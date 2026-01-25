@@ -1,0 +1,17 @@
+- What if one reservation for table A is accepted and there is another pending request for that same table at the same time?
+    - Warning Modal?
+    - Auto-cancel?
+
+- Extra Ideas and Features:
+    - Happy Hour / Deal - Announcements & Advertisements via Email or Phone
+    - SMS & Email reminders
+    - Mobile App for the entire webapp
+    - Rewards program
+    - Form submission alongside reservations
+    - Payment before reservations
+    - Comments from customers (can be listed in dashboards, etc.)
+    - Dashboard enhancement ideas:
+        - Websocket instead of polling for data retrieval
+        - Time range selector for charts
+        - Export CSV/PDF for reports
+        - Count-up animations
