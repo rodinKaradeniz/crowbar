@@ -13,5 +13,5 @@ export default async function BusinessBooking() {
   const businessId = user.businessId;
   const business = await fetchBusiness(businessId);
 
-  return <BusinessBookingClient businessId={businessId} initialBusiness={business} />;
+  return <BusinessBookingClient businessId={businessId} initialBusiness={business ?? undefined} />;
 }
