@@ -15,8 +15,6 @@ import { ContactDialog } from "@/components/contact-dialog";
 import { BusinessesCarouselSection } from "@/components/businesses-carousel-section";
 import { fetchBusinesses } from "@/lib/api";
 
-export const dynamic = "force-dynamic";
-
 const bgCollage = [
   {
     src: "/website-img-1.jpg",

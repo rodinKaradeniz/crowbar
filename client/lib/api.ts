@@ -25,17 +25,27 @@ import {
   type CustomerDashboardStats,
   type LoginResponse,
 } from "./api-client";
+import * as mock from "./api-mock";
+
+// ─── Mock mode ──────────────────────────────────────────────────────────────
+// When NEXT_PUBLIC_USE_MOCK_API=true, all functions return mock data instead
+// of calling the real backend. This allows the frontend to render on Vercel
+// (or anywhere) without a running backend.
+
+const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK_API === "true";
 
 const TOKEN_COOKIE_NAME = "rk-token";
 
 // ─── Token helpers ───────────────────────────────────────────────────────────
 
 export async function getToken(): Promise<string | null> {
+  if (USE_MOCK) return mock.getToken();
   const cookieStore = await cookies();
   return cookieStore.get(TOKEN_COOKIE_NAME)?.value || null;
 }
 
 export async function setTokenCookie(token: string): Promise<void> {
+  if (USE_MOCK) return mock.setTokenCookie();
   const cookieStore = await cookies();
   cookieStore.set(TOKEN_COOKIE_NAME, token, {
     httpOnly: true,
@@ -47,6 +57,7 @@ export async function setTokenCookie(token: string): Promise<void> {
 }
 
 export async function deleteTokenCookie(): Promise<void> {
+  if (USE_MOCK) return mock.deleteTokenCookie();
   const cookieStore = await cookies();
   cookieStore.delete(TOKEN_COOKIE_NAME);
 }
@@ -136,10 +147,12 @@ function toReservation(r: ReservationResponse): Reservation {
 export type { LoginResponse };
 
 export async function serverLogin(email: string, password: string) {
+  if (USE_MOCK) return mock.serverLogin();
   return apiLogin(email, password);
 }
 
 export async function serverGetMe() {
+  if (USE_MOCK) return mock.serverGetMe();
   const token = await getToken();
   if (!token) return null;
 
@@ -153,11 +166,13 @@ export async function serverGetMe() {
 // ─── Businesses ──────────────────────────────────────────────────────────────
 
 export async function fetchBusinesses(): Promise<Business[]> {
+  if (USE_MOCK) return mock.fetchBusinesses();
   const data = await apiGetBusinesses();
   return data.map(toBusiness);
 }
 
 export async function fetchBusiness(id: string): Promise<Business | null> {
+  if (USE_MOCK) return mock.fetchBusiness(id);
   try {
     const token = await getToken();
     const data = await apiGetBusiness(id, token || undefined);
@@ -168,6 +183,7 @@ export async function fetchBusiness(id: string): Promise<Business | null> {
 }
 
 export async function fetchBusinessBySlug(slug: string): Promise<Business | null> {
+  if (USE_MOCK) return mock.fetchBusinessBySlug(slug);
   try {
     const data = await apiGetBusinessBySlug(slug);
     return toBusiness(data);
@@ -181,12 +197,14 @@ export async function fetchBusinessBySlug(slug: string): Promise<Business | null
 export async function fetchServiceTypesByBusiness(
   businessId: string
 ): Promise<ServiceType[]> {
+  if (USE_MOCK) return mock.fetchServiceTypesByBusiness(businessId);
   const token = await getToken();
   const data = await apiGetServiceTypesByBusiness(businessId, token || undefined);
   return data.map(toServiceType);
 }
 
 export async function fetchServiceType(id: string): Promise<ServiceType | null> {
+  if (USE_MOCK) return mock.fetchServiceType(id);
   try {
     const token = await getToken();
     const data = await apiGetServiceType(id, token || undefined);
@@ -202,6 +220,7 @@ export async function fetchBusinessReservations(
   businessId: string,
   status?: string
 ): Promise<Reservation[]> {
+  if (USE_MOCK) return mock.fetchBusinessReservations(businessId, status);
   const token = await getToken();
   if (!token) return [];
   const data = await apiGetBusinessReservations(businessId, token, status);
@@ -211,6 +230,7 @@ export async function fetchBusinessReservations(
 export async function fetchCustomerReservations(
   customerId: string
 ): Promise<Reservation[]> {
+  if (USE_MOCK) return mock.fetchCustomerReservations(customerId);
   const token = await getToken();
   if (!token) return [];
   const data = await apiGetCustomerReservations(customerId, token);
@@ -218,6 +238,7 @@ export async function fetchCustomerReservations(
 }
 
 export async function fetchMyReservations(): Promise<Reservation[]> {
+  if (USE_MOCK) return mock.fetchMyReservations();
   const token = await getToken();
   if (!token) return [];
   const data = await apiGetMyReservations(token);
@@ -229,6 +250,7 @@ export async function fetchMyReservations(): Promise<Reservation[]> {
 export async function fetchBusinessDashboardStats(
   businessId: string
 ): Promise<BusinessDashboardStats | null> {
+  if (USE_MOCK) return mock.fetchBusinessDashboardStats(businessId);
   const token = await getToken();
   if (!token) return null;
   try {
@@ -239,6 +261,7 @@ export async function fetchBusinessDashboardStats(
 }
 
 export async function fetchMyCustomerStats(): Promise<CustomerDashboardStats | null> {
+  if (USE_MOCK) return mock.fetchMyCustomerStats();
   const token = await getToken();
   if (!token) return null;
   try {
@@ -251,12 +274,14 @@ export async function fetchMyCustomerStats(): Promise<CustomerDashboardStats | n
 // ─── Customers ───────────────────────────────────────────────────────────────
 
 export async function fetchBusinessCustomers(businessId: string) {
+  if (USE_MOCK) return mock.fetchBusinessCustomers(businessId);
   const token = await getToken();
   if (!token) return [];
   return apiGetBusinessCustomers(businessId, token);
 }
 
 export async function fetchCustomer(customerId: string) {
+  if (USE_MOCK) return mock.fetchCustomer(customerId);
   const token = await getToken();
   if (!token) return null;
   try {
@@ -269,6 +294,7 @@ export async function fetchCustomer(customerId: string) {
 // ─── Staff ───────────────────────────────────────────────────────────────────
 
 export async function fetchBusinessStaff(businessId: string) {
+  if (USE_MOCK) return mock.fetchBusinessStaff(businessId);
   const token = await getToken();
   if (!token) return [];
   return apiGetBusinessStaff(businessId, token);
