@@ -1,0 +1,24 @@
+# Web framework
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+
+# Database
+asyncpg==0.30.0
+sqlalchemy[asyncio]==2.0.36
+psycopg2-binary==2.9.10
+
+# Settings & validation
+pydantic==2.10.4
+pydantic-settings==2.7.1
+
+# Data processing
+pandas==2.2.3
+numpy==1.26.4
+
+# Machine learning
+scikit-learn==1.6.1
+lightgbm==4.5.0
+
+# Utilities
+python-dotenv==1.0.1
+httpx==0.28.1

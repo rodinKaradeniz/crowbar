@@ -1,0 +1,10 @@
+__pycache__
+*.pyc
+.env
+venv/
+.venv/
+notebooks/
+mlflow.db
+mlruns/
+*.egg-info
+.pytest_cache

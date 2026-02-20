@@ -1,0 +1,82 @@
+---
+title: ML Insights
+description: Machine learning powered predictions and customer intelligence for your business.
+---
+
+# ML Insights
+
+The **Insights** page provides machine-learning-powered analytics that go beyond basic charts and counters. These models learn from your historical reservation data to surface actionable predictions and patterns.
+
+## Getting Started
+
+Navigate to **Insights** in the sidebar. If this is your first time, you'll see an empty state — click **Run Pipeline** to generate your first set of insights.
+
+The pipeline takes a few seconds to run and will:
+1. Load all your reservation and customer data
+2. Engineer features (booking patterns, customer behavior, time-series trends)
+3. Train three ML models
+4. Display the results on the dashboard
+
+## Customer Segmentation
+
+Your customers are automatically grouped into segments using **RFM analysis** (Recency, Frequency, Monetary value) and K-Means clustering:
+
+| Segment | Description |
+|---------|-------------|
+| **Champions** | Recent, frequent, high-spending customers — your best clients |
+| **Loyal Customers** | Regular visitors with consistent booking patterns |
+| **Potential Loyalists** | Moderately recent with decent spending — could become loyal |
+| **At Risk** | Previously active customers who haven't booked recently |
+| **Lost Customers** | Haven't booked in a long time with low frequency |
+
+### How to use this
+- **Champions** — Offer exclusive perks or early access to new services
+- **At Risk** — Send re-engagement emails or special offers to win them back
+- **Lost Customers** — Consider a win-back campaign with a compelling discount
+
+## Cancellation Prediction
+
+A machine learning model (LightGBM) is trained on your resolved reservations (completed vs. cancelled) to predict which future bookings are most likely to be cancelled.
+
+### Key metrics shown
+- **AUC-ROC** — How well the model distinguishes cancellations from completions (closer to 1.0 is better)
+- **Precision** — Of the reservations flagged as likely cancellations, how many actually were
+- **Recall** — Of all actual cancellations, how many the model caught
+- **F1 Score** — The harmonic mean of precision and recall
+
+### Top risk factors
+The chart shows which features most influence the model's predictions. Common top factors include:
+- **Lead time** — Reservations booked far in advance are more likely to be cancelled
+- **Payment status** — Paid reservations are much less likely to be cancelled
+- **Customer history** — Customers with past cancellations are more likely to cancel again
+
+### How to use this
+- Consider requiring deposits for high-risk bookings
+- Send confirmation reminders for reservations booked far in advance
+- Flag repeat cancellers for special attention
+
+## Demand Forecasting
+
+The demand forecast predicts your expected reservation volume for the next 7 days using historical patterns, day-of-week effects, and rolling averages.
+
+### What you'll see
+- **Bar chart** showing predicted daily reservations (weekdays in blue, weekends in purple)
+- **Total expected** reservations for the week
+- **Busiest / Quietest day** predictions
+- **Weekday vs. weekend** averages
+
+### How to use this
+- **Staff scheduling** — Schedule more staff on predicted busy days
+- **Inventory planning** — Order supplies based on expected volume
+- **Marketing** — Run promotions on predicted quiet days to boost traffic
+
+## Running the Pipeline
+
+Click **Run Pipeline** at the top of the Insights page to refresh all predictions with the latest data. The pipeline typically completes in a few seconds.
+
+Results are cached and will persist until you run the pipeline again.
+
+## Next Steps
+
+- Check [Analytics & Insights](/docs/businesses/analytics) for basic dashboard metrics
+- Visit the [FAQ](/docs/general/faq) for common questions

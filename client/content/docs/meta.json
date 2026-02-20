@@ -1,0 +1,11 @@
+{
+  "title": "Documentation",
+  "pages": [
+    "---Customers---",
+    "customers",
+    "---Businesses---",
+    "businesses",
+    "---General---",
+    "general"
+  ]
+}
