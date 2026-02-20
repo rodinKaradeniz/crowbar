@@ -13,5 +13,5 @@ export default async function BusinessHours() {
   const businessId = user.businessId;
   const business = await fetchBusiness(businessId);
 
-  return <BusinessHoursClient businessId={businessId} initialBusiness={business} />;
+  return <BusinessHoursClient businessId={businessId} initialBusiness={business ?? undefined} />;
 }
