@@ -298,7 +298,25 @@ export default async function Home() {
               </ContactDialog>
             </div>
           </div>
-          <div className="pt-8 border-t text-center text-sm text-muted-foreground">
+          
+          {/* Disclaimer */}
+          <div className="pt-6 pb-4 border-t text-center text-sm text-muted-foreground">
+            <p className="mb-2">
+              <strong>Demo Notice:</strong> All data displayed on this platform is mock data for demonstration purposes only. 
+              Images are sourced from{" "}
+              <a 
+                href="https://unsplash.com/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="underline hover:text-foreground transition-colors"
+              >
+                Unsplash
+              </a>
+              .
+            </p>
+          </div>
+          
+          <div className="pt-4 border-t text-center text-sm text-muted-foreground">
             <p>
               &copy; {new Date().getFullYear()} RK Reservations. All rights
               reserved.
