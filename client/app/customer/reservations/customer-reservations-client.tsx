@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { Calendar, Clock, Users, MapPin } from "lucide-react";
+import { Calendar, Clock, Users, MapPin, Video } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -126,7 +126,15 @@ export default function CustomerReservationsClient({
                       {serviceTypeInfo && (
                         <div className="contact-row">
                           <MapPin className="contact-icon" />
-                          <span>{serviceTypeInfo.name}</span>
+                          <span>
+                            {serviceTypeInfo.name}
+                            {reservation.meetingLink && (
+                              <span className="ml-1.5 inline-flex items-center gap-1 text-primary text-xs">
+                                <Video className="h-3 w-3" />
+                                Online
+                              </span>
+                            )}
+                          </span>
                         </div>
                       )}
                     </div>
@@ -198,6 +206,20 @@ export default function CustomerReservationsClient({
                     )}
                   </span>
                 </div>
+                {selectedReservation.meetingLink && (
+                  <div className="pt-2 border-t">
+                    <p className="text-sm font-medium mb-2">Online Meeting</p>
+                    <a
+                      href={selectedReservation.meetingLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-primary hover:underline"
+                    >
+                      <Video className="h-4 w-4" />
+                      Join Google Meet
+                    </a>
+                  </div>
+                )}
                 {selectedReservation.note && (
                   <div className="pt-2 border-t">
                     <p className="text-sm font-medium mb-1">Special Notes</p>

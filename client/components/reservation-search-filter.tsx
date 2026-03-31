@@ -1,6 +1,7 @@
 "use client";
 
 import { Search } from "lucide-react";
+import { useMounted } from "@/hooks/use-mounted";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -29,6 +30,10 @@ export function ReservationSearchFilter({
   serviceTypes = [],
   showServiceTypeFilter = true,
 }: ReservationSearchFilterProps) {
+  const mounted = useMounted();
+  const showSelect =
+    showServiceTypeFilter && onServiceTypeFilterChange && serviceTypes.length > 0;
+
   return (
     <div className="flex flex-col sm:flex-row gap-4 mb-6">
       {/* Search Input */}
@@ -43,33 +48,39 @@ export function ReservationSearchFilter({
         />
       </div>
 
-      {/* Service Type Filter */}
-      {showServiceTypeFilter && onServiceTypeFilterChange && serviceTypes.length > 0 && (
-        <Select
-          value={serviceTypeFilter || "all"}
-          onValueChange={(value) =>
-            onServiceTypeFilterChange(value === "all" ? "" : value)
-          }
-        >
-          <SelectTrigger className="w-full sm:w-[200px]">
-            <SelectValue placeholder="Filter by service type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Service Types</SelectItem>
-            {serviceTypes.map((serviceType) => (
-              <SelectItem key={serviceType.id} value={serviceType.id}>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: serviceType.color }}
-                  />
-                  <span>{serviceType.name}</span>
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
+      {/* Service Type Filter — Select deferred to avoid Radix useId hydration mismatch */}
+      {showSelect &&
+        (!mounted ? (
+          <div
+            className="h-9 w-full shrink-0 rounded-md border border-input bg-muted/30 sm:w-[200px]"
+            aria-hidden
+          />
+        ) : (
+          <Select
+            value={serviceTypeFilter || "all"}
+            onValueChange={(value) =>
+              onServiceTypeFilterChange(value === "all" ? "" : value)
+            }
+          >
+            <SelectTrigger className="w-full sm:w-[200px]">
+              <SelectValue placeholder="Filter by service type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Service Types</SelectItem>
+              {serviceTypes.map((serviceType) => (
+                <SelectItem key={serviceType.id} value={serviceType.id}>
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: serviceType.color }}
+                    />
+                    <span>{serviceType.name}</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ))}
     </div>
   );
 }

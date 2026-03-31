@@ -1,0 +1,156 @@
+---
+title: Menu & Ordering
+description: Set up your menu, manage items with the item library, and run a live kitchen/bar ticket board.
+---
+
+# Menu & Ordering
+
+The Ordering module lets you run a digital menu and a real-time ticket board for your kitchen and bar. Customers scan a QR code (or follow a link) to browse your menu, add items to a cart, and place an order — no app download required.
+
+<Callout type="info">
+The Ordering module must be enabled for your business before the Menu and Orders pages appear in your sidebar.
+</Callout>
+
+## Menu Management
+
+Navigate to **Menu** in the sidebar to create and manage your menus.
+
+### Creating a Menu
+
+1. Click **New Menu**.
+2. Enter a name (e.g. "Dinner Menu") and an optional description (e.g. "Available from 6 pm–11 pm").
+3. Click **Create**.
+
+You can create multiple menus (e.g. Lunch, Dinner, Happy Hour). Only **active** menus are shown to customers. Use the **Activate / Deactivate** button on the menu header to control visibility.
+
+### Categories
+
+Each menu is organized into categories (e.g. Starters, Mains, Desserts, Cocktails).
+
+1. Select a menu from the tabs at the top.
+2. Click **+ Category** in the menu header.
+3. Enter a category name and click **Create**.
+
+### Adding Items
+
+1. Click **+ Item** inside a category, or click **Library** to add from your saved item library.
+2. Fill in the item details:
+   - **Name** — What customers will see
+   - **Description** — Optional details (ingredients, allergens, etc.)
+   - **Price** — Item price in euros
+   - **Prep time** — Estimated preparation time in minutes (shown to customers)
+   - **Routing** — Which station fulfills this item (see [Routing](#routing) below)
+3. Click **Add Item**.
+
+### Managing Item Availability
+
+Each item has an **86** button (restaurant shorthand for "out of stock"). Clicking it marks the item as unavailable — it will appear crossed out on the staff view and be hidden from customers. Click **Restore** to make it available again.
+
+---
+
+## Item Library
+
+The item library is a business-wide collection of reusable item templates. Use it to avoid re-entering the same item details across multiple menus or categories.
+
+### Saving an Item to the Library
+
+On any item row, click the **bookmark icon**. This copies the item's name, description, price, and routing tag into the library.
+
+### Opening the Library
+
+Click the **Library** button in the top-right of the Menu page to open the library panel. From here you can:
+- Browse all saved templates
+- Create new library items directly with **+ New**
+- Edit or delete existing library entries
+
+### Adding a Library Item to a Category
+
+1. On a category header, click **Library**.
+2. The library panel opens with a **+** button next to each item.
+3. Click **+** next to the item you want — it is copied into that category as a new menu item.
+
+<Callout type="info">
+Adding from the library creates an independent copy. Editing a library template later does not change items already placed in a menu — this is intentional to prevent unexpected changes during live service.
+</Callout>
+
+---
+
+## Routing
+
+Every menu item has a **routing tag**: `kitchen`, `bar`, or `any`. This controls which column the item appears in on the staff ticket board.
+
+| Routing tag | Ticket board column |
+|-------------|---------------------|
+| `kitchen` | Kitchen only |
+| `bar` | Bar only |
+| `any` | Both Kitchen and Bar |
+
+Set the routing tag when creating or editing an item. For example, food dishes → `kitchen`; cocktails and drinks → `bar`; bottled water → `any`.
+
+---
+
+## Orders Ticket Board
+
+Navigate to **Orders** in the sidebar to see the live ticket board.
+
+### Board Layout
+
+The board is split into two columns — **Kitchen** and **Bar** — each showing only the orders relevant to that station based on the items' routing tags.
+
+Each ticket shows:
+- Table number (if provided)
+- Time since the order was placed
+- Items for that station (with modifiers and notes)
+- Current status
+
+### Status Transitions
+
+Orders move through the following statuses:
+
+| Status | Meaning | Next action |
+|--------|---------|-------------|
+| **Received** | Order just came in | Start Preparing |
+| **Preparing** | Kitchen/bar is working on it | Mark Ready |
+| **Ready** | Done, waiting to be served | Mark Served |
+| **Served** | Delivered to the customer | — |
+| **Cancelled** | Order was cancelled | — |
+
+Click the action button on each ticket to advance it to the next status. The board updates in real time across all open browser tabs — no refresh needed.
+
+### New Order Toasts
+
+When a new order arrives, a Sonner toast notification appears at the bottom of the screen showing the table number and total. This works even if you are on a different page in the dashboard while the Orders tab is open in another tab.
+
+---
+
+## Pausing Orders
+
+If you need to temporarily stop accepting new orders (e.g. kitchen is full, closing early), click **Pause Orders** in the top-right of the Orders page.
+
+- A red banner appears on the staff board as a reminder
+- Customers visiting your menu page see a **"Ordering is temporarily unavailable"** banner
+- The cart checkout button is disabled — customers cannot submit new orders
+- The API returns an error if an order is submitted directly while paused
+
+Click **Resume Orders** to go back online.
+
+---
+
+## Customer Flow
+
+Customers do not need an account to place an order.
+
+1. **Reach the menu** — via a QR code at the table (pointing to `/menu/{your-business-id}?table=X`) or a direct link
+2. **Browse** — scroll through categories, tap an item to see details and modifiers
+3. **Add to cart** — select modifiers (if any), add notes, choose quantity
+4. **Checkout** — tap the cart bar at the bottom, optionally enter table number and order notes, then place the order
+5. **Track** — after placing, the order status page auto-refreshes every 10 seconds and reflects the current status from the ticket board
+
+To get a QR link for a specific table, use the **QR URL** helper under the menu settings (available via the API at `GET /api/ordering/{business_id}/qr-url/{table_identifier}`).
+
+---
+
+## Next Steps
+
+- Check [Analytics & Insights](./analytics) to understand overall business performance
+- Visit the [FAQ](../general/faq) for common questions

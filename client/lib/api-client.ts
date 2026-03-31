@@ -119,6 +119,8 @@ export interface ServiceTypeResponse {
   max_concurrent_bookings: number | null;
   requires_payment: boolean;
   amount: number | null;
+  is_online: boolean;
+  is_pending_enabled: boolean;
   duration: number | null;
   color: string;
   display_order: number | null;
@@ -297,6 +299,10 @@ export interface BusinessDashboardStats {
     name: string;
     color: string;
     count: number;
+  }>;
+  daily_by_type: Array<{
+    day: string;
+    [serviceTypeName: string]: string | number;
   }>;
   upcoming_reservations: Array<{
     id: string;

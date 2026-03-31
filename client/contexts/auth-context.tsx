@@ -1,12 +1,14 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { Customer, Staff } from "@/types";
+import { Customer, Staff, MeContext } from "@/types";
+import { clientGetMeContext } from "@/lib/client-api";
 
 export type AuthUser = Customer | Staff;
 
 interface AuthContextType {
   user: AuthUser | null;
+  meContext: MeContext | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<AuthUser | null>;
   logout: () => Promise<void>;
@@ -16,7 +18,21 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [meContext, setMeContext] = useState<MeContext | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  async function loadMeContext(userData: AuthUser) {
+    if (userData.type === "staff") {
+      try {
+        const ctx = await clientGetMeContext();
+        setMeContext(ctx);
+      } catch {
+        setMeContext(null);
+      }
+    } else {
+      setMeContext(null);
+    }
+  }
 
   // Load user from session on mount
   useEffect(() => {
@@ -27,6 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const userData = await response.json();
           if (userData) {
             setUser(userData);
+            await loadMeContext(userData);
           }
         }
       } catch (error) {
@@ -53,6 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (response.ok) {
         const userData = await response.json();
         setUser(userData);
+        await loadMeContext(userData);
         return userData;
       }
       return null;
@@ -66,13 +84,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
       setUser(null);
+      setMeContext(null);
     } catch (error) {
       console.error("Logout failed:", error);
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, meContext, isLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

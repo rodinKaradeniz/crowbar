@@ -31,18 +31,20 @@ import { toast } from "sonner";
 interface ReservationFormProps {
   businessId: string;
   serviceTypes?: ServiceType[];
+  preselectedServiceTypeId?: string;
+  onSuccess?: () => void;
 }
 
-export function ReservationForm({ businessId, serviceTypes: propServiceTypes }: ReservationFormProps) {
+export function ReservationForm({ businessId, serviceTypes: propServiceTypes, preselectedServiceTypeId, onSuccess }: ReservationFormProps) {
   const [step, setStep] = useState<
     "type" | "datetime" | "info" | "custom" | "payment" | "confirmation" | "success"
-  >("type");
+  >(preselectedServiceTypeId ? "datetime" : "type");
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [selectedTime, setSelectedTime] = useState<string>("");
   const [guests, setGuests] = useState<string>("");
   const [timePicker, setTimePicker] = useState<string>("12:00");
   const [termsAgreed, setTermsAgreed] = useState<boolean>(false);
-  const [serviceTypeId, setServiceTypeId] = useState<string>("");
+  const [serviceTypeId, setServiceTypeId] = useState<string>(preselectedServiceTypeId ?? "");
 
   // Customer info (default form)
   const [firstName, setFirstName] = useState("");
@@ -55,6 +57,7 @@ export function ReservationForm({ businessId, serviceTypes: propServiceTypes }: 
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [createdReservation, setCreatedReservation] = useState<{ meetingLink?: string } | null>(null);
 
   // Get service types for this business
   const serviceTypes = propServiceTypes || [];
@@ -270,9 +273,11 @@ export function ReservationForm({ businessId, serviceTypes: propServiceTypes }: 
 
     try {
       const data = buildSubmissionData();
-      await clientCreatePublicReservation(data);
+      const reservation = await clientCreatePublicReservation(data);
+      setCreatedReservation(reservation);
       toast.success("Reservation submitted successfully!");
       setStep("success");
+      onSuccess?.();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to submit reservation";
       setSubmitError(message);
@@ -295,6 +300,18 @@ export function ReservationForm({ businessId, serviceTypes: propServiceTypes }: 
             email shortly.
           </p>
         </div>
+        {createdReservation?.meetingLink && (
+          <div className="w-full space-y-2">
+            <p className="text-sm font-medium">This is an online meeting</p>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => window.open(createdReservation.meetingLink, "_blank")}
+            >
+              Join Google Meet
+            </Button>
+          </div>
+        )}
         <Button onClick={() => window.location.reload()} className="w-full">
           Make Another Reservation
         </Button>
@@ -814,6 +831,11 @@ export function ReservationForm({ businessId, serviceTypes: propServiceTypes }: 
                           - ${serviceType.amount.toFixed(2)}
                         </span>
                       )}
+                      {serviceType.isOnline && (
+                        <span className="text-xs text-primary font-medium">
+                          Online
+                        </span>
+                      )}
                     </div>
                   </SelectItem>
                 ))}
@@ -830,6 +852,11 @@ export function ReservationForm({ businessId, serviceTypes: propServiceTypes }: 
                   Payment required: ${selectedServiceType.amount.toFixed(2)}
                 </p>
               )}
+            {selectedServiceType?.isOnline && (
+              <p className="text-sm text-muted-foreground mt-2">
+                This is an online meeting. A Google Meet link will be sent to your email.
+              </p>
+            )}
           </Field>
         )}
 

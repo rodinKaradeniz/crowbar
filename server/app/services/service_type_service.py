@@ -38,10 +38,13 @@ async def create_service_type(
         max_concurrent_bookings=data.max_concurrent_bookings,
         requires_payment=data.requires_payment,
         amount=data.amount,
+        is_online=data.is_online,
+        is_pending_enabled=data.is_pending_enabled,
         duration=data.duration,
         color=data.color,
         display_order=data.display_order,
         image=data.image,
+        form_fields=[f.model_dump() for f in data.form_fields] if data.form_fields else None,
     )
     db.add(service_type)
     await db.flush()
@@ -60,6 +63,7 @@ async def update_service_type(
         setattr(service_type, key, value)
 
     await db.flush()
+    await db.refresh(service_type)
     return service_type
 
 

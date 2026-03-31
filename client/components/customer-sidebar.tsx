@@ -1,12 +1,13 @@
 "use client";
 
-import { Sidebar } from "@/components/ui/sidebar";
+import { Sidebar, SidebarRail } from "@/components/ui/sidebar";
 import { CustomerSidebarContent } from "@/components/customer-sidebar-content";
 
 export function CustomerSidebar() {
   return (
-    <Sidebar>
+    <Sidebar collapsible="icon">
       <CustomerSidebarContent />
+      <SidebarRail />
     </Sidebar>
   );
 }

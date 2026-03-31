@@ -27,6 +27,8 @@ class ServiceTypeCreate(BaseModel):
     max_concurrent_bookings: int | None = None
     requires_payment: bool = False
     amount: float | None = None
+    is_online: bool = False
+    is_pending_enabled: bool = True
     duration: int | None = None
     color: str = "#3b82f6"
     display_order: int | None = None
@@ -41,6 +43,8 @@ class ServiceTypeUpdate(BaseModel):
     max_concurrent_bookings: int | None = None
     requires_payment: bool | None = None
     amount: float | None = None
+    is_online: bool | None = None
+    is_pending_enabled: bool | None = None
     duration: int | None = None
     color: str | None = None
     display_order: int | None = None
@@ -57,6 +61,8 @@ class ServiceTypeResponse(BaseModel):
     max_concurrent_bookings: int | None = None
     requires_payment: bool
     amount: float | None = None
+    is_online: bool
+    is_pending_enabled: bool
     duration: int | None = None
     color: str
     display_order: int | None = None

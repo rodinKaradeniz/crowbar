@@ -1,3 +1,10 @@
+- Quick Notes:
+    - Find a better name than ML Insights, something more business-friendly.
+    - In ML Insights, use more technical wording - including buzzwords such as "Artifical Intelligence", with being accurate of course.
+    - Move "Docs" into dashboard as a separate tab/page.
+    - Add a notification button/dropdown on top-right corner
+    - Add a chat sidesheet trigger button on top-right corner, next to the notification. It should have a chatbot working with a RAG based on app documentation, only purposed to navigate users on how to use the app.
+
 - What if one reservation for table A is accepted and there is another pending request for that same table at the same time?
     - Warning Modal?
     - Auto-cancel?

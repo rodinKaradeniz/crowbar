@@ -11,6 +11,7 @@ import {
   Mail,
   Phone,
   CreditCard,
+  Video,
 } from "lucide-react";
 import {
   Dialog,
@@ -292,6 +293,24 @@ export function ReservationDialog({
                 </div>
               </FieldContent>
             </Field>
+
+            {/* Meeting Link (Display Only for online reservations) */}
+            {reservation?.meetingLink && (
+              <Field>
+                <FieldLabel>Online Meeting</FieldLabel>
+                <FieldContent>
+                  <a
+                    href={reservation.meetingLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-primary hover:underline"
+                  >
+                    <Video className="h-4 w-4" />
+                    Join Google Meet
+                  </a>
+                </FieldContent>
+              </Field>
+            )}
 
             {/* Payment Information (Display Only) */}
             {reservation?.paymentStatus && (

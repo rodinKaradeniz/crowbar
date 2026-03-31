@@ -1,9 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_business, get_current_user
+from app.models.business import Business
 from app.models.user import User
+from app.services import google_oauth_service
+from app.services import staff_service
 from app.schemas.auth import BusinessRegisterRequest, LoginRequest, LoginResponse, RegisterRequest
 from app.schemas.user import ChangeEmailRequest, ChangePasswordRequest, UserResponse, UserUpdate
 from app.services.auth_service import (
@@ -102,6 +109,72 @@ async def get_me(
     return response
 
 
+@router.get("/me/context")
+async def get_me_context(
+    current_user: User = Depends(get_current_user),
+    current_business: Business = Depends(get_current_business),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Returns full session context for staff users: user, business, role,
+    derived permissions, enabled modules, and locations.
+
+    Only available to staff users — customers receive 403 (no staff assignment).
+    """
+    staff_list = await staff_service.get_staff_by_user_id(db, current_user.id)
+    staff = staff_list[0] if staff_list else None
+    role = staff.role if staff else "staff"
+
+    # Derive permissions from role
+    _all_permissions = [
+        "can_manage_reservations",
+        "can_manage_staff",
+        "can_manage_service_types",
+        "can_manage_business_profile",
+        "can_view_analytics",
+        "can_manage_modules",
+        "can_delete_business",
+        "can_change_billing",
+    ]
+    _manager_permissions = [p for p in _all_permissions if p not in ("can_delete_business", "can_change_billing")]
+    _staff_permissions = ["can_view_reservations", "can_manage_own_schedule"]
+
+    if role == "owner":
+        permissions = _all_permissions
+    elif role == "manager":
+        permissions = _manager_permissions
+    else:
+        permissions = _staff_permissions
+
+    locations = [
+        {"id": str(loc.id), "name": loc.name, "address": loc.address, "is_primary": loc.is_primary}
+        for loc in (current_business.locations or [])
+    ]
+
+    return {
+        "user": {
+            "id": str(current_user.id),
+            "email": current_user.email,
+            "name": current_user.name,
+            "phone": current_user.phone,
+            "avatar": current_user.avatar,
+            "user_type": current_user.user_type,
+        },
+        "business": {
+            "id": str(current_business.id),
+            "name": current_business.name,
+            "slug": current_business.slug,
+            "enabled_modules": current_business.enabled_modules or [],
+            "onboarding_complete": current_business.onboarding_complete,
+            "notification_channels": current_business.notification_channels or ["email"],
+            "locations": locations,
+        },
+        "role": role,
+        "permissions": permissions,
+        "enabled_modules": current_business.enabled_modules or [],
+    }
+
+
 @router.patch("/me", response_model=UserResponse)
 async def update_me(
     data: UserUpdate,
@@ -159,3 +232,51 @@ async def disable_account(
     current_user.user_type = f"disabled_{current_user.user_type}"
     await db.flush()
     return {"message": "Account disabled successfully"}
+
+
+# ─── Google OAuth (for Calendar / Meet links) ───────────────────────────────
+
+
+@router.get("/google/authorize")
+async def google_authorize(
+    business_id: UUID = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Redirect to Google OAuth consent. Caller must be staff for the business.
+    """
+    staff_list = await staff_service.get_staff_by_user_id(db, current_user.id)
+    if not staff_list or not any(s.business_id == business_id for s in staff_list):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to connect Google for this business",
+        )
+    url = google_oauth_service.get_authorization_url(business_id)
+    return RedirectResponse(url=url, status_code=status.HTTP_302_FOUND)
+
+
+@router.get("/google/callback")
+async def google_callback(
+    code: str | None = Query(None),
+    state: str | None = Query(None),
+    error: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    OAuth callback from Google. Exchanges code for tokens and redirects to success URL.
+    """
+    if error:
+        redirect_url = f"{settings.google_connect_success_url}?google_error={error}"
+        return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+    if not code or not state:
+        redirect_url = f"{settings.google_connect_success_url}?google_error=missing_params"
+        return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+
+    token = await google_oauth_service.exchange_code_and_store(db, code, state)
+    if token is None:
+        redirect_url = f"{settings.google_connect_success_url}?google_error=exchange_failed"
+        return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+
+    redirect_url = f"{settings.google_connect_success_url}?google_connected=1"
+    return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)

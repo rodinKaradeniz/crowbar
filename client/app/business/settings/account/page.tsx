@@ -9,5 +9,11 @@ export default async function BusinessAccountSettings() {
     redirect("/auth/login");
   }
 
-  return <BusinessAccountSettingsClient userId={user.id} userEmail={user.email} />;
+  return (
+    <BusinessAccountSettingsClient
+      userId={user.id}
+      userEmail={user.email}
+      businessId={user.businessId}
+    />
+  );
 }

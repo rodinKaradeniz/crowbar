@@ -41,6 +41,8 @@ class BusinessUpdate(BaseModel):
     time_slot_interval: int | None = None
     advance_booking_days: int | None = None
     operating_hours: dict[str, OperatingHoursEntry] | None = None
+    enabled_modules: list[str] | None = None
+    notification_channels: list[str] | None = None
 
 
 class BusinessResponse(BaseModel):
@@ -59,6 +61,9 @@ class BusinessResponse(BaseModel):
     time_slot_interval: int
     advance_booking_days: int
     operating_hours: dict
+    enabled_modules: list[str] = []
+    onboarding_complete: bool = False
+    notification_channels: list[str] = ["email"]
     created_at: datetime
 
     model_config = {"from_attributes": True}

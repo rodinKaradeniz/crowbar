@@ -1,11 +1,11 @@
 """
 Shared test fixtures for backend tests.
 
-Uses a dedicated test PostgreSQL database (rk_reservations_test) with
+Uses a dedicated test PostgreSQL database (slotera_test) with
 per-test table creation/teardown for full isolation.
 
 Setup:
-    docker compose exec postgres createdb -U postgres rk_reservations_test
+    docker compose exec postgres createdb -U postgres slotera_test
 """
 
 import pytest
@@ -26,7 +26,7 @@ import app.models  # noqa: F401
 # --------------------------------------------------------------------------- #
 
 TEST_DATABASE_URL = settings.database_url.replace(
-    "/rk_reservations", "/rk_reservations_test"
+    "/slotera", "/slotera_test"
 )
 
 test_engine = create_async_engine(TEST_DATABASE_URL, echo=False)

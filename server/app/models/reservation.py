@@ -35,6 +35,8 @@ class Reservation(Base, UUIDMixin, TimestampMixin):
     payment_amount: Mapped[float | None] = mapped_column(Numeric(10, 2))
     payment_status: Mapped[str | None] = mapped_column(String(20))
     stripe_payment_intent_id: Mapped[str | None] = mapped_column(String(255))
+    meeting_link: Mapped[str | None] = mapped_column(String(500))
+    google_calendar_event_id: Mapped[str | None] = mapped_column(String(255))
     custom_fields: Mapped[dict | None] = mapped_column(JSONB)
 
     business: Mapped["Business"] = relationship(back_populates="reservations")

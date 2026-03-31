@@ -8,6 +8,10 @@ import {
   Clock,
   Bell,
   Settings,
+  BarChart3,
+  ShoppingCart,
+  Package,
+  Users2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NewsletterForm } from "@/components/newsletter-form";
@@ -68,7 +72,7 @@ export default async function Home() {
   return (
     <div className="flex flex-col bg-background">
       {/* Hero Section */}
-      <section className="relative h-svh flex items-center overflow-hidden">
+      <section className="relative h-svh flex items-center overflow-hidden bg-neutral-950">
         {/* Background Image Collage */}
         <div className="absolute inset-0 grid grid-rows-3 grid-cols-4 gap-2 p-2 brightness-30 bg-neutral-950">
           {bgCollage.map((bg, index) => (
@@ -85,10 +89,10 @@ export default async function Home() {
         <div className="relative z-10 size-full">
           <div className="absolute bottom-[10%] left-[5%]">
             <p className="text-lg text-white mb-8 max-w-xl">
-            Streamline Your Reservations
+              The all-in-one business operations platform
             </p>
             <h1 className="page-title-xl mb-6 text-white">
-              RK Reservations
+              Slotera
             </h1>
           </div>
 
@@ -260,6 +264,51 @@ export default async function Home() {
         </div>
       </section>
 
+      {/* Platform Modules Section */}
+      <section className="py-16 md:py-24">
+        <div className="container mx-auto px-6">
+          <div className="max-w-3xl mx-auto text-center mb-12">
+            <h2 className="page-title-lg mb-4">One platform, every module you need</h2>
+            <p className="text-lg text-muted-foreground">
+              Start with reservations and unlock more as your business grows.
+              Each module is built to work seamlessly together.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 max-w-5xl mx-auto">
+            {[
+              { icon: Calendar, name: "Reservations", available: true },
+              { icon: BarChart3, name: "Insights", available: false },
+              { icon: Users2, name: "Queue", available: false },
+              { icon: ShoppingCart, name: "Ordering", available: false },
+              { icon: Package, name: "Inventory", available: false },
+            ].map((mod) => {
+              const Icon = mod.icon;
+              return (
+                <div
+                  key={mod.name}
+                  className={`rounded-xl border p-5 flex flex-col items-center gap-3 text-center ${
+                    mod.available ? "bg-card shadow-sm" : "bg-muted/30 opacity-60"
+                  }`}
+                >
+                  <div className={`p-2.5 rounded-lg ${mod.available ? "bg-primary/10" : "bg-muted"}`}>
+                    <Icon className={`w-5 h-5 ${mod.available ? "text-primary" : "text-muted-foreground"}`} />
+                  </div>
+                  <span className="text-sm font-medium">{mod.name}</span>
+                  {!mod.available && (
+                    <span className="text-xs text-muted-foreground">Coming soon</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="text-center mt-8">
+            <Link href="/pricing" className="text-sm text-primary hover:underline font-medium">
+              View pricing and modules →
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* Footer */}
       <footer className="bg-muted border-t">
         <div className="container mx-auto px-6 py-12">
@@ -270,7 +319,7 @@ export default async function Home() {
                 <div className="bg-primary text-primary-foreground flex size-6 items-center justify-center rounded-md">
                   <GalleryVerticalEnd className="size-4" />
                 </div>
-                <span className="font-semibold">RK Reservations</span>
+                <span className="font-semibold">Slotera</span>
               </div>
               <h3 className="font-semibold mb-2">Making Reservations Simple</h3>
               <p className="text-sm text-muted-foreground">
@@ -316,11 +365,13 @@ export default async function Home() {
             </p>
           </div>
           
-          <div className="pt-4 border-t text-center text-sm text-muted-foreground">
-            <p>
-              &copy; {new Date().getFullYear()} RK Reservations. All rights
-              reserved.
-            </p>
+          <div className="pt-4 border-t flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-muted-foreground">
+            <p>&copy; {new Date().getFullYear()} Slotera. All rights reserved.</p>
+            <div className="flex items-center gap-4">
+              <Link href="/pricing" className="hover:text-foreground transition-colors">Pricing</Link>
+              <Link href="/for-businesses" className="hover:text-foreground transition-colors">For Businesses</Link>
+              <Link href="/for-customers" className="hover:text-foreground transition-colors">For Customers</Link>
+            </div>
           </div>
         </div>
       </footer>

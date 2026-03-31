@@ -46,7 +46,7 @@ export function RegisterForm({
   // Password validation errors
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
-  const { login } = useAuth();
+  useAuth();
 
   const handleSlugChange = (value: string) => {
     const slugValue = value
@@ -132,7 +132,8 @@ export function RegisterForm({
       if (userType === "customer") {
         router.push("/customer/overview");
       } else {
-        router.push("/business/overview");
+        // New business accounts always start with onboarding
+        router.push("/business/onboarding");
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Registration failed";

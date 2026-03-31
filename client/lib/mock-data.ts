@@ -137,6 +137,8 @@ export const mockServiceTypes: ServiceType[] = [
     description: "Spacious table for up to 4 guests",
     capacity: 4,
     requiresPayment: false,
+    isOnline: false,
+    isPendingEnabled: true,
     color: "#3b82f6",
     displayOrder: 1,
     createdAt: "2024-01-15T10:00:00Z",
@@ -149,6 +151,8 @@ export const mockServiceTypes: ServiceType[] = [
     description: "Intimate table for 2 guests",
     capacity: 2,
     requiresPayment: false,
+    isOnline: false,
+    isPendingEnabled: true,
     color: "#3b82f6",
     displayOrder: 2,
     createdAt: "2024-01-15T10:00:00Z",
@@ -161,6 +165,8 @@ export const mockServiceTypes: ServiceType[] = [
     description: "Single seat at the bar",
     capacity: 1,
     requiresPayment: false,
+    isOnline: false,
+    isPendingEnabled: true,
     color: "#8b5cf6",
     displayOrder: 3,
     createdAt: "2024-01-15T10:00:00Z",
@@ -173,6 +179,8 @@ export const mockServiceTypes: ServiceType[] = [
     description: "Two seats together at the bar",
     capacity: 2,
     requiresPayment: false,
+    isOnline: false,
+    isPendingEnabled: true,
     color: "#8b5cf6",
     displayOrder: 4,
     createdAt: "2024-01-15T10:00:00Z",
@@ -186,6 +194,8 @@ export const mockServiceTypes: ServiceType[] = [
     description: "Large event space accommodating up to 50 guests",
     capacity: 50,
     requiresPayment: true,
+    isOnline: false,
+    isPendingEnabled: true,
     amount: 500.0,
     color: "#10b981",
     displayOrder: 1,
@@ -201,6 +211,8 @@ export const mockServiceTypes: ServiceType[] = [
     capacity: 3,
     maxConcurrentBookings: 5,
     requiresPayment: true,
+    isOnline: false,
+    isPendingEnabled: true,
     amount: 75.0,
     duration: 30,
     color: "#f59e0b",
@@ -216,6 +228,8 @@ export const mockServiceTypes: ServiceType[] = [
     capacity: 3,
     maxConcurrentBookings: 3,
     requiresPayment: true,
+    isOnline: false,
+    isPendingEnabled: true,
     amount: 150.0,
     duration: 60,
     color: "#f59e0b",
@@ -231,6 +245,8 @@ export const mockServiceTypes: ServiceType[] = [
     capacity: 3,
     maxConcurrentBookings: 2,
     requiresPayment: true,
+    isOnline: false,
+    isPendingEnabled: true,
     amount: 200.0,
     duration: 90,
     color: "#f59e0b",
@@ -246,6 +262,8 @@ export const mockServiceTypes: ServiceType[] = [
     description: "One-on-one therapy session",
     capacity: 1,
     requiresPayment: true,
+    isOnline: false,
+    isPendingEnabled: true,
     amount: 120.0,
     duration: 60,
     color: "#06b6d4",
@@ -260,6 +278,8 @@ export const mockServiceTypes: ServiceType[] = [
     description: "Therapy session for couples",
     capacity: 2,
     requiresPayment: true,
+    isOnline: false,
+    isPendingEnabled: true,
     amount: 180.0,
     duration: 90,
     color: "#a855f7",
@@ -607,6 +627,49 @@ export function getMockBusinessDashboardStats(businessId: string): BusinessDashb
       color: st.color,
       count: businessReservations.filter((r) => r.serviceTypeId === st.id).length,
     })),
+    daily_by_type: (() => {
+      const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+      const now = new Date();
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      
+      // Get last 7 days of reservations
+      const last7DaysReservations = businessReservations.filter(
+        (r) => new Date(r.time) >= sevenDaysAgo && r.status !== "cancelled"
+      );
+      
+      // Group by day of week
+      const dailyData = [];
+      for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+        const dayStart = new Date(sevenDaysAgo);
+        dayStart.setDate(dayStart.getDate() + dayOffset);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(dayStart);
+        dayEnd.setDate(dayEnd.getDate() + 1);
+        
+        const dayOfWeek = dayStart.getDay(); // 0 = Sunday, 6 = Saturday
+        // Convert to Monday = 0 format
+        const dayIndex = (dayOfWeek + 6) % 7; // Monday = 0, Sunday = 6
+        const dayName = dayNames[dayIndex];
+        
+        const dayReservations = last7DaysReservations.filter(
+          (r) => {
+            const rDate = new Date(r.time);
+            return rDate >= dayStart && rDate < dayEnd;
+          }
+        );
+        
+        const dayData: Record<string, string | number> = { day: dayName };
+        serviceTypes.forEach((st) => {
+          dayData[st.name] = dayReservations.filter((r) => r.serviceTypeId === st.id).length;
+        });
+        
+        dailyData.push(
+          dayData as BusinessDashboardStats["daily_by_type"][number],
+        );
+      }
+
+      return dailyData;
+    })(),
     upcoming_reservations: businessReservations
       .filter((r) => r.status === "confirmed" && new Date(r.time) >= new Date())
       .slice(0, 5)

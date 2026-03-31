@@ -21,6 +21,8 @@ class ServiceType(Base, UUIDMixin, TimestampMixin):
     max_concurrent_bookings: Mapped[int | None] = mapped_column(Integer)
     requires_payment: Mapped[bool] = mapped_column(Boolean, default=False)
     amount: Mapped[float | None] = mapped_column(Numeric(10, 2))
+    is_online: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_pending_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     duration: Mapped[int | None] = mapped_column(Integer)
     color: Mapped[str] = mapped_column(String(20), default="#3b82f6")
     display_order: Mapped[int | None] = mapped_column(Integer)

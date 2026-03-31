@@ -1,4 +1,22 @@
-import { Business, ServiceType, Reservation, FormFieldDefinition } from "@/types";
+import {
+  Business,
+  FormFieldDefinition,
+  InventoryItem,
+  LibraryItem,
+  Menu,
+  MenuCategory,
+  MenuItem,
+  Modifier,
+  ModifierGroup,
+  MeContext,
+  Notification,
+  Order,
+  QueueEntry,
+  QueueStatus,
+  Reservation,
+  ServiceType,
+  StockMovement,
+} from "@/types";
 
 /**
  * Client-side API calls.
@@ -43,8 +61,18 @@ async function authFetch<T>(path: string, options?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({}));
-    throw new Error(errorBody.detail || response.statusText);
+    const errorBody = (await response.json().catch(() => ({}))) as Record<
+      string,
+      unknown
+    >;
+    const d = errorBody.detail;
+    const msg =
+      typeof d === "string"
+        ? d
+        : d != null
+          ? JSON.stringify(d)
+          : response.statusText;
+    throw new Error(msg);
   }
 
   if (response.status === 204) return undefined as T;
@@ -71,6 +99,9 @@ function toBusiness(b: Record<string, unknown>): Business {
     timeSlotInterval: b.time_slot_interval as number,
     advanceBookingDays: b.advance_booking_days as number,
     operatingHours: b.operating_hours as Business["operatingHours"],
+    enabledModules: (b.enabled_modules as string[]) ?? [],
+    onboardingComplete: (b.onboarding_complete as boolean) ?? false,
+    notificationChannels: (b.notification_channels as string[]) ?? ["email"],
   };
 }
 
@@ -101,6 +132,8 @@ function toServiceType(st: Record<string, unknown>): ServiceType {
     maxConcurrentBookings: (st.max_concurrent_bookings as number) || undefined,
     requiresPayment: st.requires_payment as boolean,
     amount: (st.amount as number) || undefined,
+    isOnline: (st.is_online as boolean) ?? false,
+    isPendingEnabled: (st.is_pending_enabled as boolean) ?? true,
     duration: (st.duration as number) || undefined,
     color: st.color as string,
     displayOrder: (st.display_order as number) || undefined,
@@ -108,6 +141,21 @@ function toServiceType(st: Record<string, unknown>): ServiceType {
     formFields: rawFields ? rawFields.map(toFormField) : undefined,
     createdAt: st.created_at as string,
     updatedAt: st.updated_at as string,
+  };
+}
+
+function toNotification(n: Record<string, unknown>): Notification {
+  return {
+    id: n.id as string,
+    userId: n.user_id as string,
+    businessId: n.business_id as string,
+    kind: n.kind as string,
+    title: n.title as string,
+    body: n.body as string,
+    payload: (n.payload as Record<string, unknown>) || {},
+    readAt: (n.read_at as string) || null,
+    createdAt: n.created_at as string,
+    sourceType: (n.source_type as string) || undefined,
   };
 }
 
@@ -124,8 +172,10 @@ function toReservation(r: Record<string, unknown>): Reservation {
     status: r.status as Reservation["status"],
     guests: r.guests as number,
     paymentAmount: (r.payment_amount as number) || undefined,
-    paymentStatus: (r.payment_status as Reservation["paymentStatus"]) || undefined,
+    paymentStatus:
+      (r.payment_status as Reservation["paymentStatus"]) || undefined,
     stripePaymentIntentId: (r.stripe_payment_intent_id as string) || undefined,
+    meetingLink: (r.meeting_link as string) || undefined,
     customFields: (r.custom_fields as Record<string, unknown>) || undefined,
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
@@ -141,16 +191,22 @@ export async function clientGetBusinesses(): Promise<Business[]> {
 
 export async function clientGetBusiness(id: string): Promise<Business | null> {
   try {
-    const data = await clientFetch<Record<string, unknown>>(`/businesses/${id}`);
+    const data = await clientFetch<Record<string, unknown>>(
+      `/businesses/${id}`,
+    );
     return toBusiness(data);
   } catch {
     return null;
   }
 }
 
-export async function clientGetBusinessBySlug(slug: string): Promise<Business | null> {
+export async function clientGetBusinessBySlug(
+  slug: string,
+): Promise<Business | null> {
   try {
-    const data = await clientFetch<Record<string, unknown>>(`/businesses/slug/${slug}`);
+    const data = await clientFetch<Record<string, unknown>>(
+      `/businesses/slug/${slug}`,
+    );
     return toBusiness(data);
   } catch {
     return null;
@@ -158,21 +214,63 @@ export async function clientGetBusinessBySlug(slug: string): Promise<Business | 
 }
 
 export async function clientGetServiceTypesByBusiness(
-  businessId: string
+  businessId: string,
 ): Promise<ServiceType[]> {
   const data = await clientFetch<Record<string, unknown>[]>(
-    `/service-types/business/${businessId}`
+    `/service-types/business/${businessId}`,
   );
   return data.map(toServiceType);
 }
 
-export async function clientGetServiceType(id: string): Promise<ServiceType | null> {
+export async function clientGetServiceType(
+  id: string,
+): Promise<ServiceType | null> {
   try {
-    const data = await clientFetch<Record<string, unknown>>(`/service-types/${id}`);
+    const data = await clientFetch<Record<string, unknown>>(
+      `/service-types/${id}`,
+    );
     return toServiceType(data);
   } catch {
     return null;
   }
+}
+
+// ─── Authenticated: Notifications ────────────────────────────────────────────
+
+export async function clientGetUnreadNotificationCount(): Promise<number> {
+  const { count } = await authFetch<{ count: number }>(
+    "/notifications/unread-count",
+  );
+  return count;
+}
+
+export async function clientGetNotifications(options?: {
+  limit?: number;
+  offset?: number;
+}): Promise<Notification[]> {
+  const params = new URLSearchParams();
+  if (options?.limit != null) params.set("limit", String(options.limit));
+  if (options?.offset != null) params.set("offset", String(options.offset));
+  const q = params.toString();
+  const path = q ? `/notifications?${q}` : "/notifications";
+  const data = await authFetch<Record<string, unknown>[]>(path);
+  return data.map(toNotification);
+}
+
+export async function clientMarkNotificationRead(
+  id: string,
+): Promise<Notification> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/notifications/${id}/read`,
+    {
+      method: "PATCH",
+    },
+  );
+  return toNotification(result);
+}
+
+export async function clientMarkAllNotificationsRead(): Promise<void> {
+  await authFetch("/notifications/read-all", { method: "POST" });
 }
 
 // ─── Authenticated: User profile & account ────────────────────────────────────
@@ -233,7 +331,7 @@ export async function clientUpdateBusiness(
     timeSlotInterval: number;
     advanceBookingDays: number;
     operatingHours: Record<string, unknown>;
-  }>
+  }>,
 ): Promise<Business> {
   const apiData: Record<string, unknown> = {};
   if (data.name !== undefined) apiData.name = data.name;
@@ -245,10 +343,14 @@ export async function clientUpdateBusiness(
   if (data.website !== undefined) apiData.website = data.website;
   if (data.tags !== undefined) apiData.tags = data.tags;
   if (data.maxGuests !== undefined) apiData.max_guests = data.maxGuests;
-  if (data.reservationTime !== undefined) apiData.reservation_time = data.reservationTime;
-  if (data.timeSlotInterval !== undefined) apiData.time_slot_interval = data.timeSlotInterval;
-  if (data.advanceBookingDays !== undefined) apiData.advance_booking_days = data.advanceBookingDays;
-  if (data.operatingHours !== undefined) apiData.operating_hours = data.operatingHours;
+  if (data.reservationTime !== undefined)
+    apiData.reservation_time = data.reservationTime;
+  if (data.timeSlotInterval !== undefined)
+    apiData.time_slot_interval = data.timeSlotInterval;
+  if (data.advanceBookingDays !== undefined)
+    apiData.advance_booking_days = data.advanceBookingDays;
+  if (data.operatingHours !== undefined)
+    apiData.operating_hours = data.operatingHours;
 
   const result = await authFetch<Record<string, unknown>>(`/businesses/${id}`, {
     method: "PATCH",
@@ -284,10 +386,13 @@ export async function clientCreatePublicReservation(data: {
     apiData.custom_fields = data.customFields;
   }
 
-  const result = await clientFetch<Record<string, unknown>>("/reservations/public", {
-    method: "POST",
-    body: JSON.stringify(apiData),
-  });
+  const result = await clientFetch<Record<string, unknown>>(
+    "/reservations/public",
+    {
+      method: "POST",
+      body: JSON.stringify(apiData),
+    },
+  );
   return toReservation(result);
 }
 
@@ -333,10 +438,11 @@ export async function clientUpdateReservation(
     note: string;
     status: string;
     guests: number;
-  }>
+  }>,
 ): Promise<Reservation> {
   const apiData: Record<string, unknown> = {};
-  if (data.serviceTypeId !== undefined) apiData.service_type_id = data.serviceTypeId;
+  if (data.serviceTypeId !== undefined)
+    apiData.service_type_id = data.serviceTypeId;
   if (data.time !== undefined) apiData.time = data.time;
   if (data.phone !== undefined) apiData.phone = data.phone;
   if (data.email !== undefined) apiData.email = data.email;
@@ -344,10 +450,13 @@ export async function clientUpdateReservation(
   if (data.status !== undefined) apiData.status = data.status;
   if (data.guests !== undefined) apiData.guests = data.guests;
 
-  const result = await authFetch<Record<string, unknown>>(`/reservations/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify(apiData),
-  });
+  const result = await authFetch<Record<string, unknown>>(
+    `/reservations/${id}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(apiData),
+    },
+  );
   return toReservation(result);
 }
 
@@ -365,6 +474,8 @@ export async function clientCreateServiceType(data: {
   maxConcurrentBookings?: number;
   requiresPayment: boolean;
   amount?: number;
+  isOnline?: boolean;
+  isPendingEnabled?: boolean;
   duration?: number;
   color: string;
   displayOrder?: number;
@@ -379,6 +490,8 @@ export async function clientCreateServiceType(data: {
     max_concurrent_bookings: data.maxConcurrentBookings,
     requires_payment: data.requiresPayment,
     amount: data.amount,
+    is_online: data.isOnline ?? false,
+    is_pending_enabled: data.isPendingEnabled ?? true,
     duration: data.duration,
     color: data.color,
     display_order: data.displayOrder,
@@ -416,23 +529,31 @@ export async function clientUpdateServiceType(
     maxConcurrentBookings: number;
     requiresPayment: boolean;
     amount: number;
+    isOnline: boolean;
+    isPendingEnabled: boolean;
     duration: number;
     color: string;
     displayOrder: number;
     image: string;
     formFields: FormFieldDefinition[];
-  }>
+  }>,
 ): Promise<ServiceType> {
   const apiData: Record<string, unknown> = {};
   if (data.name !== undefined) apiData.name = data.name;
   if (data.description !== undefined) apiData.description = data.description;
   if (data.capacity !== undefined) apiData.capacity = data.capacity;
-  if (data.maxConcurrentBookings !== undefined) apiData.max_concurrent_bookings = data.maxConcurrentBookings;
-  if (data.requiresPayment !== undefined) apiData.requires_payment = data.requiresPayment;
+  if (data.maxConcurrentBookings !== undefined)
+    apiData.max_concurrent_bookings = data.maxConcurrentBookings;
+  if (data.requiresPayment !== undefined)
+    apiData.requires_payment = data.requiresPayment;
   if (data.amount !== undefined) apiData.amount = data.amount;
+  if (data.isOnline !== undefined) apiData.is_online = data.isOnline;
+  if (data.isPendingEnabled !== undefined)
+    apiData.is_pending_enabled = data.isPendingEnabled;
   if (data.duration !== undefined) apiData.duration = data.duration;
   if (data.color !== undefined) apiData.color = data.color;
-  if (data.displayOrder !== undefined) apiData.display_order = data.displayOrder;
+  if (data.displayOrder !== undefined)
+    apiData.display_order = data.displayOrder;
   if (data.image !== undefined) apiData.image = data.image;
   if (data.formFields !== undefined) {
     apiData.form_fields = data.formFields.map((f) => ({
@@ -450,15 +571,99 @@ export async function clientUpdateServiceType(
     }));
   }
 
-  const result = await authFetch<Record<string, unknown>>(`/service-types/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify(apiData),
-  });
+  const result = await authFetch<Record<string, unknown>>(
+    `/service-types/${id}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(apiData),
+    },
+  );
   return toServiceType(result);
 }
 
 export async function clientDeleteServiceType(id: string): Promise<void> {
   await authFetch(`/service-types/${id}`, { method: "DELETE" });
+}
+
+export async function clientGetMeContext(): Promise<MeContext | null> {
+  try {
+    const data = await authFetch<Record<string, unknown>>("/auth/me/context");
+    const biz = data.business as Record<string, unknown>;
+    return {
+      user: {
+        id: (data.user as Record<string, unknown>).id as string,
+        email: (data.user as Record<string, unknown>).email as string,
+        name: (data.user as Record<string, unknown>).name as string,
+        phone: (data.user as Record<string, unknown>).phone as string | undefined,
+        avatar: (data.user as Record<string, unknown>).avatar as string | undefined,
+        userType: (data.user as Record<string, unknown>).user_type as string,
+      },
+      business: {
+        id: biz.id as string,
+        name: biz.name as string,
+        slug: biz.slug as string,
+        enabledModules: (biz.enabled_modules as string[]) ?? [],
+        onboardingComplete: (biz.onboarding_complete as boolean) ?? false,
+        notificationChannels: (biz.notification_channels as string[]) ?? ["email"],
+        locations: (biz.locations as MeContext["business"]["locations"]) ?? [],
+      },
+      role: data.role as MeContext["role"],
+      permissions: (data.permissions as string[]) ?? [],
+      enabledModules: (data.enabled_modules as string[]) ?? [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function clientCompleteOnboarding(businessId: string): Promise<Business> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/businesses/${businessId}/onboarding-complete`,
+    { method: "PATCH" },
+  );
+  return toBusiness(result);
+}
+
+export async function clientUpdateNotificationChannels(
+  businessId: string,
+  channels: string[],
+): Promise<Business> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/businesses/${businessId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ notification_channels: channels }),
+    },
+  );
+  return toBusiness(result);
+}
+
+export async function clientUpdateEnabledModules(
+  businessId: string,
+  enabledModules: string[],
+): Promise<Business> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/businesses/${businessId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ enabled_modules: enabledModules }),
+    },
+  );
+  return toBusiness(result);
+}
+
+export async function clientGetGoogleConnected(
+  businessId: string,
+): Promise<boolean> {
+  const result = await authFetch<{ connected: boolean }>(
+    `/businesses/${businessId}/google-connected`,
+  );
+  return result.connected;
+}
+
+/** URL to start Google OAuth - use with window.location for redirect flow */
+export function getGoogleAuthorizeUrl(businessId: string): string {
+  return `/api/proxy/auth/google/authorize?business_id=${businessId}`;
 }
 
 // ─── Authenticated: Staff mutations ──────────────────────────────────────────
@@ -501,7 +706,7 @@ export async function clientCreateStaff(data: {
 
 export async function clientUpdateStaff(
   id: string,
-  data: Partial<{ role: string }>
+  data: Partial<{ role: string }>,
 ): Promise<StaffMember> {
   const result = await authFetch<Record<string, unknown>>(`/staff/${id}`, {
     method: "PATCH",
@@ -512,4 +717,742 @@ export async function clientUpdateStaff(
 
 export async function clientDeleteStaff(id: string): Promise<void> {
   await authFetch(`/staff/${id}`, { method: "DELETE" });
+}
+
+// ─── Queue ────────────────────────────────────────────────────────────────────
+
+function toQueueEntry(e: Record<string, unknown>): QueueEntry {
+  return {
+    id: e.id as string,
+    businessId: e.business_id as string,
+    sessionToken: e.session_token as string,
+    name: e.name as string,
+    partySize: e.party_size as number,
+    phone: (e.phone as string) || undefined,
+    status: e.status as QueueEntry["status"],
+    position: (e.position as number) ?? undefined,
+    joinedAt: e.joined_at as string,
+    calledAt: (e.called_at as string) || undefined,
+    seatedAt: (e.seated_at as string) || undefined,
+  };
+}
+
+function toQueueStatus(s: Record<string, unknown>): QueueStatus {
+  return {
+    entry: toQueueEntry(s.entry as Record<string, unknown>),
+    totalWaiting: s.total_waiting as number,
+    estimatedWaitMinutes: (s.estimated_wait_minutes as number) ?? undefined,
+  };
+}
+
+export async function clientLeaveQueue(
+  businessId: string,
+  sessionToken: string,
+): Promise<void> {
+  await clientFetch(
+    `/queue/${businessId}/leave?session_token=${encodeURIComponent(sessionToken)}`,
+    { method: "POST" },
+  );
+}
+
+export async function clientJoinQueue(
+  businessId: string,
+  data: { name: string; partySize: number; phone?: string },
+): Promise<QueueStatus> {
+  const result = await clientFetch<Record<string, unknown>>(
+    `/queue/${businessId}/join`,
+    {
+      method: "POST",
+      body: JSON.stringify({ name: data.name, party_size: data.partySize, phone: data.phone }),
+    },
+  );
+  return toQueueStatus(result);
+}
+
+export async function clientGetQueueStatus(
+  businessId: string,
+  sessionToken: string,
+): Promise<QueueStatus> {
+  const result = await clientFetch<Record<string, unknown>>(
+    `/queue/${businessId}/status?session_token=${encodeURIComponent(sessionToken)}`,
+  );
+  return toQueueStatus(result);
+}
+
+export async function clientGetQueueActiveCount(businessId: string): Promise<number> {
+  const result = await authFetch<Record<string, unknown>[]>(`/queue/${businessId}/entries`);
+  return result.filter((e) => e.status === "waiting" || e.status === "called").length;
+}
+
+export async function clientGetQueueEntries(businessId: string): Promise<QueueEntry[]> {
+  const result = await authFetch<Record<string, unknown>[]>(`/queue/${businessId}/entries`);
+  return result.map(toQueueEntry);
+}
+
+export async function clientNotifyQueueEntry(
+  businessId: string,
+  entryId: string,
+): Promise<QueueEntry> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/queue/${businessId}/entries/${entryId}/notify`,
+    { method: "POST" },
+  );
+  return toQueueEntry(result);
+}
+
+export async function clientAcceptQueueEntry(
+  businessId: string,
+  entryId: string,
+): Promise<QueueEntry> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/queue/${businessId}/entries/${entryId}/accept`,
+    { method: "POST" },
+  );
+  return toQueueEntry(result);
+}
+
+export async function clientSeatQueueEntry(
+  businessId: string,
+  entryId: string,
+): Promise<QueueEntry> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/queue/${businessId}/entries/${entryId}/seat`,
+    { method: "POST" },
+  );
+  return toQueueEntry(result);
+}
+
+export async function clientRemoveQueueEntry(
+  businessId: string,
+  entryId: string,
+): Promise<void> {
+  await authFetch(`/queue/${businessId}/entries/${entryId}`, { method: "DELETE" });
+}
+
+// ─── Ordering: transform helpers ─────────────────────────────────────────────
+
+function toModifier(m: Record<string, unknown>): Modifier {
+  return {
+    id: m.id as string,
+    groupId: m.group_id as string,
+    businessId: m.business_id as string,
+    name: m.name as string,
+    priceDelta: m.price_delta as number,
+    isAvailable: m.is_available as boolean,
+  };
+}
+
+function toModifierGroup(g: Record<string, unknown>): ModifierGroup {
+  return {
+    id: g.id as string,
+    itemId: g.item_id as string,
+    businessId: g.business_id as string,
+    name: g.name as string,
+    required: g.required as boolean,
+    minSelect: g.min_select as number,
+    maxSelect: g.max_select as number,
+    modifiers: ((g.modifiers as Record<string, unknown>[]) ?? []).map(toModifier),
+  };
+}
+
+function toMenuItem(i: Record<string, unknown>): MenuItem {
+  return {
+    id: i.id as string,
+    categoryId: i.category_id as string,
+    businessId: i.business_id as string,
+    name: i.name as string,
+    description: (i.description as string) || undefined,
+    price: i.price as number,
+    isAvailable: i.is_available as boolean,
+    routingTag: i.routing_tag as MenuItem["routingTag"],
+    prepTimeMinutes: (i.prep_time_minutes as number) || undefined,
+    displayOrder: i.display_order as number,
+    image: (i.image as string) || undefined,
+    modifierGroups: ((i.modifier_groups as Record<string, unknown>[]) ?? []).map(toModifierGroup),
+  };
+}
+
+function toMenuCategory(c: Record<string, unknown>): MenuCategory {
+  return {
+    id: c.id as string,
+    menuId: c.menu_id as string,
+    businessId: c.business_id as string,
+    name: c.name as string,
+    displayOrder: c.display_order as number,
+    isActive: c.is_active as boolean,
+    items: ((c.items as Record<string, unknown>[]) ?? []).map(toMenuItem),
+  };
+}
+
+function toMenu(m: Record<string, unknown>): Menu {
+  return {
+    id: m.id as string,
+    businessId: m.business_id as string,
+    locationId: (m.location_id as string) || undefined,
+    name: m.name as string,
+    description: (m.description as string) || undefined,
+    isActive: m.is_active as boolean,
+    categories: ((m.categories as Record<string, unknown>[]) ?? []).map(toMenuCategory),
+  };
+}
+
+function toOrder(o: Record<string, unknown>): Order {
+  const lineItems = (o.line_items as Record<string, unknown>[]) ?? [];
+  const timeline = (o.status_timeline as Record<string, unknown>[]) ?? [];
+  return {
+    id: o.id as string,
+    businessId: o.business_id as string,
+    locationId: (o.location_id as string) || undefined,
+    sessionToken: o.session_token as string,
+    tableIdentifier: (o.table_identifier as string) || undefined,
+    status: o.status as Order["status"],
+    idempotencyKey: o.idempotency_key as string,
+    totalAmount: o.total_amount as number,
+    notes: (o.notes as string) || undefined,
+    placedAt: o.placed_at as string,
+    lineItems: lineItems.map((li) => ({
+      id: li.id as string,
+      orderId: li.order_id as string,
+      itemId: (li.item_id as string) || undefined,
+      itemName: li.item_name as string,
+      quantity: li.quantity as number,
+      unitPrice: li.unit_price as number,
+      selectedModifiers: ((li.selected_modifiers as Record<string, unknown>[]) ?? []).map((s) => ({
+        modifierId: s.modifier_id as string,
+        name: s.name as string,
+        priceDelta: s.price_delta as number,
+      })),
+      routingTag: li.routing_tag as string,
+      notes: (li.notes as string) || undefined,
+    })),
+    statusTimeline: timeline.map((t) => ({
+      id: t.id as string,
+      status: t.status as string,
+      changedBy: (t.changed_by as string) || undefined,
+      changedAt: t.changed_at as string,
+    })),
+  };
+}
+
+// ─── Ordering: Public endpoints ───────────────────────────────────────────────
+
+export async function clientGetMenu(businessId: string): Promise<Menu | null> {
+  try {
+    const data = await clientFetch<Record<string, unknown>>(
+      `/ordering/${businessId}/menu`,
+    );
+    return toMenu(data);
+  } catch {
+    return null;
+  }
+}
+
+export async function clientPlaceOrder(
+  businessId: string,
+  data: {
+    tableIdentifier?: string;
+    items: Array<{
+      itemId: string;
+      quantity: number;
+      selectedModifiers?: Array<{ modifierId: string; name: string; priceDelta: number }>;
+      notes?: string;
+    }>;
+    notes?: string;
+    idempotencyKey: string;
+  },
+): Promise<Order> {
+  const body = {
+    table_identifier: data.tableIdentifier,
+    items: data.items.map((i) => ({
+      item_id: i.itemId,
+      quantity: i.quantity,
+      selected_modifiers: (i.selectedModifiers ?? []).map((m) => ({
+        modifier_id: m.modifierId,
+        name: m.name,
+        price_delta: m.priceDelta,
+      })),
+      notes: i.notes,
+    })),
+    notes: data.notes,
+    idempotency_key: data.idempotencyKey,
+  };
+  const result = await clientFetch<Record<string, unknown>>(
+    `/ordering/${businessId}/orders`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+  return toOrder(result);
+}
+
+export async function clientGetOrderStatus(
+  businessId: string,
+  sessionToken: string,
+): Promise<Order[]> {
+  const result = await clientFetch<Record<string, unknown>[]>(
+    `/ordering/${businessId}/orders/status?session_token=${encodeURIComponent(sessionToken)}`,
+  );
+  return result.map(toOrder);
+}
+
+// ─── Ordering: Staff endpoints ────────────────────────────────────────────────
+
+export async function clientGetOrders(
+  businessId: string,
+  filters?: { status?: string[]; routingTag?: string },
+): Promise<Order[]> {
+  const params = new URLSearchParams();
+  if (filters?.status) {
+    for (const s of filters.status) params.append("status", s);
+  }
+  if (filters?.routingTag) params.set("routing_tag", filters.routingTag);
+  const q = params.toString();
+  const path = q ? `/ordering/${businessId}/orders?${q}` : `/ordering/${businessId}/orders`;
+  const result = await authFetch<Record<string, unknown>[]>(path);
+  return result.map(toOrder);
+}
+
+export async function clientAdvanceOrderStatus(
+  businessId: string,
+  orderId: string,
+  status: Order["status"],
+): Promise<Order> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/ordering/${businessId}/orders/${orderId}/status`,
+    { method: "PATCH", body: JSON.stringify({ status }) },
+  );
+  return toOrder(result);
+}
+
+export async function clientGetMenus(businessId: string): Promise<Menu[]> {
+  const result = await authFetch<Record<string, unknown>[]>(
+    `/ordering/${businessId}/menus`,
+  );
+  return result.map(toMenu);
+}
+
+export async function clientCreateMenu(
+  businessId: string,
+  data: { name: string; description?: string; locationId?: string },
+): Promise<Menu> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/ordering/${businessId}/menus`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name: data.name,
+        description: data.description,
+        location_id: data.locationId,
+      }),
+    },
+  );
+  return toMenu(result);
+}
+
+export async function clientUpdateMenu(
+  businessId: string,
+  menuId: string,
+  data: { name?: string; description?: string; isActive?: boolean },
+): Promise<Menu> {
+  const body: Record<string, unknown> = {};
+  if (data.name !== undefined) body.name = data.name;
+  if (data.description !== undefined) body.description = data.description;
+  if (data.isActive !== undefined) body.is_active = data.isActive;
+  const result = await authFetch<Record<string, unknown>>(
+    `/ordering/${businessId}/menus/${menuId}`,
+    { method: "PATCH", body: JSON.stringify(body) },
+  );
+  return toMenu(result);
+}
+
+export async function clientDeleteMenu(
+  businessId: string,
+  menuId: string,
+): Promise<void> {
+  await authFetch(`/ordering/${businessId}/menus/${menuId}`, { method: "DELETE" });
+}
+
+export async function clientCreateCategory(
+  businessId: string,
+  menuId: string,
+  data: { name: string; displayOrder?: number },
+): Promise<MenuCategory> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/ordering/${businessId}/menus/${menuId}/categories`,
+    {
+      method: "POST",
+      body: JSON.stringify({ name: data.name, display_order: data.displayOrder ?? 0 }),
+    },
+  );
+  return toMenuCategory(result);
+}
+
+export async function clientUpdateCategory(
+  businessId: string,
+  categoryId: string,
+  data: { name?: string; displayOrder?: number; isActive?: boolean },
+): Promise<MenuCategory> {
+  const body: Record<string, unknown> = {};
+  if (data.name !== undefined) body.name = data.name;
+  if (data.displayOrder !== undefined) body.display_order = data.displayOrder;
+  if (data.isActive !== undefined) body.is_active = data.isActive;
+  const result = await authFetch<Record<string, unknown>>(
+    `/ordering/${businessId}/categories/${categoryId}`,
+    { method: "PATCH", body: JSON.stringify(body) },
+  );
+  return toMenuCategory(result);
+}
+
+export async function clientDeleteCategory(
+  businessId: string,
+  categoryId: string,
+): Promise<void> {
+  await authFetch(`/ordering/${businessId}/categories/${categoryId}`, { method: "DELETE" });
+}
+
+export async function clientCreateMenuItem(
+  businessId: string,
+  categoryId: string,
+  data: {
+    name: string;
+    description?: string;
+    price: number;
+    isAvailable?: boolean;
+    routingTag?: string;
+    prepTimeMinutes?: number;
+    displayOrder?: number;
+    image?: string;
+  },
+): Promise<MenuItem> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/ordering/${businessId}/categories/${categoryId}/items`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name: data.name,
+        description: data.description,
+        price: data.price,
+        is_available: data.isAvailable ?? true,
+        routing_tag: data.routingTag ?? "kitchen",
+        prep_time_minutes: data.prepTimeMinutes,
+        display_order: data.displayOrder ?? 0,
+        image: data.image,
+      }),
+    },
+  );
+  return toMenuItem(result);
+}
+
+export async function clientUpdateMenuItem(
+  businessId: string,
+  itemId: string,
+  data: {
+    name?: string;
+    description?: string;
+    price?: number;
+    isAvailable?: boolean;
+    routingTag?: string;
+    prepTimeMinutes?: number;
+    displayOrder?: number;
+    image?: string;
+  },
+): Promise<MenuItem> {
+  const body: Record<string, unknown> = {};
+  if (data.name !== undefined) body.name = data.name;
+  if (data.description !== undefined) body.description = data.description;
+  if (data.price !== undefined) body.price = data.price;
+  if (data.isAvailable !== undefined) body.is_available = data.isAvailable;
+  if (data.routingTag !== undefined) body.routing_tag = data.routingTag;
+  if (data.prepTimeMinutes !== undefined) body.prep_time_minutes = data.prepTimeMinutes;
+  if (data.displayOrder !== undefined) body.display_order = data.displayOrder;
+  if (data.image !== undefined) body.image = data.image;
+  const result = await authFetch<Record<string, unknown>>(
+    `/ordering/${businessId}/items/${itemId}`,
+    { method: "PATCH", body: JSON.stringify(body) },
+  );
+  return toMenuItem(result);
+}
+
+export async function clientToggleItemAvailability(
+  businessId: string,
+  itemId: string,
+): Promise<MenuItem> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/ordering/${businessId}/items/${itemId}/toggle-availability`,
+    { method: "POST" },
+  );
+  return toMenuItem(result);
+}
+
+export async function clientDeleteMenuItem(
+  businessId: string,
+  itemId: string,
+): Promise<void> {
+  await authFetch(`/ordering/${businessId}/items/${itemId}`, { method: "DELETE" });
+}
+
+export async function clientGetQrUrl(
+  businessId: string,
+  tableIdentifier: string,
+): Promise<{ url: string; tableIdentifier: string }> {
+  const result = await authFetch<{ url: string; table_identifier: string }>(
+    `/ordering/${businessId}/qr-url/${encodeURIComponent(tableIdentifier)}`,
+  );
+  return { url: result.url, tableIdentifier: result.table_identifier };
+}
+
+// ─── Ordering: Settings ───────────────────────────────────────────────────────
+
+export async function clientGetOrderingSettings(
+  businessId: string,
+): Promise<{ isAcceptingOrders: boolean }> {
+  const result = await clientFetch<{ is_accepting_orders: boolean }>(
+    `/ordering/${businessId}/settings`,
+  );
+  return { isAcceptingOrders: result.is_accepting_orders };
+}
+
+export async function clientSetOrderingSettings(
+  businessId: string,
+  isAcceptingOrders: boolean,
+): Promise<{ isAcceptingOrders: boolean }> {
+  const result = await authFetch<{ is_accepting_orders: boolean }>(
+    `/ordering/${businessId}/settings`,
+    { method: "PATCH", body: JSON.stringify({ is_accepting_orders: isAcceptingOrders }) },
+  );
+  return { isAcceptingOrders: result.is_accepting_orders };
+}
+
+// ─── Ordering: Item Library ───────────────────────────────────────────────────
+
+function toLibraryItem(d: Record<string, unknown>): LibraryItem {
+  return {
+    id: d.id as string,
+    businessId: d.business_id as string,
+    name: d.name as string,
+    description: d.description as string | undefined,
+    price: Number(d.price),
+    routingTag: d.routing_tag as string,
+    prepTimeMinutes: d.prep_time_minutes as number | undefined,
+  };
+}
+
+export async function clientGetLibrary(businessId: string): Promise<LibraryItem[]> {
+  const result = await authFetch<Record<string, unknown>[]>(
+    `/ordering/${businessId}/library`,
+  );
+  return result.map(toLibraryItem);
+}
+
+export async function clientCreateLibraryItem(
+  businessId: string,
+  data: { name: string; description?: string; price: number; routingTag?: string; prepTimeMinutes?: number },
+): Promise<LibraryItem> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/ordering/${businessId}/library`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name: data.name,
+        description: data.description,
+        price: data.price,
+        routing_tag: data.routingTag ?? "kitchen",
+        prep_time_minutes: data.prepTimeMinutes,
+      }),
+    },
+  );
+  return toLibraryItem(result);
+}
+
+export async function clientUpdateLibraryItem(
+  businessId: string,
+  itemId: string,
+  data: { name?: string; description?: string; price?: number; routingTag?: string; prepTimeMinutes?: number },
+): Promise<LibraryItem> {
+  const body: Record<string, unknown> = {};
+  if (data.name !== undefined) body.name = data.name;
+  if (data.description !== undefined) body.description = data.description;
+  if (data.price !== undefined) body.price = data.price;
+  if (data.routingTag !== undefined) body.routing_tag = data.routingTag;
+  if (data.prepTimeMinutes !== undefined) body.prep_time_minutes = data.prepTimeMinutes;
+  const result = await authFetch<Record<string, unknown>>(
+    `/ordering/${businessId}/library/${itemId}`,
+    { method: "PATCH", body: JSON.stringify(body) },
+  );
+  return toLibraryItem(result);
+}
+
+export async function clientDeleteLibraryItem(businessId: string, itemId: string): Promise<void> {
+  await authFetch(`/ordering/${businessId}/library/${itemId}`, { method: "DELETE" });
+}
+
+export async function clientSaveItemToLibrary(
+  businessId: string,
+  itemId: string,
+): Promise<LibraryItem> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/ordering/${businessId}/items/${itemId}/save-to-library`,
+    { method: "POST" },
+  );
+  return toLibraryItem(result);
+}
+
+export async function clientAddLibraryItemToCategory(
+  businessId: string,
+  libraryItemId: string,
+  categoryId: string,
+): Promise<MenuItem> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/ordering/${businessId}/library/${libraryItemId}/add-to-category/${categoryId}`,
+    { method: "POST" },
+  );
+  return toMenuItem(result);
+}
+
+// ─── Inventory ────────────────────────────────────────────────────────────────
+
+function toInventoryItem(raw: Record<string, unknown>): InventoryItem {
+  const parQty = raw.par_quantity != null ? Number(raw.par_quantity) : undefined;
+  const currentQty = Number(raw.current_quantity ?? 0);
+  return {
+    id: raw.id as string,
+    businessId: raw.business_id as string,
+    locationId: raw.location_id as string | undefined,
+    name: raw.name as string,
+    unit: raw.unit as string,
+    currentQuantity: currentQty,
+    parQuantity: parQty,
+    costPerUnit: raw.cost_per_unit != null ? Number(raw.cost_per_unit) : undefined,
+    notes: raw.notes as string | undefined,
+    isLowStock: parQty != null && currentQty < parQty,
+    createdAt: raw.created_at as string,
+    updatedAt: raw.updated_at as string,
+  };
+}
+
+function toStockMovement(raw: Record<string, unknown>): StockMovement {
+  return {
+    id: raw.id as string,
+    businessId: raw.business_id as string,
+    locationId: raw.location_id as string | undefined,
+    itemId: raw.item_id as string,
+    movementType: raw.movement_type as "receive" | "adjust" | "waste",
+    quantityDelta: Number(raw.quantity_delta),
+    notes: raw.notes as string | undefined,
+    createdBy: raw.created_by as string | undefined,
+    alertTriggered: raw.alert_triggered as boolean,
+    createdAt: raw.created_at as string,
+  };
+}
+
+export async function clientGetInventoryItems(
+  businessId: string,
+  locationId?: string,
+): Promise<InventoryItem[]> {
+  const params = locationId ? `?location_id=${locationId}` : "";
+  const result = await authFetch<Record<string, unknown>[]>(
+    `/inventory/${businessId}/items${params}`,
+  );
+  return (result ?? []).map(toInventoryItem);
+}
+
+export async function clientCreateInventoryItem(
+  businessId: string,
+  data: {
+    name: string;
+    unit: string;
+    parQuantity?: number;
+    costPerUnit?: number;
+    notes?: string;
+    locationId?: string;
+  },
+): Promise<InventoryItem> {
+  const body: Record<string, unknown> = { name: data.name, unit: data.unit };
+  if (data.parQuantity !== undefined) body.par_quantity = data.parQuantity;
+  if (data.costPerUnit !== undefined) body.cost_per_unit = data.costPerUnit;
+  if (data.notes !== undefined) body.notes = data.notes;
+  if (data.locationId !== undefined) body.location_id = data.locationId;
+  const result = await authFetch<Record<string, unknown>>(
+    `/inventory/${businessId}/items`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+  return toInventoryItem(result);
+}
+
+export async function clientUpdateInventoryItem(
+  businessId: string,
+  itemId: string,
+  data: {
+    name?: string;
+    unit?: string;
+    parQuantity?: number;
+    costPerUnit?: number;
+    notes?: string;
+    locationId?: string;
+  },
+): Promise<InventoryItem> {
+  const body: Record<string, unknown> = {};
+  if (data.name !== undefined) body.name = data.name;
+  if (data.unit !== undefined) body.unit = data.unit;
+  if (data.parQuantity !== undefined) body.par_quantity = data.parQuantity;
+  if (data.costPerUnit !== undefined) body.cost_per_unit = data.costPerUnit;
+  if (data.notes !== undefined) body.notes = data.notes;
+  if (data.locationId !== undefined) body.location_id = data.locationId;
+  const result = await authFetch<Record<string, unknown>>(
+    `/inventory/${businessId}/items/${itemId}`,
+    { method: "PATCH", body: JSON.stringify(body) },
+  );
+  return toInventoryItem(result);
+}
+
+export async function clientDeleteInventoryItem(
+  businessId: string,
+  itemId: string,
+): Promise<void> {
+  await authFetch(`/inventory/${businessId}/items/${itemId}`, { method: "DELETE" });
+}
+
+export async function clientGetLowStockItems(
+  businessId: string,
+): Promise<InventoryItem[]> {
+  const result = await authFetch<Record<string, unknown>[]>(
+    `/inventory/${businessId}/low-stock`,
+  );
+  return (result ?? []).map(toInventoryItem);
+}
+
+export async function clientRecordStockMovement(
+  businessId: string,
+  itemId: string,
+  data: {
+    movementType: "receive" | "adjust" | "waste";
+    quantityDelta: number;
+    notes?: string;
+    locationId?: string;
+  },
+): Promise<StockMovement> {
+  const body: Record<string, unknown> = {
+    movement_type: data.movementType,
+    quantity_delta: data.quantityDelta,
+  };
+  if (data.notes !== undefined) body.notes = data.notes;
+  if (data.locationId !== undefined) body.location_id = data.locationId;
+  const result = await authFetch<Record<string, unknown>>(
+    `/inventory/${businessId}/items/${itemId}/movements`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+  return toStockMovement(result);
+}
+
+export async function clientGetStockMovements(
+  businessId: string,
+  itemId: string,
+  params?: { limit?: number; offset?: number },
+): Promise<StockMovement[]> {
+  const qs = new URLSearchParams();
+  if (params?.limit !== undefined) qs.set("limit", String(params.limit));
+  if (params?.offset !== undefined) qs.set("offset", String(params.offset));
+  const query = qs.toString() ? `?${qs.toString()}` : "";
+  const result = await authFetch<Record<string, unknown>[]>(
+    `/inventory/${businessId}/items/${itemId}/movements${query}`,
+  );
+  return (result ?? []).map(toStockMovement);
 }

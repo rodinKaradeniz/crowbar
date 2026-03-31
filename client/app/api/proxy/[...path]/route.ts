@@ -46,7 +46,16 @@ async function proxyRequest(
     method: request.method,
     headers,
     body,
+    redirect: "manual",
   });
+
+  // Pass through redirects (e.g. Google OAuth)
+  if (backendResponse.status >= 300 && backendResponse.status < 400) {
+    const location = backendResponse.headers.get("location");
+    if (location) {
+      return NextResponse.redirect(location, backendResponse.status as 301 | 302 | 303 | 307 | 308);
+    }
+  }
 
   // For 204 No Content, return empty response
   if (backendResponse.status === 204) {

@@ -1,7 +1,6 @@
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { BusinessSidebar } from "@/components/business-sidebar";
 import { DashboardLayoutWrapper } from "@/components/dashboard-layout-wrapper";
-import { BusinessFloatingContent } from "@/components/business-floating-content";
 import { getCurrentUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
@@ -28,10 +27,7 @@ export default async function BusinessLayout({
     <SidebarProvider defaultOpen={false}>
       <BusinessSidebar />
       <SidebarInset>
-        <DashboardLayoutWrapper
-          variant="business"
-          floatingSidebarContent={<BusinessFloatingContent />}
-        >
+        <DashboardLayoutWrapper variant="business">
           <main className="flex-1 overflow-auto">{children}</main>
         </DashboardLayoutWrapper>
       </SidebarInset>

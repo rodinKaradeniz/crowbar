@@ -1,5 +1,4 @@
 import type { NextConfig } from "next";
-import { createMDX } from "fumadocs-mdx/next";
 
 const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -12,8 +11,16 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async headers() {
+    return [
+      {
+        source: "/reserve/:path*",
+        headers: [
+          { key: "Content-Security-Policy", value: "frame-ancestors *" },
+        ],
+      },
+    ];
+  },
 };
 
-const withMDX = createMDX();
-
-export default withMDX(nextConfig);
+export default nextConfig;

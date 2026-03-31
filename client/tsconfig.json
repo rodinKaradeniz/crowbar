@@ -19,8 +19,7 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"],
-      "@/.source": ["./.source/server.ts"]
+      "@/*": ["./*"]
     }
   },
   "include": [
@@ -28,7 +27,6 @@
     "**/*.ts",
     "**/*.tsx",
     "**/*.mdx",
-    ".source/**/*.ts",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     "**/*.mts"

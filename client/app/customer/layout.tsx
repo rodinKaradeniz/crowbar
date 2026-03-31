@@ -1,7 +1,6 @@
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { CustomerSidebar } from "@/components/customer-sidebar";
 import { DashboardLayoutWrapper } from "@/components/dashboard-layout-wrapper";
-import { CustomerFloatingContent } from "@/components/customer-floating-content";
 import { getCurrentUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
@@ -31,10 +30,7 @@ export default async function CustomerLayout({
     <SidebarProvider defaultOpen={false}>
       <CustomerSidebar />
       <SidebarInset>
-        <DashboardLayoutWrapper
-          variant="customer"
-          floatingSidebarContent={<CustomerFloatingContent />}
-        >
+        <DashboardLayoutWrapper variant="customer">
           <main className="flex-1 overflow-auto">{children}</main>
         </DashboardLayoutWrapper>
       </SidebarInset>

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Field,
@@ -21,19 +21,79 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { clientChangeEmail, clientChangePassword, clientDisableAccount } from "@/lib/client-api";
+import {
+  clientChangeEmail,
+  clientChangePassword,
+  clientDisableAccount,
+  clientGetGoogleConnected,
+  getGoogleAuthorizeUrl,
+  clientUpdateNotificationChannels,
+} from "@/lib/client-api";
+import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
+import { CheckCircle2, XCircle } from "lucide-react";
 
 interface BusinessAccountSettingsClientProps {
   userId: string;
   userEmail: string;
+  businessId: string;
 }
 
 export default function BusinessAccountSettingsClient({
   userId,
   userEmail,
+  businessId,
 }: BusinessAccountSettingsClientProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { meContext } = useAuth();
+
+  // Google connection state
+  const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
+
+  // SMS notification state
+  const [smsEnabled, setSmsEnabled] = useState(false);
+  const [savingSms, setSavingSms] = useState(false);
+
+  useEffect(() => {
+    clientGetGoogleConnected(businessId)
+      .then(setGoogleConnected)
+      .catch(() => setGoogleConnected(false));
+  }, [businessId]);
+
+  useEffect(() => {
+    if (meContext?.business.notificationChannels) {
+      setSmsEnabled(meContext.business.notificationChannels.includes("sms"));
+    }
+  }, [meContext]);
+
+  // Handle Google OAuth callback params
+  useEffect(() => {
+    const connected = searchParams.get("google_connected");
+    const error = searchParams.get("google_error");
+    if (connected === "1") {
+      setGoogleConnected(true);
+      toast.success("Google Calendar connected successfully");
+      router.replace("/business/settings/account", { scroll: false });
+    } else if (error) {
+      toast.error(`Google connection failed: ${error}`);
+      router.replace("/business/settings/account", { scroll: false });
+    }
+  }, [searchParams, router]);
+
+  const handleSmsToggle = async (enabled: boolean) => {
+    setSavingSms(true);
+    try {
+      const channels = enabled ? ["email", "sms"] : ["email"];
+      await clientUpdateNotificationChannels(businessId, channels);
+      setSmsEnabled(enabled);
+      toast.success(enabled ? "SMS notifications enabled" : "SMS notifications disabled");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update notification settings");
+    } finally {
+      setSavingSms(false);
+    }
+  };
 
   // Email change state
   const [newEmail, setNewEmail] = useState("");
@@ -268,6 +328,89 @@ export default function BusinessAccountSettingsClient({
           </Field>
         </FieldGroup>
       </form>
+
+      {/* Integrations Section */}
+      <FieldGroup>
+        <FieldSeparator />
+        <FieldSet>
+          <FieldLegend>Integrations</FieldLegend>
+          <FieldDescription>
+            Connect third-party services to enhance your bookings
+          </FieldDescription>
+
+          <div className="rounded-lg border p-4 space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h3 className="font-medium text-sm">Google Calendar</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Sync confirmed reservations to your Google Calendar and generate Meet links for online services.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {googleConnected === null ? (
+                  <span className="text-xs text-muted-foreground">Checking...</span>
+                ) : googleConnected ? (
+                  <span className="flex items-center gap-1.5 text-xs text-green-600 font-medium">
+                    <CheckCircle2 className="w-4 h-4" /> Connected
+                  </span>
+                ) : (
+                  <>
+                    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <XCircle className="w-4 h-4" /> Not connected
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => { window.location.href = getGoogleAuthorizeUrl(businessId); }}
+                    >
+                      Connect Google
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </FieldSet>
+      </FieldGroup>
+
+      {/* SMS Notifications Section */}
+      <FieldGroup>
+        <FieldSeparator />
+        <FieldSet>
+          <FieldLegend>SMS Notifications</FieldLegend>
+          <FieldDescription>
+            Send SMS messages to customers when their reservation status changes
+          </FieldDescription>
+
+          <div className="rounded-lg border p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h3 className="font-medium text-sm">Enable SMS</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Customers will receive an SMS when reservations are confirmed, updated, or cancelled.
+                  Requires Twilio to be configured on the server.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={smsEnabled}
+                disabled={savingSms}
+                onClick={() => handleSmsToggle(!smsEnabled)}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+                  smsEnabled ? "bg-primary" : "bg-input"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform ${
+                    smsEnabled ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+        </FieldSet>
+      </FieldGroup>
 
       {/* Account Actions Section */}
       <FieldGroup>

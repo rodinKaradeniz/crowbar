@@ -74,11 +74,11 @@ const customerSearchItems: SearchItem[] = [
     keywords: ["password", "email", "security"],
   },
   {
-    title: "Documentation",
-    url: "/docs",
+    title: "For customers",
+    url: "/for-customers",
     icon: BookOpen,
     group: "Help",
-    keywords: ["help", "guide", "how to", "docs"],
+    keywords: ["help", "guide", "how to", "docs", "documentation"],
   },
 ];
 
@@ -96,6 +96,13 @@ const businessSearchItems: SearchItem[] = [
     icon: BrainCircuit,
     group: "Navigation",
     keywords: ["ml", "machine learning", "predictions", "analytics", "forecast", "segmentation"],
+  },
+  {
+    title: "Docs",
+    url: "/business/docs",
+    icon: BookOpen,
+    group: "Navigation",
+    keywords: ["help", "guide", "how to", "documentation", "manual"],
   },
   {
     title: "Reservations",
@@ -173,13 +180,6 @@ const businessSearchItems: SearchItem[] = [
     icon: ShieldCheck,
     group: "Settings",
     keywords: ["password", "email", "security"],
-  },
-  {
-    title: "Documentation",
-    url: "/docs",
-    icon: BookOpen,
-    group: "Help",
-    keywords: ["help", "guide", "how to", "docs"],
   },
 ];
 

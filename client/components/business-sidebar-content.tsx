@@ -20,6 +20,11 @@ import {
   CalendarCog,
   UserCircle,
   BrainCircuit,
+  BookOpen,
+  Code2,
+  ChefHat,
+  ClipboardList,
+  Package,
 } from "lucide-react";
 import {
   SidebarContent,
@@ -40,19 +45,27 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/hooks/use-auth";
-import { clientGetBusiness } from "@/lib/client-api";
-import { useEffect, useState } from "react";
+import { useMounted } from "@/hooks/use-mounted";
+import { clientGetBusiness, clientGetQueueActiveCount } from "@/lib/client-api";
+import { useEffect, useRef, useState } from "react";
 import { Business } from "@/types";
 
 /**
- * Shared business sidebar content - used in both the inset sidebar and the floating sidebar.
+ * Shared business sidebar content — used in both the inset sidebar and the floating sidebar.
  */
-export function BusinessSidebarContent() {
+function BusinessSidebarContentInner() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, meContext, logout } = useAuth();
+
+  // Default to showing all items while meContext is still loading
+  const hasModule = (m: string) => !meContext || meContext.enabledModules.includes(m);
   const [business, setBusiness] = useState<Business | null>(null);
+  const [queueCount, setQueueCount] = useState<number | null>(null);
+  const queuePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (user?.type === "staff" && user.businessId) {
@@ -60,6 +73,24 @@ export function BusinessSidebarContent() {
         if (data) setBusiness(data);
       });
     }
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || user.type !== "staff" || !hasModule("queue")) return;
+    const businessId = user.businessId;
+
+    const refresh = () => {
+      clientGetQueueActiveCount(businessId)
+        .then(setQueueCount)
+        .catch(() => {});
+    };
+
+    refresh();
+    queuePollRef.current = setInterval(refresh, 30_000);
+    return () => {
+      if (queuePollRef.current) clearInterval(queuePollRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const handleLogout = async () => {
@@ -84,6 +115,7 @@ export function BusinessSidebarContent() {
   const settingsSubItems = [
     { title: "Profile", url: "/business/settings/profile", icon: User },
     { title: "Account", url: "/business/settings/account", icon: ShieldCheck },
+    { title: "Widget", url: "/business/settings/widget", icon: Code2 },
   ];
 
   const isBusinessActive = pathname.startsWith("/business/profile");
@@ -93,7 +125,7 @@ export function BusinessSidebarContent() {
     <>
       <SidebarHeader>
         {business && (
-          <div className="p-4 border-b">
+          <div className="p-4 border-b group-data-[collapsible=icon]:hidden">
             <div className="flex items-center gap-3">
               <div className="relative h-12 w-12 rounded-full overflow-hidden bg-muted shrink-0">
                 {business.image ? (
@@ -123,7 +155,7 @@ export function BusinessSidebarContent() {
       </SidebarHeader>
 
       <SidebarContent>
-        {/* Overview - No Label */}
+        {/* Overview */}
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -131,6 +163,7 @@ export function BusinessSidebarContent() {
                 <SidebarMenuButton
                   asChild
                   isActive={pathname === "/business/overview"}
+                  tooltip="Overview"
                 >
                   <Link href="/business/overview">
                     <LayoutDashboard />
@@ -142,14 +175,127 @@ export function BusinessSidebarContent() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Insights */}
+        {/* Queue — guarded by "queue" module */}
+        {hasModule("queue") && (
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === "/business/queue"}
+                    tooltip="Queue"
+                  >
+                    <Link href="/business/queue">
+                      <Users />
+                      <span>Queue</span>
+                      {queueCount !== null && queueCount > 0 && (
+                        <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                          {queueCount > 99 ? "99+" : queueCount}
+                        </span>
+                      )}
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {/* Ordering — guarded by "ordering" module */}
+        {hasModule("ordering") && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Ordering</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === "/business/orders"}
+                    tooltip="Orders"
+                  >
+                    <Link href="/business/orders">
+                      <ClipboardList />
+                      <span>Orders</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === "/business/menu"}
+                    tooltip="Menu"
+                  >
+                    <Link href="/business/menu">
+                      <ChefHat />
+                      <span>Menu</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {/* Inventory — guarded by "inventory" module */}
+        {hasModule("inventory") && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Inventory</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === "/business/inventory"}
+                    tooltip="Stock"
+                  >
+                    <Link href="/business/inventory">
+                      <Package />
+                      <span>Stock</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {/* Operations — guarded by "reservations" module */}
+        {hasModule("reservations") && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Operations</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {operationsItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={pathname === item.url}
+                      tooltip={item.title}
+                    >
+                      <Link href={item.url}>
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {/* Analytics & Support */}
         <SidebarGroup>
+          <SidebarGroupLabel>Analytics & Support</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
+              {hasModule("insights") && (
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
                   isActive={pathname === "/business/insights"}
+                  tooltip="Insights"
                 >
                   <Link href="/business/insights">
                     <BrainCircuit />
@@ -157,25 +303,19 @@ export function BusinessSidebarContent() {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {/* Operations */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Operations</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {operationsItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={pathname === item.url}>
-                    <Link href={item.url}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              )}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname.startsWith("/business/docs")}
+                  tooltip="Docs"
+                >
+                  <Link href="/business/docs">
+                    <BookOpen />
+                    <span>Docs</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -189,6 +329,7 @@ export function BusinessSidebarContent() {
                 <SidebarMenuButton
                   asChild
                   isActive={pathname === "/business/staff"}
+                  tooltip="Staff"
                 >
                   <Link href="/business/staff">
                     <Users />
@@ -204,7 +345,10 @@ export function BusinessSidebarContent() {
               >
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
-                    <SidebarMenuButton isActive={isBusinessActive}>
+                    <SidebarMenuButton
+                      isActive={isBusinessActive}
+                      tooltip="Business"
+                    >
                       <Building2 />
                       <span>Business</span>
                       <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
@@ -237,7 +381,10 @@ export function BusinessSidebarContent() {
               >
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
-                    <SidebarMenuButton isActive={isSettingsActive}>
+                    <SidebarMenuButton
+                      isActive={isSettingsActive}
+                      tooltip="Settings"
+                    >
                       <Settings />
                       <span>Settings</span>
                       <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
@@ -268,19 +415,11 @@ export function BusinessSidebarContent() {
       </SidebarContent>
 
       <SidebarFooter>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild>
-              <button className="w-full" onClick={handleLogout}>
-                <LogOut />
-                <span>Logout</span>
-              </button>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-        <div className="p-4 border-t">
-          <div className="flex items-center gap-3">
-            <div className="relative h-10 w-10 rounded-full overflow-hidden bg-muted shrink-0">
+        {/* Expanded: user info row + logout */}
+        <div className="group-data-[collapsible=icon]:hidden">
+          <Separator />
+          <div className="flex items-center gap-3 px-3 py-3">
+            <div className="relative h-9 w-9 rounded-full overflow-hidden bg-muted shrink-0">
               {user?.avatar ? (
                 <Image
                   src={user.avatar}
@@ -304,9 +443,58 @@ export function BusinessSidebarContent() {
                 {user?.email || "staff@business.com"}
               </p>
             </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="shrink-0 text-muted-foreground hover:text-destructive"
+              onClick={handleLogout}
+              title="Log out"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
           </div>
+        </div>
+
+        {/* Collapsed icon mode */}
+        <div className="hidden group-data-[collapsible=icon]:flex flex-col items-center py-2">
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton onClick={handleLogout} tooltip="Log out">
+                <LogOut />
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
         </div>
       </SidebarFooter>
     </>
   );
+}
+
+/** Radix (Tooltip, Collapsible) ids can mismatch SSR vs hydration — render after mount. */
+function BusinessSidebarHydrationFallback() {
+  return (
+    <>
+      <SidebarHeader>
+        <div
+          className="h-16 shrink-0 border-b border-sidebar-border bg-sidebar-accent/30"
+          aria-hidden
+        />
+      </SidebarHeader>
+      <SidebarContent>
+        <div className="flex flex-col gap-2 p-2" aria-hidden>
+          {Array.from({ length: 12 }).map((_, i) => (
+            <div key={i} className="h-9 rounded-md bg-sidebar-accent/40" />
+          ))}
+        </div>
+      </SidebarContent>
+    </>
+  );
+}
+
+export function BusinessSidebarContent() {
+  const mounted = useMounted();
+  if (!mounted) {
+    return <BusinessSidebarHydrationFallback />;
+  }
+  return <BusinessSidebarContentInner />;
 }

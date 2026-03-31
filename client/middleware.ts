@@ -48,9 +48,11 @@ export async function middleware(request: NextRequest) {
   const publicRoutePrefixes = [
     "/auth",
     "/reserve",
+    "/queue",
+    "/menu",
+    "/order",
     "/for-businesses",
     "/for-customers",
-    "/docs",
   ];
 
   const isPublicRoute = publicRoutePrefixes.some((route) =>

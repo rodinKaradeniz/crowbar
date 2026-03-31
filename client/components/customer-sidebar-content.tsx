@@ -70,6 +70,7 @@ export function CustomerSidebarContent() {
                 <SidebarMenuButton
                   asChild
                   isActive={pathname === "/customer/overview"}
+                  tooltip="Overview"
                 >
                   <Link href="/customer/overview">
                     <LayoutDashboard />
@@ -88,7 +89,11 @@ export function CustomerSidebarContent() {
             <SidebarMenu>
               {reservationsItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={pathname === item.url}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === item.url}
+                    tooltip={item.title}
+                  >
                     <Link href={item.url}>
                       <item.icon />
                       <span>{item.title}</span>
@@ -111,7 +116,10 @@ export function CustomerSidebarContent() {
               >
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
-                    <SidebarMenuButton isActive={isSettingsActive}>
+                    <SidebarMenuButton
+                      isActive={isSettingsActive}
+                      tooltip="Settings"
+                    >
                       <Settings />
                       <span>Settings</span>
                       <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
@@ -144,7 +152,7 @@ export function CustomerSidebarContent() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild>
+            <SidebarMenuButton asChild tooltip="Logout">
               <button className="w-full" onClick={handleLogout}>
                 <LogOut />
                 <span>Logout</span>
@@ -152,7 +160,7 @@ export function CustomerSidebarContent() {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <div className="p-4 border-t">
+        <div className="p-4 border-t group-data-[collapsible=icon]:hidden">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
               <span className="text-sm font-medium">

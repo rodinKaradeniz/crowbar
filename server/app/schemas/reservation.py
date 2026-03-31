@@ -55,6 +55,7 @@ class ReservationResponse(BaseModel):
     payment_amount: float | None = None
     payment_status: str | None = None
     stripe_payment_intent_id: str | None = None
+    meeting_link: str | None = None
     custom_fields: dict | None = None
     created_at: datetime
     updated_at: datetime

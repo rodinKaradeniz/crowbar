@@ -1,11 +1,14 @@
-# RK Reservations
+# Slotera
 
 A reservation management system for businesses and customers.
 
 ## Project Structure
 
 ```
-rk-reservations/
+slotera/
+├── scripts/             # Development scripts
+│   ├── dev.sh          # Start all services (Docker, backend, frontend)
+│   └── stop.sh         # Stop Docker containers
 ├── client/              # Frontend (Next.js)
 │   ├── app/             # Next.js app router pages
 │   │   └── api/         # BFF proxy routes (auth, proxy)
@@ -58,6 +61,31 @@ rk-reservations/
 - Docker & Docker Compose
 - (ML service) Python 3.12+ with LightGBM
 
+### Quick Start (All Services)
+
+From the project root, run:
+
+```bash
+chmod +x scripts/dev.sh
+./scripts/dev.sh
+```
+
+This will:
+
+1. Start Docker (PostgreSQL, Redis, ML service)
+2. Wait for the database to be ready
+3. Set up backend (venv, dependencies, migrations + seed data)
+4. Set up frontend (npm install if needed)
+5. Start backend (port 8000), frontend (port 3000), and ML (port 8001)
+
+Press **Ctrl+C** to stop all services.
+
+To stop Docker containers only:
+
+```bash
+./scripts/stop.sh
+```
+
 ### Frontend (Client)
 
 ```bash
@@ -82,6 +110,9 @@ pip install -r requirements.txt
 
 # Copy environment config
 cp env.example .env
+
+# Default DB name is `slotera`. If you still have an older `rk_reservations` database,
+# either create `slotera` and run migrations, or keep your existing name in `DATABASE_URL`.
 
 # Start PostgreSQL & Redis
 docker compose up -d
@@ -132,7 +163,7 @@ uvicorn src.main:app --reload --port 8001
 # Run migrations only (production-safe)
 python -m db.migrate
 
-# Run migrations + seed test data
+# Run migrations + seed test data (RK Design and Development, admin: mrodin.karadeniz@gmail.com, password: password123)
 SEED_DATA=true python -m db.migrate
 
 # Seed data only (assumes tables exist)
@@ -156,7 +187,7 @@ source venv/bin/activate
 
 # One-time setup: install test dependencies + create test database
 pip install -r requirements-test.txt
-docker compose exec postgres createdb -U postgres rk_reservations_test
+docker compose exec postgres createdb -U postgres slotera_test
 
 # Run all tests
 python -m pytest tests/ -v
@@ -177,7 +208,7 @@ python -m pytest tests/ --cov=app --cov-report=term-missing
 | `tests/integration/test_auth_routes.py` | Integration | Register, login, `/me`, profile update, password change |
 | `tests/integration/test_reservation_routes.py` | Integration | Full reservation CRUD lifecycle, public reservations, edge cases |
 
-**How it works:** Integration tests use a real `rk_reservations_test` PostgreSQL database. Tables are created before each test and dropped after, ensuring full isolation. The FastAPI `get_db` dependency is overridden to use the test session. See `tests/conftest.py` for all shared fixtures.
+**How it works:** Integration tests use a real `slotera_test` PostgreSQL database. Tables are created before each test and dropped after, ensuring full isolation. The FastAPI `get_db` dependency is overridden to use the test session. See `tests/conftest.py` for all shared fixtures.
 
 ### Frontend Tests
 

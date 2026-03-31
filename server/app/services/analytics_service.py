@@ -72,6 +72,41 @@ async def get_business_dashboard_stats(db: AsyncSession, business_id: UUID) -> d
             {"name": st.name, "color": st.color, "count": count}
         )
 
+    # Daily breakdown by day of week and service type
+    # Get last 7 days, map to day names (Mon-Sun)
+    day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    daily_by_type = []
+    
+    # Create a map of service type ID to name and color
+    service_type_map = {str(st.id): {"name": st.name, "color": st.color} for st in service_types}
+    
+    # Group reservations by day of week
+    for day_offset in range(7):
+        day_start = seven_days_ago + timedelta(days=day_offset)
+        day_end = day_start + timedelta(days=1)
+        
+        # Get day name (0 = Monday, 6 = Sunday)
+        day_of_week = day_start.weekday()  # 0 = Monday, 6 = Sunday
+        day_name = day_names[day_of_week]
+        
+        # Get reservations for this day
+        day_reservations = [
+            r for r in last_7_reservations
+            if day_start <= r.time < day_end and r.status != "cancelled"
+        ]
+        
+        # Count by service type
+        day_data = {"day": day_name}
+        for st in service_types:
+            count = sum(
+                1
+                for r in day_reservations
+                if r.service_type_id == st.id
+            )
+            day_data[st.name] = count
+        
+        daily_by_type.append(day_data)
+
     # Upcoming reservations
     upcoming_result = await db.execute(
         select(Reservation)
@@ -117,6 +152,7 @@ async def get_business_dashboard_stats(db: AsyncSession, business_id: UUID) -> d
         "today_guest_count": today_guest_count,
         "status_breakdown": status_breakdown,
         "reservations_by_type": reservations_by_type,
+        "daily_by_type": daily_by_type,
         "upcoming_reservations": [
             {
                 "id": str(r.id),

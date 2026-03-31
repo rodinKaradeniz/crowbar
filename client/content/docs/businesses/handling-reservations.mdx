@@ -5,11 +5,14 @@ description: Learn how to accept, reject, and manage customer reservations for y
 
 # Handling Reservations
 
-Managing reservations efficiently is key to running a successful business on RK Reservations.
+Managing reservations efficiently is key to running a successful business on Slotera.
 
 ## Reservation Requests
 
-When a customer books with your business, the reservation appears as a **pending request** (unless you have auto-accept enabled).
+When a customer books, the reservation may start as **pending** or **confirmed**:
+
+- **Per service type** — On **Profile** → **Types**, each service can enable **Pending requests**. If enabled, new bookings for that service appear under **Requests** until you accept them.
+- **Global booking settings** — **Profile** → **Booking** controls defaults such as how far ahead customers can book and cancellation expectations.
 
 ### Reviewing Requests
 
@@ -19,6 +22,7 @@ When a customer books with your business, the reservation appears as a **pending
    - Requested date and time
    - Service type
    - Any notes from the customer
+   - **Custom form** answers, if you configured extra fields on the service type
 3. For each request, you can:
    - **Accept** — Confirm the reservation
    - **Reject** — Decline the reservation
@@ -26,6 +30,14 @@ When a customer books with your business, the reservation appears as a **pending
 <Callout type="info">
 Responding to requests promptly improves the customer experience and helps build trust with your clientele.
 </Callout>
+
+## Email confirmations and calendar invites
+
+When your environment is configured for outbound email, customers receive a **confirmation email** after a relevant booking is created or updated. That email can include:
+
+- Reservation summary (business, service, time, guests)
+- **ICS calendar attachment** — Add the booking to their calendar
+- **Google Meet link** — For **online** service types, when Google Calendar is connected (see [Managing Service Types](./managing-services))
 
 ## Managing All Reservations
 
@@ -44,6 +56,7 @@ Click on any reservation to see:
 - Booking details (date, time, service type)
 - Payment status
 - Notes and special requests
+- **Meeting link** (for online services)
 - Reservation history
 
 ### Updating a Reservation
@@ -72,13 +85,13 @@ The **Schedule** page provides a visual timeline of your reservations:
 
 ## Auto-Accept vs. Manual Review
 
-You can configure how reservation requests are handled in **Profile** → **Booking**:
+You can combine **Profile** → **Booking** defaults with **per–service-type** pending settings:
 
-| Mode | Description |
-|------|-------------|
-| **Auto-accept** | Reservations are automatically confirmed when submitted. Best for businesses with flexible availability. |
-| **Manual review** | Each reservation requires your approval. Best for businesses that need to check availability or prepare in advance. |
+| Approach | Description |
+|----------|-------------|
+| **Immediate confirmation** | Disable **Pending requests** on the service type so eligible bookings are confirmed when submitted (subject to availability). |
+| **Manual review** | Enable **Pending requests** on services that need approval; use **Requests** to accept or reject. |
 
 ## Next Steps
 
-Learn how to [manage your staff](/docs/businesses/staff-management) and delegate reservation management to your team.
+Learn how to [manage your staff](./staff-management) and delegate reservation management to your team.

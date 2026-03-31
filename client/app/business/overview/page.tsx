@@ -31,6 +31,10 @@ export default async function BusinessOverview() {
     redirect("/auth/login");
   }
 
+  if (!business.onboardingComplete) {
+    redirect("/business/onboarding");
+  }
+
   return (
     <BusinessOverviewClient
       business={business}

@@ -1,11 +1,11 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: rk-reservations-db
+    container_name: slotera-db
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: rk_reservations
+      POSTGRES_DB: slotera
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
@@ -18,7 +18,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: rk-reservations-redis
+    container_name: slotera-redis
     ports:
       - "6379:6379"
     volumes:
@@ -33,12 +33,12 @@ services:
     build:
       context: ../ml
       dockerfile: Dockerfile
-    container_name: rk-reservations-ml
+    container_name: slotera-ml
     ports:
       - "8001:8001"
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/rk_reservations
-      DATABASE_URL_SYNC: postgresql://postgres:postgres@postgres:5432/rk_reservations
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/slotera
+      DATABASE_URL_SYNC: postgresql://postgres:postgres@postgres:5432/slotera
       ENVIRONMENT: development
       LOG_LEVEL: INFO
     depends_on:

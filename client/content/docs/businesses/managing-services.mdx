@@ -15,13 +15,23 @@ Navigate to **Profile** → **Types** to see all your current service types.
 
 1. Go to **Profile** → **Types**.
 2. Click **Add Service Type**.
-3. Fill in the details:
+3. Fill in the **Details** tab:
    - **Name** — The name of the service (e.g., "Haircut", "Consultation")
    - **Description** — A brief description of what the service includes
-   - **Duration** — How long the service typically takes
+   - **Duration** — How long the service typically takes (used for scheduling and, for online services, the calendar event length)
    - **Price** — The cost of the service (if applicable)
    - **Capacity** — How many customers can book this service at the same time
-4. Click **Save** to create the service type.
+   - **Color** — Display color for calendars and lists
+4. Optional **Booking behavior**:
+   - **Require payment** — When enabled, customers may need to pay a deposit or full amount at booking (Stripe), depending on your configuration.
+   - **Online (video) service** — Mark the service as held online. When Google Calendar is connected for your business, Slotera can create a **Google Meet** link and attach it to the reservation and confirmation email. Connect Google from **Profile** → **Types** (connection banner) if you use online services.
+   - **Pending requests** — When enabled, new bookings for this service start as **pending** until you accept them in **Requests**. When disabled, eligible bookings are **confirmed** immediately (still subject to your global booking rules).
+5. Optional **Custom form** tab — Add extra fields (text, number, select, etc.) that customers must fill when booking this service. Responses are stored on the reservation.
+6. Click **Save** to create the service type.
+
+## Google Calendar and Meet
+
+For **online** service types, Meet links are created only if your business has connected **Google Calendar** (OAuth). Use the connect action on **Profile** → **Types** to authorize Slotera. Without a connection, online services still work, but no Meet link is generated automatically.
 
 ## Editing a Service Type
 
@@ -41,13 +51,17 @@ Navigate to **Profile** → **Types** to see all your current service types.
 Deleting a service type will not cancel existing reservations of that type, but customers will no longer be able to book it.
 </Callout>
 
+## Guests and public booking
+
+Customers booking from your public page can specify **guest count** where the flow supports it. Capacity on the service type helps control how many spots each slot represents.
+
 ## Best Practices
 
 - **Be descriptive** — Clear names and descriptions help customers choose the right service.
-- **Set accurate durations** — This helps prevent scheduling conflicts.
+- **Set accurate durations** — Prevents scheduling conflicts and sets the right length for online calendar events.
 - **Keep prices updated** — Ensure your listed prices match your current rates.
 - **Review regularly** — Update your service types as your offerings change.
 
 ## Next Steps
 
-With your services set up, learn how to [handle incoming reservations](/docs/businesses/handling-reservations).
+With your services set up, learn how to [handle incoming reservations](./handling-reservations).

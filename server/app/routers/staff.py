@@ -3,8 +3,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.errors import forbidden, not_found
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_business, get_current_user, require_roles
+from app.models.business import Business
 from app.models.user import User
 from app.schemas.staff import StaffCreate, StaffResponse, StaffUpdate, StaffWithUserResponse
 from app.services import staff_service
@@ -16,8 +18,11 @@ router = APIRouter(prefix="/api/staff", tags=["staff"])
 async def list_business_staff(
     business_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_business: Business = Depends(get_current_business),
 ):
+    """List staff for the authenticated user's business."""
+    if current_business.id != business_id:
+        raise forbidden("Not authorized for this business")
     staff_list = await staff_service.get_staff_by_business(db, business_id)
     return [
         StaffWithUserResponse(
@@ -38,11 +43,13 @@ async def list_business_staff(
 async def get_staff(
     staff_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_business: Business = Depends(get_current_business),
 ):
     staff = await staff_service.get_staff_by_id(db, staff_id)
     if staff is None:
-        raise HTTPException(status_code=404, detail="Staff not found")
+        raise not_found("Staff")
+    if staff.business_id != current_business.id:
+        raise forbidden("Not authorized for this business")
     return staff
 
 
@@ -50,8 +57,10 @@ async def get_staff(
 async def create_staff(
     data: StaffCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    _: User = Depends(require_roles("owner", "manager")),
+    current_business: Business = Depends(get_current_business),
 ):
+    """Add a staff member. Requires owner or manager role."""
     return await staff_service.create_staff(db, data)
 
 
@@ -60,11 +69,18 @@ async def update_staff(
     staff_id: UUID,
     data: StaffUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    _: User = Depends(require_roles("owner", "manager")),
+    current_business: Business = Depends(get_current_business),
 ):
+    """Update a staff member's role. Requires owner or manager role."""
+    existing = await staff_service.get_staff_by_id(db, staff_id)
+    if existing is None:
+        raise not_found("Staff")
+    if existing.business_id != current_business.id:
+        raise forbidden("Not authorized for this business")
     staff = await staff_service.update_staff(db, staff_id, data)
     if staff is None:
-        raise HTTPException(status_code=404, detail="Staff not found")
+        raise not_found("Staff")
     return staff
 
 
@@ -72,8 +88,15 @@ async def update_staff(
 async def delete_staff(
     staff_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    _: User = Depends(require_roles("owner", "manager")),
+    current_business: Business = Depends(get_current_business),
 ):
+    """Remove a staff member. Requires owner or manager role."""
+    existing = await staff_service.get_staff_by_id(db, staff_id)
+    if existing is None:
+        raise not_found("Staff")
+    if existing.business_id != current_business.id:
+        raise forbidden("Not authorized for this business")
     deleted = await staff_service.delete_staff(db, staff_id)
     if not deleted:
-        raise HTTPException(status_code=404, detail="Staff not found")
+        raise not_found("Staff")

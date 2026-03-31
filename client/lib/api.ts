@@ -25,6 +25,7 @@ import {
   type CustomerDashboardStats,
   type LoginResponse,
 } from "./api-client";
+import type { MeContext } from "@/types";
 import * as mock from "./api-mock";
 
 // ─── Mock mode ──────────────────────────────────────────────────────────────
@@ -65,6 +66,11 @@ export async function deleteTokenCookie(): Promise<void> {
 // ─── Transform helpers (snake_case → camelCase) ─────────────────────────────
 
 function toBusiness(b: BusinessResponse): Business {
+  const raw = b as BusinessResponse & {
+    enabled_modules?: string[];
+    onboarding_complete?: boolean;
+    notification_channels?: string[];
+  };
   return {
     id: b.id,
     name: b.name,
@@ -82,6 +88,9 @@ function toBusiness(b: BusinessResponse): Business {
     timeSlotInterval: b.time_slot_interval,
     advanceBookingDays: b.advance_booking_days,
     operatingHours: b.operating_hours as Business["operatingHours"],
+    enabledModules: raw.enabled_modules ?? [],
+    onboardingComplete: raw.onboarding_complete ?? false,
+    notificationChannels: raw.notification_channels ?? ["email"],
   };
 }
 
@@ -111,6 +120,8 @@ function toServiceType(st: ServiceTypeResponse): ServiceType {
     maxConcurrentBookings: st.max_concurrent_bookings || undefined,
     requiresPayment: st.requires_payment,
     amount: st.amount || undefined,
+    isOnline: st.is_online ?? false,
+    isPendingEnabled: st.is_pending_enabled ?? true,
     duration: st.duration || undefined,
     color: st.color,
     displayOrder: st.display_order || undefined,
@@ -158,6 +169,46 @@ export async function serverGetMe() {
 
   try {
     return await apiGetMe(token);
+  } catch {
+    return null;
+  }
+}
+
+export async function serverGetMeContext(): Promise<MeContext | null> {
+  if (USE_MOCK) return null;
+  const token = await getToken();
+  if (!token) return null;
+
+  try {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    const res = await fetch(`${apiUrl}/api/auth/me/context`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      user: {
+        id: data.user.id,
+        email: data.user.email,
+        name: data.user.name,
+        phone: data.user.phone,
+        avatar: data.user.avatar,
+        userType: data.user.user_type,
+      },
+      business: {
+        id: data.business.id,
+        name: data.business.name,
+        slug: data.business.slug,
+        enabledModules: data.business.enabled_modules ?? [],
+        onboardingComplete: data.business.onboarding_complete ?? false,
+        notificationChannels: data.business.notification_channels ?? ["email"],
+        locations: data.business.locations ?? [],
+      },
+      role: data.role,
+      permissions: data.permissions ?? [],
+      enabledModules: data.enabled_modules ?? [],
+    };
   } catch {
     return null;
   }

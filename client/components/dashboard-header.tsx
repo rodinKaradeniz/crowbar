@@ -25,18 +25,31 @@ const routeLabels: Record<string, string> = {
   info: "Info",
   booking: "Booking",
   hours: "Hours",
-  types: "Types",
+  types: "Service Types",
   account: "Account",
+  docs: "Documentation",
+  insights: "Insights",
+  businesses: "Businesses",
+  general: "General",
   // Customer routes
   customer: "Customer",
+  // Public routes
+  reserve: "Book",
+  auth: "Authentication",
+  login: "Log in",
+  register: "Register",
+  "forgot-password": "Forgot Password",
+  "reset-password": "Reset Password",
 };
 
 interface DashboardHeaderProps {
   /** Optional element rendered before the breadcrumbs (e.g. sidebar trigger) */
   leading?: React.ReactNode;
+  /** Optional actions on the right (e.g. help chat) */
+  trailing?: React.ReactNode;
 }
 
-export function DashboardHeader({ leading }: DashboardHeaderProps) {
+export function DashboardHeader({ leading, trailing }: DashboardHeaderProps) {
   const pathname = usePathname();
   const segments = pathname.split("/").filter(Boolean);
 
@@ -53,22 +66,27 @@ export function DashboardHeader({ leading }: DashboardHeaderProps) {
     <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
       {leading}
       {leading && <Separator orientation="vertical" className="mr-1 h-4" />}
-      <Breadcrumb>
-        <BreadcrumbList>
-          {breadcrumbItems.map((item, index) => (
-            <span key={item.href} className="flex items-center gap-2">
-              {index > 0 && <BreadcrumbSeparator />}
-              <BreadcrumbItem>
-                {item.isLast ? (
-                  <BreadcrumbPage>{item.label}</BreadcrumbPage>
-                ) : (
-                  <BreadcrumbLink href={item.href}>{item.label}</BreadcrumbLink>
-                )}
-              </BreadcrumbItem>
-            </span>
-          ))}
-        </BreadcrumbList>
-      </Breadcrumb>
+      <div className="min-w-0 flex-1 overflow-hidden">
+        <Breadcrumb>
+          <BreadcrumbList>
+            {breadcrumbItems.map((item, index) => (
+              <span key={item.href} className="flex items-center gap-2">
+                {index > 0 && <BreadcrumbSeparator />}
+                <BreadcrumbItem>
+                  {item.isLast ? (
+                    <BreadcrumbPage>{item.label}</BreadcrumbPage>
+                  ) : (
+                    <BreadcrumbLink href={item.href}>{item.label}</BreadcrumbLink>
+                  )}
+                </BreadcrumbItem>
+              </span>
+            ))}
+          </BreadcrumbList>
+        </Breadcrumb>
+      </div>
+      {trailing ? (
+        <div className="flex shrink-0 items-center gap-2">{trailing}</div>
+      ) : null}
     </header>
   );
 }

@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Mail, Phone, MapPin } from "lucide-react";
+import { Mail, Phone, MapPin, ExternalLink, Copy, Check } from "lucide-react";
 import { Business } from "@/types";
 import { clientUpdateBusiness } from "@/lib/client-api";
 import { toast } from "sonner";
@@ -37,6 +37,19 @@ export default function BusinessInfoClient({
   const [businessPhone, setBusinessPhone] = useState(initialBusiness?.phone || "");
   const [businessAddress, setBusinessAddress] = useState(initialBusiness?.address || "");
   const [businessImage, setBusinessImage] = useState(initialBusiness?.image || "");
+  const [slugCopied, setSlugCopied] = useState(false);
+
+  const slug = initialBusiness?.slug ?? "";
+  const bookingUrl = typeof window !== "undefined"
+    ? `${window.location.origin}/reserve/${slug}`
+    : `/reserve/${slug}`;
+
+  const handleCopyUrl = async () => {
+    const fullUrl = `${window.location.origin}/reserve/${slug}`;
+    await navigator.clipboard.writeText(fullUrl).catch(() => {});
+    setSlugCopied(true);
+    setTimeout(() => setSlugCopied(false), 2000);
+  };
 
   const [isSaving, setIsSaving] = useState(false);
 
@@ -200,6 +213,32 @@ export default function BusinessInfoClient({
           <p className="text-xs text-muted-foreground mt-2 text-center">
             Customer preview
           </p>
+
+          {/* Booking URL */}
+          {slug && (
+            <div className="mt-4 rounded-lg border bg-muted/40 p-3 space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Booking URL</p>
+              <p className="text-xs font-mono text-foreground break-all">/reserve/{slug}</p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopyUrl}
+                  className="flex-1 flex items-center justify-center gap-1.5 text-xs px-2 py-1.5 rounded-md border hover:bg-muted transition-colors"
+                >
+                  {slugCopied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  {slugCopied ? "Copied" : "Copy URL"}
+                </button>
+                <a
+                  href={bookingUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 flex items-center justify-center gap-1.5 text-xs px-2 py-1.5 rounded-md border hover:bg-muted transition-colors"
+                >
+                  <ExternalLink className="w-3 h-3" /> Preview
+                </a>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

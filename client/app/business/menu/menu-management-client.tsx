@@ -1,0 +1,1096 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import {
+  clientGetMenus,
+  clientCreateMenu,
+  clientUpdateMenu,
+  clientDeleteMenu,
+  clientCreateCategory,
+  clientDeleteCategory,
+  clientCreateMenuItem,
+  clientUpdateMenuItem,
+  clientToggleItemAvailability,
+  clientDeleteMenuItem,
+  clientSaveItemToLibrary,
+  clientGetLibrary,
+  clientCreateLibraryItem,
+  clientUpdateLibraryItem,
+  clientDeleteLibraryItem,
+  clientAddLibraryItemToCategory,
+} from "@/lib/client-api";
+import type { LibraryItem, Menu, MenuCategory, MenuItem } from "@/types";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  ChefHat,
+  Wine,
+  Package,
+  BookMarked,
+  PlusCircle,
+  Bookmark,
+} from "lucide-react";
+
+const ROUTING_ICONS: Record<string, React.ReactNode> = {
+  kitchen: <ChefHat className="h-3 w-3" />,
+  bar: <Wine className="h-3 w-3" />,
+  any: <Package className="h-3 w-3" />,
+};
+
+interface Props {
+  businessId: string;
+}
+
+export function MenuManagementClient({ businessId }: Props) {
+  const [menus, setMenus] = useState<Menu[]>([]);
+  const [selectedMenuId, setSelectedMenuId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // ── Dialog state ────────────────────────────────────────────────────────────
+  const [menuDialog, setMenuDialog] = useState(false);
+  const [categoryDialog, setCategoryDialog] = useState(false);
+  const [itemDialog, setItemDialog] = useState(false);
+  const [libraryDialog, setLibraryDialog] = useState(false);
+  const [libraryItemDialog, setLibraryItemDialog] = useState(false);
+
+  // ── Menu form ───────────────────────────────────────────────────────────────
+  const [menuName, setMenuName] = useState("");
+  const [menuDesc, setMenuDesc] = useState("");
+  const [editingMenu, setEditingMenu] = useState<Menu | null>(null);
+
+  // ── Category form ───────────────────────────────────────────────────────────
+  const [categoryName, setCategoryName] = useState("");
+  const [targetMenuId, setTargetMenuId] = useState<string | null>(null);
+
+  // ── Item form ───────────────────────────────────────────────────────────────
+  const [itemForm, setItemForm] = useState({
+    name: "",
+    description: "",
+    price: "",
+    routingTag: "kitchen",
+    prepTime: "",
+  });
+  const [targetCategoryId, setTargetCategoryId] = useState<string | null>(null);
+  const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
+
+  // ── Library state ───────────────────────────────────────────────────────────
+  const [library, setLibrary] = useState<LibraryItem[]>([]);
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [libraryTargetCategoryId, setLibraryTargetCategoryId] = useState<
+    string | null
+  >(null);
+  const [editingLibraryItem, setEditingLibraryItem] =
+    useState<LibraryItem | null>(null);
+  const [libraryItemForm, setLibraryItemForm] = useState({
+    name: "",
+    description: "",
+    price: "",
+    routingTag: "kitchen",
+    prepTime: "",
+  });
+
+  const selectedMenu = menus.find((m) => m.id === selectedMenuId) ?? null;
+
+  useEffect(() => {
+    void loadMenus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [businessId]);
+
+  async function loadMenus() {
+    setLoading(true);
+    try {
+      const data = await clientGetMenus(businessId);
+      setMenus(data);
+      if (data.length > 0 && !selectedMenuId) {
+        setSelectedMenuId(data[0].id);
+      }
+    } catch {
+      toast.error("Failed to load menus");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadLibrary() {
+    setLibraryLoading(true);
+    try {
+      const data = await clientGetLibrary(businessId);
+      setLibrary(data);
+    } catch {
+      toast.error("Failed to load library");
+    } finally {
+      setLibraryLoading(false);
+    }
+  }
+
+  // ── Menu CRUD ────────────────────────────────────────────────────────────────
+
+  function openCreateMenu() {
+    setEditingMenu(null);
+    setMenuName("");
+    setMenuDesc("");
+    setMenuDialog(true);
+  }
+
+  function openEditMenu(menu: Menu) {
+    setEditingMenu(menu);
+    setMenuName(menu.name);
+    setMenuDesc(menu.description ?? "");
+    setMenuDialog(true);
+  }
+
+  async function saveMenu() {
+    if (!menuName.trim()) return;
+    try {
+      if (editingMenu) {
+        const updated = await clientUpdateMenu(businessId, editingMenu.id, {
+          name: menuName.trim(),
+          description: menuDesc.trim() || undefined,
+        });
+        setMenus((prev) =>
+          prev.map((m) => (m.id === updated.id ? updated : m)),
+        );
+      } else {
+        const created = await clientCreateMenu(businessId, {
+          name: menuName.trim(),
+          description: menuDesc.trim() || undefined,
+        });
+        setMenus((prev) => [...prev, created]);
+        setSelectedMenuId(created.id);
+      }
+      setMenuDialog(false);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  async function deleteMenu(menuId: string) {
+    if (!confirm("Delete this menu and all its items?")) return;
+    try {
+      await clientDeleteMenu(businessId, menuId);
+      const remaining = menus.filter((m) => m.id !== menuId);
+      setMenus(remaining);
+      if (selectedMenuId === menuId) {
+        setSelectedMenuId(remaining[0]?.id ?? null);
+      }
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  async function toggleMenuActive(menu: Menu) {
+    try {
+      const updated = await clientUpdateMenu(businessId, menu.id, {
+        isActive: !menu.isActive,
+      });
+      setMenus((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  // ── Category CRUD ─────────────────────────────────────────────────────────────
+
+  function openCreateCategory(menuId: string) {
+    setCategoryName("");
+    setTargetMenuId(menuId);
+    setCategoryDialog(true);
+  }
+
+  async function saveCategory() {
+    if (!categoryName.trim() || !targetMenuId) return;
+    try {
+      const created = await clientCreateCategory(businessId, targetMenuId, {
+        name: categoryName.trim(),
+      });
+      setMenus((prev) =>
+        prev.map((m) =>
+          m.id === targetMenuId
+            ? { ...m, categories: [...m.categories, { ...created, items: [] }] }
+            : m,
+        ),
+      );
+      setCategoryDialog(false);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  async function deleteCategory(menuId: string, categoryId: string) {
+    if (!confirm("Delete this category and all its items?")) return;
+    try {
+      await clientDeleteCategory(businessId, categoryId);
+      setMenus((prev) =>
+        prev.map((m) =>
+          m.id === menuId
+            ? {
+                ...m,
+                categories: m.categories.filter((c) => c.id !== categoryId),
+              }
+            : m,
+        ),
+      );
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  // ── Item CRUD ─────────────────────────────────────────────────────────────────
+
+  function openCreateItem(categoryId: string) {
+    setEditingItem(null);
+    setItemForm({
+      name: "",
+      description: "",
+      price: "",
+      routingTag: "kitchen",
+      prepTime: "",
+    });
+    setTargetCategoryId(categoryId);
+    setItemDialog(true);
+  }
+
+  function openEditItem(item: MenuItem, categoryId: string) {
+    setEditingItem(item);
+    setItemForm({
+      name: item.name,
+      description: item.description ?? "",
+      price: String(item.price),
+      routingTag: item.routingTag,
+      prepTime: item.prepTimeMinutes ? String(item.prepTimeMinutes) : "",
+    });
+    setTargetCategoryId(categoryId);
+    setItemDialog(true);
+  }
+
+  async function saveItem() {
+    if (!itemForm.name.trim() || !targetCategoryId) return;
+    const price = parseFloat(itemForm.price);
+    if (isNaN(price) || price < 0) {
+      toast.error("Enter a valid price");
+      return;
+    }
+    try {
+      if (editingItem) {
+        const updated = await clientUpdateMenuItem(businessId, editingItem.id, {
+          name: itemForm.name.trim(),
+          description: itemForm.description.trim() || undefined,
+          price,
+          routingTag: itemForm.routingTag,
+          prepTimeMinutes: itemForm.prepTime
+            ? parseInt(itemForm.prepTime)
+            : undefined,
+        });
+        updateItemInState(updated, targetCategoryId);
+      } else {
+        const created = await clientCreateMenuItem(
+          businessId,
+          targetCategoryId,
+          {
+            name: itemForm.name.trim(),
+            description: itemForm.description.trim() || undefined,
+            price,
+            routingTag: itemForm.routingTag,
+            prepTimeMinutes: itemForm.prepTime
+              ? parseInt(itemForm.prepTime)
+              : undefined,
+          },
+        );
+        addItemToCategory(created, targetCategoryId);
+      }
+      setItemDialog(false);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  async function toggleAvailability(item: MenuItem, categoryId: string) {
+    try {
+      const updated = await clientToggleItemAvailability(businessId, item.id);
+      updateItemInState(updated, categoryId);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  async function deleteItem(
+    item: MenuItem,
+    menuId: string,
+    categoryId: string,
+  ) {
+    if (!confirm(`Delete "${item.name}"?`)) return;
+    try {
+      await clientDeleteMenuItem(businessId, item.id);
+      setMenus((prev) =>
+        prev.map((m) =>
+          m.id === menuId
+            ? {
+                ...m,
+                categories: m.categories.map((c) =>
+                  c.id === categoryId
+                    ? { ...c, items: c.items.filter((i) => i.id !== item.id) }
+                    : c,
+                ),
+              }
+            : m,
+        ),
+      );
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  async function saveToLibrary(item: MenuItem) {
+    try {
+      await clientSaveItemToLibrary(businessId, item.id);
+      toast.success(`"${item.name}" saved to library`);
+      // Reload library if it's open
+      if (library.length > 0) void loadLibrary();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  function updateItemInState(updated: MenuItem, categoryId: string) {
+    setMenus((prev) =>
+      prev.map((m) => ({
+        ...m,
+        categories: m.categories.map((c) =>
+          c.id === categoryId
+            ? {
+                ...c,
+                items: c.items.map((i) => (i.id === updated.id ? updated : i)),
+              }
+            : c,
+        ),
+      })),
+    );
+  }
+
+  function addItemToCategory(item: MenuItem, categoryId: string) {
+    setMenus((prev) =>
+      prev.map((m) => ({
+        ...m,
+        categories: m.categories.map((c) =>
+          c.id === categoryId ? { ...c, items: [...c.items, item] } : c,
+        ),
+      })),
+    );
+  }
+
+  // ── Library panel ─────────────────────────────────────────────────────────────
+
+  function openLibraryForCategory(categoryId: string) {
+    setLibraryTargetCategoryId(categoryId);
+    void loadLibrary();
+    setLibraryDialog(true);
+  }
+
+  async function addFromLibrary(libItem: LibraryItem) {
+    if (!libraryTargetCategoryId) return;
+    try {
+      const created = await clientAddLibraryItemToCategory(
+        businessId,
+        libItem.id,
+        libraryTargetCategoryId,
+      );
+      addItemToCategory(created, libraryTargetCategoryId);
+      toast.success(`"${libItem.name}" added to category`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  function openCreateLibraryItem() {
+    setEditingLibraryItem(null);
+    setLibraryItemForm({
+      name: "",
+      description: "",
+      price: "",
+      routingTag: "kitchen",
+      prepTime: "",
+    });
+    setLibraryItemDialog(true);
+  }
+
+  function openEditLibraryItem(item: LibraryItem) {
+    setEditingLibraryItem(item);
+    setLibraryItemForm({
+      name: item.name,
+      description: item.description ?? "",
+      price: String(item.price),
+      routingTag: item.routingTag,
+      prepTime: item.prepTimeMinutes ? String(item.prepTimeMinutes) : "",
+    });
+    setLibraryItemDialog(true);
+  }
+
+  async function saveLibraryItem() {
+    if (!libraryItemForm.name.trim()) return;
+    const price = parseFloat(libraryItemForm.price);
+    if (isNaN(price) || price < 0) {
+      toast.error("Enter a valid price");
+      return;
+    }
+    try {
+      if (editingLibraryItem) {
+        const updated = await clientUpdateLibraryItem(
+          businessId,
+          editingLibraryItem.id,
+          {
+            name: libraryItemForm.name.trim(),
+            description: libraryItemForm.description.trim() || undefined,
+            price,
+            routingTag: libraryItemForm.routingTag,
+            prepTimeMinutes: libraryItemForm.prepTime
+              ? parseInt(libraryItemForm.prepTime)
+              : undefined,
+          },
+        );
+        setLibrary((prev) =>
+          prev.map((i) => (i.id === updated.id ? updated : i)),
+        );
+      } else {
+        const created = await clientCreateLibraryItem(businessId, {
+          name: libraryItemForm.name.trim(),
+          description: libraryItemForm.description.trim() || undefined,
+          price,
+          routingTag: libraryItemForm.routingTag,
+          prepTimeMinutes: libraryItemForm.prepTime
+            ? parseInt(libraryItemForm.prepTime)
+            : undefined,
+        });
+        setLibrary((prev) => [...prev, created]);
+      }
+      setLibraryItemDialog(false);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  async function deleteLibraryItem(item: LibraryItem) {
+    if (!confirm(`Remove "${item.name}" from library?`)) return;
+    try {
+      await clientDeleteLibraryItem(businessId, item.id);
+      setLibrary((prev) => prev.filter((i) => i.id !== item.id));
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="p-8 flex items-center justify-center">
+        <p className="text-muted-foreground">Loading menus…</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 max-w-5xl mx-auto space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">Menu Management</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Create menus, categories, and items for your ordering board.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              void loadLibrary();
+              setLibraryTargetCategoryId(null);
+              setLibraryDialog(true);
+            }}
+          >
+            <BookMarked className="h-4 w-4 mr-2" />
+            Library
+          </Button>
+          <Button onClick={openCreateMenu}>
+            <Plus className="h-4 w-4 mr-2" />
+            New Menu
+          </Button>
+        </div>
+      </div>
+
+      {menus.length === 0 ? (
+        <div className="rounded-lg border border-dashed p-12 text-center">
+          <ChefHat className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
+          <p className="font-medium">No menus yet</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Create your first menu to get started.
+          </p>
+          <Button className="mt-4" onClick={openCreateMenu}>
+            <Plus className="h-4 w-4 mr-2" />
+            Create Menu
+          </Button>
+        </div>
+      ) : (
+        <>
+          {/* Menu tabs */}
+          <div className="flex gap-2 flex-wrap">
+            {menus.map((menu) => (
+              <button
+                key={menu.id}
+                onClick={() => setSelectedMenuId(menu.id)}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${
+                  selectedMenuId === menu.id
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background border-border hover:bg-muted"
+                }`}
+              >
+                {menu.name}
+                {!menu.isActive && (
+                  <span className="ml-1.5 text-xs opacity-60">(inactive)</span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {selectedMenu && (
+            <div className="space-y-4">
+              {/* Menu header */}
+              <div className="flex items-center justify-between rounded-lg border p-4">
+                <div>
+                  <p className="font-medium">{selectedMenu.name}</p>
+                  {selectedMenu.description && (
+                    <p className="text-sm text-muted-foreground">
+                      {selectedMenu.description}
+                    </p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => toggleMenuActive(selectedMenu)}
+                  >
+                    {selectedMenu.isActive ? "Deactivate" : "Activate"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openEditMenu(selectedMenu)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => deleteMenu(selectedMenu.id)}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => openCreateCategory(selectedMenu.id)}
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1" />
+                    Category
+                  </Button>
+                </div>
+              </div>
+
+              {/* Categories and items */}
+              {selectedMenu.categories.length === 0 ? (
+                <div className="rounded-lg border border-dashed p-8 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    No categories yet.{" "}
+                    <button
+                      className="underline"
+                      onClick={() => openCreateCategory(selectedMenu.id)}
+                    >
+                      Add one
+                    </button>
+                  </p>
+                </div>
+              ) : (
+                selectedMenu.categories.map((cat) => (
+                  <CategorySection
+                    key={cat.id}
+                    menu={selectedMenu}
+                    category={cat}
+                    onAddItem={openCreateItem}
+                    onAddFromLibrary={openLibraryForCategory}
+                    onEditItem={openEditItem}
+                    onToggleAvail={toggleAvailability}
+                    onDeleteItem={deleteItem}
+                    onDeleteCategory={deleteCategory}
+                    onSaveToLibrary={saveToLibrary}
+                  />
+                ))
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Menu dialog ──────────────────────────────────────────────────────── */}
+      <Dialog open={menuDialog} onOpenChange={setMenuDialog}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>{editingMenu ? "Edit Menu" : "New Menu"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Name</Label>
+              <Input
+                value={menuName}
+                onChange={(e) => setMenuName(e.target.value)}
+                placeholder="Dinner Menu"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Description (optional)</Label>
+              <Textarea
+                value={menuDesc}
+                onChange={(e) => setMenuDesc(e.target.value)}
+                placeholder="Available from 6pm–11pm"
+                rows={2}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMenuDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={saveMenu} disabled={!menuName.trim()}>
+              {editingMenu ? "Save" : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Category dialog ───────────────────────────────────────────────────── */}
+      <Dialog open={categoryDialog} onOpenChange={setCategoryDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>New Category</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1.5 py-2">
+            <Label>Name</Label>
+            <Input
+              value={categoryName}
+              onChange={(e) => setCategoryName(e.target.value)}
+              placeholder="Starters"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCategoryDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={saveCategory} disabled={!categoryName.trim()}>
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Item dialog ───────────────────────────────────────────────────────── */}
+      <Dialog open={itemDialog} onOpenChange={setItemDialog}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>{editingItem ? "Edit Item" : "New Item"}</DialogTitle>
+          </DialogHeader>
+          <ItemFormFields form={itemForm} onChange={setItemForm} />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setItemDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={saveItem}
+              disabled={!itemForm.name.trim() || !itemForm.price}
+            >
+              {editingItem ? "Save" : "Add Item"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Library sheet ─────────────────────────────────────────────────────── */}
+      <Sheet open={libraryDialog} onOpenChange={setLibraryDialog}>
+        <SheetContent className="w-[400px] sm:max-w-[400px] flex flex-col">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <BookMarked className="h-4 w-4" />
+              Item Library
+            </SheetTitle>
+          </SheetHeader>
+
+          <div className="flex items-center justify-between px-4 pt-1 pb-3 border-b">
+            <p className="text-xs text-muted-foreground">
+              {libraryTargetCategoryId
+                ? "Click + to add an item to the selected category."
+                : "Manage reusable item templates."}
+            </p>
+            <Button size="sm" variant="outline" onClick={openCreateLibraryItem}>
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              New
+            </Button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+            {libraryLoading ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">
+                Loading…
+              </p>
+            ) : library.length === 0 ? (
+              <div className="rounded-lg border border-dashed p-8 text-center mt-2">
+                <BookMarked className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">
+                  No library items yet.
+                </p>
+                <Button
+                  size="sm"
+                  className="mt-3"
+                  onClick={openCreateLibraryItem}
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                  Add first item
+                </Button>
+              </div>
+            ) : (
+              library.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center gap-3 rounded-lg border px-4 py-3"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-sm font-medium truncate">
+                        {item.name}
+                      </span>
+                      <Badge
+                        variant="outline"
+                        className="text-xs flex items-center gap-1 h-4 shrink-0"
+                      >
+                        {ROUTING_ICONS[item.routingTag]}
+                        {item.routingTag}
+                      </Badge>
+                    </div>
+                    {item.description && (
+                      <p className="text-xs text-muted-foreground truncate mt-0.5">
+                        {item.description}
+                      </p>
+                    )}
+                    <p className="text-sm font-semibold mt-1">
+                      €{Number(item.price).toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    {libraryTargetCategoryId && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 w-8 p-0 text-primary hover:text-primary"
+                        title="Add to category"
+                        onClick={() => addFromLibrary(item)}
+                      >
+                        <PlusCircle className="h-4 w-4" />
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 w-8 p-0"
+                      onClick={() => openEditLibraryItem(item)}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                      onClick={() => deleteLibraryItem(item)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* ── Library item dialog ───────────────────────────────────────────────── */}
+      <Dialog open={libraryItemDialog} onOpenChange={setLibraryItemDialog}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>
+              {editingLibraryItem ? "Edit Library Item" : "New Library Item"}
+            </DialogTitle>
+          </DialogHeader>
+          <ItemFormFields
+            form={libraryItemForm}
+            onChange={setLibraryItemForm}
+          />
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setLibraryItemDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={saveLibraryItem}
+              disabled={!libraryItemForm.name.trim() || !libraryItemForm.price}
+            >
+              {editingLibraryItem ? "Save" : "Add to Library"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ─── Shared item form fields ──────────────────────────────────────────────────
+
+type ItemFormState = {
+  name: string;
+  description: string;
+  price: string;
+  routingTag: string;
+  prepTime: string;
+};
+
+function ItemFormFields({
+  form,
+  onChange,
+}: {
+  form: ItemFormState;
+  onChange: React.Dispatch<React.SetStateAction<ItemFormState>>;
+}) {
+  return (
+    <div className="space-y-3 py-2">
+      <div className="space-y-1.5">
+        <Label>Name</Label>
+        <Input
+          value={form.name}
+          onChange={(e) => onChange((f) => ({ ...f, name: e.target.value }))}
+          placeholder="Margherita Pizza"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label>Description (optional)</Label>
+        <Textarea
+          value={form.description}
+          onChange={(e) =>
+            onChange((f) => ({ ...f, description: e.target.value }))
+          }
+          rows={2}
+          placeholder="Tomato, mozzarella, basil"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label>Price (€)</Label>
+          <Input
+            type="number"
+            min="0"
+            step="0.01"
+            value={form.price}
+            onChange={(e) => onChange((f) => ({ ...f, price: e.target.value }))}
+            placeholder="12.50"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Prep time (min)</Label>
+          <Input
+            type="number"
+            min="1"
+            value={form.prepTime}
+            onChange={(e) =>
+              onChange((f) => ({ ...f, prepTime: e.target.value }))
+            }
+            placeholder="15"
+          />
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <Label>Routing</Label>
+        <Select
+          value={form.routingTag}
+          onValueChange={(v) => onChange((f) => ({ ...f, routingTag: v }))}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="kitchen">Kitchen</SelectItem>
+            <SelectItem value="bar">Bar</SelectItem>
+            <SelectItem value="any">Any</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+}
+
+// ─── Category Section ─────────────────────────────────────────────────────────
+
+function CategorySection({
+  menu,
+  category,
+  onAddItem,
+  onAddFromLibrary,
+  onEditItem,
+  onToggleAvail,
+  onDeleteItem,
+  onDeleteCategory,
+  onSaveToLibrary,
+}: {
+  menu: Menu;
+  category: MenuCategory;
+  onAddItem: (categoryId: string) => void;
+  onAddFromLibrary: (categoryId: string) => void;
+  onEditItem: (item: MenuItem, categoryId: string) => void;
+  onToggleAvail: (item: MenuItem, categoryId: string) => void;
+  onDeleteItem: (item: MenuItem, menuId: string, categoryId: string) => void;
+  onDeleteCategory: (menuId: string, categoryId: string) => void;
+  onSaveToLibrary: (item: MenuItem) => void;
+}) {
+  return (
+    <div className="rounded-lg border overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 bg-muted/40 border-b">
+        <h3 className="font-medium text-sm">{category.name}</h3>
+        <div className="flex gap-1.5">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => onAddFromLibrary(category.id)}
+          >
+            <BookMarked className="h-3.5 w-3.5 mr-1" />
+            Library
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => onAddItem(category.id)}
+          >
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            Item
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-destructive hover:text-destructive"
+            onClick={() => onDeleteCategory(menu.id, category.id)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+
+      {category.items.length === 0 ? (
+        <p className="text-sm text-muted-foreground px-4 py-3">
+          No items.{" "}
+          <button className="underline" onClick={() => onAddItem(category.id)}>
+            Add one
+          </button>
+        </p>
+      ) : (
+        <div className="divide-y">
+          {category.items.map((item) => (
+            <div key={item.id} className="flex items-center gap-3 px-4 py-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`text-sm font-medium ${!item.isAvailable ? "line-through text-muted-foreground" : ""}`}
+                  >
+                    {item.name}
+                  </span>
+                  <Badge
+                    variant="outline"
+                    className="text-xs flex items-center gap-1 h-4"
+                  >
+                    {ROUTING_ICONS[item.routingTag]}
+                    {item.routingTag}
+                  </Badge>
+                  {!item.isAvailable && (
+                    <Badge variant="secondary" className="text-xs h-4">
+                      unavailable
+                    </Badge>
+                  )}
+                </div>
+                {item.description && (
+                  <p className="text-xs text-muted-foreground truncate mt-0.5">
+                    {item.description}
+                  </p>
+                )}
+              </div>
+              <span className="text-sm font-medium tabular-nums shrink-0">
+                €{Number(item.price).toFixed(2)}
+              </span>
+              <div className="flex gap-1">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-xs h-7 px-2"
+                  onClick={() => onToggleAvail(item, category.id)}
+                >
+                  {item.isAvailable ? "86" : "Restore"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 w-7 p-0"
+                  title="Save to library"
+                  onClick={() => onSaveToLibrary(item)}
+                >
+                  <Bookmark className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 w-7 p-0"
+                  onClick={() => onEditItem(item, category.id)}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                  onClick={() => onDeleteItem(item, menu.id, category.id)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

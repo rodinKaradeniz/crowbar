@@ -19,6 +19,8 @@ import {
   Info,
   CalendarCog,
   UserCircle,
+  BrainCircuit,
+  BookOpen,
 } from "lucide-react";
 import {
   Collapsible,
@@ -119,6 +121,27 @@ export function BusinessFloatingContent() {
             >
               <LayoutDashboard className="h-4 w-4" />
               <span>Overview</span>
+            </Link>
+            <Link
+              href="/business/insights"
+              className={cn(
+                "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent transition-colors",
+                pathname === "/business/insights" && "bg-accent font-medium"
+              )}
+            >
+              <BrainCircuit className="h-4 w-4" />
+              <span>Insights</span>
+            </Link>
+            <Link
+              href="/business/docs"
+              className={cn(
+                "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent transition-colors",
+                pathname.startsWith("/business/docs") &&
+                  "bg-accent font-medium"
+              )}
+            >
+              <BookOpen className="h-4 w-4" />
+              <span>Docs</span>
             </Link>
           </nav>
         </div>
