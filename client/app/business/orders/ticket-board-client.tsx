@@ -325,6 +325,15 @@ function LineItemRow({ item }: { item: OrderLineItem }) {
     <div className="text-sm">
       <span className="font-medium">{item.quantity}×</span>{" "}
       <span>{item.itemName}</span>
+      {item.isAlcoholic && (
+        <span
+          className="ml-1.5 inline-flex items-center gap-0.5 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800 align-middle"
+          title="Contains alcohol — check ID"
+        >
+          <Wine className="h-2.5 w-2.5" />
+          Alcohol
+        </span>
+      )}
       {item.selectedModifiers.length > 0 && (
         <span className="text-xs text-muted-foreground ml-1">
           ({item.selectedModifiers.map((m) => m.name).join(", ")})

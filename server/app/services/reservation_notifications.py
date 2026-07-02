@@ -156,7 +156,7 @@ async def notify_after_reservation_patch(
         notification_service.send_sms_if_enabled(
             channels,
             new.phone,
-            f"Slotera: {sms_body}",
+            f"Crowbar: {sms_body}",
         )
 
 
@@ -182,5 +182,5 @@ async def notify_after_reservation_delete(
         notification_service.send_sms_if_enabled(
             channels,
             reservation.phone,
-            f"Slotera: Your booking for {_fmt_time(reservation.time)} was cancelled.",
+            f"Crowbar: Your booking for {_fmt_time(reservation.time)} was cancelled.",
         )

@@ -73,6 +73,12 @@ class MenuItem(Base, UUIDMixin, TimestampMixin):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     price: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, nullable=False)
+    # Flat happy-hour override price. NULL = item never discounts. Applied only
+    # while a happy-hour window is active (see happy_hour_service).
+    happy_hour_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    # Age-verification flag. True = item is alcoholic; gates the checkout
+    # attestation on customer channels and drives the staff alcohol badge.
+    is_alcoholic: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_available: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     routing_tag: Mapped[str] = mapped_column(String(20), default="kitchen", nullable=False)
     # routing_tag: kitchen | bar | any

@@ -4,6 +4,7 @@ from uuid import UUID
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants.days import DAY_ABBREVIATIONS
 from app.models.reservation import Reservation
 from app.models.service_type import ServiceType
 
@@ -74,7 +75,7 @@ async def get_business_dashboard_stats(db: AsyncSession, business_id: UUID) -> d
 
     # Daily breakdown by day of week and service type
     # Get last 7 days, map to day names (Mon-Sun)
-    day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    day_names = DAY_ABBREVIATIONS  # 0=Monday..6=Sunday (see app.constants.days)
     daily_by_type = []
     
     # Create a map of service type ID to name and color

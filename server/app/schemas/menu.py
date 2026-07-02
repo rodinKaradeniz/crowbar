@@ -94,6 +94,8 @@ class MenuItemCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
     price: Decimal = Field(default=Decimal("0.00"), ge=0)
+    happy_hour_price: Decimal | None = Field(default=None, ge=0)
+    is_alcoholic: bool = False
     is_available: bool = True
     routing_tag: str = Field(default="kitchen", pattern="^(kitchen|bar|any)$")
     prep_time_minutes: int | None = Field(None, ge=1)
@@ -106,6 +108,10 @@ class MenuItemUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = None
     price: Decimal | None = None
+    # happy_hour_price uses a sentinel-free convention: absent = unchanged, null
+    # = clear the discount. See update_item in menu_service for the handling.
+    happy_hour_price: Decimal | None = Field(default=None, ge=0)
+    is_alcoholic: bool | None = None
     is_available: bool | None = None
     routing_tag: str | None = Field(None, pattern="^(kitchen|bar|any)$")
     prep_time_minutes: int | None = None
@@ -120,6 +126,10 @@ class MenuItemResponse(BaseModel):
     name: str
     description: str | None = None
     price: Decimal
+    # Flat happy-hour override price (None = item never discounts). Whether it
+    # currently applies is signalled by MenuResponse.happy_hour_active.
+    happy_hour_price: Decimal | None = None
+    is_alcoholic: bool = False
     is_available: bool
     routing_tag: str
     prep_time_minutes: int | None = None
@@ -178,6 +188,10 @@ class MenuResponse(BaseModel):
     name: str
     description: str | None = None
     is_active: bool
+    # Server-computed: whether a happy-hour window is active for this business
+    # right now. Set on the public menu read path (defaults False elsewhere).
+    # The client must trust this flag rather than computing from local time.
+    happy_hour_active: bool = False
     categories: list[MenuCategoryResponse] = []
 
     model_config = {"from_attributes": True}

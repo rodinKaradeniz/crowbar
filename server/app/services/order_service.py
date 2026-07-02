@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.models.menu import MenuItem
 from app.models.order import Order, OrderLineItem, OrderStatusTimeline
 from app.schemas.order import OrderPlaceRequest, OrderStatusUpdateRequest
+from app.services import happy_hour_service
 
 # Valid status transitions
 _TRANSITIONS: dict[str, list[str]] = {
@@ -19,6 +20,22 @@ _TRANSITIONS: dict[str, list[str]] = {
     "served": [],
     "cancelled": [],
 }
+
+
+def order_contains_alcohol(items) -> bool:
+    """Single source of truth for 'this order contains alcohol'.
+
+    Accepts any sequence of objects carrying an ``is_alcoholic`` attribute —
+    resolved ``MenuItem`` rows on the placement path, or stored ``OrderLineItem``
+    rows on the read path (line items snapshot the flag at placement, like
+    ``routing_tag``). The order-level fact is derived from the items on demand and
+    never persisted as a redundant column (same pattern as the happy-hour check).
+    """
+    return any(getattr(i, "is_alcoholic", False) for i in items)
+
+
+class AgeConfirmationRequired(ValueError):
+    """Raised at placement when an alcoholic cart lacks a valid age attestation."""
 
 
 async def _load_order(db: AsyncSession, order_id: UUID, business_id: UUID) -> Order | None:
@@ -55,6 +72,7 @@ def order_to_dict(order: Order) -> dict:
                 "unit_price": float(li.unit_price),
                 "selected_modifiers": li.selected_modifiers or [],
                 "routing_tag": li.routing_tag,
+                "is_alcoholic": li.is_alcoholic,
                 "notes": li.notes,
             }
             for li in (order.line_items or [])
@@ -66,8 +84,18 @@ async def place_order(
     db: AsyncSession,
     business_id: UUID,
     request: OrderPlaceRequest,
+    *,
+    require_age_confirmation: bool = True,
 ) -> Order:
-    """Create an order. Idempotent: returns existing order if same idempotency_key."""
+    """Create an order. Idempotent: returns existing order if same idempotency_key.
+
+    ``require_age_confirmation`` gates the alcohol self-attestation. It is True on
+    customer self-service channels (the public order endpoint) and False for
+    staff-entered orders (the tabs path) — a staff member taking an order in
+    person doesn't need a software checkbox. When True and the cart contains an
+    alcoholic item, a truthy ``request.age_confirmed`` is required or
+    ``AgeConfirmationRequired`` is raised (mapped to 422 by the router).
+    """
     # Idempotency check
     existing = await db.execute(
         select(Order)
@@ -78,23 +106,10 @@ async def place_order(
     if existing_order is not None:
         return existing_order
 
-    session_token = secrets.token_urlsafe(32)
-    total = Decimal("0.00")
-
-    order = Order(
-        business_id=business_id,
-        session_token=session_token,
-        table_identifier=request.table_identifier,
-        status="received",
-        idempotency_key=request.idempotency_key,
-        notes=request.notes,
-        total_amount=Decimal("0.00"),
-    )
-    db.add(order)
-    await db.flush()
-
+    # Resolve the requested menu items up front so the alcohol/age gate can run
+    # before any rows are written.
+    resolved: list[tuple[object, MenuItem]] = []
     for item_req in request.items:
-        # Look up item to get current price and metadata
         item_result = await db.execute(
             select(MenuItem).where(
                 MenuItem.id == item_req.item_id,
@@ -104,8 +119,48 @@ async def place_order(
         item = item_result.scalar_one_or_none()
         if item is None:
             continue
+        resolved.append((item_req, item))
 
-        unit_price = item.price
+    # Age attestation gate (customer self-service channels only). Derived from the
+    # resolved items via the single source of truth, then re-validated here so the
+    # backend never trusts a client-only "box checked" state.
+    if (
+        require_age_confirmation
+        and not request.age_confirmed
+        and order_contains_alcohol(item for _, item in resolved)
+    ):
+        raise AgeConfirmationRequired(
+            "Age confirmation is required for orders containing alcohol."
+        )
+
+    session_token = secrets.token_urlsafe(32)
+    total = Decimal("0.00")
+
+    # Determine happy-hour state once, server-side, at the moment the order is
+    # placed. This uses the SAME is_happy_hour_active as the public menu read
+    # path, so the price charged can never disagree with what was displayed.
+    hh_active = await happy_hour_service.is_happy_hour_active(db, business_id)
+
+    order = Order(
+        business_id=business_id,
+        session_token=session_token,
+        table_identifier=request.table_identifier,
+        status="received",
+        idempotency_key=request.idempotency_key,
+        notes=request.notes,
+        age_confirmed=request.age_confirmed,
+        total_amount=Decimal("0.00"),
+    )
+    db.add(order)
+    await db.flush()
+
+    for item_req, item in resolved:
+        # Apply the flat happy-hour override when a window is active and the item
+        # opts in (happy_hour_price set). Modifiers are added on top as usual.
+        if hh_active and item.happy_hour_price is not None:
+            unit_price = item.happy_hour_price
+        else:
+            unit_price = item.price
         selected_mods = []
         for mod_req in item_req.selected_modifiers:
             unit_price += mod_req.price_delta
@@ -126,6 +181,7 @@ async def place_order(
             unit_price=unit_price,
             selected_modifiers=selected_mods,
             routing_tag=item.routing_tag,
+            is_alcoholic=item.is_alcoholic,
             notes=item_req.notes,
         )
         db.add(li)

@@ -79,7 +79,7 @@ export default function ReserveClient({ business, serviceTypes }: ReserveClientP
         )}
         <div className="absolute inset-0 bg-linear-to-t from-black/70 via-black/30 to-transparent" />
 
-        {/* Slotera branding */}
+        {/* Crowbar branding */}
         <div className="absolute top-4 left-4">
           <Link href="/" className="flex items-center gap-2 text-white/90 hover:text-white transition-colors text-sm font-medium">
             <div className="bg-white/20 backdrop-blur-sm flex size-6 items-center justify-center rounded-md">

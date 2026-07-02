@@ -191,6 +191,8 @@ async def _create_item_for_category(
         name=data.name,
         description=data.description,
         price=data.price,
+        happy_hour_price=data.happy_hour_price,
+        is_alcoholic=data.is_alcoholic,
         is_available=data.is_available,
         routing_tag=data.routing_tag,
         prep_time_minutes=data.prep_time_minutes,
@@ -238,6 +240,11 @@ async def update_item(
         item.description = data.description
     if data.price is not None:
         item.price = data.price
+    # happy_hour_price: present (even as null) = set/clear; absent = unchanged.
+    if "happy_hour_price" in data.model_fields_set:
+        item.happy_hour_price = data.happy_hour_price
+    if data.is_alcoholic is not None:
+        item.is_alcoholic = data.is_alcoholic
     if data.is_available is not None:
         item.is_available = data.is_available
     if data.routing_tag is not None:

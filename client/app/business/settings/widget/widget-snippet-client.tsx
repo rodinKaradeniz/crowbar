@@ -11,7 +11,9 @@ interface WidgetSnippetClientProps {
 export default function WidgetSnippetClient({ slug }: WidgetSnippetClientProps) {
   const [copied, setCopied] = useState(false);
 
-  const snippet = `<script src="https://slotera.com/widget.js" data-business="${slug}"></script>`;
+  const widgetBaseUrl =
+    process.env.NEXT_PUBLIC_WIDGET_BASE_URL || "https://crowbar.example";
+  const snippet = `<script src="${widgetBaseUrl}/widget.js" data-business="${slug}"></script>`;
 
   async function handleCopy() {
     try {

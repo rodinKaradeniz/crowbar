@@ -106,10 +106,16 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
     setCart((prev) => prev.filter((_, i) => i !== index));
   }
 
+  // Happy hour is decided server-side (menu.happyHourActive). When active, an
+  // item with happyHourPrice set is displayed and totalled at the lower price.
+  const hhActive = menu?.happyHourActive ?? false;
+  const effectivePrice = (item: MenuItem) =>
+    hhActive && item.happyHourPrice != null ? item.happyHourPrice : item.price;
+
   const totalItems = cart.reduce((sum, ci) => sum + ci.quantity, 0);
   const totalPrice = cart.reduce((sum, ci) => {
     const modTotal = ci.selectedModifiers.reduce((s, m) => s + m.priceDelta, 0);
-    return sum + (ci.item.price + modTotal) * ci.quantity;
+    return sum + (effectivePrice(ci.item) + modTotal) * ci.quantity;
   }, 0);
 
   if (loading) {
@@ -193,7 +199,21 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                           )}
                         </div>
                         <div className="shrink-0 text-right">
-                          <p className="text-sm font-semibold">€{Number(item.price).toFixed(2)}</p>
+                          {hhActive && item.happyHourPrice != null ? (
+                            <>
+                              <p className="text-sm font-semibold text-primary">
+                                €{Number(item.happyHourPrice).toFixed(2)}
+                              </p>
+                              <p className="text-xs text-muted-foreground line-through">
+                                €{Number(item.price).toFixed(2)}
+                              </p>
+                              <span className="mt-1 inline-block rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                                Happy Hour
+                              </span>
+                            </>
+                          ) : (
+                            <p className="text-sm font-semibold">€{Number(item.price).toFixed(2)}</p>
+                          )}
                           <Plus className="h-4 w-4 text-primary mt-1 ml-auto" />
                         </div>
                       </div>
@@ -213,6 +233,9 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
               onClick={() => {
                 if (typeof window !== "undefined") {
                   sessionStorage.setItem(`cart_${businessSlug}`, JSON.stringify(cart));
+                  // Carry the server-decided happy-hour state to the checkout
+                  // page so its running total matches the menu display.
+                  sessionStorage.setItem(`cart_hh_${businessSlug}`, JSON.stringify(hhActive));
                 }
               }}
             >
@@ -240,7 +263,21 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                 {selectedItem.description && (
                   <p className="text-sm text-muted-foreground">{selectedItem.description}</p>
                 )}
-                <p className="text-base font-semibold">€{Number(selectedItem.price).toFixed(2)}</p>
+                {hhActive && selectedItem.happyHourPrice != null ? (
+                  <div className="flex items-center gap-2">
+                    <p className="text-base font-semibold text-primary">
+                      €{Number(selectedItem.happyHourPrice).toFixed(2)}
+                    </p>
+                    <p className="text-sm text-muted-foreground line-through">
+                      €{Number(selectedItem.price).toFixed(2)}
+                    </p>
+                    <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                      Happy Hour
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-base font-semibold">€{Number(selectedItem.price).toFixed(2)}</p>
+                )}
               </SheetHeader>
 
               <div className="space-y-4 mt-4">
@@ -306,7 +343,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                 </div>
                 <Button className="w-full" onClick={addToCart}>
                   Add to Cart · €{(
-                    (Number(selectedItem.price) +
+                    (effectivePrice(selectedItem) +
                       sheetMods.reduce((s, m) => s + m.priceDelta, 0)) *
                     sheetQty
                   ).toFixed(2)}

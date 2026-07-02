@@ -16,12 +16,14 @@ import {
   clientUpdateEnabledModules,
 } from "@/lib/client-api";
 import { Building2, Clock, Layers, Puzzle, ChevronRight, ChevronLeft, Check } from "lucide-react";
+import { TimezoneCombobox } from "@/components/timezone-combobox";
+import { DAYS_OF_WEEK } from "@/lib/days";
 
-const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
-const DAY_LABELS: Record<string, string> = {
-  monday: "Monday", tuesday: "Tuesday", wednesday: "Wednesday",
-  thursday: "Thursday", friday: "Friday", saturday: "Saturday", sunday: "Sunday",
-};
+// Day ordering comes from the single source of truth (lib/days.ts).
+const DAYS = DAYS_OF_WEEK.map((d) => d.key);
+const DAY_LABELS: Record<string, string> = Object.fromEntries(
+  DAYS_OF_WEEK.map((d) => [d.key, d.label]),
+);
 
 const AVAILABLE_MODULES = [
   { id: "reservations", label: "Reservations", description: "Accept and manage bookings from customers" },
@@ -71,6 +73,14 @@ export default function OnboardingWizard({
   const [description, setDescription] = useState(initialDescription);
   const [address, setAddress] = useState(initialAddress);
   const [image, setImage] = useState(initialImage);
+  // Prefill the timezone from the browser; the owner confirms/changes it.
+  const [timezone, setTimezone] = useState<string>(() => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    } catch {
+      return "UTC";
+    }
+  });
 
   // Step 2: Hours
   const [hours, setHours] = useState<Record<string, DayHours>>(defaultHours);
@@ -89,7 +99,8 @@ export default function OnboardingWizard({
     try {
       if (step === 0) {
         if (!name.trim()) { toast.error("Business name is required"); return; }
-        await clientUpdateBusiness(businessId, { name, description, address, image });
+        if (!timezone) { toast.error("Timezone is required"); return; }
+        await clientUpdateBusiness(businessId, { name, description, address, image, timezone });
         setStep(1);
       } else if (step === 1) {
         const operatingHours = Object.fromEntries(
@@ -203,6 +214,13 @@ export default function OnboardingWizard({
                   onChange={(e) => setAddress(e.target.value)}
                   placeholder="123 Main St, City, Country"
                 />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="biz-tz">Timezone *</Label>
+                <TimezoneCombobox id="biz-tz" value={timezone} onChange={setTimezone} />
+                <p className="text-xs text-muted-foreground">
+                  Used to interpret your operating hours and happy-hour windows.
+                </p>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="biz-img">Logo / cover image URL</Label>

@@ -18,20 +18,13 @@ Navigate to **Profile** → **Types** to see all your current service types.
 3. Fill in the **Details** tab:
    - **Name** — The name of the service (e.g., "Haircut", "Consultation")
    - **Description** — A brief description of what the service includes
-   - **Duration** — How long the service typically takes (used for scheduling and, for online services, the calendar event length)
+   - **Duration** — How long the service typically takes (used for scheduling)
    - **Price** — The cost of the service (if applicable)
    - **Capacity** — How many customers can book this service at the same time
-   - **Color** — Display color for calendars and lists
+   - **Color** — Display color for schedules and lists
 4. Optional **Booking behavior**:
-   - **Require payment** — When enabled, customers may need to pay a deposit or full amount at booking (Stripe), depending on your configuration.
-   - **Online (video) service** — Mark the service as held online. When Google Calendar is connected for your business, Crowbar can create a **Google Meet** link and attach it to the reservation and confirmation email. Connect Google from **Profile** → **Types** (connection banner) if you use online services.
    - **Pending requests** — When enabled, new bookings for this service start as **pending** until you accept them in **Requests**. When disabled, eligible bookings are **confirmed** immediately (still subject to your global booking rules).
-5. Optional **Custom form** tab — Add extra fields (text, number, select, etc.) that customers must fill when booking this service. Responses are stored on the reservation.
-6. Click **Save** to create the service type.
-
-## Google Calendar and Meet
-
-For **online** service types, Meet links are created only if your business has connected **Google Calendar** (OAuth). Use the connect action on **Profile** → **Types** to authorize Crowbar. Without a connection, online services still work, but no Meet link is generated automatically.
+5. Click **Save** to create the service type.
 
 ## Editing a Service Type
 
@@ -58,7 +51,7 @@ Customers booking from your public page can specify **guest count** where the fl
 ## Best Practices
 
 - **Be descriptive** — Clear names and descriptions help customers choose the right service.
-- **Set accurate durations** — Prevents scheduling conflicts and sets the right length for online calendar events.
+- **Set accurate durations** — Prevents scheduling conflicts and reserves the right length for each booking.
 - **Keep prices updated** — Ensure your listed prices match your current rates.
 - **Review regularly** — Update your service types as your offerings change.
 

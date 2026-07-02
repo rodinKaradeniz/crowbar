@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     # Database
     database_url: str = (
-        "postgresql+asyncpg://postgres:postgres@localhost:5432/slotera"
+        "postgresql+asyncpg://postgres:postgres@localhost:5432/crowbar"
     )
 
     # Redis
@@ -25,13 +25,8 @@ class Settings(BaseSettings):
     # Email (Resend)
     resend_api_key: str | None = None
     email_from_address: str = "onboarding@resend.dev"
-    email_from_name: str = "Slotera"
+    email_from_name: str = "Crowbar"
 
-    # Google OAuth (for Calendar API / Meet links)
-    google_client_id: str | None = None
-    google_client_secret: str | None = None
-    google_redirect_uri: str = "http://localhost:8000/api/auth/google/callback"
-    google_connect_success_url: str = "http://localhost:3000/business/settings/account"
     frontend_url: str = "http://localhost:3000"
 
     # Twilio SMS

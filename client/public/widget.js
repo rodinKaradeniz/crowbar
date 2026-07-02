@@ -16,41 +16,41 @@
   // Inject styles
   var style = document.createElement("style");
   style.textContent = [
-    "#slotera-widget-btn{display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:#6366f1;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:background 0.2s;}",
-    "#slotera-widget-btn:hover{background:#4f46e5;}",
-    "#slotera-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:999999;align-items:center;justify-content:center;padding:16px;}",
-    "#slotera-overlay.open{display:flex;}",
-    "#slotera-modal{background:#fff;border-radius:12px;width:100%;max-width:520px;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 25px 50px rgba(0,0,0,0.25);}",
-    "#slotera-modal-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #e5e7eb;}",
-    "#slotera-modal-title{font-size:14px;font-weight:600;color:#111827;font-family:inherit;}",
-    "#slotera-close-btn{background:none;border:none;cursor:pointer;padding:4px;color:#6b7280;font-size:20px;line-height:1;}",
-    "#slotera-close-btn:hover{color:#111827;}",
-    "#slotera-iframe{flex:1;border:none;width:100%;min-height:480px;}",
+    "#crowbar-widget-btn{display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:#6366f1;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:background 0.2s;}",
+    "#crowbar-widget-btn:hover{background:#4f46e5;}",
+    "#crowbar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:999999;align-items:center;justify-content:center;padding:16px;}",
+    "#crowbar-overlay.open{display:flex;}",
+    "#crowbar-modal{background:#fff;border-radius:12px;width:100%;max-width:520px;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 25px 50px rgba(0,0,0,0.25);}",
+    "#crowbar-modal-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #e5e7eb;}",
+    "#crowbar-modal-title{font-size:14px;font-weight:600;color:#111827;font-family:inherit;}",
+    "#crowbar-close-btn{background:none;border:none;cursor:pointer;padding:4px;color:#6b7280;font-size:20px;line-height:1;}",
+    "#crowbar-close-btn:hover{color:#111827;}",
+    "#crowbar-iframe{flex:1;border:none;width:100%;min-height:480px;}",
   ].join("");
   document.head.appendChild(style);
 
   // Create button
   var btn = document.createElement("button");
-  btn.id = "slotera-widget-btn";
+  btn.id = "crowbar-widget-btn";
   btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Book Now';
   scriptTag.parentNode.insertBefore(btn, scriptTag.nextSibling);
 
   // Create overlay + modal
   var overlay = document.createElement("div");
-  overlay.id = "slotera-overlay";
+  overlay.id = "crowbar-overlay";
 
   var modal = document.createElement("div");
-  modal.id = "slotera-modal";
+  modal.id = "crowbar-modal";
 
   var header = document.createElement("div");
-  header.id = "slotera-modal-header";
+  header.id = "crowbar-modal-header";
 
   var title = document.createElement("span");
-  title.id = "slotera-modal-title";
+  title.id = "crowbar-modal-title";
   title.textContent = "Book a reservation";
 
   var closeBtn = document.createElement("button");
-  closeBtn.id = "slotera-close-btn";
+  closeBtn.id = "crowbar-close-btn";
   closeBtn.innerHTML = "&times;";
   closeBtn.setAttribute("aria-label", "Close");
 
@@ -58,8 +58,8 @@
   header.appendChild(closeBtn);
 
   var iframe = document.createElement("iframe");
-  iframe.id = "slotera-iframe";
-  iframe.title = "Slotera booking widget";
+  iframe.id = "crowbar-iframe";
+  iframe.title = "Crowbar booking widget";
   iframe.setAttribute("loading", "lazy");
 
   modal.appendChild(header);
@@ -88,7 +88,7 @@
 
   // Listen for postMessage close signal from the iframe
   window.addEventListener("message", function (e) {
-    if (e.data && e.data.type === "slotera:close") closeWidget();
+    if (e.data && e.data.type === "crowbar:close") closeWidget();
   });
 
   // Keyboard close

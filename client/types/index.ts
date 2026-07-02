@@ -29,6 +29,8 @@ export interface Business {
   slug: string;
   email: string;
   phone: string;
+  timezone?: string; // IANA timezone name (e.g. "Europe/Istanbul"); mappers default to "UTC"
+  legalDrinkingAge?: number; // age asserted at alcohol checkout; mappers default to 18
   address?: string;
   description?: string;
   image?: string;
@@ -158,6 +160,8 @@ export interface MenuItem {
   name: string;
   description?: string;
   price: number;
+  happyHourPrice?: number; // flat override; undefined = never discounts
+  isAlcoholic?: boolean; // age-verification flag; drives the checkout attestation + staff badge
   isAvailable: boolean;
   routingTag: "kitchen" | "bar" | "any";
   prepTimeMinutes?: number;
@@ -183,7 +187,18 @@ export interface Menu {
   name: string;
   description?: string;
   isActive: boolean;
+  happyHourActive?: boolean; // server-computed; only set on the public read path
   categories: MenuCategory[];
+}
+
+export interface HappyHourWindow {
+  id: string;
+  businessId: string;
+  name: string;
+  daysOfWeek: number[]; // 0=Monday..6=Sunday (see lib/days.ts)
+  startTime: string; // "HH:MM" wall-clock in the business's timezone
+  endTime: string;
+  isActive: boolean;
 }
 
 export interface SelectedModifier {
@@ -201,6 +216,7 @@ export interface OrderLineItem {
   unitPrice: number;
   selectedModifiers: SelectedModifier[];
   routingTag: string;
+  isAlcoholic?: boolean; // snapshot from the menu item at placement
   notes?: string;
 }
 

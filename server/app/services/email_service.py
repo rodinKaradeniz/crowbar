@@ -115,7 +115,7 @@ def send_staff_invitation(
     role_display = role.replace("_", " ").title()
 
     html = "\n".join([
-        f"<p>You've been invited to join <strong>{business_name}</strong> on Slotera as a <strong>{role_display}</strong>.</p>",
+        f"<p>You've been invited to join <strong>{business_name}</strong> on Crowbar as a <strong>{role_display}</strong>.</p>",
         "<p>Click the link below to accept your invitation and set up your account:</p>",
         f'<p><a href="{invite_url}" style="background:#111;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;">Accept Invitation</a></p>',
         "<p>This invitation expires in 7 days. If you did not expect this invitation, you can safely ignore this email.</p>",
@@ -124,7 +124,7 @@ def send_staff_invitation(
     params: resend.Emails.SendParams = {
         "from": f"{settings.email_from_name} <{settings.email_from_address}>",
         "to": [to_email],
-        "subject": f"You've been invited to join {business_name} on Slotera",
+        "subject": f"You've been invited to join {business_name} on Crowbar",
         "html": html,
     }
 

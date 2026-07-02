@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Slotera - Start all development services
+# Crowbar - Start all development services
 # Run from project root: ./scripts/dev.sh
 
 set -e
@@ -56,7 +56,7 @@ trap cleanup SIGINT SIGTERM EXIT
 
 echo ""
 echo "=========================================="
-echo "  Slotera - Development Startup"
+echo "  Crowbar - Development Startup"
 echo "=========================================="
 echo ""
 
@@ -91,8 +91,8 @@ log "Installing backend dependencies..."
 pip install -q -r requirements.txt
 ok "Backend dependencies installed"
 
-log "Ensuring database exists (for existing volumes from before rename)..."
-docker compose exec -T postgres createdb -U postgres slotera 2>/dev/null || true
+log "Ensuring database exists..."
+docker compose exec -T postgres createdb -U postgres crowbar 2>/dev/null || true
 
 log "Running migrations + seeding test data..."
 SEED_DATA=true python -m db.migrate
@@ -129,7 +129,7 @@ sleep 5
 # --- 5. Status report ---
 echo ""
 echo "=========================================="
-echo "  Slotera - Services Running"
+echo "  Crowbar - Services Running"
 echo "=========================================="
 echo ""
 echo "  Frontend:  http://localhost:3000"

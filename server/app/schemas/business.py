@@ -15,6 +15,7 @@ class BusinessCreate(BaseModel):
     slug: str
     email: str
     phone: str
+    timezone: str = "UTC"
     address: str | None = None
     description: str | None = None
     image: str | None = None
@@ -31,6 +32,7 @@ class BusinessUpdate(BaseModel):
     name: str | None = None
     email: str | None = None
     phone: str | None = None
+    timezone: str | None = None
     address: str | None = None
     description: str | None = None
     image: str | None = None
@@ -43,6 +45,7 @@ class BusinessUpdate(BaseModel):
     operating_hours: dict[str, OperatingHoursEntry] | None = None
     enabled_modules: list[str] | None = None
     notification_channels: list[str] | None = None
+    legal_drinking_age: int | None = None
 
 
 class BusinessResponse(BaseModel):
@@ -51,6 +54,8 @@ class BusinessResponse(BaseModel):
     slug: str
     email: str
     phone: str
+    timezone: str = "UTC"
+    legal_drinking_age: int = 18
     address: str | None = None
     description: str | None = None
     image: str | None = None

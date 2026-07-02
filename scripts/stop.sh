@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Slotera - Stop all development services
+# Crowbar - Stop all development services
 # Run from project root: ./scripts/stop.sh
 
 set -e

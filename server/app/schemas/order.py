@@ -31,6 +31,7 @@ class OrderLineItemResponse(BaseModel):
     unit_price: Decimal
     selected_modifiers: list[dict] = []
     routing_tag: str
+    is_alcoholic: bool = False
     notes: str | None = None
 
     model_config = {"from_attributes": True}
@@ -43,6 +44,10 @@ class OrderPlaceRequest(BaseModel):
     items: list[OrderLineItemRequest] = Field(..., min_length=1)
     notes: str | None = None
     idempotency_key: str = Field(..., min_length=1, max_length=100)
+    # Self-attestation that the guest is of legal drinking age. Required (must be
+    # True) at placement only when the cart contains an alcoholic item on a
+    # customer self-service channel; re-validated server-side (see order_service).
+    age_confirmed: bool = False
 
 
 class OrderStatusUpdateRequest(BaseModel):

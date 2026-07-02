@@ -1,5 +1,6 @@
 import {
   Business,
+  HappyHourWindow,
   HighRiskReservation,
   InventoryItem,
   LibraryItem,
@@ -91,6 +92,8 @@ function toBusiness(b: Record<string, unknown>): Business {
     slug: b.slug as string,
     email: b.email as string,
     phone: b.phone as string,
+    timezone: (b.timezone as string) || "UTC",
+    legalDrinkingAge: (b.legal_drinking_age as number) ?? 18,
     address: (b.address as string) || undefined,
     description: (b.description as string) || undefined,
     image: (b.image as string) || undefined,
@@ -297,6 +300,8 @@ export async function clientUpdateBusiness(
     name: string;
     email: string;
     phone: string;
+    timezone: string;
+    legalDrinkingAge: number;
     address: string;
     description: string;
     image: string;
@@ -313,6 +318,9 @@ export async function clientUpdateBusiness(
   if (data.name !== undefined) apiData.name = data.name;
   if (data.email !== undefined) apiData.email = data.email;
   if (data.phone !== undefined) apiData.phone = data.phone;
+  if (data.timezone !== undefined) apiData.timezone = data.timezone;
+  if (data.legalDrinkingAge !== undefined)
+    apiData.legal_drinking_age = data.legalDrinkingAge;
   if (data.address !== undefined) apiData.address = data.address;
   if (data.description !== undefined) apiData.description = data.description;
   if (data.image !== undefined) apiData.image = data.image;
@@ -773,6 +781,8 @@ function toMenuItem(i: Record<string, unknown>): MenuItem {
     name: i.name as string,
     description: (i.description as string) || undefined,
     price: i.price as number,
+    happyHourPrice: (i.happy_hour_price as number | null) ?? undefined,
+    isAlcoholic: (i.is_alcoholic as boolean) ?? false,
     isAvailable: i.is_available as boolean,
     routingTag: i.routing_tag as MenuItem["routingTag"],
     prepTimeMinutes: (i.prep_time_minutes as number) || undefined,
@@ -802,6 +812,7 @@ function toMenu(m: Record<string, unknown>): Menu {
     name: m.name as string,
     description: (m.description as string) || undefined,
     isActive: m.is_active as boolean,
+    happyHourActive: (m.happy_hour_active as boolean) ?? false,
     categories: ((m.categories as Record<string, unknown>[]) ?? []).map(toMenuCategory),
   };
 }
@@ -833,6 +844,7 @@ function toOrder(o: Record<string, unknown>): Order {
         priceDelta: s.price_delta as number,
       })),
       routingTag: li.routing_tag as string,
+      isAlcoholic: (li.is_alcoholic as boolean) ?? false,
       notes: (li.notes as string) || undefined,
     })),
     statusTimeline: timeline.map((t) => ({
@@ -869,6 +881,7 @@ export async function clientPlaceOrder(
     }>;
     notes?: string;
     idempotencyKey: string;
+    ageConfirmed?: boolean;
   },
 ): Promise<Order> {
   const body = {
@@ -885,6 +898,7 @@ export async function clientPlaceOrder(
     })),
     notes: data.notes,
     idempotency_key: data.idempotencyKey,
+    age_confirmed: data.ageConfirmed ?? false,
   };
   const result = await clientFetch<Record<string, unknown>>(
     `/ordering/${businessId}/orders`,
@@ -1077,6 +1091,8 @@ export async function clientCreateMenuItem(
     name: string;
     description?: string;
     price: number;
+    happyHourPrice?: number | null;
+    isAlcoholic?: boolean;
     isAvailable?: boolean;
     routingTag?: string;
     prepTimeMinutes?: number;
@@ -1092,6 +1108,8 @@ export async function clientCreateMenuItem(
         name: data.name,
         description: data.description,
         price: data.price,
+        happy_hour_price: data.happyHourPrice ?? null,
+        is_alcoholic: data.isAlcoholic ?? false,
         is_available: data.isAvailable ?? true,
         routing_tag: data.routingTag ?? "kitchen",
         prep_time_minutes: data.prepTimeMinutes,
@@ -1110,6 +1128,8 @@ export async function clientUpdateMenuItem(
     name?: string;
     description?: string;
     price?: number;
+    happyHourPrice?: number | null;
+    isAlcoholic?: boolean;
     isAvailable?: boolean;
     routingTag?: string;
     prepTimeMinutes?: number;
@@ -1121,6 +1141,10 @@ export async function clientUpdateMenuItem(
   if (data.name !== undefined) body.name = data.name;
   if (data.description !== undefined) body.description = data.description;
   if (data.price !== undefined) body.price = data.price;
+  // Send happy_hour_price when explicitly provided (a number sets it, null
+  // clears the discount). Backend treats "field present" as set/clear.
+  if (data.happyHourPrice !== undefined) body.happy_hour_price = data.happyHourPrice;
+  if (data.isAlcoholic !== undefined) body.is_alcoholic = data.isAlcoholic;
   if (data.isAvailable !== undefined) body.is_available = data.isAvailable;
   if (data.routingTag !== undefined) body.routing_tag = data.routingTag;
   if (data.prepTimeMinutes !== undefined) body.prep_time_minutes = data.prepTimeMinutes;
@@ -1492,5 +1516,72 @@ export async function clientGetInvite(token: string): Promise<{
   } catch {
     return null;
   }
+}
+
+// ─── Happy Hour windows (staff; behind the ordering module) ───────────────────
+
+function toHappyHourWindow(w: Record<string, unknown>): HappyHourWindow {
+  return {
+    id: w.id as string,
+    businessId: w.business_id as string,
+    name: w.name as string,
+    daysOfWeek: (w.days_of_week as number[]) ?? [],
+    // Backend serializes TIME as "HH:MM:SS"; keep the "HH:MM" prefix for inputs.
+    startTime: (w.start_time as string)?.slice(0, 5) ?? "",
+    endTime: (w.end_time as string)?.slice(0, 5) ?? "",
+    isActive: (w.is_active as boolean) ?? true,
+  };
+}
+
+export async function clientGetHappyHourWindows(): Promise<HappyHourWindow[]> {
+  const result = await authFetch<Record<string, unknown>[]>("/happy-hour/windows");
+  return (result ?? []).map(toHappyHourWindow);
+}
+
+export async function clientCreateHappyHourWindow(data: {
+  name: string;
+  daysOfWeek: number[];
+  startTime: string;
+  endTime: string;
+  isActive?: boolean;
+}): Promise<HappyHourWindow> {
+  const result = await authFetch<Record<string, unknown>>("/happy-hour/windows", {
+    method: "POST",
+    body: JSON.stringify({
+      name: data.name,
+      days_of_week: data.daysOfWeek,
+      start_time: data.startTime,
+      end_time: data.endTime,
+      is_active: data.isActive ?? true,
+    }),
+  });
+  return toHappyHourWindow(result);
+}
+
+export async function clientUpdateHappyHourWindow(
+  windowId: string,
+  data: Partial<{
+    name: string;
+    daysOfWeek: number[];
+    startTime: string;
+    endTime: string;
+    isActive: boolean;
+  }>,
+): Promise<HappyHourWindow> {
+  const body: Record<string, unknown> = {};
+  if (data.name !== undefined) body.name = data.name;
+  if (data.daysOfWeek !== undefined) body.days_of_week = data.daysOfWeek;
+  if (data.startTime !== undefined) body.start_time = data.startTime;
+  if (data.endTime !== undefined) body.end_time = data.endTime;
+  if (data.isActive !== undefined) body.is_active = data.isActive;
+  const result = await authFetch<Record<string, unknown>>(
+    `/happy-hour/windows/${windowId}`,
+    { method: "PATCH", body: JSON.stringify(body) },
+  );
+  return toHappyHourWindow(result);
+}
+
+export async function clientDeleteHappyHourWindow(windowId: string): Promise<void> {
+  await authFetch(`/happy-hour/windows/${windowId}`, { method: "DELETE" });
 }
 

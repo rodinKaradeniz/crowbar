@@ -333,6 +333,18 @@ INSERT INTO menu_items (id, category_id, business_id, name, description, price, 
 ('00000000-0000-0000-0008-000000000021', '00000000-0000-0000-0007-000000000008', '00000000-0000-0000-0000-000000000002',
   'Classic Lager Pint', 'Full pour of our house lager.',                                7.00, TRUE, 'bar',     2, 1);
 
+-- Mark alcoholic drinks (Age Verification demo). Cocktails, Beers, Spirits, and
+-- Wine categories are alcoholic; Bites and Bar Food stay non-alcoholic.
+UPDATE menu_items SET is_alcoholic = TRUE
+WHERE category_id IN (
+    '00000000-0000-0000-0007-000000000001',  -- Happy Hour: Cocktails
+    '00000000-0000-0000-0007-000000000002',  -- Happy Hour: Beers
+    '00000000-0000-0000-0007-000000000004',  -- Classic: Cocktails
+    '00000000-0000-0000-0007-000000000005',  -- Classic: Spirits
+    '00000000-0000-0000-0007-000000000006',  -- Classic: Wine
+    '00000000-0000-0000-0007-000000000008'   -- Classic: Beers
+);
+
 -- ─── Item Library (mirror of all menu items) ──────────────────────────────────
 INSERT INTO item_library (id, business_id, name, description, price, routing_tag, prep_time_minutes) VALUES
 ('00000000-0000-0000-0009-000000000001', '00000000-0000-0000-0000-000000000002', 'Happy Hour Mojito',  'Fresh mint, lime, white rum, soda. House special.',            9.00, 'bar',     5),

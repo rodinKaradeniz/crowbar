@@ -49,7 +49,7 @@ async function proxyRequest(
     redirect: "manual",
   });
 
-  // Pass through redirects (e.g. Google OAuth)
+  // Pass through redirects from the backend
   if (backendResponse.status >= 300 && backendResponse.status < 400) {
     const location = backendResponse.headers.get("location");
     if (location) {

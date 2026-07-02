@@ -20,6 +20,7 @@ from app.routers import (
     auth,
     businesses,
     customers,
+    happy_hour,
     inventory,
     notifications,
     ordering,
@@ -34,7 +35,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
-logger = logging.getLogger("slotera")
+logger = logging.getLogger("crowbar")
 
 
 @asynccontextmanager
@@ -65,7 +66,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Slotera API",
+    title="Crowbar API",
     description="Reservation management system API",
     version="0.1.0",
     lifespan=lifespan,
@@ -128,6 +129,7 @@ app.include_router(queue.router)
 app.include_router(ordering.router)
 app.include_router(inventory.router)
 app.include_router(tabs.router)
+app.include_router(happy_hour.router)
 
 # ─── Static files (dev only) ──────────────────────────────────────────────────
 

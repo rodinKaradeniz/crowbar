@@ -28,5 +28,11 @@ export default async function OrderPage({ params }: OrderPageProps) {
     );
   }
 
-  return <OrderClient businessId={business.id} businessSlug={business.slug} />;
+  return (
+    <OrderClient
+      businessId={business.id}
+      businessSlug={business.slug}
+      legalDrinkingAge={business.legalDrinkingAge ?? 18}
+    />
+  );
 }

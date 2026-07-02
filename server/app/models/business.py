@@ -10,6 +10,12 @@ class Business(Base, UUIDMixin, TimestampMixin):
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    # IANA timezone name (e.g. 'Europe/Istanbul'). Interprets wall-clock times
+    # such as operating hours and happy-hour windows. Defaults to 'UTC'.
+    timezone: Mapped[str] = mapped_column(String(64), default="UTC", nullable=False)
+    # Age asserted at alcohol checkout. Configurable per business (differs by
+    # country: 18 across most of the EU/Turkey, 21 in the US). Never hardcoded.
+    legal_drinking_age: Mapped[int] = mapped_column(Integer, default=18, nullable=False)
     email: Mapped[str] = mapped_column(String(255), nullable=False)
     phone: Mapped[str] = mapped_column(String(50), nullable=False)
     address: Mapped[str | None] = mapped_column(Text)

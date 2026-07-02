@@ -13,17 +13,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Business } from "@/types";
 import { clientUpdateBusiness } from "@/lib/client-api";
+import { DAYS_OF_WEEK } from "@/lib/days";
 import { toast } from "sonner";
-
-const DAYS_OF_WEEK = [
-  { key: "monday", label: "Monday" },
-  { key: "tuesday", label: "Tuesday" },
-  { key: "wednesday", label: "Wednesday" },
-  { key: "thursday", label: "Thursday" },
-  { key: "friday", label: "Friday" },
-  { key: "saturday", label: "Saturday" },
-  { key: "sunday", label: "Sunday" },
-] as const;
 
 interface BusinessHoursClientProps {
   businessId: string;

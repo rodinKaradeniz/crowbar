@@ -137,7 +137,7 @@ export function BusinessDocsChatTrigger({
                 <BookOpen className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
                 <p className="text-sm leading-relaxed text-muted-foreground">
                   Ask where to find something or how to do a task—e.g. accepting
-                  requests, connecting Google for Meet, or running{" "}
+                  requests, managing your menu, or running{" "}
                   <span className="font-medium text-foreground/90">
                     Insights
                   </span>

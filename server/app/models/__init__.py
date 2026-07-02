@@ -1,6 +1,7 @@
 from app.models.bot_config import BotConfig
 from app.models.business import Business
 from app.models.customer import Customer
+from app.models.happy_hour_window import HappyHourWindow
 from app.models.inventory import InventoryItem, StockMovement
 from app.models.location import Location
 from app.models.menu import ItemLibrary, Menu, MenuCategory, MenuItem, Modifier, ModifierGroup
@@ -36,4 +37,5 @@ __all__ = [
     "Table",
     "BotConfig",
     "Tab",
+    "HappyHourWindow",
 ]

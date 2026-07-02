@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Mail, Phone, MapPin, ExternalLink, Copy, Check } from "lucide-react";
 import { Business } from "@/types";
 import { clientUpdateBusiness } from "@/lib/client-api";
+import { TimezoneCombobox } from "@/components/timezone-combobox";
 import { toast } from "sonner";
 
 interface BusinessInfoClientProps {
@@ -37,6 +38,12 @@ export default function BusinessInfoClient({
   const [businessPhone, setBusinessPhone] = useState(initialBusiness?.phone || "");
   const [businessAddress, setBusinessAddress] = useState(initialBusiness?.address || "");
   const [businessImage, setBusinessImage] = useState(initialBusiness?.image || "");
+  const [businessTimezone, setBusinessTimezone] = useState(
+    initialBusiness?.timezone || "UTC"
+  );
+  const [legalDrinkingAge, setLegalDrinkingAge] = useState(
+    String(initialBusiness?.legalDrinkingAge ?? 18)
+  );
   const [slugCopied, setSlugCopied] = useState(false);
 
   const slug = initialBusiness?.slug ?? "";
@@ -64,6 +71,8 @@ export default function BusinessInfoClient({
         phone: businessPhone,
         address: businessAddress,
         image: businessImage,
+        timezone: businessTimezone,
+        legalDrinkingAge: parseInt(legalDrinkingAge, 10) || 18,
       });
       toast.success("Business info saved");
       router.refresh();
@@ -143,6 +152,37 @@ export default function BusinessInfoClient({
                   value={businessAddress}
                   onChange={(e) => setBusinessAddress(e.target.value)}
                 />
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="businessTimezone">Timezone</FieldLabel>
+                <TimezoneCombobox
+                  id="businessTimezone"
+                  value={businessTimezone}
+                  onChange={setBusinessTimezone}
+                />
+                <FieldDescription>
+                  Interprets your operating hours and happy-hour windows.
+                </FieldDescription>
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="legalDrinkingAge">
+                  Legal drinking age
+                </FieldLabel>
+                <Input
+                  id="legalDrinkingAge"
+                  type="number"
+                  min={0}
+                  max={99}
+                  value={legalDrinkingAge}
+                  onChange={(e) => setLegalDrinkingAge(e.target.value)}
+                  className="max-w-32"
+                />
+                <FieldDescription>
+                  Guests confirm they are at least this age when ordering
+                  alcohol. Varies by country (e.g. 18 in the EU, 21 in the US).
+                </FieldDescription>
               </Field>
 
               <Field>

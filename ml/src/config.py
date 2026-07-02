@@ -4,10 +4,10 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     # Database (read-only access to the main app DB)
     database_url: str = (
-        "postgresql+asyncpg://postgres:postgres@localhost:5432/slotera"
+        "postgresql+asyncpg://postgres:postgres@localhost:5432/crowbar"
     )
     database_url_sync: str = (
-        "postgresql://postgres:postgres@localhost:5432/slotera"
+        "postgresql://postgres:postgres@localhost:5432/crowbar"
     )
 
     # Environment

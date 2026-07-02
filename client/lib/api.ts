@@ -69,6 +69,8 @@ function toBusiness(b: BusinessResponse): Business {
     enabled_modules?: string[];
     onboarding_complete?: boolean;
     notification_channels?: string[];
+    timezone?: string;
+    legal_drinking_age?: number;
   };
   return {
     id: b.id,
@@ -76,6 +78,8 @@ function toBusiness(b: BusinessResponse): Business {
     slug: b.slug,
     email: b.email,
     phone: b.phone,
+    timezone: raw.timezone ?? "UTC",
+    legalDrinkingAge: raw.legal_drinking_age ?? 18,
     address: b.address || undefined,
     description: b.description || undefined,
     image: b.image || undefined,

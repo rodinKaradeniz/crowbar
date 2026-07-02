@@ -28,6 +28,7 @@ import {
   ListOrdered,
   Receipt,
   Users,
+  Wine,
 } from "lucide-react";
 import {
   SidebarContent,
@@ -270,6 +271,18 @@ function BusinessSidebarContentInner() {
                     <Link href="/business/menu">
                       <ChefHat />
                       <span>Menu</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === "/business/happy-hour"}
+                    tooltip="Happy Hour"
+                  >
+                    <Link href="/business/happy-hour">
+                      <Wine />
+                      <span>Happy Hour</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

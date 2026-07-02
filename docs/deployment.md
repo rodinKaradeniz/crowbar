@@ -56,10 +56,10 @@ Production compose file — includes the `api` service (unlike the dev compose w
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: slotera-db
+    container_name: crowbar-db
     restart: always
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-slotera}
+      POSTGRES_DB: ${POSTGRES_DB:-crowbar}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
@@ -72,7 +72,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: slotera-redis
+    container_name: crowbar-redis
     restart: always
     volumes:
       - redis_data:/data
@@ -86,12 +86,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: slotera-api
+    container_name: crowbar-api
     restart: always
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-slotera}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-crowbar}
       REDIS_URL: redis://redis:6379/0
       SECRET_KEY: ${SECRET_KEY}
       ENVIRONMENT: production
@@ -110,13 +110,13 @@ services:
     build:
       context: ../ml
       dockerfile: Dockerfile
-    container_name: slotera-ml
+    container_name: crowbar-ml
     restart: always
     ports:
       - "8001:8001"
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-slotera}
-      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-slotera}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-crowbar}
+      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-crowbar}
       ENVIRONMENT: production
     depends_on:
       postgres:
@@ -154,7 +154,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             set -e
-            cd ~/slotera
+            cd ~/crowbar
             git pull origin main
 
             # Write prod env file from secret
@@ -164,7 +164,7 @@ jobs:
             docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 
             # Run DB migrations
-            docker exec slotera-api python -m db.migrate
+            docker exec crowbar-api python -m db.migrate
 
             # Clean up old images
             docker image prune -f
@@ -221,7 +221,7 @@ sudo curl -SL https://github.com/docker/compose/releases/latest/download/docker-
 sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
 # Clone repo
-git clone https://github.com/rodinKaradeniz/slotera.git ~/slotera
+git clone https://github.com/rodinKaradeniz/crowbar.git ~/crowbar
 ```
 
 ---
@@ -242,7 +242,7 @@ In your repo → Settings → Secrets → Actions, add:
 ```
 POSTGRES_PASSWORD=a-strong-password
 SECRET_KEY=a-very-long-random-string
-CORS_ORIGINS=https://slotera.vercel.app
+CORS_ORIGINS=https://crowbar.vercel.app
 STORAGE_TYPE=local
 ```
 

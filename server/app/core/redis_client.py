@@ -5,7 +5,7 @@ Usage:
     from app.core.redis_client import get_redis, close_redis
 
     r = await get_redis()
-    await r.xadd("slotera:events", {...})
+    await r.xadd("crowbar:events", {...})
 """
 import logging
 

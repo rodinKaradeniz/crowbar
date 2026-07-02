@@ -62,10 +62,9 @@ const modules = [
   {
     icon: Calendar,
     name: "Reservations",
-    description: "Online booking with calendar sync, reminders, and a public booking page.",
+    description: "Online booking with reminders and a public booking page.",
     highlights: [
       "Unlimited bookings",
-      "Google Calendar sync",
       "SMS & email reminders",
       "Public booking page + embeddable widget",
     ],
@@ -252,7 +251,7 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* Why Slotera */}
+      {/* Why Crowbar */}
       <section className="py-16 md:py-20 bg-muted/30">
         <div className="container mx-auto px-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">

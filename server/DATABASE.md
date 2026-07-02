@@ -85,14 +85,14 @@ Stores submitted custom field values keyed by field ID:
 
 ## Test Database
 
-Integration tests use a separate `slotera_test` database to avoid touching development data.
+Integration tests use a separate `crowbar_test` database to avoid touching development data.
 
 | Command | Description |
 |---|---|
-| `docker compose exec postgres createdb -U postgres slotera_test` | Create the test database (one-time setup) |
-| `docker compose exec postgres dropdb -U postgres slotera_test` | Drop the test database |
+| `docker compose exec postgres createdb -U postgres crowbar_test` | Create the test database (one-time setup) |
+| `docker compose exec postgres dropdb -U postgres crowbar_test` | Drop the test database |
 
-The test suite automatically creates and drops all tables before/after each test — no manual migrations needed. The test database URL is derived from your main `DATABASE_URL` by replacing the path segment `/slotera` with `/slotera_test` (see `tests/conftest.py`).
+The test suite automatically creates and drops all tables before/after each test — no manual migrations needed. The test database URL is derived from your main `DATABASE_URL` by replacing the path segment `/crowbar` with `/crowbar_test` (see `tests/conftest.py`).
 
 ## Adding a New Migration
 

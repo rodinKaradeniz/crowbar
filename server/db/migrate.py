@@ -13,7 +13,7 @@ load_dotenv()
 async def get_connection() -> asyncpg.Connection:
     database_url = os.getenv(
         "DATABASE_URL",
-        "postgresql://postgres:postgres@localhost:5432/slotera",
+        "postgresql://postgres:postgres@localhost:5432/crowbar",
     )
     # asyncpg uses postgresql:// not postgresql+asyncpg://
     database_url = database_url.replace("postgresql+asyncpg://", "postgresql://")
@@ -90,7 +90,6 @@ async def reset_database(conn: asyncpg.Connection) -> None:
         DROP TABLE IF EXISTS reservations CASCADE;
         DROP TABLE IF EXISTS service_types CASCADE;
         DROP TABLE IF EXISTS staff CASCADE;
-        DROP TABLE IF EXISTS google_oauth_tokens CASCADE;
         DROP TABLE IF EXISTS ml_predictions CASCADE;
         DROP TABLE IF EXISTS business_daily_metrics CASCADE;
         DROP TABLE IF EXISTS users CASCADE;

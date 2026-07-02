@@ -1,11 +1,11 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: slotera-db
+    container_name: crowbar-db
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: slotera
+      POSTGRES_DB: crowbar
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
@@ -18,7 +18,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: slotera-redis
+    container_name: crowbar-redis
     ports:
       - "6379:6379"
     volumes:
@@ -33,12 +33,12 @@ services:
     build:
       context: ../ml
       dockerfile: Dockerfile
-    container_name: slotera-ml
+    container_name: crowbar-ml
     ports:
       - "8001:8001"
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/slotera
-      DATABASE_URL_SYNC: postgresql://postgres:postgres@postgres:5432/slotera
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/crowbar
+      DATABASE_URL_SYNC: postgresql://postgres:postgres@postgres:5432/crowbar
       ENVIRONMENT: development
       LOG_LEVEL: INFO
     depends_on:

@@ -1,4 +1,4 @@
-# Slotera — Deferred Work Backlog
+# Crowbar — Deferred Work Backlog
 
 This is a living document. Items are added here when they are explicitly deferred from a phase rather than dropped entirely. Mark items as **done** and link the commit/PR when resolved.
 
@@ -61,13 +61,6 @@ Needs:
 SMS delivery via Twilio requires E.164 format (`+1xxxxxxxxxx`).
 Currently `sms_service.send_sms()` returns `False` for any number that doesn't start with `+`, but no normalization is attempted.
 A normalization step at reservation creation time (using a library like `phonenumbers`) would improve reliability.
-
----
-
-## Google Calendar API — Async Execution
-
-`google_calendar_service.py` wraps synchronous `googleapiclient` calls in `asyncio.get_event_loop().run_in_executor(None, ...)`.
-This works but `get_event_loop()` is deprecated in Python 3.10+. Should be migrated to `asyncio.get_running_loop().run_in_executor(...)` and, eventually, replaced with the async Google API client when it stabilizes.
 
 ---
 

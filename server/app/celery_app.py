@@ -22,7 +22,7 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 celery_app = Celery(
-    "slotera",
+    "crowbar",
     broker=settings.redis_url,
     backend=settings.redis_url,
 )

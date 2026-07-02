@@ -37,7 +37,7 @@ from app.schemas.order import (
     OrderResponse,
     OrderStatusUpdateRequest,
 )
-from app.services import menu_service, order_service
+from app.services import happy_hour_service, menu_service, order_service
 from app.services.order_ws_manager import manager
 
 logger = logging.getLogger(__name__)
@@ -68,6 +68,10 @@ async def get_public_menu(
     menu = await menu_service.get_active_menu(db, business_id)
     if menu is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active menu found")
+    # Compute happy-hour state server-side (client clocks can't be trusted) and
+    # stamp it as a transient attribute the response schema reads. Items carry
+    # their own happy_hour_price so the client can render the discount.
+    menu.happy_hour_active = await happy_hour_service.is_happy_hour_active(db, business_id)
     return menu
 
 
@@ -90,7 +94,13 @@ async def place_order(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="This business is not currently accepting orders.",
         )
-    order = await order_service.place_order(db, business_id, body)
+    # Public endpoint = customer self-service channel → enforce the age gate.
+    try:
+        order = await order_service.place_order(db, business_id, body)
+    except order_service.AgeConfirmationRequired as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        )
     await db.commit()
     await publish(DomainEvent(
         event_type="order.placed",

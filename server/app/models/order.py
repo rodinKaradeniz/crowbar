@@ -3,7 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -50,6 +50,9 @@ class Order(Base, UUIDMixin, TimestampMixin):
     status: Mapped[str] = mapped_column(String(20), default="received", nullable=False)
     # status: received | preparing | ready | served | cancelled
     idempotency_key: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    # Self-attestation recorded at placement. Whether the order actually contains
+    # alcohol is derived from the line items on demand, not stored here.
+    age_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     total_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     placed_at: Mapped[datetime] = mapped_column(
@@ -86,6 +89,9 @@ class OrderLineItem(Base, UUIDMixin, TimestampMixin):
     unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, nullable=False)
     selected_modifiers: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
     routing_tag: Mapped[str] = mapped_column(String(20), default="kitchen", nullable=False)
+    # Snapshot of the menu item's is_alcoholic at placement (like routing_tag),
+    # so the staff badge is stable even if the menu item is later edited/deleted.
+    is_alcoholic: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     order: Mapped["Order"] = relationship(back_populates="line_items")

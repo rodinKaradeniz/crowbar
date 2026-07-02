@@ -10,7 +10,7 @@ Usage:
         payload={"reservation_id": str(reservation.id), "status": reservation.status},
     ))
 
-Phase 4: publish() writes to Redis Stream "slotera:events".
+Phase 4: publish() writes to Redis Stream "crowbar:events".
 Callers are unchanged from Phase 0.
 """
 import json
@@ -19,9 +19,9 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger("slotera.events")
+logger = logging.getLogger("crowbar.events")
 
-STREAM_KEY = "slotera:events"
+STREAM_KEY = "crowbar:events"
 STREAM_MAXLEN = 10_000
 
 

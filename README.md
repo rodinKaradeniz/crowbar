@@ -5,7 +5,7 @@ A reservation management system for businesses and customers.
 ## Project Structure
 
 ```
-slotera/
+crowbar/
 ├── scripts/             # Development scripts
 │   ├── dev.sh          # Start all services (Docker, backend, frontend)
 │   └── stop.sh         # Stop Docker containers
@@ -112,8 +112,8 @@ pip install -r requirements.txt
 # Copy environment config
 cp env.example .env
 
-# Default DB name is `slotera`. If you still have an older `rk_reservations` database,
-# either create `slotera` and run migrations, or keep your existing name in `DATABASE_URL`.
+# Default DB name is `crowbar`. If you still have an older `rk_reservations` database,
+# either create `crowbar` and run migrations, or keep your existing name in `DATABASE_URL`.
 
 # Start PostgreSQL & Redis
 docker compose up -d
@@ -188,7 +188,7 @@ source venv/bin/activate
 
 # One-time setup: install test dependencies + create test database
 pip install -r requirements-test.txt
-docker compose exec postgres createdb -U postgres slotera_test
+docker compose exec postgres createdb -U postgres crowbar_test
 
 # Run all tests
 python -m pytest tests/ -v
@@ -209,7 +209,7 @@ python -m pytest tests/ --cov=app --cov-report=term-missing
 | `tests/integration/test_auth_routes.py` | Integration | Register, login, `/me`, profile update, password change |
 | `tests/integration/test_reservation_routes.py` | Integration | Full reservation CRUD lifecycle, public reservations, edge cases |
 
-**How it works:** Integration tests use a real `slotera_test` PostgreSQL database. Tables are created before each test and dropped after, ensuring full isolation. The FastAPI `get_db` dependency is overridden to use the test session. See `tests/conftest.py` for all shared fixtures.
+**How it works:** Integration tests use a real `crowbar_test` PostgreSQL database. Tables are created before each test and dropped after, ensuring full isolation. The FastAPI `get_db` dependency is overridden to use the test session. See `tests/conftest.py` for all shared fixtures.
 
 ### Frontend Tests
 

@@ -43,9 +43,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Slotera — ML Insights",
+    title="Crowbar — ML Insights",
     description=(
-        "Machine learning insights microservice for the Slotera platform. "
+        "Machine learning insights microservice for the Crowbar platform. "
         "Provides customer segmentation, cancellation prediction, and demand forecasting."
     ),
     version="0.1.0",

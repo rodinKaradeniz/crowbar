@@ -1,7 +1,7 @@
 """
 Redis Stream consumer for WebSocket push.
 
-Reads from the "slotera:events" stream and dispatches events to the appropriate
+Reads from the "crowbar:events" stream and dispatches events to the appropriate
 WebSocket broadcast function. Runs as an asyncio background task started in
 the FastAPI lifespan.
 
@@ -22,7 +22,7 @@ from app.core.redis_client import get_redis
 from app.core.ws_projections import broadcast_order_board, broadcast_queue_state
 from app.database import async_session
 
-logger = logging.getLogger("slotera.stream_consumer")
+logger = logging.getLogger("crowbar.stream_consumer")
 
 GROUP_NAME = "ws_push"
 CONSUMER_NAME = "worker_1"

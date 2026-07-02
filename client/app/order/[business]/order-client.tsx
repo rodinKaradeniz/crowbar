@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Trash2, ShoppingCart, CheckCircle2, Clock } from "lucide-react";
 import Link from "next/link";
 
@@ -28,7 +29,14 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 interface CartItem {
-  item: { id: string; name: string; price: number; routingTag: string };
+  item: {
+    id: string;
+    name: string;
+    price: number;
+    happyHourPrice?: number | null;
+    isAlcoholic?: boolean;
+    routingTag: string;
+  };
   quantity: number;
   selectedModifiers: Array<{ modifierId: string; name: string; priceDelta: number }>;
   notes: string;
@@ -41,16 +49,22 @@ function generateIdempotencyKey() {
 interface OrderClientProps {
   businessId: string;
   businessSlug: string;
+  legalDrinkingAge: number;
 }
 
-export default function OrderClient({ businessId, businessSlug }: OrderClientProps) {
+export default function OrderClient({ businessId, businessSlug, legalDrinkingAge }: OrderClientProps) {
   const searchParams = useSearchParams();
   const table = searchParams.get("table");
 
   const [cart, setCart] = useState<CartItem[]>([]);
+  // Happy-hour state carried from the menu page (server-decided). Display only —
+  // the backend re-decides authoritatively at order placement.
+  const [hhActive, setHhActive] = useState(false);
   const [tableInput, setTableInput] = useState(table ?? "");
   const [notes, setNotes] = useState("");
   const [placing, setPlacing] = useState(false);
+  // Age self-attestation (only surfaced when the cart contains an alcoholic item).
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
 
   // Post-order state
   const [sessionToken, setSessionToken] = useState<string | null>(null);
@@ -63,6 +77,12 @@ export default function OrderClient({ businessId, businessSlug }: OrderClientPro
       if (stored) {
         try {
           setCart(JSON.parse(stored) as CartItem[]);
+        } catch {}
+      }
+      const hh = sessionStorage.getItem(`cart_hh_${businessSlug}`);
+      if (hh) {
+        try {
+          setHhActive(JSON.parse(hh) as boolean);
         } catch {}
       }
     }
@@ -91,13 +111,21 @@ export default function OrderClient({ businessId, businessSlug }: OrderClientPro
     }
   }
 
+  const effectivePrice = (item: CartItem["item"]) =>
+    hhActive && item.happyHourPrice != null ? item.happyHourPrice : item.price;
+
   const totalPrice = cart.reduce((sum, ci) => {
     const modTotal = ci.selectedModifiers.reduce((s, m) => s + m.priceDelta, 0);
-    return sum + (ci.item.price + modTotal) * ci.quantity;
+    return sum + (effectivePrice(ci.item) + modTotal) * ci.quantity;
   }, 0);
+
+  // Whether the cart contains any alcoholic item. Gates the attestation step and
+  // is re-validated server-side at placement (the backend is authoritative).
+  const cartHasAlcohol = cart.some((ci) => ci.item.isAlcoholic);
 
   async function placeOrder() {
     if (cart.length === 0) return;
+    if (cartHasAlcohol && !ageConfirmed) return;
     setPlacing(true);
     try {
       const order = await clientPlaceOrder(businessId, {
@@ -110,6 +138,7 @@ export default function OrderClient({ businessId, businessSlug }: OrderClientPro
         })),
         notes: notes.trim() || undefined,
         idempotencyKey: generateIdempotencyKey(),
+        ageConfirmed: cartHasAlcohol ? ageConfirmed : undefined,
       });
       setSessionToken(order.sessionToken);
       setOrders([order]);
@@ -219,7 +248,7 @@ export default function OrderClient({ businessId, businessSlug }: OrderClientPro
             <div className="space-y-2">
               {cart.map((ci, i) => {
                 const modTotal = ci.selectedModifiers.reduce((s, m) => s + m.priceDelta, 0);
-                const lineTotal = (ci.item.price + modTotal) * ci.quantity;
+                const lineTotal = (effectivePrice(ci.item) + modTotal) * ci.quantity;
                 return (
                   <div key={i} className="flex items-start gap-3 rounded-lg border p-3">
                     <div className="flex-1 min-w-0">
@@ -268,6 +297,19 @@ export default function OrderClient({ businessId, businessSlug }: OrderClientPro
 
             <div className="fixed bottom-0 inset-x-0 p-4 bg-background border-t">
               <div className="max-w-md mx-auto">
+                {cartHasAlcohol && (
+                  <label className="flex items-start gap-2 mb-3 rounded-md border bg-muted/40 p-2.5 text-sm cursor-pointer">
+                    <Checkbox
+                      checked={ageConfirmed}
+                      onCheckedChange={(v) => setAgeConfirmed(v === true)}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      This order contains alcohol. I confirm I am at least{" "}
+                      {legalDrinkingAge} years old.
+                    </span>
+                  </label>
+                )}
                 <div className="flex justify-between text-sm mb-3">
                   <span className="text-muted-foreground">Total</span>
                   <span className="font-semibold">€{totalPrice.toFixed(2)}</span>
@@ -276,7 +318,11 @@ export default function OrderClient({ businessId, businessSlug }: OrderClientPro
                   className="w-full"
                   size="lg"
                   onClick={placeOrder}
-                  disabled={placing || cart.length === 0}
+                  disabled={
+                    placing ||
+                    cart.length === 0 ||
+                    (cartHasAlcohol && !ageConfirmed)
+                  }
                 >
                   {placing ? "Placing order…" : "Place Order"}
                 </Button>

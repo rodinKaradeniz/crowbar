@@ -174,6 +174,8 @@ rk-reservations/
 | `014_multi_channel_foundations.sql`         | New tables: `customers` (business-scoped, phone-keyed identity), `tables` (per-table QR ordering), `bot_configs` (per-channel bot settings). Adds nullable `customer_id`, `channel`, `fulfillment_type`, `table_id`, `delivery_address`, `scheduled_for` on `orders`; `channel`, `idempotency_key` on `reservations` and `queue_entries`. Adds `ordering_config` (jsonb, default `{"allowed_fulfillment_types":["dine_in"]}`) and `bot_enabled` on `businesses` |
 | `015_reservations_customer_cutover.sql`     | Drop legacy `reservations.customer_id` FK to `users`; promote `customer_id_new` → `customer_id` (NOT NULL, FK to `customers`). Delete orphaned `users.user_type='customer'` rows                                                                                                                                                                                                                                                                                |
 | `016_tabs.sql`                              | New `tabs` table (open/closed, opened_by/closed_by → users, `settled_method`, nullable `table_id`/`customer_id`); adds nullable `orders.tab_id` FK. Tabs group orders under one running total; total is computed on demand (no denormalized column)                                                                                                                                                                                                             |
+| `017_happy_hour_and_timezone.sql`           | Adds `businesses.timezone` (`VARCHAR(64)`, NOT NULL default `'UTC'`, IANA name). New `happy_hour_windows` table (business-wide windows: `name`, `days_of_week INT[]` with 0=Monday..6=Sunday, wall-clock `start_time`/`end_time` TIME interpreted against `businesses.timezone`, `is_active`). Adds nullable `menu_items.happy_hour_price NUMERIC(10,2)` (flat override; NULL = never discounts)                                                                  |
+| `018_age_verification.sql`                  | Age verification (self-attestation). Adds `menu_items.is_alcoholic BOOLEAN NOT NULL DEFAULT false`; `order_line_items.is_alcoholic BOOLEAN NOT NULL DEFAULT false` (snapshot at placement, like `routing_tag`); `orders.age_confirmed BOOLEAN NOT NULL DEFAULT false` (the attestation, recorded on the order); `businesses.legal_drinking_age INT NOT NULL DEFAULT 18` (configurable per country; never hardcoded). Whether an order "contains alcohol" is derived from its line items on demand — not stored                                          |
 
 ---
 
@@ -183,7 +185,7 @@ rk-reservations/
 | -------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `reservations` | Complete             | Core booking flow, staff management, analytics                                                                                                                                                                                                                                 |
 | `queue`        | Complete (Phase 1.5) | Walk-in queue, WebSocket live board, SMS on call                                                                                                                                                                                                                               |
-| `ordering`     | Complete (Phase 2)   | QR menu, cart, order placement (idempotent), kitchen/bar ticket board, WebSocket; item library (reusable templates, copy-on-add); ordering on/off toggle (`is_accepting_orders`); **tabs** (Phase B.1) — group orders under one running total, close with simulated settlement |
+| `ordering`     | Complete (Phase 2)   | QR menu, cart, order placement (idempotent), kitchen/bar ticket board, WebSocket; item library (reusable templates, copy-on-add); ordering on/off toggle (`is_accepting_orders`); **tabs** (Phase B.1) — group orders under one running total, close with simulated settlement; **happy hour** (Phase B.2) — timezone-aware windows discount opted-in items on both the menu read and order placement paths; **age verification** (Phase B.3) — `is_alcoholic` menu flag drives a checkout self-attestation (server-re-validated via `age_confirmed`, channel-scoped) + an alcohol badge on staff tickets |
 | `inventory`    | Complete (Phase 3)   | Stock items, movements (receive/adjust/waste), par levels, low-stock alerts; `menu_item_ingredients` recipe stub for future auto-deduction                                                                                                                                     |
 | `insights`     | Complete (Phase 5)   | ML outputs surfaced (segmentation, cancellation, demand forecast); operational KPIs (reservations/ordering/inventory); high-risk reservation flagging; overview carousel shows 3-day forecast slide                                                                            |
 
@@ -247,7 +249,7 @@ All P0 and P1 hardening items are complete:
     The `menu_item_ingredients` join table (menu_item_id → inventory_item_id + quantity) exists as a FK scaffold for future auto-deduction on order placement. Nothing currently reads or writes it via the API. It exists so Phase 8 (Recipe Management) can wire recipes without a schema migration.
 
 11. **Event stream (Phase 4) — `publish()` is fire-and-forget**
-    `publish(DomainEvent(...))` is always called _after_ `db.commit()`. Redis errors are caught and logged but never re-raised — a failed publish drops the WS push silently without crashing the HTTP response. The consumer (`stream_consumer.py`) runs as an asyncio background task in the FastAPI lifespan; it uses `XREADGROUP` with `ws_push` consumer group on stream `slotera:events`. WS managers (`queue_ws_manager`, `order_ws_manager`) are unchanged — they still do the final `broadcast()`, but are now driven by the consumer rather than the router. `inventory.*` and `reservation.*` events flow through the stream but have no WS consumer yet (Phase 5).
+    `publish(DomainEvent(...))` is always called _after_ `db.commit()`. Redis errors are caught and logged but never re-raised — a failed publish drops the WS push silently without crashing the HTTP response. The consumer (`stream_consumer.py`) runs as an asyncio background task in the FastAPI lifespan; it uses `XREADGROUP` with `ws_push` consumer group on stream `crowbar:events`. WS managers (`queue_ws_manager`, `order_ws_manager`) are unchanged — they still do the final `broadcast()`, but are now driven by the consumer rather than the router. `inventory.*` and `reservation.*` events flow through the stream but have no WS consumer yet (Phase 5).
 
 12. **`ws_projections.py` extracted from routers**
     `broadcast_queue_state()` and `broadcast_order_board()` were private `_broadcast_*` helpers in the routers. They now live in `server/app/core/ws_projections.py` so the stream consumer can call them without importing the routers (which would create a circular dependency).
@@ -321,6 +323,12 @@ All P0 and P1 hardening items are complete:
 34. **Tabs are additive; tab total is computed on demand, settlement is simulated**
     A `tab` groups multiple discrete orders under one running total (Phase B.1). Orders with `tab_id = NULL` behave exactly as before — tabs replace nothing. `add_order_to_tab` is a thin wrapper over `order_service.place_order` that then stamps `tab_id` (no duplicated order-creation logic), and it publishes `order.placed` so tab orders still flow through the existing ticket board unchanged. The tab total is **never denormalized**: `tab_service.get_tab_total` is a live `SUM(orders.total_amount)` over the tab's **non-cancelled** orders (compute-on-demand, like `inventory_service.recompute_quantity_from_movements`). The `cancelled` exclusion is real, not defensive — `cancelled` is a genuine `orders.status` value (see the order-lifecycle note in Phase 2) reachable via the status-transition endpoint and enforced by a CHECK constraint in migration 008; a cancelled order must not count toward what's owed. Closing a tab is a status change + a `settled_method` (`cash|card|comp|other`) value — there is **no payment processing** behind it (deferred to Phase 10). `settled_method` is required to close. Closing an **already-closed** tab is rejected with **409** (router checks `status != "open"` before mutating, mirroring the add-order-to-closed-tab guard) so a double-click or retried request can't silently overwrite the original settlement record. The `/api/tabs*` router scopes tenancy via `get_current_business` (no `business_id` in the path), matching the core tenant-scoping convention rather than the ordering router's path-param style.
 
+35. **Happy hour is timezone-aware and decided by ONE server-side function; day-of-week has a single canonical enum (Monday=0)**
+    `happy_hour_service.is_happy_hour_active(db, business_id, at=None)` is the **single source of truth** for "is a happy-hour window active right now." It reads `businesses.timezone` (an IANA name), converts `at` (default `now()` in UTC) into that timezone with Python `zoneinfo`, then matches `local.weekday()` and `local.time()` against every `is_active` window. It is called in **exactly two places**, and they must stay identical so displayed and charged prices can't disagree: (a) the **public menu read** (`GET /api/ordering/{id}/menu`) stamps a transient `menu.happy_hour_active` bool that `MenuResponse` serializes — items carry their own `happy_hour_price`, so the client renders the discount from server-decided state, never from a local clock; (b) **order placement** (`order_service.place_order`) computes `hh_active` once and charges `item.happy_hour_price` (when set and active) instead of `item.price`. A window applies **business-wide**; an item opts in only by having a non-NULL `happy_hour_price` (flat override, not a percentage). `happy_hour_price` on `MenuItemUpdate` uses a **`model_fields_set`** check (not `is not None`) so a client can *clear* the discount by sending `null` while omission leaves it unchanged. **Day-of-week is standardized to one convention everywhere: 0=Monday..6=Sunday** — this matches Python `datetime.weekday()` so no offset math is ever needed. The single source is `server/app/constants/days.py` (backend) mirrored by `client/lib/days.ts` (frontend); both `analytics_service`, the onboarding wizard, the operating-hours settings, and the happy-hour day picker consume it. JS `Date.getDay()` (0=Sunday) must be converted via `jsDayToIndex()` before use. **Overnight windows are supported:** a window with `start_time <= end_time` is same-day (matches when the local weekday is listed and `start_time <= t <= end_time`); a window with `start_time > end_time` wraps past midnight and is active in two segments — on a listed day from `start_time` until midnight, and on the day *after* a listed day from midnight until `end_time` (keyed off `prev_weekday = (weekday - 1) % 7`). So a Friday 22:00–02:00 window is active Fri 22:00–23:59:59 **and** Sat 00:00–02:00, even though only Friday is listed in `days_of_week`. The staff create form allows `start > end`; it only rejects an identical start/end (a zero-length window).
+
+36. **Age verification is self-attestation only, and the backend is authoritative — the checkbox is a formality, the staff glance is the real check**
+    This is a speed bump plus a visual cue, **not** identity verification: no ID scan, no third-party service, no stored proof of age. `menu_items.is_alcoholic` flags an item. "Does this order contain alcohol" is **never stored** — it is derived on demand by `order_service.order_contains_alcohol(items)` (the single source of truth; accepts resolved `MenuItem` rows at placement or stored `OrderLineItem` rows at read, both carrying `is_alcoholic`). Order line items **snapshot** `is_alcoholic` at placement (like `routing_tag`/`unit_price`), so the staff alcohol badge survives later menu edits or item deletion (`item_id` is nullable). The attestation itself **is** persisted, but only as `orders.age_confirmed` on the order row — no session-level "already confirmed, skip next time" logic. **The backend re-validates, never trusting a client "box checked" flag:** `place_order` computes `order_contains_alcohol` from the resolved items and, when `require_age_confirmation` is set and the cart is alcoholic, raises `AgeConfirmationRequired` (→ 422) unless `request.age_confirmed` is true. **Channel scoping is structural, not a stored `channel` string:** the public order endpoint (customer self-service) calls `place_order` with the default `require_age_confirmation=True`; the tabs path (`tab_service.add_order_to_tab`, staff entering an order in person) passes `require_age_confirmation=False`. Those are the only two callers of `place_order`, so gating at the call site cleanly separates customer from staff without populating/reading `orders.channel`. **`businesses.legal_drinking_age` (default 18) is read for the checkout copy — no age is hardcoded** in logic or copy (different countries: 18 EU/Turkey, 21 US); it is editable on the Business Info settings page. The public order page pulls it from the resolved business and passes it to the checkout attestation ("I am at least N years old"). Frontend gates the Place Order button on the checkbox; the 422 is the safety net. **Deliberately NOT touched:** the item library carries no alcohol flag; only checkout/placement is gated (menu browsing is open); reservations/booking are unaffected.
+
 ---
 
 ## Key Files
@@ -349,6 +357,14 @@ All P0 and P1 hardening items are complete:
 | `server/app/services/tab_service.py`                                     | `open_tab`, `add_order_to_tab` (wraps `order_service.place_order`), `get_tab_total` (live SUM), `close_tab`                                    |
 | `server/app/routers/tabs.py`                                             | Tab endpoints `/api/tabs*` — behind `require_module("ordering")`, tenant-scoped via `get_current_business`                                     |
 | `client/app/business/tabs/tabs-client.tsx`                               | Tabs UI: open a tab, view associated orders + running total, close via settlement dialog                                                       |
+| `server/app/constants/days.py`                                           | Canonical day-of-week enum (0=Monday..6=Sunday, matches `datetime.weekday()`); `DAY_NAMES`, `DAY_ABBREVIATIONS`, `weekday_index()`             |
+| `client/lib/days.ts`                                                     | Frontend mirror of `constants/days.py` (identical indices) + `jsDayToIndex()`; single source of day ordering (onboarding, hours, happy hour)   |
+| `server/app/models/happy_hour_window.py`                                 | `HappyHourWindow` ORM model (business-wide window; `days_of_week` INT[], wall-clock `start_time`/`end_time`)                                    |
+| `server/app/services/happy_hour_service.py`                              | `is_happy_hour_active()` (single source of truth) + window CRUD; timezone-aware via `zoneinfo` + `businesses.timezone`                          |
+| `server/app/schemas/happy_hour.py`                                       | `HappyHourWindowCreate/Update/Response` (validates day indices 0..6)                                                                           |
+| `server/app/routers/happy_hour.py`                                       | Happy hour window endpoints `/api/happy-hour/windows*` — behind `require_module("ordering")`, tenant-scoped via `get_current_business`         |
+| `client/components/timezone-combobox.tsx`                                | Searchable IANA-timezone combobox (Popover + Command + `Intl.supportedValuesOf`); used by onboarding + Business Info                           |
+| `client/app/business/happy-hour/happy-hour-settings-client.tsx`          | Happy hour window CRUD UI (name, day picker, start/end time, active toggle); shows the business timezone next to the time inputs                |
 | `server/app/services/menu_service.py`                                    | Menu/category/item/modifier CRUD                                                                                                               |
 | `server/app/services/order_service.py`                                   | Order placement (idempotent), status transitions                                                                                               |
 | `server/app/services/order_ws_manager.py`                                | In-memory WebSocket manager for orders                                                                                                         |
@@ -356,7 +372,7 @@ All P0 and P1 hardening items are complete:
 | `server/app/services/inventory_service.py`                               | Inventory CRUD, movement logic, par breach → notification                                                                                      |
 | `server/app/routers/inventory.py`                                        | Inventory REST endpoints (all behind `require_module("inventory")`)                                                                            |
 | `client/app/business/inventory/inventory-management-client.tsx`          | Inventory dashboard UI                                                                                                                         |
-| `server/app/core/events.py`                                              | `DomainEvent` class + `publish()` → writes to Redis Stream `slotera:events`                                                                    |
+| `server/app/core/events.py`                                              | `DomainEvent` class + `publish()` → writes to Redis Stream `crowbar:events`                                                                    |
 | `server/app/core/redis_client.py`                                        | Async Redis singleton (`redis.asyncio`)                                                                                                        |
 | `server/app/core/stream_consumer.py`                                     | asyncio consumer: `XREADGROUP` → dispatch → `XACK`; retry up to 3×                                                                             |
 | `server/app/core/ws_projections.py`                                      | `broadcast_queue_state()` + `broadcast_order_board()` (called by consumer)                                                                     |
@@ -465,7 +481,7 @@ Stock items, movements (receive/adjust/waste), par levels, low-stock alerts via 
 
 ### Phase 4 — Event Stream + Real-time Hardening ✅
 
-Single Redis Stream `slotera:events`. `DomainEvent` + `publish()` (fire-and-forget). `XREADGROUP` consumer dispatches queue/order events to WS broadcast helpers. `ws_projections.py` extracted to avoid circular imports. Retry: 3× / 30 s XCLAIM; no DLQ.
+Single Redis Stream `crowbar:events`. `DomainEvent` + `publish()` (fire-and-forget). `XREADGROUP` consumer dispatches queue/order events to WS broadcast helpers. `ws_projections.py` extracted to avoid circular imports. Retry: 3× / 30 s XCLAIM; no DLQ.
 
 Events: `queue.*` (party_joined/called/accepted/seated/removed), `order.*` (placed/status_changed), `inventory.*` (movement_recorded), `reservation.*` (created/updated/deleted).
 
@@ -488,7 +504,7 @@ Error boundaries, module-disabled screens, `ConfirmationDialog` for destructive 
 
 Removed features irrelevant to bars/restaurants and simplified the reservation model:
 
-- **Google Calendar/Meet/OAuth removed** — `google_oauth_service.py`, `google_meet_service.py`, `google_calendar_service.py` deleted; `google_oauth_tokens` table dropped; `/google/authorize` and `/google/callback` auth endpoints removed
+- **Google Calendar/Meet/OAuth removed** — `google_oauth_service.py`, `google_meet_service.py`, `google_calendar_service.py` deleted; `google_oauth_tokens` table dropped; `/google/authorize` and `/google/callback` auth endpoints removed. **Note:** this was a service-and-endpoint-level removal only. Dead config/env/deps/docs residue (`config.py` `google_*` fields, `server/env.example` `GOOGLE_*` vars, four `google-*` pip packages, landing-page "Google Calendar sync" copy, a backlog item, and stale MDX docs describing Google Meet / online-video services) survived until the post-B.3 cleanup pass below finished the job.
 - **Customer portal removed** — entire `/customer/` Next.js route tree deleted; backend `GET /reservations/my`, `GET /reservations/customer/{id}`, `GET /analytics/customer/my` endpoints removed
 - **Service types simplified** — `is_online`, `requires_payment`, `amount`, `form_fields` dropped from model, schema, API, and UI; `FormFieldBuilder`, `DynamicField`, `PaymentStep` components deleted
 - **Reservation payment stubs removed** — `payment_amount`, `payment_status`, `stripe_payment_intent_id`, `meeting_link`, `custom_fields` dropped from `Reservation` type and all mappers
@@ -540,6 +556,62 @@ First slice of the bars-only Tier B work. An open, appendable **tab** groups mul
 **Frontend:** `client/app/business/tabs/` — loads the business's open tabs on mount (via `GET /api/tabs?status=open`, so they survive a refresh), open a tab, view associated orders + running total, close via a settlement-method dialog (not `confirm()`). Sidebar "Tabs" entry under the Ordering group.
 
 **Deliberately out of scope (deferred):** split/guest-level attribution, real payment processing, and an add-order-to-tab compose UI (the endpoint exists; there's no menu/cart UI to drive it yet).
+
+### Phase B.2 — Happy Hour + Business Timezone ✅ (most recent)
+
+Second slice of Tier B. Adds a **business timezone** and a **timezone-aware happy-hour** engine. Additive — items without a `happy_hour_price` and businesses without windows behave exactly as before.
+
+**Schema (migration 017):**
+
+- `businesses.timezone` — `VARCHAR(64)` NOT NULL default `'UTC'`, stores an IANA name (not a raw offset, so DST is correct). Existing/seed rows keep `'UTC'` (no backfill — pre-production).
+- New `happy_hour_windows` table — business-wide windows: `name`, `days_of_week INT[]` (0=Monday..6=Sunday), wall-clock `start_time`/`end_time` (TIME, interpreted against `businesses.timezone`), `is_active`. Multiple windows per business; no DB limit.
+- `menu_items.happy_hour_price` — nullable `NUMERIC(10,2)` flat override (NULL = never discounts; not a percentage).
+
+**Canonical day-of-week (per handoff instruction):** standardized to **one** convention everywhere — 0=Monday..6=Sunday, matching Python `datetime.weekday()`. Single source: `server/app/constants/days.py` + its frontend mirror `client/lib/days.ts`. `analytics_service`, the onboarding wizard, the operating-hours settings, and the happy-hour day picker all consume it. (The handoff's schema comment said 0=Sunday; resolved to Monday=0 to match the existing repo convention — see "Clarifying questions" in the change summary.)
+
+**Service / API:**
+
+- `happy_hour_service.is_happy_hour_active(db, business_id, at=None)` — the **single source of truth**, timezone-aware via `zoneinfo`. Plus window CRUD.
+- `happy_hour.py` router (`/api/happy-hour/windows*`, behind `require_module("ordering")`, tenant-scoped via `get_current_business`): list / create / update (404) / delete (404).
+- **Two integration points, same function:** the public menu read stamps `menu.happy_hour_active` (items expose `happy_hour_price`), and `order_service.place_order` charges `happy_hour_price` when active. See Non-Obvious #35.
+
+**Frontend:**
+
+- `TimezoneCombobox` (searchable IANA list) added to the onboarding wizard (required; prefilled from the browser) and the Business Information settings page.
+- Menu management: optional `happy_hour_price` per item (blank = no discount; clearing supported).
+- New `client/app/business/happy-hour/` CRUD page (sidebar entry under Ordering) — shows the business timezone next to the time inputs.
+- Public menu / order flow: opted-in items show the discounted price with the original struck through + a "Happy Hour" badge; the cart/checkout total follows the server-decided state.
+
+**Deliberately out of scope (deferred):** percentage/formula discounts, per-item individual schedules, and any promo notification when happy hour starts/ends. (Overnight/cross-midnight windows were initially deferred but are now supported — see the post-B.2 wipe/overnight pass below and Non-Obvious #35.)
+
+### Post-B.2 — Full Crowbar rename + overnight happy hour ✅ (most recent)
+
+Two small completion passes, no schema changes:
+
+- **Slotera → Crowbar wipe (completion).** The earlier rename was branding-copy only; this pass swept every remaining internal identifier, infra, and config reference. Renamed across `client/`, `server/`, `ml/`, `docs/`, `scripts/`, root files: package name, FastAPI/Celery/logger names, `email_from_name`, staff-invite email copy, the `Slotera:` SMS prefix, the DB name default (`slotera` → `crowbar`) in `config.py`/`migrate.py`/`conftest.py`/`docker-compose.yml`/env examples, container names (`slotera-db` → `crowbar-db`, etc.), `dev.sh`/`stop.sh` banners + `createdb`, the two leftover JSX comments, and — beyond the handoff's known-locations list — the `client/public/widget.js` DOM element IDs (`#slotera-*` → `#crowbar-*`), iframe title, and `slotera:close` postMessage type. The **Redis stream key `slotera:events` → `crowbar:events`** (defined once in `events.py` as `STREAM_KEY`; `stream_consumer.py` imports it). Widget embed URL is no longer hardcoded — `widget-snippet-client.tsx` now reads `NEXT_PUBLIC_WIDGET_BASE_URL` (placeholder default `https://crowbar.example`, documented in `client/env.example`). **Intentionally left:** `.claude/settings.local.json` (user-local, gitignored) and `server/.env` (machine-specific — the user's own file to update).
+- **Overnight happy-hour windows.** `is_happy_hour_active` now handles `start_time > end_time` as a cross-midnight window active in two segments (listed day from start→midnight; day *after* a listed day from midnight→end, via `prev_weekday = (weekday - 1) % 7`). Same-day windows unchanged. The staff create form no longer rejects `start > end` (only an identical start/end). See Non-Obvious #35.
+
+### Phase B.3 — Age Verification (self-attestation) ✅ (most recent)
+
+Third slice of Tier B. A self-attestation speed bump on the ordering checkout plus a staff-facing visual cue. **Not** identity verification — no ID scan, no third-party service, no stored proof of age. Additive: items without `is_alcoholic` and carts without alcohol behave exactly as before.
+
+**Schema (migration 018):** `menu_items.is_alcoholic`, `order_line_items.is_alcoholic` (snapshot at placement, like `routing_tag`), `orders.age_confirmed` (the attestation), `businesses.legal_drinking_age` (default 18, configurable per country).
+
+**Service / API:** `order_service.order_contains_alcohol(items)` — single source of truth (derives "contains alcohol" from items, never stored). `place_order(..., require_age_confirmation=True)` re-validates server-side: raises `AgeConfirmationRequired` (→ 422) when an alcoholic cart lacks `age_confirmed`. **Channel-scoped structurally:** the public order endpoint enforces (default `True`); `tab_service.add_order_to_tab` (staff, in person) passes `False`. `OrderPlaceRequest.age_confirmed` is a request field; menu item create/update carry `is_alcoholic`; `BusinessUpdate/Response` carry `legal_drinking_age`.
+
+**Frontend:** checkout shows a self-attestation checkbox ("I am at least `{legal_drinking_age}` years old") **only** when the cart contains an alcoholic item, and gates the Place Order button on it. Ticket board shows an "Alcohol" badge on alcoholic line items (the real ID-check cue). Menu management has an `is_alcoholic` toggle per item; Business Info settings has an editable legal-drinking-age field. Seed (`002_seed_puzzles.sql`) marks Puzzles Bar drinks alcoholic so the flow is demoable.
+
+**Resolved judgment calls (asked up front):** (a) line-item alcohol → **snapshot column** (robust to menu edits/deletion), not derive-by-join; (b) attestation → **stored on the order** (`age_confirmed`); (c) legal drinking age → **editable** in settings, not schema-only. **Deliberately out of scope:** ID scanning / OCR / third-party verification (see Future — ID Verification), cross-session attestation persistence, gating menu browsing (only checkout is gated), any reservation-flow change, and an alcohol flag on the item library.
+
+### Post-B.3 — Google removal residue cleanup ✅ (most recent)
+
+Finished the Google OAuth/Calendar/Meet removal that Phase 5.8 only did at the service/endpoint level (same find-everything-first method as the Slotera wipe). No schema changes — the `google_oauth_tokens` drop (migration 013) and the create→drop migration history (003/006/013) were already correct and are left intact as historical record.
+
+Removed the surviving residue: `config.py` `google_client_id/secret/redirect_uri/connect_success_url` fields; `server/env.example` `GOOGLE_*` vars; the four unused `google-*` pip packages in `requirements.txt`; the stale `google_oauth_tokens` drop line in `migrate.py`'s dev `reset_database`; the landing-page "Google Calendar sync" module bullet + "calendar sync" copy (`page.tsx`); the `business-docs-chat-trigger` "connecting Google for Meet" example; a stale proxy-route comment; and the "Google Calendar API — Async Execution" backlog item. Rewrote the MDX docs (`managing-services`, `handling-reservations`, `making-a-reservation`, `managing-reservations`, `faq`) to drop Google Meet / online-video-service references, then regenerated `doc-chunks.json` (RAG source).
+
+**Beyond pure Google (flagged, then cleaned in the same docs):** those MDX files also still documented other Phase-5.8-removed features — Stripe payment-at-booking, "online (video) service" types, `meeting_link`, and custom-form fields. Since they're documented-removed and the docs were actively wrong, they were cleaned in the same pass. **Separately flagged, NOT acted on:** the docs also claim **ICS calendar attachments / calendar invites** on confirmation emails, but no ICS-generation code exists in `email_service` and the `icalendar` dependency is unused — that's a separate unimplemented-feature gap, left for the user to decide.
+
+**Justified remaining grep hits (all legitimate, not live Google integration):** `OAuth2PasswordBearer`/`oauth2_scheme` in `dependencies.py` (FastAPI JWT bearer, not Google); `next/font/google` in `layout.tsx` (Google Fonts / Geist); "Google Chrome" in the FAQ supported-browsers list; migrations 003/006/013 (historical create→drop record); and CLAUDE.md's own historical removal notes.
 
 ### Phase 6 — Stations & Routing (Planned)
 
@@ -600,8 +672,8 @@ Sequenced cheapest-highest-impact first. Tiers are independent enough to stop af
 ### Tier B — Core Bar Features (medium — model + logic)
 
 - [~] **Tabs**: DONE (Phase B.1, simplified) — a `tabs` table groups discrete orders under one running total, closed with a simulated `settled_method`. Additive (orders can still be standalone). Total computed on demand. **Not yet built:** GET list of open tabs, add-order-to-tab UI, split/guest-level attribution (all deliberately deferred — see Phase B.1 note).
-- [ ] **Age verification / 21+**: `is_alcoholic` flag on menu items; age gate on public order + queue flows; ID-check flag at the door.
-- [ ] **Happy hour**: time-windowed price schedule on menu items (new; nothing exists today).
+- [x] **Age verification**: DONE (Phase B.3) — `is_alcoholic` flag on menu items drives a self-attestation checkbox on the ordering checkout (server-re-validated via `age_confirmed`; channel-scoped so staff/tab orders skip it) and an alcohol badge on staff order tickets. `businesses.legal_drinking_age` (default 18) is configurable and read for the copy — no age hardcoded. Ordering-only; self-attestation, not ID verification (see Future — ID Verification). **Deferred:** the door/queue age gate and door ID-check flag were not built (this pass is ordering checkout only).
+- [x] **Happy hour**: DONE (Phase B.2) — business-wide `happy_hour_windows` (timezone-aware, day-of-week + wall-clock range) + a flat `menu_items.happy_hour_price` opt-in. One `is_happy_hour_active` function drives both the public menu display and order-placement pricing. Also landed `businesses.timezone` (IANA) and a single canonical day-of-week enum (Monday=0) shared front/back. Overnight (cross-midnight) windows are now supported (post-B.2 pass). **Deferred:** percentage/formula discounts, per-item schedules, promo notifications.
 - [ ] **Pour/keg inventory**: unit types for spirits (bottle → oz/ml pours) and draft (kegs); wire into Phase 8 recipe deduction. Fold into / precede Phase 8 rather than duplicating it.
 
 ### Tier C — Nightlife Platform (larger — new surface)
@@ -615,6 +687,41 @@ Sequenced cheapest-highest-impact first. Tiers are independent enough to stop af
 - Keep it simple; build only what a bar actually needs. Follow the single-pass migration rule (Non-Obvious #29) — no parallel columns / deferred cleanup.
 - Tier B "pour/keg inventory" and Phase 8 (Recipe Management) overlap heavily; do them together.
 - Payments/Stripe remain deferred (Phase 10), so Tabs close-out and cover charge are tracking-only until then.
+
+---
+
+## Future — Visual Redesign (Not Scheduled)
+
+A pass to bring the customer-facing UI (public menu, order, reserve, queue pages — these
+carry the most weight for guest-facing polish) up to a more premium, considered visual
+standard: refined spacing, subtle motion/animation, stronger typographic hierarchy.
+
+Not scheduled. Deliberately sequenced after Tier B stabilizes, since Happy Hour, Age
+Verification, and Pour/Keg Inventory will each still be reshaping the same UI surfaces
+(menu item cards, order flow) — restyling now means restyling twice.
+
+When this is picked up: scope it to specific named screens, not "the whole app," and
+provide concrete direction (an animation library, a spacing scale, 1-2 reference sites)
+rather than a subjective bar like "award-winning" — vague visual-quality instructions
+tend to produce generic polish (more padding, a fade-in) rather than an actually
+distinctive result.
+
+---
+
+## Future — ID Verification (Not Scheduled)
+
+Current age verification (Phase B.3) is self-attestation only: a checkbox plus a
+staff-facing badge, no identity or age proof. A future pass could add real ID
+verification — e.g. ID scanning/OCR, a third-party verification service, or
+photo-ID capture at order time — for businesses that want stronger compliance
+assurance than self-attestation provides.
+
+Not scheduled. This is a materially bigger feature than the self-attestation
+pass: it likely means a new vendor/service integration, real handling of
+sensitive ID data (with corresponding privacy/compliance obligations that don't
+exist today), and a genuinely different UX, not an extension of the current
+checkbox. Scope this as its own project when picked up, not a checkbox
+enhancement.
 
 ---
 

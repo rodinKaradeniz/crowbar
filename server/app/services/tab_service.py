@@ -98,7 +98,10 @@ async def add_order_to_tab(
 
     Callers must validate that the tab exists and is open (see router).
     """
-    order = await order_service.place_order(db, business_id, request)
+    # Staff-entered order (in-person) — skip the customer self-service age gate.
+    order = await order_service.place_order(
+        db, business_id, request, require_age_confirmation=False
+    )
     order.tab_id = tab_id
     await db.flush()
     await db.refresh(order, ["line_items", "status_timeline"])

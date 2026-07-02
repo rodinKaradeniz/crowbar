@@ -28,6 +28,7 @@ async def create_business(db: AsyncSession, data: BusinessCreate) -> Business:
         slug=data.slug,
         email=data.email,
         phone=data.phone,
+        timezone=data.timezone,
         address=data.address,
         description=data.description,
         image=data.image,

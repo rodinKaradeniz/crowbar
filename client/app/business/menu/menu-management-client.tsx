@@ -46,6 +46,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Plus,
   Pencil,
@@ -100,10 +101,12 @@ export function MenuManagementClient({ businessId }: Props) {
   const [targetMenuId, setTargetMenuId] = useState<string | null>(null);
 
   // ── Item form ───────────────────────────────────────────────────────────────
-  const [itemForm, setItemForm] = useState({
+  const [itemForm, setItemForm] = useState<ItemFormState>({
     name: "",
     description: "",
     price: "",
+    happyHourPrice: "",
+    isAlcoholic: false,
     routingTag: "kitchen",
     prepTime: "",
   });
@@ -118,10 +121,12 @@ export function MenuManagementClient({ businessId }: Props) {
   >(null);
   const [editingLibraryItem, setEditingLibraryItem] =
     useState<LibraryItem | null>(null);
-  const [libraryItemForm, setLibraryItemForm] = useState({
+  const [libraryItemForm, setLibraryItemForm] = useState<ItemFormState>({
     name: "",
     description: "",
     price: "",
+    happyHourPrice: "",
+    isAlcoholic: false,
     routingTag: "kitchen",
     prepTime: "",
   });
@@ -291,6 +296,8 @@ export function MenuManagementClient({ businessId }: Props) {
       name: "",
       description: "",
       price: "",
+      happyHourPrice: "",
+      isAlcoholic: false,
       routingTag: "kitchen",
       prepTime: "",
     });
@@ -304,6 +311,11 @@ export function MenuManagementClient({ businessId }: Props) {
       name: item.name,
       description: item.description ?? "",
       price: String(item.price),
+      happyHourPrice:
+        item.happyHourPrice !== undefined && item.happyHourPrice !== null
+          ? String(item.happyHourPrice)
+          : "",
+      isAlcoholic: item.isAlcoholic ?? false,
       routingTag: item.routingTag,
       prepTime: item.prepTimeMinutes ? String(item.prepTimeMinutes) : "",
     });
@@ -318,12 +330,24 @@ export function MenuManagementClient({ businessId }: Props) {
       toast.error("Enter a valid price");
       return;
     }
+    // Blank happy-hour price = no discount (null clears it on update).
+    let happyHourPrice: number | null = null;
+    if (itemForm.happyHourPrice.trim()) {
+      const parsed = parseFloat(itemForm.happyHourPrice);
+      if (isNaN(parsed) || parsed < 0) {
+        toast.error("Enter a valid happy hour price");
+        return;
+      }
+      happyHourPrice = parsed;
+    }
     try {
       if (editingItem) {
         const updated = await clientUpdateMenuItem(businessId, editingItem.id, {
           name: itemForm.name.trim(),
           description: itemForm.description.trim() || undefined,
           price,
+          happyHourPrice,
+          isAlcoholic: itemForm.isAlcoholic,
           routingTag: itemForm.routingTag,
           prepTimeMinutes: itemForm.prepTime
             ? parseInt(itemForm.prepTime)
@@ -338,6 +362,8 @@ export function MenuManagementClient({ businessId }: Props) {
             name: itemForm.name.trim(),
             description: itemForm.description.trim() || undefined,
             price,
+            happyHourPrice,
+            isAlcoholic: itemForm.isAlcoholic,
             routingTag: itemForm.routingTag,
             prepTimeMinutes: itemForm.prepTime
               ? parseInt(itemForm.prepTime)
@@ -455,6 +481,8 @@ export function MenuManagementClient({ businessId }: Props) {
       name: "",
       description: "",
       price: "",
+      happyHourPrice: "",
+      isAlcoholic: false,
       routingTag: "kitchen",
       prepTime: "",
     });
@@ -467,6 +495,8 @@ export function MenuManagementClient({ businessId }: Props) {
       name: item.name,
       description: item.description ?? "",
       price: String(item.price),
+      happyHourPrice: "",
+      isAlcoholic: false,
       routingTag: item.routingTag,
       prepTime: item.prepTimeMinutes ? String(item.prepTimeMinutes) : "",
     });
@@ -737,7 +767,7 @@ export function MenuManagementClient({ businessId }: Props) {
           <DialogHeader>
             <DialogTitle>{editingItem ? "Edit Item" : "New Item"}</DialogTitle>
           </DialogHeader>
-          <ItemFormFields form={itemForm} onChange={setItemForm} />
+          <ItemFormFields form={itemForm} onChange={setItemForm} showHappyHour showAlcohol />
           <DialogFooter>
             <Button variant="outline" onClick={() => setItemDialog(false)}>
               Cancel
@@ -914,6 +944,8 @@ type ItemFormState = {
   name: string;
   description: string;
   price: string;
+  happyHourPrice: string;
+  isAlcoholic: boolean;
   routingTag: string;
   prepTime: string;
 };
@@ -921,9 +953,15 @@ type ItemFormState = {
 function ItemFormFields({
   form,
   onChange,
+  showHappyHour = false,
+  showAlcohol = false,
 }: {
   form: ItemFormState;
   onChange: React.Dispatch<React.SetStateAction<ItemFormState>>;
+  // Happy-hour price only applies to live menu items, not library templates.
+  showHappyHour?: boolean;
+  // Alcohol flag only applies to live menu items, not library templates.
+  showAlcohol?: boolean;
 }) {
   return (
     <div className="space-y-3 py-2">
@@ -971,6 +1009,24 @@ function ItemFormFields({
           />
         </div>
       </div>
+      {showHappyHour && (
+        <div className="space-y-1.5">
+          <Label>Happy hour price (€)</Label>
+          <Input
+            type="number"
+            min="0"
+            step="0.01"
+            value={form.happyHourPrice}
+            onChange={(e) =>
+              onChange((f) => ({ ...f, happyHourPrice: e.target.value }))
+            }
+            placeholder="Leave blank for no discount"
+          />
+          <p className="text-xs text-muted-foreground">
+            Applied automatically during active happy-hour windows.
+          </p>
+        </div>
+      )}
       <div className="space-y-1.5">
         <Label>Routing</Label>
         <Select
@@ -987,6 +1043,27 @@ function ItemFormFields({
           </SelectContent>
         </Select>
       </div>
+      {showAlcohol && (
+        <div className="flex items-start gap-2 rounded-md border p-3">
+          <Checkbox
+            id="isAlcoholic"
+            checked={form.isAlcoholic}
+            onCheckedChange={(v) =>
+              onChange((f) => ({ ...f, isAlcoholic: v === true }))
+            }
+            className="mt-0.5"
+          />
+          <div className="space-y-0.5">
+            <Label htmlFor="isAlcoholic" className="text-sm cursor-pointer">
+              Contains alcohol
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Prompts guests to confirm their age at checkout and shows an
+              alcohol badge on staff order tickets.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

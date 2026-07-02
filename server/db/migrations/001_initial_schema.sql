@@ -1,5 +1,5 @@
 -- 001_initial_schema.sql
--- Creates all tables for the Slotera system
+-- Creates all tables for the Crowbar system
 
 -- Track which migrations have been applied
 CREATE TABLE IF NOT EXISTS _migrations (
