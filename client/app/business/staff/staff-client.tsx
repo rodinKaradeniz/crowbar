@@ -27,16 +27,15 @@ import {
 } from "@/components/ui/dialog";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { StaffResponse } from "@/lib/api-client";
-import { Plus, Pencil, Trash2, Users } from "lucide-react";
-import { clientUpdateStaff, clientDeleteStaff } from "@/lib/client-api";
+import { Mail, Pencil, Trash2, Users } from "lucide-react";
+import { clientSendInvite, clientUpdateStaff, clientDeleteStaff } from "@/lib/client-api";
 import { toast } from "sonner";
 
 interface StaffClientProps {
-  businessId: string;
   initialStaff: StaffResponse[];
 }
 
-export default function StaffClient({ businessId, initialStaff }: StaffClientProps) {
+export default function StaffClient({ initialStaff }: StaffClientProps) {
   const router = useRouter();
   const [staffMembers, setStaffMembers] = useState<StaffResponse[]>(initialStaff);
   const [editingStaff, setEditingStaff] = useState<StaffResponse | null>(null);
@@ -44,31 +43,26 @@ export default function StaffClient({ businessId, initialStaff }: StaffClientPro
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Form state
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  // Invite form state
+  const [inviteEmail, setInviteEmail] = useState("");
   const [role, setRole] = useState<"owner" | "manager" | "staff">("staff");
 
-  const resetForm = () => {
-    setName("");
-    setEmail("");
-    setPhone("");
+  // Edit form state
+  const [editRole, setEditRole] = useState<"owner" | "manager" | "staff">("staff");
+
+  const resetInviteForm = () => {
+    setInviteEmail("");
     setRole("staff");
-    setEditingStaff(null);
   };
 
-  const handleCreate = () => {
-    resetForm();
+  const handleInvite = () => {
+    resetInviteForm();
     setIsDialogOpen(true);
   };
 
   const handleEdit = (staff: StaffResponse) => {
     setEditingStaff(staff);
-    setName(staff.user_name || "");
-    setEmail(staff.user_email || "");
-    setPhone(staff.user_phone || "");
-    setRole(staff.role as "owner" | "manager" | "staff");
+    setEditRole(staff.role as "owner" | "manager" | "staff");
     setIsDialogOpen(true);
   };
 
@@ -96,23 +90,24 @@ export default function StaffClient({ businessId, initialStaff }: StaffClientPro
 
     try {
       if (editingStaff) {
-        await clientUpdateStaff(editingStaff.id, { role });
+        await clientUpdateStaff(editingStaff.id, { role: editRole });
         setStaffMembers(
           staffMembers.map((s) =>
-            s.id === editingStaff.id ? { ...s, role } : s
+            s.id === editingStaff.id ? { ...s, role: editRole } : s
           )
         );
         toast.success("Staff member updated");
+        setIsDialogOpen(false);
+        setEditingStaff(null);
+        router.refresh();
       } else {
-        toast.info("Staff creation requires an existing user. Use the registration flow first.");
-        return;
+        await clientSendInvite(inviteEmail, role);
+        toast.success(`Invitation sent to ${inviteEmail}`);
+        setIsDialogOpen(false);
+        resetInviteForm();
       }
-
-      setIsDialogOpen(false);
-      resetForm();
-      router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to save staff member");
+      toast.error(error instanceof Error ? error.message : "Failed to save");
     } finally {
       setIsSubmitting(false);
     }
@@ -136,9 +131,9 @@ export default function StaffClient({ businessId, initialStaff }: StaffClientPro
           <h1 className="page-title">Staff</h1>
           <p className="page-description">Manage your business staff members</p>
         </div>
-        <Button onClick={handleCreate}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Staff
+        <Button onClick={handleInvite}>
+          <Mail className="h-4 w-4 mr-2" />
+          Invite Staff
         </Button>
       </div>
 
@@ -146,9 +141,9 @@ export default function StaffClient({ businessId, initialStaff }: StaffClientPro
         <div className="text-center py-12 border rounded-lg bg-card">
           <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
           <p className="text-muted-foreground mb-4">No staff members yet</p>
-          <Button onClick={handleCreate} variant="outline">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Your First Staff Member
+          <Button onClick={handleInvite} variant="outline">
+            <Mail className="h-4 w-4 mr-2" />
+            Invite Your First Staff Member
           </Button>
         </div>
       ) : (
@@ -205,84 +200,82 @@ export default function StaffClient({ businessId, initialStaff }: StaffClientPro
         </div>
       )}
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog open={isDialogOpen} onOpenChange={(open) => {
+        setIsDialogOpen(open);
+        if (!open) setEditingStaff(null);
+      }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {editingStaff ? "Edit Staff Member" : "Add Staff Member"}
+              {editingStaff ? "Edit Staff Member" : "Invite Staff Member"}
             </DialogTitle>
             <DialogDescription>
               {editingStaff
-                ? "Update staff member details"
-                : "Add a new staff member to your business"}
+                ? "Update this staff member's role"
+                : "Send an invitation email to add a new staff member"}
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSubmit}>
             <FieldGroup>
-              <Field>
-                <FieldLabel>Name *</FieldLabel>
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Full name"
-                  required
-                />
-              </Field>
-
-              <Field>
-                <FieldLabel>Email *</FieldLabel>
-                <Input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="email@example.com"
-                  required
-                />
-              </Field>
-
-              <Field>
-                <FieldLabel>Phone</FieldLabel>
-                <Input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="Phone number"
-                />
-              </Field>
-
-              <Field>
-                <FieldLabel>Role *</FieldLabel>
-                <Select value={role} onValueChange={(v) => setRole(v as typeof role)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="owner">Owner</SelectItem>
-                    <SelectItem value="manager">Manager</SelectItem>
-                    <SelectItem value="staff">Staff</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FieldDescription>
-                  Role determines access permissions
-                </FieldDescription>
-              </Field>
+              {editingStaff ? (
+                <Field>
+                  <FieldLabel>Role *</FieldLabel>
+                  <Select value={editRole} onValueChange={(v) => setEditRole(v as typeof editRole)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="owner">Owner</SelectItem>
+                      <SelectItem value="manager">Manager</SelectItem>
+                      <SelectItem value="staff">Staff</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FieldDescription>Role determines access permissions</FieldDescription>
+                </Field>
+              ) : (
+                <>
+                  <Field>
+                    <FieldLabel>Email *</FieldLabel>
+                    <Input
+                      type="email"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      placeholder="staff@example.com"
+                      required
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel>Role *</FieldLabel>
+                    <Select value={role} onValueChange={(v) => setRole(v as typeof role)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="owner">Owner</SelectItem>
+                        <SelectItem value="manager">Manager</SelectItem>
+                        <SelectItem value="staff">Staff</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FieldDescription>Role determines access permissions</FieldDescription>
+                  </Field>
+                </>
+              )}
             </FieldGroup>
 
             <DialogFooter className="mt-6">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => {
-                  setIsDialogOpen(false);
-                  resetForm();
-                }}
+                onClick={() => setIsDialogOpen(false)}
                 disabled={isSubmitting}
               >
                 Cancel
               </Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Saving..." : editingStaff ? "Update" : "Add"}
+                {isSubmitting
+                  ? editingStaff ? "Saving..." : "Sending..."
+                  : editingStaff ? "Update" : "Send Invitation"}
               </Button>
             </DialogFooter>
           </form>

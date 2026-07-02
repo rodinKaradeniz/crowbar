@@ -1,11 +1,7 @@
 import CustomersClient from "./customers-client";
 import { getCurrentUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import {
-  fetchBusinessCustomers,
-  fetchBusinessReservations,
-  fetchServiceTypesByBusiness,
-} from "@/lib/api";
+import { fetchBusiness, fetchBusinessVisitors, fetchServiceTypesByBusiness } from "@/lib/api";
 import { fetchMLSegmentation } from "@/lib/ml-api";
 
 export default async function BusinessCustomers() {
@@ -17,15 +13,22 @@ export default async function BusinessCustomers() {
 
   const businessId = user.businessId;
 
-  const [customers, reservations, serviceTypes, segmentation] =
-    await Promise.all([
-      fetchBusinessCustomers(businessId),
-      fetchBusinessReservations(businessId),
-      fetchServiceTypesByBusiness(businessId),
-      fetchMLSegmentation(),
-    ]);
+  const [business, visitors, serviceTypes, segmentation] = await Promise.all([
+    fetchBusiness(businessId),
+    fetchBusinessVisitors(businessId),
+    fetchServiceTypesByBusiness(businessId),
+    fetchMLSegmentation(),
+  ]);
 
-  // Build a map of customer_id → segment_label
+  if (!business) {
+    redirect("/auth/login");
+  }
+
+  if (!business.onboardingComplete) {
+    redirect("/business/onboarding");
+  }
+
+  // Build a map of customer_id → segment_label (reservation customers only)
   const segmentMap: Record<string, string> = {};
   if (segmentation?.status === "success" && segmentation.customer_segments) {
     for (const seg of segmentation.customer_segments) {
@@ -35,9 +38,7 @@ export default async function BusinessCustomers() {
 
   return (
     <CustomersClient
-      businessId={businessId}
-      customers={customers}
-      reservations={reservations}
+      visitors={visitors}
       serviceTypes={serviceTypes}
       customerSegments={segmentMap}
     />

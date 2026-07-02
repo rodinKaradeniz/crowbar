@@ -1,8 +1,10 @@
+import asyncio
 import logging
 import time
 import uuid
 from contextlib import asynccontextmanager
 
+import redis.asyncio as aioredis
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,6 +12,9 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.core.errors import http_exception_handler, validation_exception_handler
+from app.core.events import STREAM_KEY
+from app.core.redis_client import close_redis, get_redis
+from app.core.stream_consumer import GROUP_NAME, ws_push_consumer
 from app.routers import (
     analytics,
     auth,
@@ -22,6 +27,7 @@ from app.routers import (
     reservations,
     service_types,
     staff,
+    tabs,
 )
 
 logging.basicConfig(
@@ -33,7 +39,29 @@ logger = logging.getLogger("slotera")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # ── Startup ───────────────────────────────────────────────────────────────
+    r = await get_redis()
+
+    # Create consumer group if it doesn't exist yet (MKSTREAM creates the
+    # stream on first use so the server starts cleanly even on a fresh Redis).
+    try:
+        await r.xgroup_create(STREAM_KEY, GROUP_NAME, id="$", mkstream=True)
+        logger.info("lifespan: created consumer group %s on stream %s", GROUP_NAME, STREAM_KEY)
+    except aioredis.ResponseError as exc:
+        if "BUSYGROUP" in str(exc):
+            logger.debug("lifespan: consumer group %s already exists", GROUP_NAME)
+        else:
+            logger.warning("lifespan: xgroup_create error: %s", exc)
+
+    consumer_task = asyncio.create_task(ws_push_consumer(), name="ws_push_consumer")
+
     yield
+
+    # ── Shutdown ──────────────────────────────────────────────────────────────
+    consumer_task.cancel()
+    await asyncio.gather(consumer_task, return_exceptions=True)
+    await close_redis()
+    logger.info("lifespan: shutdown complete")
 
 
 app = FastAPI(
@@ -99,6 +127,7 @@ app.include_router(analytics.router)
 app.include_router(queue.router)
 app.include_router(ordering.router)
 app.include_router(inventory.router)
+app.include_router(tabs.router)
 
 # ─── Static files (dev only) ──────────────────────────────────────────────────
 

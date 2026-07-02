@@ -58,7 +58,6 @@ describe("clientGetServiceTypesByBusiness", () => {
     expect(serviceTypes).toHaveLength(1);
     expect(serviceTypes[0].name).toBe("VIP Table");
     expect(serviceTypes[0].businessId).toBe("biz-1");
-    expect(serviceTypes[0].requiresPayment).toBe(false);
     expect(serviceTypes[0].color).toBe("#ff0000");
   });
 

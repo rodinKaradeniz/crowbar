@@ -1,6 +1,6 @@
 import {
   Business,
-  FormFieldDefinition,
+  HighRiskReservation,
   InventoryItem,
   LibraryItem,
   Menu,
@@ -10,12 +10,15 @@ import {
   ModifierGroup,
   MeContext,
   Notification,
+  OperationalKpis,
   Order,
   QueueEntry,
   QueueStatus,
   Reservation,
   ServiceType,
   StockMovement,
+  Tab,
+  TabSettledMethod,
 } from "@/types";
 
 /**
@@ -105,24 +108,7 @@ function toBusiness(b: Record<string, unknown>): Business {
   };
 }
 
-function toFormField(f: Record<string, unknown>): FormFieldDefinition {
-  return {
-    id: f.id as string,
-    label: f.label as string,
-    type: f.type as FormFieldDefinition["type"],
-    required: f.required as boolean,
-    placeholder: (f.placeholder as string) || undefined,
-    options: (f.options as string[]) || undefined,
-    min: (f.min as number) ?? undefined,
-    max: (f.max as number) ?? undefined,
-    maxLength: (f.max_length as number) ?? undefined,
-    order: f.order as number,
-    system: f.system as boolean,
-  };
-}
-
 function toServiceType(st: Record<string, unknown>): ServiceType {
-  const rawFields = st.form_fields as Record<string, unknown>[] | null;
   return {
     id: st.id as string,
     businessId: st.business_id as string,
@@ -130,15 +116,11 @@ function toServiceType(st: Record<string, unknown>): ServiceType {
     description: (st.description as string) || undefined,
     capacity: st.capacity as number,
     maxConcurrentBookings: (st.max_concurrent_bookings as number) || undefined,
-    requiresPayment: st.requires_payment as boolean,
-    amount: (st.amount as number) || undefined,
-    isOnline: (st.is_online as boolean) ?? false,
     isPendingEnabled: (st.is_pending_enabled as boolean) ?? true,
     duration: (st.duration as number) || undefined,
     color: st.color as string,
     displayOrder: (st.display_order as number) || undefined,
     image: (st.image as string) || undefined,
-    formFields: rawFields ? rawFields.map(toFormField) : undefined,
     createdAt: st.created_at as string,
     updatedAt: st.updated_at as string,
   };
@@ -171,12 +153,6 @@ function toReservation(r: Record<string, unknown>): Reservation {
     note: (r.note as string) || undefined,
     status: r.status as Reservation["status"],
     guests: r.guests as number,
-    paymentAmount: (r.payment_amount as number) || undefined,
-    paymentStatus:
-      (r.payment_status as Reservation["paymentStatus"]) || undefined,
-    stripePaymentIntentId: (r.stripe_payment_intent_id as string) || undefined,
-    meetingLink: (r.meeting_link as string) || undefined,
-    customFields: (r.custom_fields as Record<string, unknown>) || undefined,
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
   };
@@ -370,7 +346,6 @@ export async function clientCreatePublicReservation(data: {
   email: string;
   note?: string;
   guests: number;
-  customFields?: Record<string, unknown>;
 }): Promise<Reservation> {
   const apiData: Record<string, unknown> = {
     business_id: data.businessId,
@@ -382,9 +357,6 @@ export async function clientCreatePublicReservation(data: {
     note: data.note,
     guests: data.guests,
   };
-  if (data.customFields) {
-    apiData.custom_fields = data.customFields;
-  }
 
   const result = await clientFetch<Record<string, unknown>>(
     "/reservations/public",
@@ -406,8 +378,6 @@ export async function clientCreateReservation(data: {
   email: string;
   note?: string;
   guests: number;
-  paymentAmount?: number;
-  paymentStatus?: string;
 }): Promise<Reservation> {
   const apiData = {
     business_id: data.businessId,
@@ -417,8 +387,6 @@ export async function clientCreateReservation(data: {
     email: data.email,
     note: data.note,
     guests: data.guests,
-    payment_amount: data.paymentAmount,
-    payment_status: data.paymentStatus,
   };
 
   const result = await authFetch<Record<string, unknown>>("/reservations", {
@@ -472,15 +440,11 @@ export async function clientCreateServiceType(data: {
   description?: string;
   capacity: number;
   maxConcurrentBookings?: number;
-  requiresPayment: boolean;
-  amount?: number;
-  isOnline?: boolean;
   isPendingEnabled?: boolean;
   duration?: number;
   color: string;
   displayOrder?: number;
   image?: string;
-  formFields?: FormFieldDefinition[];
 }): Promise<ServiceType> {
   const apiData: Record<string, unknown> = {
     business_id: data.businessId,
@@ -488,30 +452,12 @@ export async function clientCreateServiceType(data: {
     description: data.description,
     capacity: data.capacity,
     max_concurrent_bookings: data.maxConcurrentBookings,
-    requires_payment: data.requiresPayment,
-    amount: data.amount,
-    is_online: data.isOnline ?? false,
     is_pending_enabled: data.isPendingEnabled ?? true,
     duration: data.duration,
     color: data.color,
     display_order: data.displayOrder,
     image: data.image,
   };
-  if (data.formFields !== undefined) {
-    apiData.form_fields = data.formFields.map((f) => ({
-      id: f.id,
-      label: f.label,
-      type: f.type,
-      required: f.required,
-      placeholder: f.placeholder,
-      options: f.options,
-      min: f.min,
-      max: f.max,
-      max_length: f.maxLength,
-      order: f.order,
-      system: f.system,
-    }));
-  }
 
   const result = await authFetch<Record<string, unknown>>("/service-types", {
     method: "POST",
@@ -527,15 +473,11 @@ export async function clientUpdateServiceType(
     description: string;
     capacity: number;
     maxConcurrentBookings: number;
-    requiresPayment: boolean;
-    amount: number;
-    isOnline: boolean;
     isPendingEnabled: boolean;
     duration: number;
     color: string;
     displayOrder: number;
     image: string;
-    formFields: FormFieldDefinition[];
   }>,
 ): Promise<ServiceType> {
   const apiData: Record<string, unknown> = {};
@@ -544,10 +486,6 @@ export async function clientUpdateServiceType(
   if (data.capacity !== undefined) apiData.capacity = data.capacity;
   if (data.maxConcurrentBookings !== undefined)
     apiData.max_concurrent_bookings = data.maxConcurrentBookings;
-  if (data.requiresPayment !== undefined)
-    apiData.requires_payment = data.requiresPayment;
-  if (data.amount !== undefined) apiData.amount = data.amount;
-  if (data.isOnline !== undefined) apiData.is_online = data.isOnline;
   if (data.isPendingEnabled !== undefined)
     apiData.is_pending_enabled = data.isPendingEnabled;
   if (data.duration !== undefined) apiData.duration = data.duration;
@@ -555,21 +493,6 @@ export async function clientUpdateServiceType(
   if (data.displayOrder !== undefined)
     apiData.display_order = data.displayOrder;
   if (data.image !== undefined) apiData.image = data.image;
-  if (data.formFields !== undefined) {
-    apiData.form_fields = data.formFields.map((f) => ({
-      id: f.id,
-      label: f.label,
-      type: f.type,
-      required: f.required,
-      placeholder: f.placeholder,
-      options: f.options,
-      min: f.min,
-      max: f.max,
-      max_length: f.maxLength,
-      order: f.order,
-      system: f.system,
-    }));
-  }
 
   const result = await authFetch<Record<string, unknown>>(
     `/service-types/${id}`,
@@ -652,19 +575,6 @@ export async function clientUpdateEnabledModules(
   return toBusiness(result);
 }
 
-export async function clientGetGoogleConnected(
-  businessId: string,
-): Promise<boolean> {
-  const result = await authFetch<{ connected: boolean }>(
-    `/businesses/${businessId}/google-connected`,
-  );
-  return result.connected;
-}
-
-/** URL to start Google OAuth - use with window.location for redirect flow */
-export function getGoogleAuthorizeUrl(businessId: string): string {
-  return `/api/proxy/auth/google/authorize?business_id=${businessId}`;
-}
 
 // ─── Authenticated: Staff mutations ──────────────────────────────────────────
 
@@ -1020,6 +930,58 @@ export async function clientAdvanceOrderStatus(
     { method: "PATCH", body: JSON.stringify({ status }) },
   );
   return toOrder(result);
+}
+
+// ─── Tabs (feature of the ordering module) ─────────────────────────────────────
+
+function toTab(t: Record<string, unknown>): Tab {
+  return {
+    id: t.id as string,
+    businessId: t.business_id as string,
+    tableId: (t.table_id as string) || undefined,
+    customerId: (t.customer_id as string) || undefined,
+    status: t.status as Tab["status"],
+    channel: t.channel as string,
+    openedBy: t.opened_by as string,
+    openedAt: t.opened_at as string,
+    closedBy: (t.closed_by as string) || undefined,
+    closedAt: (t.closed_at as string) || undefined,
+    settledMethod: (t.settled_method as TabSettledMethod) || undefined,
+    total: Number(t.total),
+    orders: ((t.orders as Record<string, unknown>[]) ?? []).map(toOrder),
+  };
+}
+
+export async function clientListTabs(
+  status?: "open" | "closed",
+): Promise<Tab[]> {
+  const q = status ? `?status=${status}` : "";
+  const result = await authFetch<Record<string, unknown>[]>(`/tabs${q}`);
+  return result.map(toTab);
+}
+
+export async function clientOpenTab(): Promise<Tab> {
+  const result = await authFetch<Record<string, unknown>>(`/tabs`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  return toTab(result);
+}
+
+export async function clientGetTab(tabId: string): Promise<Tab> {
+  const result = await authFetch<Record<string, unknown>>(`/tabs/${tabId}`);
+  return toTab(result);
+}
+
+export async function clientCloseTab(
+  tabId: string,
+  settledMethod: TabSettledMethod,
+): Promise<Tab> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/tabs/${tabId}/close`,
+    { method: "POST", body: JSON.stringify({ settled_method: settledMethod }) },
+  );
+  return toTab(result);
 }
 
 export async function clientGetMenus(businessId: string): Promise<Menu[]> {
@@ -1456,3 +1418,79 @@ export async function clientGetStockMovements(
   );
   return (result ?? []).map(toStockMovement);
 }
+
+export async function clientGetKpis(
+  businessId: string,
+): Promise<OperationalKpis | null> {
+  const result = await authFetch<{
+    reservation: Record<string, unknown>;
+    ordering: Record<string, unknown> | null;
+    inventory: Record<string, unknown> | null;
+  }>(`/analytics/business/${businessId}/kpis`);
+  if (!result) return null;
+  return {
+    reservation: {
+      cancellationRate: result.reservation.cancellation_rate as number,
+      completionRate: result.reservation.completion_rate as number,
+      avgLeadTimeHours: result.reservation.avg_lead_time_hours as number,
+      occupancyByHour: result.reservation.occupancy_by_hour as { hour: number; count: number }[],
+    },
+    ordering: result.ordering
+      ? {
+          avgPrepTimeMinutes: result.ordering.avg_prep_time_minutes as number,
+          peakHours: result.ordering.peak_hours as { hour: number; count: number }[],
+          topItems: result.ordering.top_items as { name: string; totalOrdered: number }[],
+        }
+      : null,
+    inventory: result.inventory
+      ? {
+          totalMovements: result.inventory.total_movements as number,
+          wasteMovements: result.inventory.waste_movements as number,
+          lowStockIncidents: result.inventory.low_stock_incidents as number,
+          itemsBelowPar: result.inventory.items_below_par as number,
+        }
+      : null,
+  };
+}
+
+export async function clientGetHighRiskReservations(
+  businessId: string,
+): Promise<HighRiskReservation[]> {
+  const result = await authFetch<Record<string, unknown>[]>(
+    `/analytics/business/${businessId}/high-risk`,
+  );
+  return (result ?? []).map((r) => ({
+    id: r.id as string,
+    time: r.time as string,
+    guests: r.guests as number,
+    status: r.status as string,
+    customerId: r.customer_id as string,
+    serviceTypeId: r.service_type_id as string,
+    riskScore: r.risk_score as number,
+  }));
+}
+
+// ─── Staff Invitations ────────────────────────────────────────────────────────
+
+export async function clientSendInvite(
+  email: string,
+  role: string,
+): Promise<{ message: string }> {
+  return authFetch("/staff/invite", {
+    method: "POST",
+    body: JSON.stringify({ email, role }),
+  });
+}
+
+export async function clientGetInvite(token: string): Promise<{
+  email: string;
+  role: string;
+  business_name: string;
+} | null> {
+  try {
+    return await clientFetch(`/staff/invite/${token}`);
+  } catch {
+    return null;
+  }
+}
+

@@ -5,12 +5,11 @@
  * Returns static mock data; authenticated endpoints return null (no user session).
  */
 
-import { Business, ServiceType, Reservation } from "@/types";
+import { Business, ServiceType, Reservation, VisitorResponse } from "@/types";
 import type {
   UserResponse,
   StaffResponse,
   BusinessDashboardStats,
-  CustomerDashboardStats,
   LoginResponse,
 } from "./api-client";
 import {
@@ -20,7 +19,6 @@ import {
   mockCustomers,
   mockStaff,
   getMockBusinessDashboardStats,
-  getMockCustomerDashboardStats,
 } from "./mock-data";
 
 // ─── Token helpers (no-op in mock mode) ─────────────────────────────────────
@@ -95,27 +93,12 @@ export async function fetchBusinessReservations(
   return results;
 }
 
-export async function fetchCustomerReservations(
-  customerId: string
-): Promise<Reservation[]> {
-  return mockReservations.filter((r) => r.customerId === customerId);
-}
-
-export async function fetchMyReservations(): Promise<Reservation[]> {
-  // No session in mock mode — return empty
-  return [];
-}
-
 // ─── Analytics ──────────────────────────────────────────────────────────────
 
 export async function fetchBusinessDashboardStats(
   businessId: string
 ): Promise<BusinessDashboardStats | null> {
   return getMockBusinessDashboardStats(businessId);
-}
-
-export async function fetchMyCustomerStats(): Promise<CustomerDashboardStats | null> {
-  return getMockCustomerDashboardStats("00000000-0000-0000-0001-000000000001");
 }
 
 // ─── Customers ──────────────────────────────────────────────────────────────
@@ -126,10 +109,44 @@ export async function fetchBusinessCustomers(
   return mockCustomers;
 }
 
-export async function fetchCustomer(
-  customerId: string
-): Promise<UserResponse | null> {
-  return mockCustomers.find((c) => c.id === customerId) ?? null;
+export async function fetchBusinessVisitors(
+  _businessId: string
+): Promise<VisitorResponse[]> {
+  const reservationVisitors: VisitorResponse[] = mockCustomers.map((c) => ({
+    id: c.id,
+    name: c.name,
+    email: c.email,
+    phone: c.phone ?? null,
+    source: "reservation",
+    visitCount: 3,
+    lastVisit: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    partySize: null,
+  }));
+
+  const walkInVisitors: VisitorResponse[] = [
+    {
+      id: "00000000-0000-0000-0099-000000000001",
+      name: "Marco Bianchi",
+      email: null,
+      phone: "+39 02 1234 5678",
+      source: "walkin",
+      visitCount: 2,
+      lastVisit: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      partySize: 4,
+    },
+    {
+      id: "00000000-0000-0000-0099-000000000002",
+      name: "Sofia Greco",
+      email: null,
+      phone: null,
+      source: "walkin",
+      visitCount: 1,
+      lastVisit: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+      partySize: 2,
+    },
+  ];
+
+  return [...reservationVisitors, ...walkInVisitors];
 }
 
 // ─── Staff ──────────────────────────────────────────────────────────────────

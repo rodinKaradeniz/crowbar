@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.core.events import DomainEvent, publish
 from app.database import get_db
 from app.dependencies import get_current_user, get_current_business, require_module
 from app.models.business import Business
@@ -42,19 +43,6 @@ async def _load_business_or_404(db: AsyncSession, business_id: UUID) -> Business
     return b
 
 
-async def _broadcast_queue(db: AsyncSession, business_id: UUID) -> None:
-    entries = await queue_service.get_active_entries(db, business_id)
-    # Compute positions for waiting entries
-    waiting_pos = 1
-    payload_entries = []
-    for e in entries:
-        pos = waiting_pos if e.status == "waiting" else None
-        if e.status == "waiting":
-            waiting_pos += 1
-        payload_entries.append(queue_service.entry_to_dict(e, pos))
-    await manager.broadcast(str(business_id), {"type": "queue_updated", "entries": payload_entries})
-
-
 # ─── public endpoints ──────────────────────────────────────────────────────────
 
 @router.post("/api/queue/{business_id}/join", response_model=QueueStatusResponse)
@@ -82,8 +70,14 @@ async def join_queue(
 
     await db.commit()
 
-    # Broadcast update to connected staff
-    await _broadcast_queue(db, business_id)
+    await publish(DomainEvent(
+        event_type="queue.party_joined",
+        business_id=str(business_id),
+        payload={
+            "entry_id": str(status_dict["entry"]["id"]),
+            "party_size": body.party_size,
+        },
+    ))
 
     return QueueStatusResponse(
         entry=QueueEntryResponse(**status_dict["entry"]),
@@ -114,7 +108,13 @@ async def leave_queue(
     )
 
     await db.commit()
-    await _broadcast_queue(db, business_id)
+
+    await publish(DomainEvent(
+        event_type="queue.party_removed",
+        business_id=str(business_id),
+        payload={"entry_id": str(entry.id)},
+    ))
+
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -192,7 +192,13 @@ async def notify_queue_entry(
     )
 
     await db.commit()
-    await _broadcast_queue(db, business_id)
+
+    await publish(DomainEvent(
+        event_type="queue.party_called",
+        business_id=str(business_id),
+        payload={"entry_id": str(entry.id)},
+    ))
+
     return QueueEntryResponse(**queue_service.entry_to_dict(entry))
 
 
@@ -227,7 +233,13 @@ async def accept_queue_entry(
     )
 
     await db.commit()
-    await _broadcast_queue(db, business_id)
+
+    await publish(DomainEvent(
+        event_type="queue.party_accepted",
+        business_id=str(business_id),
+        payload={"entry_id": str(entry.id)},
+    ))
+
     return QueueEntryResponse(**queue_service.entry_to_dict(entry))
 
 
@@ -251,7 +263,13 @@ async def seat_queue_entry(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entry not found or not in called status")
 
     await db.commit()
-    await _broadcast_queue(db, business_id)
+
+    await publish(DomainEvent(
+        event_type="queue.party_seated",
+        business_id=str(business_id),
+        payload={"entry_id": str(entry.id)},
+    ))
+
     return QueueEntryResponse(**queue_service.entry_to_dict(entry))
 
 
@@ -275,7 +293,13 @@ async def remove_queue_entry(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entry not found or already inactive")
 
     await db.commit()
-    await _broadcast_queue(db, business_id)
+
+    await publish(DomainEvent(
+        event_type="queue.party_removed",
+        business_id=str(business_id),
+        payload={"entry_id": str(entry_id)},
+    ))
+
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

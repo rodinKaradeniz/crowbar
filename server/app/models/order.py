@@ -1,12 +1,16 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDMixin
+
+if TYPE_CHECKING:
+    from app.models.tab import Tab
 
 
 class Order(Base, UUIDMixin, TimestampMixin):
@@ -22,8 +26,27 @@ class Order(Base, UUIDMixin, TimestampMixin):
         ForeignKey("locations.id", ondelete="SET NULL"),
         nullable=True,
     )
+    customer_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("customers.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    table_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tables.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    tab_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tabs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     session_token: Mapped[str] = mapped_column(String(64), nullable=False)
     table_identifier: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    channel: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    fulfillment_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    delivery_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    scheduled_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="received", nullable=False)
     # status: received | preparing | ready | served | cancelled
     idempotency_key: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
@@ -42,6 +65,7 @@ class Order(Base, UUIDMixin, TimestampMixin):
         cascade="all, delete-orphan",
         order_by="OrderStatusTimeline.changed_at",
     )
+    tab: Mapped["Tab | None"] = relationship(back_populates="orders")
 
 
 class OrderLineItem(Base, UUIDMixin, TimestampMixin):

@@ -21,10 +21,17 @@ class QueueEntry(Base, UUIDMixin, TimestampMixin):
         ForeignKey("locations.id", ondelete="SET NULL"),
         nullable=True,
     )
+    customer_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("customers.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     session_token: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     party_size: Mapped[int] = mapped_column(Integer, default=1)
     phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    channel: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="waiting")
     # status: waiting | called | seated | removed
 

@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.events import DomainEvent, publish
 from app.database import get_db
 from app.dependencies import get_current_business, get_current_user, require_module
 from app.models.business import Business
@@ -146,6 +147,15 @@ async def record_movement(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
     await db.commit()
+    await publish(DomainEvent(
+        event_type="inventory.movement_recorded",
+        business_id=str(business_id),
+        payload={
+            "item_id": str(item_id),
+            "movement_type": body.movement_type,
+            "alert_triggered": movement.alert_triggered,
+        },
+    ))
     return movement
 
 

@@ -1,0 +1,46 @@
+---
+title: Inventory
+description: Track stock levels, record movements, set par levels, and get low-stock alerts for your business.
+---
+
+# Inventory
+
+The **Inventory** module lets you track stock levels across your operation, record stock movements, set par (minimum) levels, and receive automatic low-stock alerts.
+
+## Enabling the Inventory Module
+
+Go to **Settings → Modules** and enable **Inventory**. The Stock link will appear under **Inventory** in the sidebar.
+
+## Stock Items
+
+Navigate to **Stock** in the sidebar. Each inventory item has:
+
+- **Name** — e.g. "Premium Bourbon", "Lime Juice"
+- **Unit** — e.g. bottles, litres, kg
+- **Current Quantity** — updated in real time as movements are recorded
+- **Par Level** — the minimum quantity before a low-stock alert fires
+
+### Adding Items
+
+Click **Add Item** to create a new stock entry. Set a par level to enable automatic alerts.
+
+## Recording Movements
+
+Every change to stock is recorded as a **movement**. There are three types:
+
+| Type | Description |
+|------|-------------|
+| **Receive** | Stock arriving (delivery, purchase). Adds to current quantity. |
+| **Adjust** | Manual correction (e.g. stock count reveals a discrepancy). Can add or subtract. |
+| **Waste** | Spoilage or breakage. Always subtracts from current quantity. |
+
+Click the movement icon on any item to log a movement. The current quantity updates immediately.
+
+## Par Levels and Low-Stock Alerts
+
+When a movement causes the current quantity to drop **below the par level**, a low-stock alert is sent to all business staff via in-app notification. The movement itself records `alert_triggered = true` so you have an audit trail of when the alert fired and why.
+
+## Next Steps
+
+- See [Menu & Ordering](./ordering) to link menu items to inventory for future recipe-based auto-deduction
+- See [Insights](./insights) for the Inventory KPI tab (30-day movements, waste incidents, items below par)

@@ -1,7 +1,7 @@
 import StaffClient from "./staff-client";
 import { getCurrentUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { fetchBusinessStaff } from "@/lib/api";
+import { fetchBusiness, fetchBusinessStaff } from "@/lib/api";
 
 export default async function BusinessStaff() {
   const user = await getCurrentUser();
@@ -11,7 +11,19 @@ export default async function BusinessStaff() {
   }
 
   const businessId = user.businessId;
-  const staffData = await fetchBusinessStaff(businessId);
 
-  return <StaffClient businessId={businessId} initialStaff={staffData} />;
+  const [business, staffData] = await Promise.all([
+    fetchBusiness(businessId),
+    fetchBusinessStaff(businessId),
+  ]);
+
+  if (!business) {
+    redirect("/auth/login");
+  }
+
+  if (!business.onboardingComplete) {
+    redirect("/business/onboarding");
+  }
+
+  return <StaffClient initialStaff={staffData} />;
 }

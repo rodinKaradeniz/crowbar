@@ -8,7 +8,6 @@ import {
   Users,
   Bell,
   ArrowRight,
-  BrainCircuit,
   TrendingUp,
   TrendingDown,
   UserCircle,
@@ -50,10 +49,7 @@ import {
 } from "@/components/ui/collapsible";
 import { Business, ServiceType } from "@/types";
 import { BusinessDashboardStats } from "@/lib/api-client";
-import type {
-  MLDemandForecastResult,
-  MLSegmentationResult,
-} from "@/lib/ml-api";
+import type { MLDemandForecastResult } from "@/lib/ml-api";
 import { cn } from "@/lib/utils";
 import { BusinessDocsChatTrigger } from "@/components/business-docs-chat-trigger";
 
@@ -62,7 +58,6 @@ interface BusinessOverviewClientProps {
   stats: BusinessDashboardStats;
   serviceTypes: ServiceType[];
   demandForecast?: MLDemandForecastResult | null;
-  segmentation?: MLSegmentationResult | null;
 }
 
 export default function BusinessOverviewClient({
@@ -70,7 +65,6 @@ export default function BusinessOverviewClient({
   stats,
   serviceTypes,
   demandForecast,
-  segmentation,
 }: BusinessOverviewClientProps) {
   const [expandedReservations, setExpandedReservations] = useState<Set<string>>(new Set());
   const [selectedServiceType, setSelectedServiceType] = useState<string>("all");
@@ -211,18 +205,18 @@ export default function BusinessOverviewClient({
   ];
 
   return (
-    <div className="p-4 h-[calc(100vh-3rem)] flex flex-col gap-3 overflow-auto">
+    <div className="p-3 h-[calc(100vh-3rem)] flex flex-col gap-3 overflow-hidden">
 
       {/* ── KPI Grid ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2.5 flex-none">
         {kpiCards.map((card) => (
           <Card key={card.label} className="border-border/60">
-            <CardContent className="p-3">
+            <CardContent className="p-2.5">
               <div className="flex items-start justify-between mb-1">
                 <p className="text-xs text-muted-foreground leading-tight">{card.label}</p>
                 <card.icon className="h-3 w-3 text-muted-foreground/50 shrink-0 mt-0.5" />
               </div>
-              <p className="text-xl font-semibold tracking-tight">{card.value}</p>
+              <p className="text-lg font-semibold tracking-tight">{card.value}</p>
               {card.trend !== null && (
                 <div className="flex items-center gap-1 mt-1">
                   {card.trend >= 0
@@ -255,7 +249,7 @@ export default function BusinessOverviewClient({
       <div className="grid grid-cols-1 lg:grid-cols-[5fr_4fr_minmax(220px,3fr)] gap-3 flex-1 min-h-0">
 
         {/* Column 1: Weekly Bar Chart */}
-        <Card className="flex flex-col h-full">
+        <Card className="flex flex-col min-h-0">
           <CardHeader className="pb-2 pt-3 px-3 flex-none">
             <div className="flex items-center justify-between">
               <div>
@@ -291,6 +285,7 @@ export default function BusinessOverviewClient({
                           key={type.id}
                           dataKey={type.name}
                           stackId="a"
+                          isAnimationActive={false}
                           fill={type.color}
                           radius={isFirst ? [0, 0, 4, 4] : isLast ? [4, 4, 0, 0] : [0, 0, 0, 0]}
                         />
@@ -298,7 +293,7 @@ export default function BusinessOverviewClient({
                     })
                   : (() => {
                       const t = serviceTypes.find((st) => st.id === selectedServiceType);
-                      return t ? <Bar dataKey={t.name} fill={t.color} radius={[4, 4, 0, 0]} /> : null;
+                      return t ? <Bar dataKey={t.name} fill={t.color} radius={[4, 4, 0, 0]} isAnimationActive={false} /> : null;
                     })()}
               </BarChart>
             </ChartContainer>
@@ -306,7 +301,7 @@ export default function BusinessOverviewClient({
         </Card>
 
         {/* Column 2: Upcoming Reservations */}
-        <Card className="flex flex-col h-full">
+        <Card className="flex flex-col min-h-0">
           <CardHeader className="flex flex-row items-start justify-between pb-2 pt-3 px-3 flex-none">
             <div>
               <CardTitle className="text-xs font-medium">Upcoming</CardTitle>
@@ -396,28 +391,29 @@ export default function BusinessOverviewClient({
         </Card>
 
         {/* Column 3: Status Breakdown + Insights Carousel */}
-        <div className="flex flex-col gap-3 h-full">
+        <div className="flex flex-col gap-3 min-h-0">
 
           {/* Status Breakdown */}
           <Card className="flex-none">
-            <CardHeader className="pb-2 pt-3 px-3">
+            <CardHeader className="pb-1 pt-2 px-3">
               <CardTitle className="text-xs font-medium">Status Breakdown</CardTitle>
               <p className="text-xs text-muted-foreground">Last 7 days</p>
             </CardHeader>
-            <CardContent className="px-3 pb-3">
+            <CardContent className="px-3 pb-2">
               {hasPieData ? (
                 <>
                   <div className="flex justify-center">
-                    <ChartContainer config={pieChartConfig} className="h-[90px] w-[90px]">
+                    <ChartContainer config={pieChartConfig} className="h-[80px] w-[80px]">
                       <PieChart>
                         <ChartTooltip content={<ChartTooltipContent hideLabel />} />
                         <Pie
                           data={statusChartData}
                           dataKey="value"
                           nameKey="name"
-                          innerRadius={22}
-                          outerRadius={43}
+                          innerRadius={20}
+                          outerRadius={38}
                           strokeWidth={2}
+                          isAnimationActive={false}
                         >
                           {statusChartData.map((entry, i) => (
                             <Cell key={i} fill={entry.fill} />
@@ -450,11 +446,10 @@ export default function BusinessOverviewClient({
             </CardContent>
           </Card>
 
-          {/* Insights Carousel */}
-          <InsightsCarousel
-            demandForecast={demandForecast}
-            segmentation={segmentation}
+          {/* Overview Carousel */}
+          <OverviewCarousel
             businessSlug={business.slug}
+            demandForecast={demandForecast}
             onOpenChat={() => setChatOpen(true)}
           />
         </div>
@@ -466,17 +461,15 @@ export default function BusinessOverviewClient({
   );
 }
 
-// ─── Insights Carousel ────────────────────────────────────────────────────────
+// ─── Overview Carousel ────────────────────────────────────────────────────────
 
-function InsightsCarousel({
-  demandForecast,
-  segmentation,
+function OverviewCarousel({
   businessSlug,
+  demandForecast,
   onOpenChat,
 }: {
-  demandForecast?: MLDemandForecastResult | null;
-  segmentation?: MLSegmentationResult | null;
   businessSlug: string;
+  demandForecast?: MLDemandForecastResult | null;
   onOpenChat: () => void;
 }) {
   const [slide, setSlide] = useState(0);
@@ -490,31 +483,53 @@ function InsightsCarousel({
   }, [paused]);
 
   const hasForecast = demandForecast?.status === "success" && demandForecast.forecasts;
-  const hasSegments = segmentation?.status === "success" && segmentation.segments;
-  const allForecasts = Object.values(demandForecast?.forecasts ?? {}).flat();
-  const totalPredicted = allForecasts.reduce((s, f) => s + f.predicted_reservations, 0);
-
-  const mlDescription =
-    hasForecast || hasSegments
-      ? [
-          hasForecast && `${Math.round(totalPredicted)} predicted this week`,
-          hasSegments && `${segmentation!.n_customers} customers segmented`,
-        ]
-          .filter(Boolean)
-          .join(" · ")
-      : "Run the pipeline to unlock demand forecasts and customer segments";
+  const allDays = hasForecast ? Object.values(demandForecast!.forecasts!).flat() : [];
+  const next3 = allDays.slice(0, 3);
+  const busiest = hasForecast
+    ? allDays.reduce(
+        (max, d) => (d.predicted_reservations > max.predicted_reservations ? d : max),
+        allDays[0],
+      )
+    : null;
 
   const slides = [
     {
-      icon: BrainCircuit,
+      icon: TrendingUp,
       iconBg: "bg-blue-50 dark:bg-blue-900/20",
       iconColor: "text-blue-600 dark:text-blue-400",
-      title: "ML Insights",
-      description: mlDescription,
-      action: (
+      title: "Staffing Forecast",
+      description: hasForecast
+        ? busiest
+          ? `Staff up ${new Date(busiest.date).toLocaleDateString("en-US", { weekday: "long" })}`
+          : "Next 3 days demand"
+        : "Run ML pipeline to see demand predictions",
+      action: hasForecast ? (
+        <div className="flex gap-1.5 w-full">
+          {next3.map((day) => {
+            const dow = new Date(day.date).toLocaleDateString("en-US", { weekday: "short" });
+            const isBusiest = busiest && day.date === busiest.date;
+            return (
+              <div
+                key={day.date}
+                className={cn(
+                  "flex-1 rounded-md p-1.5 text-center",
+                  isBusiest
+                    ? "bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800"
+                    : "bg-muted/40 border border-transparent",
+                )}
+              >
+                <p className="text-xs text-muted-foreground">{dow}</p>
+                <p className="text-sm font-bold leading-tight">
+                  {Math.round(day.predicted_reservations)}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
         <Link href="/business/insights">
           <Button variant="outline" size="sm" className="text-xs">
-            View Insights <ArrowRight className="ml-1 h-3 w-3" />
+            Run <ArrowRight className="ml-1 h-3 w-3" />
           </Button>
         </Link>
       ),
@@ -524,8 +539,7 @@ function InsightsCarousel({
       iconBg: "bg-emerald-50 dark:bg-emerald-900/20",
       iconColor: "text-emerald-600 dark:text-emerald-400",
       title: "Any Questions?",
-      description:
-        "Ask the docs assistant how to use the dashboard, accept requests, or anything else",
+      description: "Ask the docs assistant how to use the dashboard, accept requests, or anything else",
       action: (
         <Button variant="outline" size="sm" className="text-xs" onClick={onOpenChat}>
           Ask Now <ArrowRight className="ml-1 h-3 w-3" />
@@ -546,18 +560,18 @@ function InsightsCarousel({
         </Link>
       ),
     },
-  ] as const;
+  ];
 
   const current = slides[slide];
   const Icon = current.icon;
 
   return (
     <Card
-      className="flex-1"
+      className="flex-1 min-h-0"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
-      <CardContent className="flex flex-col items-center justify-center h-full py-6 text-center px-4">
+      <CardContent className="flex flex-col items-center justify-center h-full py-4 text-center px-4 overflow-hidden">
         <div
           className={cn(
             "h-12 w-12 rounded-full flex items-center justify-center mb-3",
@@ -570,7 +584,7 @@ function InsightsCarousel({
         <p className="text-xs text-muted-foreground mt-1 max-w-[180px]">
           {current.description}
         </p>
-        <div className="mt-4">{current.action}</div>
+        <div className="mt-4 w-full flex justify-center">{current.action}</div>
         <div className="flex items-center gap-1.5 mt-4">
           {slides.map((_, i) => (
             <button

@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     google_client_secret: str | None = None
     google_redirect_uri: str = "http://localhost:8000/api/auth/google/callback"
     google_connect_success_url: str = "http://localhost:3000/business/settings/account"
+    frontend_url: str = "http://localhost:3000"
 
     # Twilio SMS
     twilio_account_sid: str | None = None

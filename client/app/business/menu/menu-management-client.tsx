@@ -57,6 +57,8 @@ import {
   PlusCircle,
   Bookmark,
 } from "lucide-react";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { EmptyState } from "@/components/empty-state";
 
 const ROUTING_ICONS: Record<string, React.ReactNode> = {
   kitchen: <ChefHat className="h-3 w-3" />,
@@ -79,6 +81,14 @@ export function MenuManagementClient({ businessId }: Props) {
   const [itemDialog, setItemDialog] = useState(false);
   const [libraryDialog, setLibraryDialog] = useState(false);
   const [libraryItemDialog, setLibraryItemDialog] = useState(false);
+
+  // ── Confirmation dialog state ────────────────────────────────────────────────
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string;
+    name: string;
+    type: "menu" | "category";
+    menuId?: string;
+  } | null>(null);
 
   // ── Menu form ───────────────────────────────────────────────────────────────
   const [menuName, setMenuName] = useState("");
@@ -191,8 +201,13 @@ export function MenuManagementClient({ businessId }: Props) {
     }
   }
 
-  async function deleteMenu(menuId: string) {
-    if (!confirm("Delete this menu and all its items?")) return;
+  function deleteMenu(menuId: string) {
+    const menu = menus.find((m) => m.id === menuId);
+    if (!menu) return;
+    setDeleteTarget({ id: menuId, name: menu.name, type: "menu" });
+  }
+
+  async function confirmDeleteMenu(menuId: string) {
     try {
       await clientDeleteMenu(businessId, menuId);
       const remaining = menus.filter((m) => m.id !== menuId);
@@ -243,8 +258,14 @@ export function MenuManagementClient({ businessId }: Props) {
     }
   }
 
-  async function deleteCategory(menuId: string, categoryId: string) {
-    if (!confirm("Delete this category and all its items?")) return;
+  function deleteCategory(menuId: string, categoryId: string) {
+    const menu = menus.find((m) => m.id === menuId);
+    const category = menu?.categories.find((c) => c.id === categoryId);
+    if (!category) return;
+    setDeleteTarget({ id: categoryId, name: category.name, type: "category", menuId });
+  }
+
+  async function confirmDeleteCategory(menuId: string, categoryId: string) {
     try {
       await clientDeleteCategory(businessId, categoryId);
       setMenus((prev) =>
@@ -542,17 +563,12 @@ export function MenuManagementClient({ businessId }: Props) {
       </div>
 
       {menus.length === 0 ? (
-        <div className="rounded-lg border border-dashed p-12 text-center">
-          <ChefHat className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-          <p className="font-medium">No menus yet</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            Create your first menu to get started.
-          </p>
-          <Button className="mt-4" onClick={openCreateMenu}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create Menu
-          </Button>
-        </div>
+        <EmptyState
+          icon={ChefHat}
+          title="No menus yet"
+          description="Create your first menu to get started."
+          action={{ label: "Create Menu", onClick: openCreateMenu }}
+        />
       ) : (
         <>
           {/* Menu tabs */}
@@ -870,6 +886,24 @@ export function MenuManagementClient({ businessId }: Props) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmationDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title={`Delete ${deleteTarget?.type === "menu" ? "Menu" : "Category"}`}
+        description={`"${deleteTarget?.name}" and all its items will be permanently deleted.`}
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          if (deleteTarget.type === "menu") {
+            void confirmDeleteMenu(deleteTarget.id);
+          } else {
+            void confirmDeleteCategory(deleteTarget.menuId!, deleteTarget.id);
+          }
+          setDeleteTarget(null);
+        }}
+      />
     </div>
   );
 }

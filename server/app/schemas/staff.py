@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
 
 class StaffCreate(BaseModel):
@@ -35,3 +35,23 @@ class StaffWithUserResponse(BaseModel):
     user_phone: str | None = None
 
     model_config = {"from_attributes": True}
+
+
+class StaffInviteRequest(BaseModel):
+    email: EmailStr
+    role: str = "staff"
+
+
+class StaffInviteResponse(BaseModel):
+    message: str
+
+
+class InviteDetailsResponse(BaseModel):
+    email: str
+    role: str
+    business_name: str
+
+
+class AcceptInviteRequest(BaseModel):
+    name: str
+    password: str

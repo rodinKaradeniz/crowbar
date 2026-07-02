@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.core.events import DomainEvent, publish
 from app.database import get_db
 from app.dependencies import get_current_business, get_current_user, require_module
 from app.models.business import Business
@@ -54,11 +55,6 @@ async def _load_business_or_404(db: AsyncSession, business_id: UUID) -> Business
     return b
 
 
-async def _broadcast_orders(db: AsyncSession, business_id: UUID) -> None:
-    orders = await order_service.get_orders_for_board(db, business_id)
-    payload = [order_service.order_to_dict(o) for o in orders]
-    await manager.broadcast(str(business_id), {"type": "order_updated", "orders": payload})
-
 
 # ─── Public: Menu ──────────────────────────────────────────────────────────────
 
@@ -96,7 +92,11 @@ async def place_order(
         )
     order = await order_service.place_order(db, business_id, body)
     await db.commit()
-    await _broadcast_orders(db, business_id)
+    await publish(DomainEvent(
+        event_type="order.placed",
+        business_id=str(business_id),
+        payload={"order_id": str(order.id)},
+    ))
     return order
 
 
@@ -161,7 +161,11 @@ async def update_order_status(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
 
     await db.commit()
-    await _broadcast_orders(db, business_id)
+    await publish(DomainEvent(
+        event_type="order.status_changed",
+        business_id=str(business_id),
+        payload={"order_id": str(order.id), "status": order.status},
+    ))
     return order
 
 

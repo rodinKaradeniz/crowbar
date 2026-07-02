@@ -1,7 +1,7 @@
 import uuid
 
-from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, String, Text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDMixin
@@ -19,15 +19,11 @@ class ServiceType(Base, UUIDMixin, TimestampMixin):
     description: Mapped[str | None] = mapped_column(Text)
     capacity: Mapped[int] = mapped_column(Integer, default=1)
     max_concurrent_bookings: Mapped[int | None] = mapped_column(Integer)
-    requires_payment: Mapped[bool] = mapped_column(Boolean, default=False)
-    amount: Mapped[float | None] = mapped_column(Numeric(10, 2))
-    is_online: Mapped[bool] = mapped_column(Boolean, default=False)
     is_pending_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     duration: Mapped[int | None] = mapped_column(Integer)
     color: Mapped[str] = mapped_column(String(20), default="#3b82f6")
     display_order: Mapped[int | None] = mapped_column(Integer)
     image: Mapped[str | None] = mapped_column(String(500))
-    form_fields: Mapped[list | None] = mapped_column(JSONB)
 
     business: Mapped["Business"] = relationship(back_populates="service_types")
     reservations: Mapped[list["Reservation"]] = relationship(

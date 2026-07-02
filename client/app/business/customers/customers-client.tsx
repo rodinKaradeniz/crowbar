@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useMemo, Fragment } from "react";
+import { useState, useMemo } from "react";
 import { format, parseISO } from "date-fns";
-import { ChevronDown, ChevronRight, Eye } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import Link from "next/link";
 import {
   Table,
   TableBody,
@@ -13,24 +14,12 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ReservationDetailsDialog } from "@/components/reservation-details-dialog";
-import { Reservation, ServiceType } from "@/types";
-import { UserResponse } from "@/lib/api-client";
+import { VisitorResponse, ServiceType } from "@/types";
 import { cn } from "@/lib/utils";
 import { Search } from "lucide-react";
 
-interface CustomerWithReservations {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  reservations: Reservation[];
-}
-
 interface CustomersClientProps {
-  businessId: string;
-  customers: UserResponse[];
-  reservations: Reservation[];
+  visitors: VisitorResponse[];
   serviceTypes: ServiceType[];
   customerSegments?: Record<string, string>;
 }
@@ -44,311 +33,164 @@ const SEGMENT_STYLES: Record<string, string> = {
   Others: "bg-muted text-muted-foreground",
 };
 
+const SOURCE_STYLES = {
+  reservation: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  walkin: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+};
+
+const SOURCE_LABELS = {
+  reservation: "Reservation",
+  walkin: "Walk-in",
+};
+
 export default function CustomersClient({
-  businessId,
-  customers,
-  reservations,
-  serviceTypes,
+  visitors,
   customerSegments,
 }: CustomersClientProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-  const [selectedReservation, setSelectedReservation] =
-    useState<Reservation | null>(null);
 
-  // Group reservations by customer
-  const allCustomers = useMemo(() => {
-    const customerMap = new Map<string, CustomerWithReservations>();
+  const hasSegments = customerSegments && Object.keys(customerSegments).length > 0;
 
-    // Initialize from customers list
-    customers.forEach((c) => {
-      customerMap.set(c.id, {
-        id: c.id,
-        name: c.name,
-        email: c.email,
-        phone: c.phone || "",
-        reservations: [],
-      });
-    });
-
-    // Attach reservations to customers
-    reservations.forEach((r) => {
-      const customer = customerMap.get(r.customerId);
-      if (customer) {
-        customer.reservations.push(r);
-      }
-    });
-
-    return Array.from(customerMap.values()).filter(
-      (c) => c.reservations.length > 0
+  const filtered = useMemo(() => {
+    if (!searchQuery) return visitors;
+    const q = searchQuery.toLowerCase();
+    return visitors.filter(
+      (v) =>
+        v.name.toLowerCase().includes(q) ||
+        (v.email ?? "").toLowerCase().includes(q) ||
+        (v.phone ?? "").toLowerCase().includes(q),
     );
-  }, [customers, reservations]);
-
-  const serviceTypeMap = useMemo(() => {
-    const map = new Map<string, ServiceType>();
-    serviceTypes.forEach((st) => map.set(st.id, st));
-    return map;
-  }, [serviceTypes]);
-
-  const filteredCustomers = useMemo(() => {
-    if (!searchQuery) return allCustomers;
-
-    const query = searchQuery.toLowerCase();
-    return allCustomers.filter((customer) => {
-      return (
-        customer.name.toLowerCase().includes(query) ||
-        customer.email.toLowerCase().includes(query) ||
-        customer.phone.toLowerCase().includes(query)
-      );
-    });
-  }, [allCustomers, searchQuery]);
-
-  const toggleRow = (id: string) => {
-    setExpandedRows((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
-
-  const getReservationCount = (customerReservations: Reservation[]) => {
-    return {
-      confirmed: customerReservations.filter((r) => r.status === "confirmed")
-        .length,
-      pending: customerReservations.filter((r) => r.status === "pending")
-        .length,
-      cancelled: customerReservations.filter((r) => r.status === "cancelled")
-        .length,
-      completed: customerReservations.filter((r) => r.status === "completed")
-        .length,
-    };
-  };
+  }, [visitors, searchQuery]);
 
   return (
     <div className="page-container">
       <div>
         <h1 className="page-title">Customers</h1>
         <p className="page-description">
-          View all customers who have made reservations at your business
+          Reservation customers and queue walk-ins across your business
         </p>
       </div>
 
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Search customers..."
+          placeholder="Search by name, email, or phone…"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="pl-9"
         />
       </div>
 
-      {filteredCustomers.length === 0 ? (
+      {filtered.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-muted-foreground">No customers found.</p>
+          <p className="text-muted-foreground">
+            {visitors.length === 0
+              ? "No customers yet. They'll appear here once reservations are made or queue walk-ins are seated."
+              : "No customers match your search."}
+          </p>
         </div>
       ) : (
         <div className="rounded-lg border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[50px]"></TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Phone</TableHead>
-                <TableHead>Total Reservations</TableHead>
-                <TableHead>Status Breakdown</TableHead>
-                {customerSegments && Object.keys(customerSegments).length > 0 && (
-                  <TableHead>Segment</TableHead>
-                )}
-                <TableHead className="w-[150px]">Actions</TableHead>
+                <TableHead>Source</TableHead>
+                <TableHead>Contact</TableHead>
+                <TableHead>Visits</TableHead>
+                <TableHead>Last Visit</TableHead>
+                <TableHead>Party</TableHead>
+                {hasSegments && <TableHead>Segment</TableHead>}
+                <TableHead className="w-[120px]" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredCustomers.map((customer) => {
-                const isExpanded = expandedRows.has(customer.id);
-                const counts = getReservationCount(customer.reservations);
-                const totalReservations = customer.reservations.length;
+              {filtered.map((v) => (
+                <TableRow key={v.id}>
+                  <TableCell className="font-medium">{v.name}</TableCell>
 
-                return (
-                  <Fragment key={customer.id}>
-                    <TableRow>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => toggleRow(customer.id)}
-                        >
-                          {isExpanded ? (
-                            <ChevronDown className="h-4 w-4" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {customer.name}
-                      </TableCell>
-                      <TableCell>{customer.email}</TableCell>
-                      <TableCell>{customer.phone}</TableCell>
-                      <TableCell>{totalReservations}</TableCell>
-                      <TableCell>
-                        <div className="flex gap-2 flex-wrap">
-                          {counts.confirmed > 0 && (
-                            <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                              {counts.confirmed} Confirmed
-                            </span>
-                          )}
-                          {counts.pending > 0 && (
-                            <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
-                              {counts.pending} Pending
-                            </span>
-                          )}
-                          {counts.cancelled > 0 && (
-                            <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
-                              {counts.cancelled} Cancelled
-                            </span>
-                          )}
-                          {counts.completed > 0 && (
-                            <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">
-                              {counts.completed} Completed
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-                      {customerSegments && Object.keys(customerSegments).length > 0 && (
-                        <TableCell>
-                          {customerSegments[customer.id] ? (
-                            <span
-                              className={cn(
-                                "text-xs px-2 py-1 rounded-full font-medium whitespace-nowrap",
-                                SEGMENT_STYLES[customerSegments[customer.id]] || SEGMENT_STYLES.Others
-                              )}
-                            >
-                              {customerSegments[customer.id]}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
+                  <TableCell>
+                    <span
+                      className={cn(
+                        "text-xs px-2 py-1 rounded-full font-medium",
+                        SOURCE_STYLES[v.source],
                       )}
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggleRow(customer.id)}
-                        >
-                          {isExpanded ? "Hide" : "See"} Reservations
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                    {isExpanded && (
-                      <TableRow>
-                        <TableCell colSpan={customerSegments && Object.keys(customerSegments).length > 0 ? 8 : 7} className="p-0">
-                          <div className="bg-muted/50 p-4">
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead>Date & Time</TableHead>
-                                  <TableHead>Guests</TableHead>
-                                  <TableHead>Service Type</TableHead>
-                                  <TableHead>Status</TableHead>
-                                  <TableHead className="w-[120px]">
-                                    Actions
-                                  </TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {customer.reservations.map((reservation) => {
-                                  const reservationDate = parseISO(
-                                    reservation.time
-                                  );
-                                  const serviceType = serviceTypeMap.get(
-                                    reservation.serviceTypeId
-                                  );
+                    >
+                      {SOURCE_LABELS[v.source]}
+                    </span>
+                  </TableCell>
 
-                                  return (
-                                    <TableRow key={reservation.id}>
-                                      <TableCell>
-                                        <div>
-                                          <div className="font-medium">
-                                            {format(
-                                              reservationDate,
-                                              "MMM d, yyyy"
-                                            )}
-                                          </div>
-                                          <div className="text-sm text-muted-foreground">
-                                            {format(reservationDate, "h:mm a")}
-                                          </div>
-                                        </div>
-                                      </TableCell>
-                                      <TableCell>
-                                        {reservation.guests}
-                                      </TableCell>
-                                      <TableCell>
-                                        {serviceType?.name || "N/A"}
-                                      </TableCell>
-                                      <TableCell>
-                                        <span
-                                          className={cn(
-                                            "text-xs px-2 py-1 rounded-full font-medium",
-                                            reservation.status ===
-                                              "confirmed" &&
-                                              "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-                                            reservation.status === "pending" &&
-                                              "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
-                                            reservation.status ===
-                                              "cancelled" &&
-                                              "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-                                            reservation.status ===
-                                              "completed" &&
-                                              "bg-muted text-muted-foreground"
-                                          )}
-                                        >
-                                          {reservation.status}
-                                        </span>
-                                      </TableCell>
-                                      <TableCell>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() =>
-                                            setSelectedReservation(reservation)
-                                          }
-                                        >
-                                          <Eye className="h-4 w-4 mr-1" />
-                                          Details
-                                        </Button>
-                                      </TableCell>
-                                    </TableRow>
-                                  );
-                                })}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        </TableCell>
-                      </TableRow>
+                  <TableCell>
+                    <div className="space-y-0.5">
+                      {v.email && (
+                        <p className="text-xs text-muted-foreground">{v.email}</p>
+                      )}
+                      {v.phone && (
+                        <p className="text-xs text-muted-foreground">{v.phone}</p>
+                      )}
+                      {!v.email && !v.phone && (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </div>
+                  </TableCell>
+
+                  <TableCell>{v.visitCount}</TableCell>
+
+                  <TableCell>
+                    {v.lastVisit ? (
+                      <span className="text-sm">
+                        {format(parseISO(v.lastVisit), "MMM d, yyyy")}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
                     )}
-                  </Fragment>
-                );
-              })}
+                  </TableCell>
+
+                  <TableCell>
+                    {v.partySize != null ? (
+                      v.partySize
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+
+                  {hasSegments && (
+                    <TableCell>
+                      {customerSegments![v.id] ? (
+                        <span
+                          className={cn(
+                            "text-xs px-2 py-1 rounded-full font-medium whitespace-nowrap",
+                            SEGMENT_STYLES[customerSegments![v.id]] ||
+                              SEGMENT_STYLES.Others,
+                          )}
+                        >
+                          {customerSegments![v.id]}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  )}
+
+                  <TableCell>
+                    {v.source === "reservation" ? (
+                      <Link
+                        href={`/business/reservations?customer=${v.id}`}
+                      >
+                        <Button variant="ghost" size="sm" className="text-xs h-7">
+                          Reservations <ArrowRight className="ml-1 h-3 w-3" />
+                        </Button>
+                      </Link>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Walk-in</span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </div>
       )}
-
-      <ReservationDetailsDialog
-        reservation={selectedReservation}
-        open={!!selectedReservation}
-        onOpenChange={(open) => !open && setSelectedReservation(null)}
-        serviceTypes={serviceTypes}
-        customers={customers}
-      />
     </div>
   );
 }

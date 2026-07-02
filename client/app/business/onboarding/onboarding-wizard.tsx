@@ -109,7 +109,6 @@ export default function OnboardingWizard({
             capacity: parseInt(serviceCapacity) || 10,
             duration: parseInt(serviceDuration) || 60,
             color: "#6366f1",
-            requiresPayment: false,
           });
         }
         setStep(3);
@@ -142,7 +141,7 @@ export default function OnboardingWizard({
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-2xl font-semibold tracking-tight">Set up your business</h1>
-          <p className="text-sm text-muted-foreground mt-1">Complete these steps to get started with Slotera</p>
+          <p className="text-sm text-muted-foreground mt-1">Complete these steps to get started with Crowbar</p>
         </div>
 
         {/* Step indicators */}

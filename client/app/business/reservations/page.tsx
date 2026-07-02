@@ -2,10 +2,13 @@ import { getCurrentUser } from "@/lib/auth";
 import ReservationsClient from "./reservations-client";
 import { redirect } from "next/navigation";
 import {
+  fetchBusiness,
   fetchBusinessReservations,
   fetchServiceTypesByBusiness,
   fetchBusinessCustomers,
 } from "@/lib/api";
+import { ModuleDisabled } from "@/components/module-disabled";
+import { hasModule, MODULE_KEYS } from "@/lib/modules";
 
 export default async function ReservationsPage() {
   const user = await getCurrentUser();
@@ -16,11 +19,20 @@ export default async function ReservationsPage() {
 
   const businessId = user.businessId;
 
-  const [reservations, serviceTypes, customers] = await Promise.all([
+  const [business, reservations, serviceTypes, customers] = await Promise.all([
+    fetchBusiness(businessId),
     fetchBusinessReservations(businessId, "confirmed"),
     fetchServiceTypesByBusiness(businessId),
     fetchBusinessCustomers(businessId),
   ]);
+
+  if (!business) {
+    redirect("/auth/login");
+  }
+
+  if (!hasModule(business.enabledModules ?? [], MODULE_KEYS.RESERVATIONS)) {
+    return <ModuleDisabled moduleName="Reservations" />;
+  }
 
   return (
     <ReservationsClient

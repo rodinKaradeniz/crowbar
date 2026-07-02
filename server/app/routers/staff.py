@@ -1,15 +1,33 @@
+import secrets
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import forbidden, not_found
+from app.config import settings
+from app.core.errors import api_error, forbidden, not_found
 from app.database import get_db
 from app.dependencies import get_current_business, get_current_user, require_roles
 from app.models.business import Business
+from app.models.staff import Staff
+from app.models.staff_invitation import StaffInvitation
 from app.models.user import User
-from app.schemas.staff import StaffCreate, StaffResponse, StaffUpdate, StaffWithUserResponse
+from app.schemas.auth import LoginResponse
+from app.schemas.staff import (
+    AcceptInviteRequest,
+    InviteDetailsResponse,
+    StaffCreate,
+    StaffInviteRequest,
+    StaffInviteResponse,
+    StaffResponse,
+    StaffUpdate,
+    StaffWithUserResponse,
+)
 from app.services import staff_service
+from app.services.auth_service import create_access_token, hash_password
+from app.services.email_service import send_staff_invitation
 
 router = APIRouter(prefix="/api/staff", tags=["staff"])
 
@@ -100,3 +118,125 @@ async def delete_staff(
     deleted = await staff_service.delete_staff(db, staff_id)
     if not deleted:
         raise not_found("Staff")
+
+
+# ─── Staff Invitations ───────────────────────────────────────────────────────
+
+@router.post("/invite", response_model=StaffInviteResponse, status_code=status.HTTP_201_CREATED)
+async def send_invite(
+    data: StaffInviteRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles("owner", "manager")),
+    current_business: Business = Depends(get_current_business),
+):
+    """Send a staff invitation email. Requires owner or manager role."""
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+
+    invitation = StaffInvitation(
+        business_id=current_business.id,
+        email=str(data.email),
+        role=data.role,
+        token=token,
+        expires_at=expires_at,
+    )
+    db.add(invitation)
+    await db.commit()
+
+    invite_url = f"{settings.frontend_url}/invite/{token}"
+    send_staff_invitation(
+        to_email=str(data.email),
+        business_name=current_business.name,
+        role=data.role,
+        invite_url=invite_url,
+    )
+
+    return StaffInviteResponse(message="Invitation sent")
+
+
+@router.get("/invite/{token}", response_model=InviteDetailsResponse)
+async def get_invite(token: str, db: AsyncSession = Depends(get_db)):
+    """Get invitation details by token. Public endpoint."""
+    result = await db.execute(
+        select(StaffInvitation).where(StaffInvitation.token == token)
+    )
+    invitation = result.scalar_one_or_none()
+
+    if invitation is None:
+        raise not_found("Invitation")
+
+    if invitation.accepted_at is not None:
+        raise api_error(status.HTTP_410_GONE, "INVITATION_USED", "This invitation has already been accepted")
+
+    now = datetime.now(timezone.utc)
+    if invitation.expires_at < now:
+        raise api_error(status.HTTP_410_GONE, "INVITATION_EXPIRED", "This invitation has expired")
+
+    # Load business name
+    biz_result = await db.execute(
+        select(Business).where(Business.id == invitation.business_id)
+    )
+    business = biz_result.scalar_one_or_none()
+
+    return InviteDetailsResponse(
+        email=invitation.email,
+        role=invitation.role,
+        business_name=business.name if business else "",
+    )
+
+
+@router.post("/invite/{token}/accept", response_model=LoginResponse, status_code=status.HTTP_201_CREATED)
+async def accept_invite(token: str, data: AcceptInviteRequest, db: AsyncSession = Depends(get_db)):
+    """Accept an invitation and create a staff account. Public endpoint."""
+    result = await db.execute(
+        select(StaffInvitation).where(StaffInvitation.token == token)
+    )
+    invitation = result.scalar_one_or_none()
+
+    if invitation is None:
+        raise not_found("Invitation")
+
+    if invitation.accepted_at is not None:
+        raise api_error(status.HTTP_410_GONE, "INVITATION_USED", "This invitation has already been accepted")
+
+    now = datetime.now(timezone.utc)
+    if invitation.expires_at < now:
+        raise api_error(status.HTTP_410_GONE, "INVITATION_EXPIRED", "This invitation has expired")
+
+    # Check if a user with this email already exists
+    user_result = await db.execute(select(User).where(User.email == invitation.email))
+    existing_user = user_result.scalar_one_or_none()
+
+    if existing_user is not None:
+        raise api_error(
+            status.HTTP_409_CONFLICT,
+            "EMAIL_EXISTS",
+            "An account with this email already exists. Please log in.",
+        )
+
+    # Create user + staff assignment in one transaction
+    new_user = User(
+        email=invitation.email,
+        name=data.name,
+        password_hash=hash_password(data.password),
+        user_type="staff",
+    )
+    db.add(new_user)
+    await db.flush()
+
+    staff = Staff(
+        user_id=new_user.id,
+        business_id=invitation.business_id,
+        role=invitation.role,
+    )
+    db.add(staff)
+
+    invitation.accepted_at = now
+    await db.commit()
+
+    access_token = create_access_token(str(new_user.id), "staff")
+    return LoginResponse(
+        access_token=access_token,
+        user_id=str(new_user.id),
+        user_type="staff",
+    )

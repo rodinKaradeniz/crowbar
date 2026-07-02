@@ -82,6 +82,7 @@ async def _async_send_reminders() -> dict:
                     Reservation.status == "confirmed",
                     Reservation.time >= window_start,
                     Reservation.time <= window_end,
+                    Reservation.sms_reminder_sent == False,  # noqa: E712
                 )
             )
             reservations = result.scalars().all()
@@ -108,9 +109,12 @@ async def _async_send_reminders() -> dict:
                 )
                 ok = sms_service.send_sms(reservation.phone, body)
                 if ok:
+                    reservation.sms_reminder_sent = True
                     sent += 1
                 else:
                     skipped += 1
+
+            await db.commit()
     except Exception as e:
         logger.error("send_reservation_reminders task failed: %s", e)
     finally:

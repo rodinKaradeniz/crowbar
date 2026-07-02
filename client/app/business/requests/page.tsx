@@ -2,6 +2,7 @@ import RequestsClient from "./requests-client";
 import { getCurrentUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import {
+  fetchBusiness,
   fetchBusinessReservations,
   fetchServiceTypesByBusiness,
   fetchBusinessCustomers,
@@ -17,13 +18,22 @@ export default async function Requests() {
 
   const businessId = user.businessId;
 
-  const [reservations, serviceTypes, customers, segmentation] =
+  const [business, reservations, serviceTypes, customers, segmentation] =
     await Promise.all([
+      fetchBusiness(businessId),
       fetchBusinessReservations(businessId, "pending"),
       fetchServiceTypesByBusiness(businessId),
       fetchBusinessCustomers(businessId),
       fetchMLSegmentation(),
     ]);
+
+  if (!business) {
+    redirect("/auth/login");
+  }
+
+  if (!business.onboardingComplete) {
+    redirect("/business/onboarding");
+  }
 
   // Build a map of customer_id → segment_label for risk context
   const customerSegments: Record<string, string> = {};

@@ -1,4 +1,4 @@
-# Slotera
+# Crowbar
 
 A reservation management system for businesses and customers.
 
@@ -23,6 +23,7 @@ slotera/
 │   └── vitest.config.ts # Vitest configuration
 ├── server/              # Backend (FastAPI + PostgreSQL)
 │   ├── app/             # FastAPI application
+│   │   ├── core/        # Cross-cutting infrastructure (Redis client, event stream, WS projections)
 │   │   ├── models/      # SQLAlchemy models
 │   │   ├── schemas/     # Pydantic request/response schemas
 │   │   ├── services/    # Business logic layer
@@ -260,7 +261,7 @@ npm run test:coverage
 - **Language**: Python 3.11+
 - **Database**: PostgreSQL 16
 - **ORM**: SQLAlchemy (async)
-- **Cache/Queue**: Redis
+- **Cache / Real-time**: Redis 7 (sessions + Redis Streams event pipeline)
 - **Auth**: JWT (python-jose + bcrypt)
 - **Testing**: pytest + pytest-asyncio + httpx
 
@@ -298,6 +299,31 @@ npm run test:coverage
 | DELETE | `/api/staff/{id}` | Yes | Remove staff |
 | GET | `/api/analytics/business/{id}` | Yes | Business dashboard stats |
 | GET | `/api/analytics/customer/me` | Yes | Customer dashboard stats |
+| GET | `/api/analytics/business/{id}/kpis` | Yes | Operational KPIs (reservations/ordering/inventory, 30d) — insights module required |
+| GET | `/api/analytics/business/{id}/high-risk` | Yes | Upcoming high-risk reservations from ML predictions — insights module required |
+| POST | `/api/queue/{id}/join` | No | Join walk-in queue |
+| POST | `/api/queue/{id}/leave` | No | Leave queue (session token) |
+| GET | `/api/queue/{id}/status` | No | Queue position + wait estimate |
+| GET | `/api/queue/{id}/entries` | Yes | List active queue entries (staff) |
+| POST | `/api/queue/{id}/entries/{eid}/notify` | Yes | Call a party (SMS + status → called) |
+| POST | `/api/queue/{id}/entries/{eid}/accept` | Yes | Seat a party directly |
+| POST | `/api/queue/{id}/entries/{eid}/seat` | Yes | Confirm seating after call |
+| DELETE | `/api/queue/{id}/entries/{eid}` | Yes | Remove queue entry |
+| WS | `/ws/queue/{id}` | Token | Live queue board (staff) |
+| GET | `/api/ordering/{id}/menu` | No | Public menu |
+| GET | `/api/ordering/{id}/settings` | No | Ordering on/off status |
+| POST | `/api/ordering/{id}/orders` | No | Place order (idempotent) |
+| GET | `/api/ordering/{id}/orders` | Yes | List orders (staff) |
+| PATCH | `/api/ordering/{id}/orders/{oid}/status` | Yes | Update order status |
+| GET/POST/PATCH/DELETE | `/api/ordering/{id}/menus/...` | Yes | Menu/category/item/modifier CRUD |
+| GET | `/api/inventory/{id}/items` | Yes | List inventory items |
+| POST | `/api/inventory/{id}/items` | Yes | Create inventory item |
+| PATCH | `/api/inventory/{id}/items/{iid}` | Yes | Update inventory item |
+| DELETE | `/api/inventory/{id}/items/{iid}` | Yes | Delete inventory item |
+| GET | `/api/inventory/{id}/low-stock` | Yes | Items below par level |
+| POST | `/api/inventory/{id}/items/{iid}/movements` | Yes | Record stock movement |
+| GET | `/api/inventory/{id}/items/{iid}/movements` | Yes | Movement history |
+| WS | `/ws/orders/{id}` | Token | Live kitchen/bar ticket board |
 
 ## License
 

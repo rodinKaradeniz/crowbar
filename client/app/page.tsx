@@ -4,19 +4,20 @@ import {
   GalleryVerticalEnd,
   ArrowRight,
   Calendar,
-  Users,
-  Clock,
-  Bell,
-  Settings,
   BarChart3,
   ShoppingCart,
   Package,
   Users2,
+  CheckCircle2,
+  Zap,
+  TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NewsletterForm } from "@/components/newsletter-form";
 import { ContactDialog } from "@/components/contact-dialog";
 import { BusinessesCarouselSection } from "@/components/businesses-carousel-section";
+import { LandingNavbar } from "@/components/landing-navbar";
+import { PricingModal } from "@/components/pricing-modal";
 import { fetchBusinesses } from "@/lib/api";
 
 const bgCollage = [
@@ -53,26 +54,95 @@ const bgCollage = [
   {
     src: "/website-img-7.jpg",
     alt: "Business 7",
-    className: "relative col-start-2 col-span-1 row-start-2 row-span-1",
-  },
-  {
-    src: "/business8.jpg",
-    alt: "Business 8",
     className: "relative col-start-4 col-span-1 row-start-2 row-span-2",
   },
+];
+
+const modules = [
   {
-    src: "/business9.jpg",
-    alt: "Business 9",
-    className: "relative col-span-1 row-span-1",
+    icon: Calendar,
+    name: "Reservations",
+    description: "Online booking with calendar sync, reminders, and a public booking page.",
+    highlights: [
+      "Unlimited bookings",
+      "Google Calendar sync",
+      "SMS & email reminders",
+      "Public booking page + embeddable widget",
+    ],
+  },
+  {
+    icon: Users2,
+    name: "Queue",
+    description: "Replace the clipboard. Customers join a digital waitlist via QR code.",
+    highlights: [
+      "QR code entry — no app required",
+      "Real-time staff board",
+      "SMS notification on call",
+      "WebSocket live updates",
+    ],
+  },
+  {
+    icon: ShoppingCart,
+    name: "Ordering",
+    description: "QR-based self-ordering from the table, straight to the kitchen.",
+    highlights: [
+      "QR menu & self-ordering",
+      "Kitchen & bar ticket board",
+      "Real-time order status",
+      "On/off toggle per service",
+    ],
+  },
+  {
+    icon: Package,
+    name: "Inventory",
+    description: "Track stock levels, record movements, and get alerted before you run out.",
+    highlights: [
+      "Stock tracking & movements",
+      "Receive, adjust, waste logging",
+      "Par-level low-stock alerts",
+      "Cost per unit tracking",
+    ],
+  },
+  {
+    icon: BarChart3,
+    name: "Insights",
+    description: "ML-powered analytics surfaced right in your dashboard.",
+    highlights: [
+      "7-day demand forecast",
+      "Customer segmentation",
+      "Cancellation risk prediction",
+      "Operational KPIs",
+    ],
+  },
+];
+
+const whyPoints = [
+  {
+    icon: Zap,
+    title: "Setup in minutes",
+    body: "Get a live booking page, configure your hours, and start accepting reservations today.",
+  },
+  {
+    icon: Package,
+    title: "Replace 5 tools",
+    body: "One subscription covers reservations, queues, ordering, inventory, and analytics.",
+  },
+  {
+    icon: TrendingUp,
+    title: "Grow with confidence",
+    body: "ML forecasting tells you when to staff up before the rush hits.",
   },
 ];
 
 export default async function Home() {
   const businesses = await fetchBusinesses();
+
   return (
     <div className="flex flex-col bg-background">
+      <LandingNavbar />
+
       {/* Hero Section */}
-      <section className="relative h-svh flex items-center overflow-hidden bg-neutral-950">
+      <section className="relative h-svh flex items-end overflow-hidden bg-neutral-950 pt-14">
         {/* Background Image Collage */}
         <div className="absolute inset-0 grid grid-rows-3 grid-cols-4 gap-2 p-2 brightness-30 bg-neutral-950">
           {bgCollage.map((bg, index) => (
@@ -86,225 +156,145 @@ export default async function Home() {
         </div>
 
         {/* Foreground Content */}
-        <div className="relative z-10 size-full">
-          <div className="absolute bottom-[10%] left-[5%]">
-            <p className="text-lg text-white mb-8 max-w-xl">
-              The all-in-one business operations platform
-            </p>
-            <h1 className="page-title-xl mb-6 text-white">
-              Slotera
-            </h1>
-          </div>
-
-          <div className="absolute top-[40%] right-[10%] flex flex-col items-end text-right">
-            <p className="text-lg text-white mb-8 max-w-xl">
-              The all-in-one platform for businesses and customers to manage
-              reservations effortlessly. From booking to scheduling, we make it
-              simple.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Button asChild size="lg" className="w-full sm:w-auto">
-                <Link href="/auth" className="flex items-center gap-2">
-                  Get Started
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
+        <div className="relative z-10 w-full px-6 pb-16 md:px-12 lg:px-20 max-w-3xl">
+          <p className="text-sm font-medium text-primary mb-3 uppercase tracking-widest">
+            All-in-one venue operations
+          </p>
+          <h1 className="page-title-xl mb-6 text-white leading-tight">
+            Run your entire venue from one platform.
+          </h1>
+          <p className="text-lg text-white/70 mb-10 max-w-xl">
+            Reservations, queues, ordering, inventory, and insights — all
+            connected. Start in minutes.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <Button asChild size="lg">
+              <Link href="/auth/register" className="flex items-center gap-2">
+                Start free trial
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+            <PricingModal>
+              <Button
+                variant="outline"
+                size="lg"
+                className="bg-transparent text-white border-white/30 hover:bg-white/10 hover:text-white"
+              >
+                See pricing
               </Button>
-              <ContactDialog>
-                <Button
-                  variant="outline"
-                  size="lg"
-                  className="w-full sm:w-auto"
-                >
-                  Contact Us
-                </Button>
-              </ContactDialog>
-            </div>
+            </PricingModal>
           </div>
         </div>
       </section>
 
-      {/* Feature Section 1 - Businesses */}
-      <section className="flex min-h-[80vh] w-full">
-        <div className="relative hidden w-1/2 items-center justify-center bg-muted lg:flex">
-          <div className="relative h-full w-full">
-            <Image
-              src="/website-img-1.jpg"
-              alt="Business management"
-              fill
-              className="object-cover"
-            />
-          </div>
-        </div>
-        <div className="flex w-full flex-col gap-4 p-6 md:w-1/2 md:p-10 lg:p-16 items-center justify-center">
-          <div className="w-full max-w-md">
-            <h2 className="page-title-lg mb-4">Powerful Tools for Businesses</h2>
-            <p className="text-muted-foreground mb-8">
-              Manage your reservations with ease. Accept or reject requests,
-              view your schedule at a glance, and keep track of all your
-              customers—all from one intuitive dashboard.
-            </p>
-            <div className="space-y-4">
-              <div className="flex items-start gap-3">
-                <Calendar className="h-5 w-5 text-primary mt-0.5 shrink-0" />
-                <div>
-                  <h3 className="font-semibold mb-1">Schedule Management</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Visual timeline view of all reservations organized by table
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <Bell className="h-5 w-5 text-primary mt-0.5 shrink-0" />
-                <div>
-                  <h3 className="font-semibold mb-1">Request Management</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Review and respond to pending reservation requests quickly
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <Users className="h-5 w-5 text-primary mt-0.5 shrink-0" />
-                <div>
-                  <h3 className="font-semibold mb-1">Customer Insights</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Track all people who have made reservations with detailed
-                    history
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="mt-8">
-              <Button asChild variant="outline" size="lg">
-                <Link href="/for-businesses" className="flex items-center gap-2">
-                  Learn More for Businesses
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Feature Section 2 - Customers */}
-      <section className="flex min-h-[80vh] w-full">
-        <div className="flex w-full flex-col gap-4 p-6 md:w-1/2 md:p-10 lg:p-16 items-center justify-center order-2 lg:order-1">
-          <div className="w-full max-w-md">
-            <h2 className="page-title-lg mb-4">
-              Seamless Booking for Customers
-            </h2>
-            <p className="text-muted-foreground mb-8">
-              Book your reservations in minutes. View your upcoming
-              reservations, receive updates on special events and deals, and
-              manage everything from one place.
-            </p>
-            <div className="space-y-4">
-              <div className="flex items-start gap-3">
-                <Calendar className="h-5 w-5 text-primary mt-0.5 shrink-0" />
-                <div>
-                  <h3 className="font-semibold mb-1">Easy Booking</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Simple, step-by-step reservation process with instant
-                    confirmation
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <Bell className="h-5 w-5 text-primary mt-0.5 shrink-0" />
-                <div>
-                  <h3 className="font-semibold mb-1">Stay Updated</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Get notified about events, happy hours, and special deals
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <Settings className="h-5 w-5 text-primary mt-0.5 shrink-0" />
-                <div>
-                  <h3 className="font-semibold mb-1">Manage Reservations</h3>
-                  <p className="text-sm text-muted-foreground">
-                    View, update, or cancel your reservations anytime
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="mt-8">
-              <Button asChild variant="outline" size="lg">
-                <Link href="/for-customers" className="flex items-center gap-2">
-                  Learn More for Customers
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-            </div>
-          </div>
-        </div>
-        <div className="relative hidden w-1/2 items-center justify-center bg-muted lg:flex order-1 lg:order-2">
-          <div className="relative h-full w-full">
-            <Image
-              src="/website-img-2.jpg"
-              alt="Customer booking"
-              fill
-              className="object-cover"
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* Businesses Carousel Section */}
+      {/* Businesses Carousel — social proof */}
       <section className="py-16 md:py-24 bg-muted/30">
         <div className="container mx-auto px-6">
           <div className="max-w-3xl mx-auto text-center mb-12">
-            <h2 className="page-title-lg mb-4">Our Partner Businesses</h2>
+            <h2 className="page-title-lg mb-4">Trusted by businesses like these</h2>
             <p className="text-lg text-muted-foreground">
-              Discover amazing businesses that trust us with their reservations.
-              From cozy cafes to professional consultants, find the perfect match for your
-              next appointment.
+              Venues across industries use Crowbar to manage their daily
+              operations, from reservations to real-time orders.
             </p>
           </div>
           <BusinessesCarouselSection businesses={businesses} />
         </div>
       </section>
 
-      {/* Platform Modules Section */}
+      {/* Module Feature Grid */}
       <section className="py-16 md:py-24">
         <div className="container mx-auto px-6">
           <div className="max-w-3xl mx-auto text-center mb-12">
-            <h2 className="page-title-lg mb-4">One platform, every module you need</h2>
+            <h2 className="page-title-lg mb-4">One platform, every module you need.</h2>
             <p className="text-lg text-muted-foreground">
-              Start with reservations and unlock more as your business grows.
-              Each module is built to work seamlessly together.
+              Every tool your venue needs, working together. No patchwork of
+              apps.
             </p>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 max-w-5xl mx-auto">
-            {[
-              { icon: Calendar, name: "Reservations", available: true },
-              { icon: BarChart3, name: "Insights", available: false },
-              { icon: Users2, name: "Queue", available: false },
-              { icon: ShoppingCart, name: "Ordering", available: false },
-              { icon: Package, name: "Inventory", available: false },
-            ].map((mod) => {
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 max-w-6xl mx-auto">
+            {modules.map((mod) => {
               const Icon = mod.icon;
               return (
                 <div
                   key={mod.name}
-                  className={`rounded-xl border p-5 flex flex-col items-center gap-3 text-center ${
-                    mod.available ? "bg-card shadow-sm" : "bg-muted/30 opacity-60"
-                  }`}
+                  className="rounded-xl border bg-card shadow-sm p-5 flex flex-col gap-3"
                 >
-                  <div className={`p-2.5 rounded-lg ${mod.available ? "bg-primary/10" : "bg-muted"}`}>
-                    <Icon className={`w-5 h-5 ${mod.available ? "text-primary" : "text-muted-foreground"}`} />
+                  <div className="p-2.5 rounded-lg bg-primary/10 w-fit">
+                    <Icon className="w-5 h-5 text-primary" />
                   </div>
-                  <span className="text-sm font-medium">{mod.name}</span>
-                  {!mod.available && (
-                    <span className="text-xs text-muted-foreground">Coming soon</span>
-                  )}
+                  <div>
+                    <h3 className="font-semibold mb-1">{mod.name}</h3>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      {mod.description}
+                    </p>
+                  </div>
+                  <ul className="flex flex-col gap-1.5 mt-auto">
+                    {mod.highlights.map((h) => (
+                      <li key={h} className="flex items-start gap-1.5 text-xs">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 mt-0.5 shrink-0" />
+                        {h}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               );
             })}
           </div>
-          <div className="text-center mt-8">
-            <Link href="/pricing" className="text-sm text-primary hover:underline font-medium">
-              View pricing and modules →
-            </Link>
+
+          <div className="text-center mt-10">
+            <PricingModal>
+              <button className="text-sm text-primary hover:underline font-medium">
+                View pricing →
+              </button>
+            </PricingModal>
+          </div>
+        </div>
+      </section>
+
+      {/* Why Slotera */}
+      <section className="py-16 md:py-20 bg-muted/30">
+        <div className="container mx-auto px-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+            {whyPoints.map(({ icon: Icon, title, body }) => (
+              <div key={title} className="flex flex-col gap-3">
+                <div className="p-2.5 rounded-lg bg-primary/10 w-fit">
+                  <Icon className="w-5 h-5 text-primary" />
+                </div>
+                <h3 className="font-semibold">{title}</h3>
+                <p className="text-sm text-muted-foreground">{body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="py-24 bg-neutral-950 text-white">
+        <div className="container mx-auto px-6 text-center">
+          <h2 className="page-title-lg mb-4 text-white">
+            Ready to streamline your operations?
+          </h2>
+          <p className="text-white/60 mb-10 max-w-xl mx-auto text-lg">
+            Join businesses already using Crowbar to run smoother services,
+            reduce no-shows, and delight their customers.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button asChild size="lg">
+              <Link href="/auth/register" className="flex items-center gap-2">
+                Start free trial
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+            <ContactDialog>
+              <Button
+                variant="outline"
+                size="lg"
+                className="bg-transparent text-white border-white/30 hover:bg-white/10 hover:text-white"
+              >
+                Talk to us
+              </Button>
+            </ContactDialog>
           </div>
         </div>
       </section>
@@ -313,28 +303,28 @@ export default async function Home() {
       <footer className="bg-muted border-t">
         <div className="container mx-auto px-6 py-12">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-8">
-            {/* About Section */}
+            {/* About */}
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <div className="bg-primary text-primary-foreground flex size-6 items-center justify-center rounded-md">
                   <GalleryVerticalEnd className="size-4" />
                 </div>
-                <span className="font-semibold">Slotera</span>
+                <span className="font-semibold">Crowbar</span>
               </div>
-              <h3 className="font-semibold mb-2">Making Reservations Simple</h3>
               <p className="text-sm text-muted-foreground">
-                We connect businesses and customers through an intuitive platform
-                that simplifies the entire reservation process.
+                The all-in-one platform for venue operations. Reservations,
+                queues, ordering, inventory, and insights — built to work
+                together.
               </p>
             </div>
 
-            {/* Newsletter Section */}
+            {/* Newsletter */}
             <div>
               <h3 className="font-semibold mb-4">Stay Updated</h3>
               <NewsletterForm />
             </div>
 
-            {/* Contact Section */}
+            {/* Contact */}
             <div>
               <h3 className="font-semibold mb-4">Get in Touch</h3>
               <p className="text-sm text-muted-foreground mb-4">
@@ -347,15 +337,15 @@ export default async function Home() {
               </ContactDialog>
             </div>
           </div>
-          
-          {/* Disclaimer */}
+
+          {/* Demo disclaimer */}
           <div className="pt-6 pb-4 border-t text-center text-sm text-muted-foreground">
-            <p className="mb-2">
-              <strong>Demo Notice:</strong> All data displayed on this platform is mock data for demonstration purposes only. 
-              Images are sourced from{" "}
-              <a 
-                href="https://unsplash.com/" 
-                target="_blank" 
+            <p>
+              <strong>Demo Notice:</strong> All data displayed is mock data for
+              demonstration purposes. Images from{" "}
+              <a
+                href="https://unsplash.com/"
+                target="_blank"
                 rel="noopener noreferrer"
                 className="underline hover:text-foreground transition-colors"
               >
@@ -364,14 +354,9 @@ export default async function Home() {
               .
             </p>
           </div>
-          
-          <div className="pt-4 border-t flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-muted-foreground">
-            <p>&copy; {new Date().getFullYear()} Slotera. All rights reserved.</p>
-            <div className="flex items-center gap-4">
-              <Link href="/pricing" className="hover:text-foreground transition-colors">Pricing</Link>
-              <Link href="/for-businesses" className="hover:text-foreground transition-colors">For Businesses</Link>
-              <Link href="/for-customers" className="hover:text-foreground transition-colors">For Customers</Link>
-            </div>
+
+          <div className="pt-4 border-t text-center text-sm text-muted-foreground">
+            <p>&copy; {new Date().getFullYear()} Crowbar. All rights reserved.</p>
           </div>
         </div>
       </footer>

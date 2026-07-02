@@ -1,6 +1,7 @@
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { BusinessSidebar } from "@/components/business-sidebar";
 import { DashboardLayoutWrapper } from "@/components/dashboard-layout-wrapper";
+import { DashboardErrorBoundary } from "@/components/dashboard-error-boundary";
 import { getCurrentUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
@@ -28,7 +29,9 @@ export default async function BusinessLayout({
       <BusinessSidebar />
       <SidebarInset>
         <DashboardLayoutWrapper variant="business">
-          <main className="flex-1 overflow-auto">{children}</main>
+          <DashboardErrorBoundary>
+            <main className="flex-1 overflow-auto">{children}</main>
+          </DashboardErrorBoundary>
         </DashboardLayoutWrapper>
       </SidebarInset>
     </SidebarProvider>

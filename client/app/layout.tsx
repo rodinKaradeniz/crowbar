@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Slotera",
+  title: "Crowbar",
   description: "Reservation management for businesses and customers",
 };
 

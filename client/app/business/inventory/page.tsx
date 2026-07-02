@@ -2,6 +2,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { fetchBusiness } from "@/lib/api";
 import { redirect } from "next/navigation";
 import { InventoryManagementClient } from "./inventory-management-client";
+import { ModuleDisabled } from "@/components/module-disabled";
+import { hasModule, MODULE_KEYS } from "@/lib/modules";
 
 export default async function InventoryPage() {
   const user = await getCurrentUser();
@@ -13,6 +15,10 @@ export default async function InventoryPage() {
   const business = await fetchBusiness(user.businessId);
   if (!business) {
     redirect("/auth/login");
+  }
+
+  if (!hasModule(business.enabledModules ?? [], MODULE_KEYS.INVENTORY)) {
+    return <ModuleDisabled moduleName="Inventory" />;
   }
 
   return <InventoryManagementClient businessId={business.id} />;

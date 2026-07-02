@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Users,
   Clock,
@@ -25,6 +25,7 @@ import { useQueueSocket } from "@/hooks/use-queue-socket";
 import type { QueueEntry } from "@/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 
 function timeAgo(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -187,6 +188,7 @@ export function QueueBoardClient({
   const [entries, setEntries] = useState<QueueEntry[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [noShowTarget, setNoShowTarget] = useState<QueueEntry | null>(null);
 
   const { connected } = useQueueSocket(businessId, (updated) => {
     setEntries(updated);
@@ -238,7 +240,11 @@ export function QueueBoardClient({
     }
   };
 
-  const handleRemove = async (entry: QueueEntry) => {
+  const handleRemove = (entry: QueueEntry) => {
+    setNoShowTarget(entry);
+  };
+
+  const confirmRemove = async (entry: QueueEntry) => {
     setEntries((prev) => prev.filter((e) => e.id !== entry.id));
     try {
       await clientRemoveQueueEntry(businessId, entry.id);
@@ -351,12 +357,25 @@ export function QueueBoardClient({
               <CalledEntryCard
                 entry={entry}
                 onSeat={() => void handleSeat(entry)}
-                onRemove={() => void handleRemove(entry)}
+                onRemove={() => handleRemove(entry)}
               />
             )}
           </QueueColumn>
         </div>
       )}
+
+      <ConfirmationDialog
+        open={noShowTarget !== null}
+        onOpenChange={(open) => !open && setNoShowTarget(null)}
+        title="Mark as No-show"
+        description={`This will remove ${noShowTarget?.name ?? "this party"}'s party of ${noShowTarget?.partySize ?? 1} from the queue.`}
+        confirmLabel="Mark No-show"
+        variant="destructive"
+        onConfirm={() => {
+          if (noShowTarget) void confirmRemove(noShowTarget);
+          setNoShowTarget(null);
+        }}
+      />
     </div>
   );
 }

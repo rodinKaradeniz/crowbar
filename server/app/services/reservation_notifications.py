@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,21 +22,14 @@ class ReservationSnapshot:
     time: datetime
     service_type_id: UUID
     guests: int
-    payment_status: str | None
-    payment_amount: float | None
 
     @staticmethod
     def from_model(r: Reservation) -> "ReservationSnapshot":
-        amt = r.payment_amount
-        if isinstance(amt, Decimal):
-            amt = float(amt)
         return ReservationSnapshot(
             status=r.status,
             time=r.time,
             service_type_id=r.service_type_id,
             guests=r.guests,
-            payment_status=r.payment_status,
-            payment_amount=float(amt) if amt is not None else None,
         )
 
 
@@ -47,8 +39,6 @@ _MATERIAL_PATCH_KEYS = frozenset(
         "time",
         "service_type_id",
         "guests",
-        "payment_status",
-        "payment_amount",
         "note",
         "phone",
         "email",
@@ -116,28 +106,6 @@ async def notify_after_reservation_create(
     )
 
 
-def _customer_patch_kind(
-    old: ReservationSnapshot, new: Reservation
-) -> tuple[str, str, str]:
-    if new.status == "cancelled" and old.status != "cancelled":
-        return (
-            nconst.CUSTOMER_RESERVATION_CANCELLED,
-            "Reservation cancelled",
-            f"Your booking for {_fmt_time(new.time)} was cancelled.",
-        )
-    if old.status == "pending" and new.status == "confirmed":
-        return (
-            nconst.CUSTOMER_RESERVATION_CONFIRMED,
-            "Reservation confirmed",
-            f"Your booking for {_fmt_time(new.time)} is confirmed.",
-        )
-    return (
-        nconst.CUSTOMER_RESERVATION_UPDATED,
-        "Reservation updated",
-        f"Your booking for {_fmt_time(new.time)} was updated.",
-    )
-
-
 def _staff_patch_kind(old: ReservationSnapshot, new: Reservation) -> tuple[str, str, str]:
     if new.status == "cancelled" and old.status != "cancelled":
         return (
@@ -176,27 +144,19 @@ async def notify_after_reservation_patch(
         exclude_user_id=exclude,
     )
 
-    if actor.user_type != "staff":
-        return
-
-    cust_kind, cust_title, cust_body = _customer_patch_kind(old, new)
-    await notification_service.notify_user(
-        db,
-        user_id=new.customer_id,
-        business_id=new.business_id,
-        kind=cust_kind,
-        title=cust_title,
-        body=cust_body,
-        payload={"reservation_id": str(new.id)},
-    )
-
-    # SMS: notify customer if business has SMS channel enabled
-    if new.business:
+    # SMS: ping the customer when staff confirm/cancel/update their booking.
+    if actor.user_type == "staff" and new.business:
+        if new.status == "cancelled" and old.status != "cancelled":
+            sms_body = f"Your booking for {_fmt_time(new.time)} was cancelled."
+        elif old.status == "pending" and new.status == "confirmed":
+            sms_body = f"Your booking for {_fmt_time(new.time)} is confirmed."
+        else:
+            sms_body = f"Your booking for {_fmt_time(new.time)} was updated."
         channels = new.business.notification_channels or []
         notification_service.send_sms_if_enabled(
             channels,
             new.phone,
-            f"Slotera: {cust_body}",
+            f"Slotera: {sms_body}",
         )
 
 
@@ -217,13 +177,10 @@ async def notify_after_reservation_delete(
         exclude_user_id=exclude,
     )
 
-    if actor.user_type == "staff" and reservation.customer_id != actor.id:
-        await notification_service.notify_user(
-            db,
-            user_id=reservation.customer_id,
-            business_id=reservation.business_id,
-            kind=nconst.CUSTOMER_RESERVATION_CANCELLED,
-            title="Reservation cancelled",
-            body=f"Your booking for {_fmt_time(reservation.time)} was cancelled.",
-            payload={"reservation_id": str(reservation.id)},
+    if actor.user_type == "staff" and reservation.business:
+        channels = reservation.business.notification_channels or []
+        notification_service.send_sms_if_enabled(
+            channels,
+            reservation.phone,
+            f"Slotera: Your booking for {_fmt_time(reservation.time)} was cancelled.",
         )

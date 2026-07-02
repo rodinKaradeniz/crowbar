@@ -10,7 +10,6 @@ import {
   Settings,
   LogOut,
   Bell,
-  Users,
   Clock,
   Tag,
   ChevronRight,
@@ -25,6 +24,10 @@ import {
   ChefHat,
   ClipboardList,
   Package,
+  Puzzle,
+  ListOrdered,
+  Receipt,
+  Users,
 } from "lucide-react";
 import {
   SidebarContent,
@@ -50,6 +53,7 @@ import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/hooks/use-auth";
 import { useMounted } from "@/hooks/use-mounted";
 import { clientGetBusiness, clientGetQueueActiveCount } from "@/lib/client-api";
+import { hasModule as _hasModule, ModuleKey } from "@/lib/modules";
 import { useEffect, useRef, useState } from "react";
 import { Business } from "@/types";
 
@@ -62,7 +66,8 @@ function BusinessSidebarContentInner() {
   const { user, meContext, logout } = useAuth();
 
   // Default to showing all items while meContext is still loading
-  const hasModule = (m: string) => !meContext || meContext.enabledModules.includes(m);
+  const hasModule = (m: ModuleKey) =>
+    !meContext || _hasModule(meContext.enabledModules, m);
   const [business, setBusiness] = useState<Business | null>(null);
   const [queueCount, setQueueCount] = useState<number | null>(null);
   const queuePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -98,13 +103,6 @@ function BusinessSidebarContentInner() {
     router.push("/auth/login");
   };
 
-  const operationsItems = [
-    { title: "Reservations", url: "/business/reservations", icon: Calendar },
-    { title: "Requests", url: "/business/requests", icon: Bell },
-    { title: "Schedule", url: "/business/schedule", icon: Clock },
-    { title: "Customers", url: "/business/customers", icon: UserCircle },
-  ];
-
   const businessSubItems = [
     { title: "Info", url: "/business/profile/info", icon: Info },
     { title: "Booking", url: "/business/profile/booking", icon: CalendarCog },
@@ -115,6 +113,7 @@ function BusinessSidebarContentInner() {
   const settingsSubItems = [
     { title: "Profile", url: "/business/settings/profile", icon: User },
     { title: "Account", url: "/business/settings/account", icon: ShieldCheck },
+    { title: "Modules", url: "/business/settings/modules", icon: Puzzle },
     { title: "Widget", url: "/business/settings/widget", icon: Code2 },
   ];
 
@@ -175,9 +174,39 @@ function BusinessSidebarContentInner() {
           </SidebarGroupContent>
         </SidebarGroup>
 
+        {/* Reservations — guarded by "reservations" module */}
+        {hasModule("reservations") && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Reservations</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {[
+                  { title: "Reservations", url: "/business/reservations", icon: Calendar },
+                  { title: "Requests", url: "/business/requests", icon: Bell },
+                  { title: "Schedule", url: "/business/schedule", icon: Clock },
+                ].map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={pathname === item.url}
+                      tooltip={item.title}
+                    >
+                      <Link href={item.url}>
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
         {/* Queue — guarded by "queue" module */}
         {hasModule("queue") && (
           <SidebarGroup>
+            <SidebarGroupLabel>Queue</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
@@ -187,7 +216,7 @@ function BusinessSidebarContentInner() {
                     tooltip="Queue"
                   >
                     <Link href="/business/queue">
-                      <Users />
+                      <ListOrdered />
                       <span>Queue</span>
                       {queueCount !== null && queueCount > 0 && (
                         <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
@@ -217,6 +246,18 @@ function BusinessSidebarContentInner() {
                     <Link href="/business/orders">
                       <ClipboardList />
                       <span>Orders</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === "/business/tabs"}
+                    tooltip="Tabs"
+                  >
+                    <Link href="/business/tabs">
+                      <Receipt />
+                      <span>Tabs</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -260,69 +301,32 @@ function BusinessSidebarContentInner() {
           </SidebarGroup>
         )}
 
-        {/* Operations — guarded by "reservations" module */}
-        {hasModule("reservations") && (
+        {/* Insights — guarded by "insights" module */}
+        {hasModule("insights") && (
           <SidebarGroup>
-            <SidebarGroupLabel>Operations</SidebarGroupLabel>
+            <SidebarGroupLabel>Insights</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {operationsItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={pathname === item.url}
-                      tooltip={item.title}
-                    >
-                      <Link href={item.url}>
-                        <item.icon />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === "/business/insights"}
+                    tooltip="Insights"
+                  >
+                    <Link href="/business/insights">
+                      <BrainCircuit />
+                      <span>Insights</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
         )}
 
-        {/* Analytics & Support */}
+        {/* Workspace — always visible */}
         <SidebarGroup>
-          <SidebarGroupLabel>Analytics & Support</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {hasModule("insights") && (
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={pathname === "/business/insights"}
-                  tooltip="Insights"
-                >
-                  <Link href="/business/insights">
-                    <BrainCircuit />
-                    <span>Insights</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              )}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={pathname.startsWith("/business/docs")}
-                  tooltip="Docs"
-                >
-                  <Link href="/business/docs">
-                    <BookOpen />
-                    <span>Docs</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {/* Management */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Management</SidebarGroupLabel>
+          <SidebarGroupLabel>Workspace</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
@@ -334,6 +338,32 @@ function BusinessSidebarContentInner() {
                   <Link href="/business/staff">
                     <Users />
                     <span>Staff</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname === "/business/customers"}
+                  tooltip="Customers"
+                >
+                  <Link href="/business/customers">
+                    <UserCircle />
+                    <span>Customers</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname.startsWith("/business/docs")}
+                  tooltip="Docs"
+                >
+                  <Link href="/business/docs">
+                    <BookOpen />
+                    <span>Docs</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

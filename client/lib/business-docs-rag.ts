@@ -90,7 +90,7 @@ export function retrieveTopK(
   return scored.slice(0, k);
 }
 
-const SYSTEM = `You are a help assistant for business users of the Slotera reservation platform.
+const SYSTEM = `You are a help assistant for business users of the Crowbar reservation platform.
 
 Output rules (always use GitHub-flavored Markdown):
 - Use **bold** for UI labels that appear in the app (e.g. **Requests**, **Profile**, **Types**).

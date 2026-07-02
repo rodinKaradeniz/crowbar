@@ -43,7 +43,6 @@ async def _create_service_type(
             "business_id": business_id,
             "name": "VIP Table",
             "capacity": 10,
-            "requires_payment": False,
             "color": "#ff0000",
         },
     )
@@ -93,99 +92,6 @@ class TestReservationLifecycle:
         assert data["status"] == "pending"
         assert data["guests"] == 4
         assert data["business_id"] == business_id
-
-    @pytest.mark.asyncio
-    async def test_update_reservation_status(self, client: AsyncClient):
-        owner_token, business_id = await _create_business_owner(client)
-        service_type_id = await _create_service_type(client, owner_token, business_id)
-        customer_token = await _register_customer(client)
-        cust_headers = {"Authorization": f"Bearer {customer_token}"}
-
-        # Create
-        create_resp = await client.post(
-            "/api/reservations",
-            headers=cust_headers,
-            json={
-                "business_id": business_id,
-                "service_type_id": service_type_id,
-                "time": "2026-03-15T20:00:00",
-                "phone": "+31612345678",
-                "email": "customer@test.com",
-                "guests": 2,
-            },
-        )
-        reservation_id = create_resp.json()["id"]
-
-        # Update status to confirmed
-        update_resp = await client.patch(
-            f"/api/reservations/{reservation_id}",
-            headers=cust_headers,
-            json={"status": "confirmed"},
-        )
-        assert update_resp.status_code == 200
-        assert update_resp.json()["status"] == "confirmed"
-
-    @pytest.mark.asyncio
-    async def test_delete_reservation(self, client: AsyncClient):
-        owner_token, business_id = await _create_business_owner(client)
-        service_type_id = await _create_service_type(client, owner_token, business_id)
-        customer_token = await _register_customer(client)
-        cust_headers = {"Authorization": f"Bearer {customer_token}"}
-
-        # Create
-        create_resp = await client.post(
-            "/api/reservations",
-            headers=cust_headers,
-            json={
-                "business_id": business_id,
-                "service_type_id": service_type_id,
-                "time": "2026-03-15T21:00:00",
-                "phone": "+31612345678",
-                "email": "customer@test.com",
-                "guests": 1,
-            },
-        )
-        reservation_id = create_resp.json()["id"]
-
-        # Delete
-        del_resp = await client.delete(
-            f"/api/reservations/{reservation_id}",
-            headers=cust_headers,
-        )
-        assert del_resp.status_code == 204
-
-        # Verify it's gone
-        get_resp = await client.get(
-            f"/api/reservations/{reservation_id}",
-            headers=cust_headers,
-        )
-        assert get_resp.status_code == 404
-
-    @pytest.mark.asyncio
-    async def test_list_my_reservations(self, client: AsyncClient):
-        owner_token, business_id = await _create_business_owner(client)
-        service_type_id = await _create_service_type(client, owner_token, business_id)
-        customer_token = await _register_customer(client)
-        cust_headers = {"Authorization": f"Bearer {customer_token}"}
-
-        # Create two reservations
-        for hour in [18, 19]:
-            await client.post(
-                "/api/reservations",
-                headers=cust_headers,
-                json={
-                    "business_id": business_id,
-                    "service_type_id": service_type_id,
-                    "time": f"2026-03-15T{hour}:00:00",
-                    "phone": "+31612345678",
-                    "email": "customer@test.com",
-                    "guests": 2,
-                },
-            )
-
-        resp = await client.get("/api/reservations/my", headers=cust_headers)
-        assert resp.status_code == 200
-        assert len(resp.json()) == 2
 
     @pytest.mark.asyncio
     async def test_list_business_reservations(self, client: AsyncClient):

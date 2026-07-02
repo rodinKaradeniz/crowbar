@@ -81,69 +81,38 @@ export default function BusinessScheduleClient({
     return slots;
   }, [operatingHours]);
 
-  const getEventPosition = (reservation: Reservation) => {
-    if (!operatingHours) return { top: 0, height: 0 };
+  // Pixel height per hour slot — must match .timeline-hour { height: 60px } in globals.css
+  const SLOT_HEIGHT = 60;
+  // Header height — must match div.h-12 spacer in the label column and .timeline-column-header
+  const HEADER_HEIGHT = 48;
+
+  const getEventPositionPx = (reservation: Reservation) => {
+    if (!operatingHours) return { topPx: 0, heightPx: SLOT_HEIGHT };
     const reservationDate = parseISO(reservation.time);
 
-    const reservationHour = reservationDate.getHours();
+    let reservationHour = reservationDate.getHours();
     const reservationMinutes = reservationDate.getMinutes();
 
-    const reservationTotalMinutes = reservationHour * 60 + reservationMinutes;
-    const openTotalMinutes = operatingHours.open * 60;
-    let closeTotalMinutes = operatingHours.close * 60;
-
-    if (operatingHours.close > 24) {
-      closeTotalMinutes = (operatingHours.close - 24) * 60 + 24 * 60;
-    } else if (operatingHours.close < operatingHours.open) {
-      closeTotalMinutes = operatingHours.close * 60 + 24 * 60;
+    // For overnight hours (e.g. midnight = hour 0 should map to 24 for a bar open until 2am)
+    if (reservationHour < operatingHours.open) {
+      reservationHour += 24;
     }
 
-    const totalOperatingMinutes = closeTotalMinutes - openTotalMinutes;
+    const minutesFromOpen =
+      (reservationHour - operatingHours.open) * 60 + reservationMinutes;
+    const totalOperatingMinutes = (operatingHours.close - operatingHours.open) * 60;
 
-    let minutesFromStart = reservationTotalMinutes - openTotalMinutes;
-
-    if (minutesFromStart < 0 && (operatingHours.close > 24 || operatingHours.close < operatingHours.open)) {
-      minutesFromStart += 24 * 60;
-    }
-
-    minutesFromStart = Math.max(0, Math.min(minutesFromStart, totalOperatingMinutes));
-
-    const topPercent = totalOperatingMinutes > 0 ? (minutesFromStart / totalOperatingMinutes) * 100 : 0;
-
-    const reservationDurationMinutes = business.reservationTime || 60;
-    const heightPercent = totalOperatingMinutes > 0
-      ? (reservationDurationMinutes / totalOperatingMinutes) * 100
-      : 0;
+    const clampedMinutes = Math.max(0, Math.min(minutesFromOpen, totalOperatingMinutes));
+    // Service type duration is the actual booked slot length; fall back to
+    // business.reservationTime (default booking slot) if the service type has none.
+    const serviceTypeDuration = serviceTypeMap.get(reservation.serviceTypeId)?.duration;
+    const reservationDurationMinutes = serviceTypeDuration ?? business.reservationTime ?? 60;
 
     return {
-      top: topPercent,
-      height: Math.max(heightPercent, 1),
+      topPx: clampedMinutes,
+      // Minimum 30px so very short slots remain readable; 60px/hr → 1px ≈ 1 minute
+      heightPx: Math.max(reservationDurationMinutes, 30),
     };
-  };
-
-  const getTimeMarkerPosition = (actualHour: number) => {
-    if (!operatingHours) return 0;
-
-    const hourTotalMinutes = actualHour * 60;
-    const openTotalMinutes = operatingHours.open * 60;
-    let closeTotalMinutes = operatingHours.close * 60;
-
-    if (operatingHours.close > 24) {
-      closeTotalMinutes = (operatingHours.close - 24) * 60 + 24 * 60;
-    } else if (operatingHours.close < operatingHours.open) {
-      closeTotalMinutes = operatingHours.close * 60 + 24 * 60;
-    }
-
-    const totalOperatingMinutes = closeTotalMinutes - openTotalMinutes;
-    let minutesFromStart = hourTotalMinutes - openTotalMinutes;
-
-    if (minutesFromStart < 0 && (operatingHours.close > 24 || operatingHours.close < operatingHours.open)) {
-      minutesFromStart += 24 * 60;
-    }
-
-    return totalOperatingMinutes > 0
-      ? (minutesFromStart / totalOperatingMinutes) * 100
-      : 0;
   };
 
   const getReservationsForServiceType = (serviceTypeId: string) => {
@@ -241,12 +210,19 @@ export default function BusinessScheduleClient({
           </div>
         ) : (
           <div className="flex gap-4">
-            {/* Time labels column */}
+            {/* Time labels column — each slot is SLOT_HEIGHT px, matching grid lines */}
             <div className="shrink-0 w-20">
-              <div className="h-12 border-b border-border" />
-              <div className="space-y-0">
-                {timeSlots.map((slot) => (
-                  <div key={slot.actualHour} className="timeline-hour">
+              <div className="border-b border-border" style={{ height: `${HEADER_HEIGHT}px` }} />
+              <div
+                className="relative"
+                style={{ height: `${timeSlots.length * SLOT_HEIGHT}px` }}
+              >
+                {timeSlots.map((slot, i) => (
+                  <div
+                    key={slot.actualHour}
+                    className="timeline-hour absolute left-0 right-0"
+                    style={{ top: `${i * SLOT_HEIGHT}px` }}
+                  >
                     <div className="timeline-hour-label">
                       {format(new Date().setHours(slot.displayHour, 0, 0, 0), "h:mm a")}
                     </div>
@@ -264,6 +240,7 @@ export default function BusinessScheduleClient({
               >
                 {serviceTypes.map((serviceType) => {
                   const serviceTypeReservations = getReservationsForServiceType(serviceType.id);
+                  const gridBodyHeight = timeSlots.length * SLOT_HEIGHT;
                   return (
                     <div key={serviceType.id} className="timeline-column">
                       <div className="timeline-column-header">
@@ -275,26 +252,19 @@ export default function BusinessScheduleClient({
 
                       <div
                         className="relative"
-                        style={{
-                          height: '100%',
-                          minHeight: `${timeSlots.length * 60}px`,
-                        }}
+                        style={{ height: `${gridBodyHeight}px` }}
                       >
-                        <div className="absolute inset-0">
-                          {timeSlots.map((slot) => {
-                            const positionPercent = getTimeMarkerPosition(slot.actualHour);
-                            return (
-                              <div
-                                key={`${slot.actualHour}`}
-                                className="absolute left-0 right-0 border-b border-border"
-                                style={{ top: `${positionPercent}%` }}
-                              />
-                            );
-                          })}
-                        </div>
+                        {/* Hour grid lines — one per slot at i * SLOT_HEIGHT */}
+                        {timeSlots.map((slot, i) => (
+                          <div
+                            key={`${slot.actualHour}`}
+                            className="absolute left-0 right-0 border-b border-border"
+                            style={{ top: `${i * SLOT_HEIGHT}px` }}
+                          />
+                        ))}
 
                         {serviceTypeReservations.map((reservation) => {
-                          const position = getEventPosition(reservation);
+                          const position = getEventPositionPx(reservation);
                           const reservationDate = parseISO(reservation.time);
                           const customerInfo = customerMap.get(reservation.customerId);
                           const reservationColor = serviceType.color || "#6b7280";
@@ -304,9 +274,8 @@ export default function BusinessScheduleClient({
                               key={reservation.id}
                               className="timeline-event cursor-pointer border-2"
                               style={{
-                                top: `${position.top}%`,
-                                height: `${Math.max(position.height, 4)}%`,
-                                minHeight: "60px",
+                                top: `${position.topPx}px`,
+                                height: `${position.heightPx}px`,
                                 left: "4px",
                                 right: "4px",
                                 backgroundColor: `${reservationColor}20`,

@@ -1,14 +1,12 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ErrorCode, forbidden, not_found
 from app.database import get_db
 from app.dependencies import get_current_business, get_current_user, require_roles
 from app.models.business import Business
-from app.models.google_oauth_token import GoogleOAuthToken
 from app.models.user import User
 from app.schemas.business import BusinessCreate, BusinessResponse, BusinessUpdate
 from app.services import business_service
@@ -93,17 +91,3 @@ async def complete_onboarding(
     return current_business
 
 
-@router.get("/{business_id}/google-connected")
-async def get_google_connected(
-    business_id: UUID,
-    db: AsyncSession = Depends(get_db),
-    current_business: Business = Depends(get_current_business),
-):
-    """Check if the business has Google Calendar connected."""
-    if current_business.id != business_id:
-        raise forbidden("Not authorized for this business")
-    result = await db.execute(
-        select(GoogleOAuthToken).where(GoogleOAuthToken.business_id == business_id)
-    )
-    token = result.scalar_one_or_none()
-    return {"connected": token is not None}

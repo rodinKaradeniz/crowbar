@@ -47,12 +47,11 @@ export async function middleware(request: NextRequest) {
   // Public route prefixes
   const publicRoutePrefixes = [
     "/auth",
+    "/invite",
     "/reserve",
     "/queue",
     "/menu",
     "/order",
-    "/for-businesses",
-    "/for-customers",
   ];
 
   const isPublicRoute = publicRoutePrefixes.some((route) =>
@@ -74,28 +73,6 @@ export async function middleware(request: NextRequest) {
     }
 
     if (user.type !== "staff") {
-      return NextResponse.redirect(new URL("/", request.url));
-    }
-
-    return NextResponse.next();
-  }
-
-  // Protect customer routes - require customer authentication
-  if (pathname.startsWith("/customer")) {
-    const user = getCurrentUserFromRequest(request);
-
-    if (!user) {
-      const loginUrl = new URL("/auth/login", request.url);
-      loginUrl.searchParams.set("redirect", pathname);
-      return NextResponse.redirect(loginUrl);
-    }
-
-    if (user.type !== "customer") {
-      if (user.type === "staff") {
-        return NextResponse.redirect(
-          new URL("/business/overview", request.url)
-        );
-      }
       return NextResponse.redirect(new URL("/", request.url));
     }
 

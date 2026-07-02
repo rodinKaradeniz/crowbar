@@ -36,15 +36,11 @@ async def create_service_type(
         description=data.description,
         capacity=data.capacity,
         max_concurrent_bookings=data.max_concurrent_bookings,
-        requires_payment=data.requires_payment,
-        amount=data.amount,
-        is_online=data.is_online,
         is_pending_enabled=data.is_pending_enabled,
         duration=data.duration,
         color=data.color,
         display_order=data.display_order,
         image=data.image,
-        form_fields=[f.model_dump() for f in data.form_fields] if data.form_fields else None,
     )
     db.add(service_type)
     await db.flush()

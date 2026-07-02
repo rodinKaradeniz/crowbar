@@ -17,11 +17,7 @@ class User(Base, UUIDMixin, TimestampMixin):
     staff_assignments: Mapped[list["Staff"]] = relationship(
         back_populates="user", lazy="selectin"
     )
-    reservations: Mapped[list["Reservation"]] = relationship(
-        back_populates="customer", lazy="selectin"
-    )
 
 
 # Avoid circular import issues
-from app.models.reservation import Reservation  # noqa: E402
 from app.models.staff import Staff  # noqa: E402

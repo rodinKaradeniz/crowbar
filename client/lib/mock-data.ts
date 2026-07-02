@@ -6,7 +6,7 @@
  */
 
 import { Business, ServiceType, Reservation } from "@/types";
-import type { UserResponse, StaffResponse, BusinessDashboardStats, CustomerDashboardStats } from "./api-client";
+import type { UserResponse, StaffResponse, BusinessDashboardStats } from "./api-client";
 
 // ─── Helper: relative dates so data always looks fresh ──────────────────────
 
@@ -136,8 +136,6 @@ export const mockServiceTypes: ServiceType[] = [
     name: "Table (4-person)",
     description: "Spacious table for up to 4 guests",
     capacity: 4,
-    requiresPayment: false,
-    isOnline: false,
     isPendingEnabled: true,
     color: "#3b82f6",
     displayOrder: 1,
@@ -150,8 +148,6 @@ export const mockServiceTypes: ServiceType[] = [
     name: "Table (2-person)",
     description: "Intimate table for 2 guests",
     capacity: 2,
-    requiresPayment: false,
-    isOnline: false,
     isPendingEnabled: true,
     color: "#3b82f6",
     displayOrder: 2,
@@ -164,8 +160,6 @@ export const mockServiceTypes: ServiceType[] = [
     name: "Bar Seat (1-person)",
     description: "Single seat at the bar",
     capacity: 1,
-    requiresPayment: false,
-    isOnline: false,
     isPendingEnabled: true,
     color: "#8b5cf6",
     displayOrder: 3,
@@ -178,8 +172,6 @@ export const mockServiceTypes: ServiceType[] = [
     name: "Bar Seat (2-person)",
     description: "Two seats together at the bar",
     capacity: 2,
-    requiresPayment: false,
-    isOnline: false,
     isPendingEnabled: true,
     color: "#8b5cf6",
     displayOrder: 4,
@@ -193,10 +185,7 @@ export const mockServiceTypes: ServiceType[] = [
     name: "Main Hall",
     description: "Large event space accommodating up to 50 guests",
     capacity: 50,
-    requiresPayment: true,
-    isOnline: false,
     isPendingEnabled: true,
-    amount: 500.0,
     color: "#10b981",
     displayOrder: 1,
     createdAt: "2024-01-20T10:00:00Z",
@@ -210,10 +199,7 @@ export const mockServiceTypes: ServiceType[] = [
     description: "Quick consultation session",
     capacity: 3,
     maxConcurrentBookings: 5,
-    requiresPayment: true,
-    isOnline: false,
     isPendingEnabled: true,
-    amount: 75.0,
     duration: 30,
     color: "#f59e0b",
     displayOrder: 1,
@@ -227,10 +213,7 @@ export const mockServiceTypes: ServiceType[] = [
     description: "Standard consultation session",
     capacity: 3,
     maxConcurrentBookings: 3,
-    requiresPayment: true,
-    isOnline: false,
     isPendingEnabled: true,
-    amount: 150.0,
     duration: 60,
     color: "#f59e0b",
     displayOrder: 2,
@@ -244,10 +227,7 @@ export const mockServiceTypes: ServiceType[] = [
     description: "Extended consultation session",
     capacity: 3,
     maxConcurrentBookings: 2,
-    requiresPayment: true,
-    isOnline: false,
     isPendingEnabled: true,
-    amount: 200.0,
     duration: 90,
     color: "#f59e0b",
     displayOrder: 3,
@@ -261,10 +241,7 @@ export const mockServiceTypes: ServiceType[] = [
     name: "Individual Therapy",
     description: "One-on-one therapy session",
     capacity: 1,
-    requiresPayment: true,
-    isOnline: false,
     isPendingEnabled: true,
-    amount: 120.0,
     duration: 60,
     color: "#06b6d4",
     displayOrder: 1,
@@ -277,10 +254,7 @@ export const mockServiceTypes: ServiceType[] = [
     name: "Couples Therapy",
     description: "Therapy session for couples",
     capacity: 2,
-    requiresPayment: true,
-    isOnline: false,
     isPendingEnabled: true,
-    amount: 180.0,
     duration: 90,
     color: "#a855f7",
     displayOrder: 2,
@@ -483,8 +457,6 @@ export const mockReservations: Reservation[] = [
     note: "Financial planning session",
     status: "confirmed",
     guests: 1,
-    paymentAmount: 150.0,
-    paymentStatus: "paid",
     createdAt: daysFromNow(-6, 10),
     updatedAt: daysFromNow(-6, 10),
   },
@@ -498,8 +470,6 @@ export const mockReservations: Reservation[] = [
     email: "john.doe@example.com",
     status: "confirmed",
     guests: 1,
-    paymentAmount: 120.0,
-    paymentStatus: "paid",
     createdAt: daysFromNow(-5, 10),
     updatedAt: daysFromNow(-5, 10),
   },
@@ -685,27 +655,3 @@ export function getMockBusinessDashboardStats(businessId: string): BusinessDashb
   };
 }
 
-export function getMockCustomerDashboardStats(customerId: string): CustomerDashboardStats {
-  const customerReservations = mockReservations.filter((r) => r.customerId === customerId);
-
-  return {
-    total_reservations: customerReservations.length,
-    status_breakdown: {
-      confirmed: customerReservations.filter((r) => r.status === "confirmed").length,
-      pending: customerReservations.filter((r) => r.status === "pending").length,
-      cancelled: customerReservations.filter((r) => r.status === "cancelled").length,
-      completed: customerReservations.filter((r) => r.status === "completed").length,
-    },
-    upcoming_reservations: customerReservations
-      .filter((r) => r.status === "confirmed" && new Date(r.time) >= new Date())
-      .slice(0, 5)
-      .map((r) => ({
-        id: r.id,
-        time: r.time,
-        guests: r.guests,
-        status: r.status,
-        business_id: r.businessId,
-        service_type_id: r.serviceTypeId,
-      })),
-  };
-}

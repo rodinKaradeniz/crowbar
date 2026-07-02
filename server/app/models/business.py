@@ -31,6 +31,12 @@ class Business(Base, UUIDMixin, TimestampMixin):
     notification_channels: Mapped[list] = mapped_column(
         JSONB, default=lambda: ["email"], nullable=False
     )
+    ordering_config: Mapped[dict] = mapped_column(
+        JSONB,
+        default=lambda: {"allowed_fulfillment_types": ["dine_in"]},
+        nullable=False,
+    )
+    bot_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     staff: Mapped[list["Staff"]] = relationship(
         back_populates="business", lazy="selectin"
@@ -41,9 +47,6 @@ class Business(Base, UUIDMixin, TimestampMixin):
     reservations: Mapped[list["Reservation"]] = relationship(
         back_populates="business", lazy="selectin"
     )
-    google_oauth_token: Mapped["GoogleOAuthToken | None"] = relationship(
-        back_populates="business", lazy="selectin", uselist=False
-    )
     locations: Mapped[list["Location"]] = relationship(
         back_populates="business", lazy="selectin"
     )
@@ -52,7 +55,6 @@ class Business(Base, UUIDMixin, TimestampMixin):
     )
 
 
-from app.models.google_oauth_token import GoogleOAuthToken  # noqa: E402
 from app.models.queue_entry import QueueEntry  # noqa: E402
 from app.models.location import Location  # noqa: E402
 from app.models.reservation import Reservation  # noqa: E402

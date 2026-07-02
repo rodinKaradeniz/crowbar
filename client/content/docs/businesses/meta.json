@@ -2,11 +2,13 @@
   "title": "For Businesses",
   "pages": [
     "getting-started",
-    "managing-services",
-    "handling-reservations",
-    "staff-management",
     "analytics",
-    "insights",
-    "ordering"
+    "handling-reservations",
+    "queue",
+    "ordering",
+    "inventory",
+    "managing-services",
+    "staff-management",
+    "insights"
   ]
 }

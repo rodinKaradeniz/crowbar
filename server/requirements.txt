@@ -36,6 +36,7 @@ google-api-python-client>=2.0.0
 
 # SMS
 twilio>=9.0.0
+phonenumbers>=8.13.0
 
 # Utilities
 python-dotenv==1.0.1

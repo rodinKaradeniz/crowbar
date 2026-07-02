@@ -1,7 +1,7 @@
 "use client";
 
 import { format, parseISO } from "date-fns";
-import { Clock, Users, Tag, CreditCard } from "lucide-react";
+import { Clock, Users, Tag } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/dialog";
 import { Reservation, ServiceType } from "@/types";
 import { UserResponse } from "@/lib/api-client";
-import { cn } from "@/lib/utils";
 
 interface ReservationDetailsDialogProps {
   reservation: Reservation | null;
@@ -90,69 +89,12 @@ export function ReservationDetailsDialog({
                 {reservation.status}
               </span>
             </div>
-            {reservation.paymentStatus && (
-              <div className="contact-row">
-                <CreditCard className="contact-icon" />
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">Payment:</span>
-                  <span
-                    className={cn(
-                      "text-xs px-2 py-1 rounded-full capitalize",
-                      reservation.paymentStatus === "paid"
-                        ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                        : reservation.paymentStatus === "pending"
-                        ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-                        : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-                    )}
-                  >
-                    {reservation.paymentStatus}
-                  </span>
-                  {reservation.paymentAmount && (
-                    <span className="text-sm text-muted-foreground">
-                      ${reservation.paymentAmount.toFixed(2)}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
             {reservation.note && (
               <div className="pt-2 border-t">
                 <p className="text-sm font-medium mb-1">Special Notes</p>
                 <p className="section-subtitle">{reservation.note}</p>
               </div>
             )}
-            {reservation.customFields &&
-              Object.keys(reservation.customFields).length > 0 && (
-                <div className="pt-2 border-t">
-                  <p className="text-sm font-medium mb-2">Additional Information</p>
-                  <div className="space-y-2">
-                    {Object.entries(reservation.customFields).map(
-                      ([fieldId, value]) => {
-                        // Try to find the field label from the service type's form definition
-                        const fieldDef = serviceType?.formFields?.find(
-                          (f) => f.id === fieldId
-                        );
-                        const label = fieldDef?.label || fieldId;
-                        const displayValue =
-                          typeof value === "boolean"
-                            ? value
-                              ? "Yes"
-                              : "No"
-                            : String(value ?? "—");
-
-                        return (
-                          <div key={fieldId}>
-                            <p className="text-xs text-muted-foreground">
-                              {label}
-                            </p>
-                            <p className="text-sm">{displayValue}</p>
-                          </div>
-                        );
-                      }
-                    )}
-                  </div>
-                </div>
-              )}
           </div>
         </div>
       </DialogContent>

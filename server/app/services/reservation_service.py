@@ -1,4 +1,3 @@
-from datetime import timedelta
 from uuid import UUID
 
 from sqlalchemy import select
@@ -7,13 +6,12 @@ from sqlalchemy.orm import selectinload
 
 from app.models.reservation import Reservation
 from app.models.service_type import ServiceType
-from app.models.user import User
 from app.schemas.reservation import (
     PublicReservationCreate,
     ReservationCreate,
     ReservationUpdate,
 )
-from app.services import google_meet_service
+from app.services.customer_identity_service import upsert_customer
 
 
 async def get_reservations_by_business(
@@ -26,17 +24,6 @@ async def get_reservations_by_business(
         query = query.where(Reservation.status == status)
     query = query.order_by(Reservation.time.desc())
     result = await db.execute(query)
-    return list(result.scalars().all())
-
-
-async def get_reservations_by_customer(
-    db: AsyncSession, customer_id: UUID
-) -> list[Reservation]:
-    result = await db.execute(
-        select(Reservation)
-        .where(Reservation.customer_id == customer_id)
-        .order_by(Reservation.time.desc())
-    )
     return list(result.scalars().all())
 
 
@@ -58,26 +45,18 @@ async def get_reservation_by_id(
 
 
 async def create_reservation(
-    db: AsyncSession, customer_id: UUID, data: ReservationCreate
+    db: AsyncSession, data: ReservationCreate
 ) -> Reservation:
     service_type = await _get_service_type(db, data.service_type_id)
     status = "pending" if service_type and service_type.is_pending_enabled else "confirmed"
-    meeting_link = None
-    if service_type and service_type.is_online:
-        duration = service_type.duration or 60
-        end_time = data.time + timedelta(minutes=duration)
-        meeting_link = await google_meet_service.create_meet_link(
-            db,
-            data.business_id,
-            summary=f"Reservation",
-            start=data.time,
-            end=end_time,
-            attendee_email=data.email,
-        )
+
+    customer = await upsert_customer(
+        db, business_id=data.business_id, phone=data.phone, email=data.email
+    )
 
     reservation = Reservation(
         business_id=data.business_id,
-        customer_id=customer_id,
+        customer_id=customer.id,
         service_type_id=data.service_type_id,
         time=data.time,
         phone=data.phone,
@@ -85,9 +64,7 @@ async def create_reservation(
         note=data.note,
         status=status,
         guests=data.guests,
-        payment_amount=data.payment_amount,
-        payment_status=data.payment_status,
-        meeting_link=meeting_link,
+        channel="web",
     )
     db.add(reservation)
     await db.flush()
@@ -133,42 +110,23 @@ async def create_public_reservation(
 ) -> Reservation:
     """Create a reservation from the public form (no login required).
 
-    Looks up an existing customer user by email. If none exists, creates a
-    lightweight guest customer account (no password — they can register later
-    to claim it).
+    Upserts a Customer (business-scoped, keyed by phone) and links the
+    reservation to it.
     """
-    result = await db.execute(select(User).where(User.email == data.email))
-    user = result.scalar_one_or_none()
-
-    if user is None:
-        user = User(
-            email=data.email,
-            name=data.name,
-            phone=data.phone,
-            password_hash="",  # guest account — no login until they register
-            user_type="customer",
-        )
-        db.add(user)
-        await db.flush()
-
     service_type = await _get_service_type(db, data.service_type_id)
     status = "pending" if service_type and service_type.is_pending_enabled else "confirmed"
-    meeting_link = None
-    if service_type and service_type.is_online:
-        duration = service_type.duration or 60
-        end_time = data.time + timedelta(minutes=duration)
-        meeting_link = await google_meet_service.create_meet_link(
-            db,
-            data.business_id,
-            summary="Reservation",
-            start=data.time,
-            end=end_time,
-            attendee_email=data.email,
-        )
+
+    customer = await upsert_customer(
+        db,
+        business_id=data.business_id,
+        phone=data.phone,
+        email=data.email,
+        name=data.name,
+    )
 
     reservation = Reservation(
         business_id=data.business_id,
-        customer_id=user.id,
+        customer_id=customer.id,
         service_type_id=data.service_type_id,
         time=data.time,
         phone=data.phone,
@@ -176,8 +134,7 @@ async def create_public_reservation(
         note=data.note,
         status=status,
         guests=data.guests,
-        meeting_link=meeting_link,
-        custom_fields=data.custom_fields,
+        channel="web",
     )
     db.add(reservation)
     await db.flush()

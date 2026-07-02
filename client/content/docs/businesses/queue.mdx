@@ -1,0 +1,44 @@
+---
+title: Walk-in Queue
+description: Manage walk-in customers with a live digital queue, SMS notifications, and real-time seating updates.
+---
+
+# Walk-in Queue
+
+The **Queue** module lets you manage walk-in customers without a reservation. Customers join a digital queue and receive an SMS when their table is ready.
+
+## Enabling the Queue Module
+
+Go to **Settings → Modules** and enable **Queue**. The Queue link will appear in the **Operations** section of the sidebar immediately after saving.
+
+## The Live Queue Board
+
+Navigate to **Queue** in the sidebar. The board shows all active queue entries in real time, updated via WebSocket — no page refresh needed.
+
+Each entry shows:
+- **Name** and **party size**
+- **Wait time** since joining
+- **Status**: Waiting → Called → Seated (or Removed)
+
+The sidebar badge next to Queue reflects the current number of waiting parties, refreshed every 30 seconds.
+
+## Queue Actions
+
+| Action | What it does |
+|--------|-------------|
+| **Call** | Marks the party as called and sends them an SMS: "Your table is ready!" |
+| **Seat** | Moves the party to Seated and removes them from the active list |
+| **Remove** | Removes the party from the queue (e.g. they left without being seated) |
+
+> **Staff tip:** Only Call and Seat trigger SMS notifications. The acting staff member does not receive their own notification.
+
+## Customer Flow
+
+Customers join the queue by scanning a QR code or visiting your queue URL directly. They enter their name, party size, and phone number — no account required.
+
+Once called, they receive an SMS with your business name. They confirm by tapping "On my way" or simply walk in.
+
+## Next Steps
+
+- See [Handling Reservations](./handling-reservations) for advance bookings
+- See [Overview & Dashboard](./analytics) for today's guest count and upcoming reservations

@@ -89,8 +89,11 @@ No UI exists yet for creating/managing locations, or for filtering reservations/
 ## Onboarding Redirect Hardening
 
 The onboarding redirect (`business.onboardingComplete === false → /business/onboarding`) is only enforced on the `/business/overview` page.
-Other authenticated business pages (e.g. `/business/staff`, `/business/reservations`) do not check this flag.
-Consider a middleware-level check or a higher-order server component guard.
+Other authenticated business pages (e.g. `/business/staff`, `/business/schedule`) do not check this flag.
+
+**Partially resolved (Phase 5.5):** Module pages (inventory, queue, menu, reservations, insights) now check `business.enabledModules` server-side and show a `<ModuleDisabled>` fallback — so they fetch the full business already. Adding an `onboardingComplete` check alongside would be trivial for those pages. The remaining gap is non-module pages (`/business/staff`, `/business/schedule`, `/business/customers`, `/business/requests`, `/business/profile`).
+
+Consider a middleware-level check or a shared server component guard for full coverage.
 
 ---
 

@@ -228,7 +228,8 @@
   }
 
   .timeline-hour {
-    @apply flex items-center gap-4 py-2 text-sm;
+    @apply flex items-center gap-4 text-sm;
+    height: 60px;
   }
 
   .timeline-hour-label {
@@ -252,7 +253,8 @@
   }
 
   .timeline-column-header {
-    @apply sticky top-0 z-10 bg-card border-b border-border p-2 text-center font-medium text-sm;
+    @apply sticky top-0 z-10 bg-card border-b border-border text-center font-medium text-sm flex flex-col items-center justify-center;
+    height: 48px;
   }
 }
 

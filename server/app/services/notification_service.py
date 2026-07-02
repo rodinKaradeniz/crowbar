@@ -53,29 +53,6 @@ async def notify_business_staff(
     await db.flush()
 
 
-async def notify_user(
-    db: AsyncSession,
-    *,
-    user_id: UUID,
-    business_id: UUID,
-    kind: str,
-    title: str,
-    body: str,
-    payload: dict | None = None,
-) -> None:
-    db.add(
-        Notification(
-            user_id=user_id,
-            business_id=business_id,
-            kind=kind,
-            title=title,
-            body=body,
-            payload=payload or {},
-        )
-    )
-    await db.flush()
-
-
 async def list_for_user(
     db: AsyncSession,
     user_id: UUID,

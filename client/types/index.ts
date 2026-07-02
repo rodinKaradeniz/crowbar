@@ -8,10 +8,6 @@ export interface User {
   createdAt: string;
 }
 
-export interface Customer extends User {
-  type: "customer";
-}
-
 export interface Staff extends User {
   type: "staff";
   businessId: string;
@@ -54,6 +50,17 @@ export interface Business {
   isAcceptingOrders: boolean;
 }
 
+export interface VisitorResponse {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  source: "reservation" | "walkin";
+  visitCount: number;
+  lastVisit: string | null;
+  partySize: number | null;
+}
+
 export interface MeContext {
   user: {
     id: string;
@@ -71,21 +78,6 @@ export interface MeContext {
   enabledModules: string[];
 }
 
-// Form field definition for customizable reservation forms
-export interface FormFieldDefinition {
-  id: string;
-  label: string;
-  type: "text" | "textarea" | "number" | "email" | "phone" | "date" | "time" | "select" | "checkbox";
-  required: boolean;
-  placeholder?: string;
-  options?: string[]; // for select type
-  min?: number; // for number type
-  max?: number; // for number type
-  maxLength?: number; // for text/textarea
-  order: number;
-  system: boolean; // true for system fields (date, time, email, phone, guests)
-}
-
 // Service Type - unified concept for bookable services/spaces
 export interface ServiceType {
   id: string;
@@ -94,15 +86,11 @@ export interface ServiceType {
   description?: string;
   capacity: number;
   maxConcurrentBookings?: number;
-  requiresPayment: boolean;
-  amount?: number;
-  isOnline: boolean;
   isPendingEnabled: boolean;
   duration?: number;
   color: string;
   displayOrder?: number;
   image?: string;
-  formFields?: FormFieldDefinition[];
   createdAt: string;
   updatedAt: string;
 }
@@ -248,6 +236,26 @@ export interface LibraryItem {
   prepTimeMinutes?: number;
 }
 
+// ─── Tabs ─────────────────────────────────────────────────────────────────────
+
+export type TabSettledMethod = "cash" | "card" | "comp" | "other";
+
+export interface Tab {
+  id: string;
+  businessId: string;
+  tableId?: string;
+  customerId?: string;
+  status: "open" | "closed";
+  channel: string;
+  openedBy: string;
+  openedAt: string;
+  closedBy?: string;
+  closedAt?: string;
+  settledMethod?: TabSettledMethod;
+  total: number; // computed live over associated orders
+  orders: Order[];
+}
+
 // ─── Inventory ────────────────────────────────────────────────────────────────
 
 export interface InventoryItem {
@@ -289,11 +297,44 @@ export interface Reservation {
   note?: string;
   status: "confirmed" | "pending" | "cancelled" | "completed";
   guests: number;
-  paymentAmount?: number;
-  paymentStatus?: "pending" | "paid" | "refunded";
-  stripePaymentIntentId?: string;
-  meetingLink?: string;
-  customFields?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
+}
+
+// ── Insights / KPIs ──────────────────────────────────────────────────────────
+
+export interface ReservationKpis {
+  cancellationRate: number;
+  completionRate: number;
+  avgLeadTimeHours: number;
+  occupancyByHour: { hour: number; count: number }[];
+}
+
+export interface OrderingKpis {
+  avgPrepTimeMinutes: number;
+  peakHours: { hour: number; count: number }[];
+  topItems: { name: string; totalOrdered: number }[];
+}
+
+export interface InventoryKpis {
+  totalMovements: number;
+  wasteMovements: number;
+  lowStockIncidents: number;
+  itemsBelowPar: number;
+}
+
+export interface OperationalKpis {
+  reservation: ReservationKpis;
+  ordering: OrderingKpis | null;
+  inventory: InventoryKpis | null;
+}
+
+export interface HighRiskReservation {
+  id: string;
+  time: string;
+  guests: number;
+  status: string;
+  customerId: string;
+  serviceTypeId: string;
+  riskScore: number;
 }

@@ -112,7 +112,7 @@ export function BusinessDocsChatTrigger({
             </SheetTrigger>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
-            Ask how to use Slotera (docs assistant)
+            Ask how to use Crowbar (docs assistant)
           </TooltipContent>
         </Tooltip>
       )}

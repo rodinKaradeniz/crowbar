@@ -117,27 +117,11 @@ export interface ServiceTypeResponse {
   description: string | null;
   capacity: number;
   max_concurrent_bookings: number | null;
-  requires_payment: boolean;
-  amount: number | null;
-  is_online: boolean;
   is_pending_enabled: boolean;
   duration: number | null;
   color: string;
   display_order: number | null;
   image: string | null;
-  form_fields: Array<{
-    id: string;
-    label: string;
-    type: string;
-    required: boolean;
-    placeholder?: string;
-    options?: string[];
-    min?: number;
-    max?: number;
-    max_length?: number;
-    order: number;
-    system: boolean;
-  }> | null;
   created_at: string;
   updated_at: string;
 }
@@ -169,10 +153,6 @@ export interface ReservationResponse {
   note: string | null;
   status: string;
   guests: number;
-  payment_amount: number | null;
-  payment_status: string | null;
-  stripe_payment_intent_id: string | null;
-  custom_fields: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }
@@ -186,17 +166,6 @@ export async function apiGetBusinessReservations(
   return apiFetch(`/api/reservations/business/${businessId}${query}`, { token });
 }
 
-export async function apiGetCustomerReservations(
-  customerId: string,
-  token: string
-): Promise<ReservationResponse[]> {
-  return apiFetch(`/api/reservations/customer/${customerId}`, { token });
-}
-
-export async function apiGetMyReservations(token: string): Promise<ReservationResponse[]> {
-  return apiFetch("/api/reservations/my", { token });
-}
-
 export async function apiCreateReservation(
   data: {
     business_id: string;
@@ -206,8 +175,6 @@ export async function apiCreateReservation(
     email: string;
     note?: string;
     guests: number;
-    payment_amount?: number;
-    payment_status?: string;
   },
   token: string
 ): Promise<ReservationResponse> {
@@ -228,8 +195,6 @@ export async function apiUpdateReservation(
     note: string;
     status: string;
     guests: number;
-    payment_amount: number;
-    payment_status: string;
   }>,
   token: string
 ): Promise<ReservationResponse> {
@@ -249,18 +214,39 @@ export async function apiDeleteReservation(id: string, token: string): Promise<v
 
 // ─── Customers ───────────────────────────────────────────────────────────────
 
+export interface CustomerResponse {
+  id: string;
+  business_id: string;
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VisitorResponseRaw {
+  id: string;
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  source: "reservation" | "walkin";
+  visit_count: number;
+  last_visit: string | null;
+  party_size: number | null;
+}
+
 export async function apiGetBusinessCustomers(
   businessId: string,
   token: string
-): Promise<UserResponse[]> {
+): Promise<CustomerResponse[]> {
   return apiFetch(`/api/customers/business/${businessId}`, { token });
 }
 
-export async function apiGetCustomer(
-  customerId: string,
+export async function apiGetBusinessVisitors(
+  businessId: string,
   token: string
-): Promise<UserResponse> {
-  return apiFetch(`/api/customers/${customerId}`, { token });
+): Promise<VisitorResponseRaw[]> {
+  return apiFetch(`/api/customers/business/${businessId}/visitors`, { token });
 }
 
 // ─── Staff ───────────────────────────────────────────────────────────────────
@@ -315,24 +301,6 @@ export interface BusinessDashboardStats {
   month_change: number;
 }
 
-export interface CustomerDashboardStats {
-  total_reservations: number;
-  status_breakdown: {
-    confirmed: number;
-    pending: number;
-    cancelled: number;
-    completed: number;
-  };
-  upcoming_reservations: Array<{
-    id: string;
-    time: string;
-    guests: number;
-    status: string;
-    business_id: string;
-    service_type_id: string;
-  }>;
-}
-
 export async function apiGetBusinessStats(
   businessId: string,
   token: string
@@ -340,10 +308,20 @@ export async function apiGetBusinessStats(
   return apiFetch(`/api/analytics/business/${businessId}`, { token });
 }
 
-export async function apiGetMyCustomerStats(
+export async function apiGetBusinessKpis(
+  businessId: string,
   token: string
-): Promise<CustomerDashboardStats> {
-  return apiFetch("/api/analytics/customer/me", { token });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<any> {
+  return apiFetch(`/api/analytics/business/${businessId}/kpis`, { token });
+}
+
+export async function apiGetHighRiskReservations(
+  businessId: string,
+  token: string
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<any[]> {
+  return apiFetch(`/api/analytics/business/${businessId}/high-risk`, { token });
 }
 
 // ─── Health ──────────────────────────────────────────────────────────────────

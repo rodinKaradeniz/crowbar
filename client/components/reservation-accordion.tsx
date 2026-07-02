@@ -10,7 +10,6 @@ import {
   User,
   Mail,
   Phone,
-  CreditCard,
   Tag,
 } from "lucide-react";
 import {
@@ -194,41 +193,6 @@ export function ReservationAccordion({
                     )}
                   </div>
                 </div>
-
-                {/* Payment Information */}
-                {reservation.paymentStatus && (
-                  <div className="space-y-2 pt-4 border-t">
-                    <h4 className="text-sm font-medium">Payment Information</h4>
-                    <div className="space-y-2">
-                      <div className="contact-row">
-                        <CreditCard className="contact-icon" />
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm">Status:</span>
-                          <span
-                            className={cn(
-                              "text-xs px-2 py-1 rounded-full capitalize",
-                              reservation.paymentStatus === "paid"
-                                ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                                : reservation.paymentStatus === "pending"
-                                ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-                                : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-                            )}
-                          >
-                            {reservation.paymentStatus}
-                          </span>
-                        </div>
-                      </div>
-                      {reservation.paymentAmount && (
-                        <div className="contact-row">
-                          <CreditCard className="contact-icon" />
-                          <span className="text-sm">
-                            Amount: ${reservation.paymentAmount.toFixed(2)}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
 
                 {/* Special Notes */}
                 {reservation.note && (

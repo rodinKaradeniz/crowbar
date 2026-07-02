@@ -2,17 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { format, parseISO } from "date-fns";
-import {
-  Calendar as CalendarIcon,
-  Clock,
-  Users,
-  MapPin,
-  User,
-  Mail,
-  Phone,
-  CreditCard,
-  Video,
-} from "lucide-react";
+import { Calendar as CalendarIcon } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -80,7 +70,6 @@ export function ReservationDialog({
   const [note, setNote] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const isPaymentPaid = reservation?.paymentStatus === "paid";
   const selectedServiceType = serviceTypeId
     ? serviceTypes.find((st) => st.id === serviceTypeId) || null
     : null;
@@ -251,7 +240,6 @@ export function ReservationDialog({
                     <Select
                       value={serviceTypeId}
                       onValueChange={setServiceTypeId}
-                      disabled={isPaymentPaid}
                       required
                     >
                       <SelectTrigger id="serviceType">
@@ -269,21 +257,11 @@ export function ReservationDialog({
                               <span className="text-muted-foreground text-xs">
                                 (Capacity: {serviceType.capacity})
                               </span>
-                              {serviceType.requiresPayment && serviceType.amount && (
-                                <span className="text-muted-foreground ml-1">
-                                  - ${serviceType.amount}
-                                </span>
-                              )}
                             </div>
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    {isPaymentPaid && (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Service type cannot be changed after payment is completed.
-                      </p>
-                    )}
                     {selectedServiceType?.description && (
                       <p className="text-sm text-muted-foreground mt-1">
                         {selectedServiceType.description}
@@ -293,61 +271,6 @@ export function ReservationDialog({
                 </div>
               </FieldContent>
             </Field>
-
-            {/* Meeting Link (Display Only for online reservations) */}
-            {reservation?.meetingLink && (
-              <Field>
-                <FieldLabel>Online Meeting</FieldLabel>
-                <FieldContent>
-                  <a
-                    href={reservation.meetingLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-primary hover:underline"
-                  >
-                    <Video className="h-4 w-4" />
-                    Join Google Meet
-                  </a>
-                </FieldContent>
-              </Field>
-            )}
-
-            {/* Payment Information (Display Only) */}
-            {reservation?.paymentStatus && (
-              <Field>
-                <FieldLabel>Payment Information</FieldLabel>
-                <FieldContent>
-                  <div className="space-y-2 p-3 bg-muted rounded-md">
-                    <div className="flex items-center gap-2">
-                      <CreditCard className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">Status:</span>
-                      <span
-                        className={cn(
-                          "text-sm px-2 py-1 rounded-full capitalize",
-                          reservation.paymentStatus === "paid"
-                            ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                            : reservation.paymentStatus === "pending"
-                            ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-                            : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-                        )}
-                      >
-                        {reservation.paymentStatus}
-                      </span>
-                    </div>
-                    {reservation.paymentAmount && (
-                      <div className="text-sm text-muted-foreground">
-                        Amount: ${reservation.paymentAmount.toFixed(2)}
-                      </div>
-                    )}
-                    {reservation.stripePaymentIntentId && (
-                      <div className="text-sm text-muted-foreground">
-                        Payment ID: {reservation.stripePaymentIntentId}
-                      </div>
-                    )}
-                  </div>
-                </FieldContent>
-              </Field>
-            )}
 
             <Field>
               <FieldLabel>Status</FieldLabel>
@@ -381,38 +304,6 @@ export function ReservationDialog({
               </FieldContent>
             </Field>
 
-            {/* Custom Fields (read-only display) */}
-            {reservation?.customFields &&
-              Object.keys(reservation.customFields).length > 0 && (
-                <Field>
-                  <FieldLabel>Additional Information</FieldLabel>
-                  <FieldContent>
-                    <div className="space-y-2 p-3 bg-muted rounded-md">
-                      {Object.entries(reservation.customFields).map(
-                        ([fieldId, value]) => {
-                          const fieldDef = selectedServiceType?.formFields?.find(
-                            (f) => f.id === fieldId
-                          );
-                          const label = fieldDef?.label || fieldId;
-                          const displayValue =
-                            typeof value === "boolean"
-                              ? value
-                                ? "Yes"
-                                : "No"
-                              : String(value ?? "—");
-
-                          return (
-                            <div key={fieldId} className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">{label}</span>
-                              <span className="font-medium">{displayValue}</span>
-                            </div>
-                          );
-                        }
-                      )}
-                    </div>
-                  </FieldContent>
-                </Field>
-              )}
           </FieldGroup>
 
           <DialogFooter className="mt-6">

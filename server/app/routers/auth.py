@@ -1,16 +1,10 @@
-from uuid import UUID
-
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_business, get_current_user
 from app.models.business import Business
 from app.models.user import User
-from app.services import google_oauth_service
-from app.services import staff_service
 from app.schemas.auth import BusinessRegisterRequest, LoginRequest, LoginResponse, RegisterRequest
 from app.schemas.user import ChangeEmailRequest, ChangePasswordRequest, UserResponse, UserUpdate
 from app.services.auth_service import (
@@ -234,49 +228,3 @@ async def disable_account(
     return {"message": "Account disabled successfully"}
 
 
-# ─── Google OAuth (for Calendar / Meet links) ───────────────────────────────
-
-
-@router.get("/google/authorize")
-async def google_authorize(
-    business_id: UUID = Query(...),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Redirect to Google OAuth consent. Caller must be staff for the business.
-    """
-    staff_list = await staff_service.get_staff_by_user_id(db, current_user.id)
-    if not staff_list or not any(s.business_id == business_id for s in staff_list):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to connect Google for this business",
-        )
-    url = google_oauth_service.get_authorization_url(business_id)
-    return RedirectResponse(url=url, status_code=status.HTTP_302_FOUND)
-
-
-@router.get("/google/callback")
-async def google_callback(
-    code: str | None = Query(None),
-    state: str | None = Query(None),
-    error: str | None = Query(None),
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    OAuth callback from Google. Exchanges code for tokens and redirects to success URL.
-    """
-    if error:
-        redirect_url = f"{settings.google_connect_success_url}?google_error={error}"
-        return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
-    if not code or not state:
-        redirect_url = f"{settings.google_connect_success_url}?google_error=missing_params"
-        return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
-
-    token = await google_oauth_service.exchange_code_and_store(db, code, state)
-    if token is None:
-        redirect_url = f"{settings.google_connect_success_url}?google_error=exchange_failed"
-        return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
-
-    redirect_url = f"{settings.google_connect_success_url}?google_connected=1"
-    return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)

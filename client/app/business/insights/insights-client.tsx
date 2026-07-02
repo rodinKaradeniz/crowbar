@@ -10,9 +10,15 @@ import {
   AlertTriangle,
   BarChart3,
   Info,
+  Activity,
+  Package,
+  ShoppingCart,
+  CalendarClock,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ChartContainer,
   ChartTooltip,
@@ -47,6 +53,10 @@ interface InsightsClientProps {
   segmentation: MLSegmentationResult | null;
   cancellation: MLCancellationResult | null;
   demandForecast: MLDemandForecastResult | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  rawKpis: any | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  rawHighRisk: any[];
 }
 
 const SEGMENT_COLORS: Record<string, string> = {
@@ -72,6 +82,8 @@ export default function InsightsClient({
   segmentation,
   cancellation,
   demandForecast,
+  rawKpis,
+  rawHighRisk,
 }: InsightsClientProps) {
   const router = useRouter();
   const [isRunning, setIsRunning] = useState(false);
@@ -173,8 +185,14 @@ export default function InsightsClient({
           {/* Section 2: Customer Segmentation + Cancellation side by side */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <SegmentationSection segmentation={segmentation} />
-            <CancellationSection cancellation={cancellation} />
+            <CancellationSection
+              cancellation={cancellation}
+              highRiskReservations={rawHighRisk ?? []}
+            />
           </div>
+
+          {/* Section 3: Operational KPIs */}
+          {rawKpis && <OperationalKpisSection kpis={rawKpis} />}
         </>
       )}
     </div>
@@ -421,7 +439,7 @@ function SegmentationSection({
       <CardContent>
         <div className="flex items-start gap-4">
           {/* Donut chart */}
-          <div className="flex-shrink-0">
+          <div className="shrink-0">
             <ChartContainer
               config={pieConfig}
               className="h-[140px] w-[140px]"
@@ -481,8 +499,11 @@ function SegmentationSection({
 
 function CancellationSection({
   cancellation,
+  highRiskReservations,
 }: {
   cancellation: MLCancellationResult | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  highRiskReservations: any[];
 }) {
   if (!cancellation || cancellation.status !== "success") {
     return (
@@ -599,9 +620,241 @@ function CancellationSection({
               {insightText}
             </p>
           )}
+
+          {/* High-risk upcoming reservations */}
+          {highRiskReservations.length > 0 && (
+            <div>
+              <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+                <CalendarClock className="h-3 w-3" />
+                High-risk upcoming reservations
+              </p>
+              <div className="space-y-1">
+                {highRiskReservations.map((r) => {
+                  const riskPct = Math.round(r.risk_score * 100);
+                  const badgeVariant =
+                    r.risk_score >= 0.8 ? "destructive" : "secondary";
+                  return (
+                    <div
+                      key={r.id}
+                      className="flex items-center justify-between p-2 rounded-md border bg-muted/30 text-xs"
+                    >
+                      <span className="text-muted-foreground">
+                        {new Date(r.time).toLocaleString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                        {" · "}
+                        {r.guests} {r.guests === 1 ? "guest" : "guests"}
+                      </span>
+                      <Badge variant={badgeVariant} className="text-xs">
+                        {riskPct}% risk
+                      </Badge>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// ─── Operational KPIs Section ───────────────────────────────────────────────
+
+function OperationalKpisSection({
+  kpis,
+}: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  kpis: any;
+}) {
+  const hasOrdering = kpis.ordering !== null;
+  const hasInventory = kpis.inventory !== null;
+
+  const occupancyConfig: ChartConfig = {
+    count: { label: "Reservations", color: "#3b82f6" },
+  };
+  const topItemsConfig: ChartConfig = {
+    total_ordered: { label: "Ordered", color: "#8b5cf6" },
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium flex items-center gap-2">
+          <Activity className="h-4 w-4" />
+          Operational KPIs
+          <span className="text-xs font-normal text-muted-foreground">
+            — last 30 days
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Tabs defaultValue="reservations">
+          <TabsList className="mb-4">
+            <TabsTrigger value="reservations" className="text-xs">
+              <CalendarClock className="h-3 w-3 mr-1" />
+              Reservations
+            </TabsTrigger>
+            {hasOrdering && (
+              <TabsTrigger value="ordering" className="text-xs">
+                <ShoppingCart className="h-3 w-3 mr-1" />
+                Ordering
+              </TabsTrigger>
+            )}
+            {hasInventory && (
+              <TabsTrigger value="inventory" className="text-xs">
+                <Package className="h-3 w-3 mr-1" />
+                Inventory
+              </TabsTrigger>
+            )}
+          </TabsList>
+
+          <TabsContent value="reservations" className="space-y-4">
+            <div className="grid grid-cols-3 gap-3">
+              <KpiStatCard
+                label="Completion rate"
+                value={`${Math.round(kpis.reservation.completion_rate * 100)}%`}
+                tone={kpis.reservation.completion_rate >= 0.7 ? "green" : "yellow"}
+              />
+              <KpiStatCard
+                label="Cancellation rate"
+                value={`${Math.round(kpis.reservation.cancellation_rate * 100)}%`}
+                tone={kpis.reservation.cancellation_rate <= 0.15 ? "green" : "red"}
+              />
+              <KpiStatCard
+                label="Avg lead time"
+                value={`${kpis.reservation.avg_lead_time_hours}h`}
+                tone="neutral"
+              />
+            </div>
+            {kpis.reservation.occupancy_by_hour?.length > 0 && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Reservations by hour of day
+                </p>
+                <ChartContainer config={occupancyConfig} className="h-[140px] w-full">
+                  <BarChart data={kpis.reservation.occupancy_by_hour}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                      dataKey="hour"
+                      tickLine={false}
+                      axisLine={false}
+                      fontSize={11}
+                      tickFormatter={(h) => `${h}:00`}
+                    />
+                    <YAxis tickLine={false} axisLine={false} fontSize={11} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Bar dataKey="count" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ChartContainer>
+              </div>
+            )}
+          </TabsContent>
+
+          {hasOrdering && (
+            <TabsContent value="ordering" className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <KpiStatCard
+                  label="Avg prep time"
+                  value={`${kpis.ordering.avg_prep_time_minutes} min`}
+                  tone="neutral"
+                />
+                <KpiStatCard
+                  label="Peak hour"
+                  value={
+                    kpis.ordering.peak_hours?.[0]
+                      ? `${kpis.ordering.peak_hours[0].hour}:00`
+                      : "—"
+                  }
+                  tone="neutral"
+                />
+              </div>
+              {kpis.ordering.top_items?.length > 0 && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Top items by quantity ordered
+                  </p>
+                  <ChartContainer config={topItemsConfig} className="h-[140px] w-full">
+                    <BarChart data={kpis.ordering.top_items} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                      <XAxis type="number" hide />
+                      <YAxis
+                        dataKey="name"
+                        type="category"
+                        tickLine={false}
+                        axisLine={false}
+                        fontSize={11}
+                        width={110}
+                      />
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <Bar
+                        dataKey="total_ordered"
+                        fill="#8b5cf6"
+                        radius={[0, 4, 4, 0]}
+                      />
+                    </BarChart>
+                  </ChartContainer>
+                </div>
+              )}
+            </TabsContent>
+          )}
+
+          {hasInventory && (
+            <TabsContent value="inventory" className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <KpiStatCard
+                  label="Total movements"
+                  value={String(kpis.inventory.total_movements)}
+                  tone="neutral"
+                />
+                <KpiStatCard
+                  label="Waste events"
+                  value={String(kpis.inventory.waste_movements)}
+                  tone={kpis.inventory.waste_movements > 0 ? "yellow" : "green"}
+                />
+                <KpiStatCard
+                  label="Low-stock alerts"
+                  value={String(kpis.inventory.low_stock_incidents)}
+                  tone={kpis.inventory.low_stock_incidents > 0 ? "red" : "green"}
+                />
+                <KpiStatCard
+                  label="Items below par"
+                  value={String(kpis.inventory.items_below_par)}
+                  tone={kpis.inventory.items_below_par > 0 ? "yellow" : "green"}
+                />
+              </div>
+            </TabsContent>
+          )}
+        </Tabs>
+      </CardContent>
+    </Card>
+  );
+}
+
+function KpiStatCard({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "green" | "yellow" | "red" | "neutral";
+}) {
+  const colors: Record<string, string> = {
+    green: "text-green-600 dark:text-green-400",
+    yellow: "text-yellow-600 dark:text-yellow-400",
+    red: "text-red-600 dark:text-red-400",
+    neutral: "",
+  };
+  return (
+    <div className="p-3 rounded-lg border bg-muted/30">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className={`text-lg font-bold mt-0.5 ${colors[tone]}`}>{value}</p>
+    </div>
   );
 }
 

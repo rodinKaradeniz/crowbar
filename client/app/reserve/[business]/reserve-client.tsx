@@ -85,7 +85,7 @@ export default function ReserveClient({ business, serviceTypes }: ReserveClientP
             <div className="bg-white/20 backdrop-blur-sm flex size-6 items-center justify-center rounded-md">
               <GalleryVerticalEnd className="size-4" />
             </div>
-            Slotera
+            Crowbar
           </Link>
         </div>
 

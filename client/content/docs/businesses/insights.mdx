@@ -1,15 +1,19 @@
 ---
 title: Insights
-description: Artificial intelligence and machine learning powered predictions and customer intelligence for your business.
+description: ML-powered predictions, customer intelligence, and operational KPIs for your business.
 ---
 
 # Insights
 
-The **Insights** page uses **artificial intelligence** and **machine learning** to go beyond the charts on your Overview. Models learn from your historical reservation data to surface forecasts, segments, and risk signals you can act on.
+The **Insights** page combines **machine learning predictions** with **operational metrics** drawn from your live data. It surfaces forecasts, customer segments, cancellation risk, and key performance indicators across all your enabled modules.
+
+<Callout type="info">
+The Insights module must be enabled for your business. Go to **Settings → Modules** to enable it.
+</Callout>
 
 ## Getting Started
 
-Navigate to **Insights** in the sidebar. If this is your first time, you'll see an empty state — click **Run Pipeline** to generate your first set of insights.
+Navigate to **Insights** in the sidebar. If this is your first time, you'll see an empty state — click **Run Pipeline** to generate your first set of ML predictions.
 
 The pipeline takes a few seconds to run and will:
 1. Load all your reservation and customer data
@@ -70,13 +74,39 @@ The demand forecast predicts your expected reservation volume for the next 7 day
 - **Inventory planning** — Order supplies based on expected volume
 - **Marketing** — Run promotions on predicted quiet days to boost traffic
 
+## High-Risk Reservations
+
+The **Cancellation Risk** section also lists upcoming confirmed reservations that the ML model considers high-risk (cancellation probability > 60%). Each flagged reservation shows:
+
+- Customer name and reservation details
+- The model's confidence score
+- A quick link to view or follow up on the booking
+
+Use this to proactively reach out to customers who might cancel — a quick reminder or a small gesture can meaningfully reduce no-shows.
+
+## Operational KPIs
+
+Below the ML sections you'll find a tabbed **KPI panel** with live metrics computed from the last 30 days of your data:
+
+| Tab | What's shown |
+|-----|-------------|
+| **Reservations** | Cancellation/completion rate, average lead time, occupancy by hour |
+| **Ordering** | Average prep time, peak order hours, top 5 items by volume |
+| **Inventory** | Total movements, waste incidents, low-stock alerts, items below par |
+
+Tabs only appear for modules that have data. If you've just enabled Ordering, the Ordering tab won't show until the first order is placed.
+
+## Staffing Hint
+
+Back on the **Overview** page, the **Staffing Hint** card (bottom-right) shows a 3-day demand forecast with a callout for the busiest expected day. This is derived from the same demand forecasting model and is always visible — no need to navigate to Insights for day-to-day staffing planning.
+
 ## Running the Pipeline
 
-Click **Run Pipeline** at the top of the Insights page to refresh all predictions with the latest data. The pipeline typically completes in a few seconds.
+Click **Run Pipeline** at the top of the Insights page to refresh all ML predictions with the latest data. The pipeline typically completes in a few seconds.
 
-Results are cached and will persist until you run the pipeline again.
+Results are cached and will persist until you run the pipeline again. Operational KPIs are always computed from live data — they do not require running the pipeline.
 
 ## Next Steps
 
-- Check [Analytics & Insights](./analytics) for basic dashboard metrics on **Overview**
+- Check [Overview & Dashboard](./analytics) for basic dashboard metrics on **Overview**
 - Visit the [FAQ](../general/faq) for common questions

@@ -36,25 +36,11 @@ async def _create_service_type(
             "business_id": business_id,
             "name": "Table",
             "capacity": 4,
-            "requires_payment": False,
             "color": "#00ff00",
         },
     )
     assert resp.status_code == 201
     return resp.json()["id"]
-
-
-async def _register_customer(client: AsyncClient, email: str) -> str:
-    resp = await client.post(
-        "/api/auth/register",
-        json={
-            "email": email,
-            "password": "pass123",
-            "name": "Customer",
-        },
-    )
-    assert resp.status_code == 201
-    return resp.json()["access_token"]
 
 
 class TestNotificationsPublicReservation:
@@ -92,51 +78,6 @@ class TestNotificationsPublicReservation:
         items = list_resp.json()
         assert len(items) >= 1
         assert items[0]["kind"] == "reservation_created"
-
-
-class TestNotificationsStaffPatch:
-    @pytest.mark.asyncio
-    async def test_staff_confirm_notifies_customer(self, client: AsyncClient):
-        owner_token, business_id = await _create_business_owner(client)
-        service_type_id = await _create_service_type(client, owner_token, business_id)
-        customer_token = await _register_customer(
-            client, "cust-notif-confirm@example.com"
-        )
-        cust_headers = {"Authorization": f"Bearer {customer_token}"}
-
-        create_resp = await client.post(
-            "/api/reservations",
-            headers=cust_headers,
-            json={
-                "business_id": business_id,
-                "service_type_id": service_type_id,
-                "time": "2026-05-02T19:00:00",
-                "phone": "+31611111111",
-                "email": "cust-notif-confirm@example.com",
-                "guests": 1,
-            },
-        )
-        assert create_resp.status_code == 201
-        reservation_id = create_resp.json()["id"]
-
-        patch_resp = await client.patch(
-            f"/api/reservations/{reservation_id}",
-            headers={"Authorization": f"Bearer {owner_token}"},
-            json={"status": "confirmed"},
-        )
-        assert patch_resp.status_code == 200
-
-        cust_count = await client.get(
-            "/api/notifications/unread-count",
-            headers=cust_headers,
-        )
-        assert cust_count.status_code == 200
-        assert cust_count.json()["count"] >= 1
-
-        cust_list = await client.get("/api/notifications", headers=cust_headers)
-        assert cust_list.status_code == 200
-        kinds = {n["kind"] for n in cust_list.json()}
-        assert "reservation_confirmed" in kinds
 
 
 class TestNotificationsMarkRead:

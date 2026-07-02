@@ -28,6 +28,10 @@ export default async function BusinessSchedule() {
     redirect("/auth/login");
   }
 
+  if (!business.onboardingComplete) {
+    redirect("/business/onboarding");
+  }
+
   return (
     <BusinessScheduleClient
       business={business}

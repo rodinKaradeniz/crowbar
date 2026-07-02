@@ -1,7 +1,18 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr
+import phonenumbers
+from pydantic import BaseModel, EmailStr, field_validator
+
+
+def _normalize_phone(v: str | None) -> str | None:
+    if not v:
+        return v
+    try:
+        parsed = phonenumbers.parse(v, "US")
+        return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
+    except phonenumbers.NumberParseException:
+        return v
 
 
 class ReservationCreate(BaseModel):
@@ -12,8 +23,11 @@ class ReservationCreate(BaseModel):
     email: EmailStr
     note: str | None = None
     guests: int = 1
-    payment_amount: float | None = None
-    payment_status: str | None = None
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def normalize_phone(cls, v: str) -> str:
+        return _normalize_phone(v) or v
 
 
 class PublicReservationCreate(BaseModel):
@@ -26,7 +40,11 @@ class PublicReservationCreate(BaseModel):
     name: str
     note: str | None = None
     guests: int = 1
-    custom_fields: dict | None = None
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def normalize_phone(cls, v: str) -> str:
+        return _normalize_phone(v) or v
 
 
 class ReservationUpdate(BaseModel):
@@ -37,8 +55,6 @@ class ReservationUpdate(BaseModel):
     note: str | None = None
     status: str | None = None
     guests: int | None = None
-    payment_amount: float | None = None
-    payment_status: str | None = None
 
 
 class ReservationResponse(BaseModel):
@@ -52,11 +68,6 @@ class ReservationResponse(BaseModel):
     note: str | None = None
     status: str
     guests: int
-    payment_amount: float | None = None
-    payment_status: str | None = None
-    stripe_payment_intent_id: str | None = None
-    meeting_link: str | None = None
-    custom_fields: dict | None = None
     created_at: datetime
     updated_at: datetime
 

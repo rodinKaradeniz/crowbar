@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { Business, ServiceType, Reservation, FormFieldDefinition } from "@/types";
+import { Business, ServiceType, Reservation, VisitorResponse } from "@/types";
 import {
   apiGetBusinesses,
   apiGetBusiness,
@@ -7,12 +7,11 @@ import {
   apiGetServiceTypesByBusiness,
   apiGetServiceType,
   apiGetBusinessReservations,
-  apiGetCustomerReservations,
-  apiGetMyReservations,
   apiGetBusinessStats,
-  apiGetMyCustomerStats,
+  apiGetBusinessKpis,
+  apiGetHighRiskReservations,
   apiGetBusinessCustomers,
-  apiGetCustomer,
+  apiGetBusinessVisitors,
   apiGetBusinessStaff,
   apiGetMe,
   apiLogin,
@@ -20,9 +19,9 @@ import {
   type ServiceTypeResponse,
   type ReservationResponse,
   type UserResponse,
+  type VisitorResponseRaw,
   type StaffResponse,
   type BusinessDashboardStats,
-  type CustomerDashboardStats,
   type LoginResponse,
 } from "./api-client";
 import type { MeContext } from "@/types";
@@ -95,22 +94,6 @@ function toBusiness(b: BusinessResponse): Business {
 }
 
 function toServiceType(st: ServiceTypeResponse): ServiceType {
-  const formFields: FormFieldDefinition[] | undefined = st.form_fields
-    ? st.form_fields.map((f) => ({
-        id: f.id,
-        label: f.label,
-        type: f.type as FormFieldDefinition["type"],
-        required: f.required,
-        placeholder: f.placeholder,
-        options: f.options,
-        min: f.min,
-        max: f.max,
-        maxLength: f.max_length,
-        order: f.order,
-        system: f.system,
-      }))
-    : undefined;
-
   return {
     id: st.id,
     businessId: st.business_id,
@@ -118,15 +101,11 @@ function toServiceType(st: ServiceTypeResponse): ServiceType {
     description: st.description || undefined,
     capacity: st.capacity,
     maxConcurrentBookings: st.max_concurrent_bookings || undefined,
-    requiresPayment: st.requires_payment,
-    amount: st.amount || undefined,
-    isOnline: st.is_online ?? false,
     isPendingEnabled: st.is_pending_enabled ?? true,
     duration: st.duration || undefined,
     color: st.color,
     displayOrder: st.display_order || undefined,
     image: st.image || undefined,
-    formFields,
     createdAt: st.created_at,
     updatedAt: st.updated_at,
   };
@@ -144,10 +123,6 @@ function toReservation(r: ReservationResponse): Reservation {
     note: r.note || undefined,
     status: r.status as Reservation["status"],
     guests: r.guests,
-    paymentAmount: r.payment_amount || undefined,
-    paymentStatus: r.payment_status as Reservation["paymentStatus"],
-    stripePaymentIntentId: r.stripe_payment_intent_id || undefined,
-    customFields: r.custom_fields || undefined,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -278,24 +253,6 @@ export async function fetchBusinessReservations(
   return data.map(toReservation);
 }
 
-export async function fetchCustomerReservations(
-  customerId: string
-): Promise<Reservation[]> {
-  if (USE_MOCK) return mock.fetchCustomerReservations(customerId);
-  const token = await getToken();
-  if (!token) return [];
-  const data = await apiGetCustomerReservations(customerId, token);
-  return data.map(toReservation);
-}
-
-export async function fetchMyReservations(): Promise<Reservation[]> {
-  if (USE_MOCK) return mock.fetchMyReservations();
-  const token = await getToken();
-  if (!token) return [];
-  const data = await apiGetMyReservations(token);
-  return data.map(toReservation);
-}
-
 // ─── Analytics ───────────────────────────────────────────────────────────────
 
 export async function fetchBusinessDashboardStats(
@@ -311,14 +268,25 @@ export async function fetchBusinessDashboardStats(
   }
 }
 
-export async function fetchMyCustomerStats(): Promise<CustomerDashboardStats | null> {
-  if (USE_MOCK) return mock.fetchMyCustomerStats();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function fetchBusinessKpis(businessId: string): Promise<any | null> {
   const token = await getToken();
   if (!token) return null;
   try {
-    return await apiGetMyCustomerStats(token);
+    return await apiGetBusinessKpis(businessId, token);
   } catch {
     return null;
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function fetchHighRiskReservations(businessId: string): Promise<any[]> {
+  const token = await getToken();
+  if (!token) return [];
+  try {
+    return await apiGetHighRiskReservations(businessId, token);
+  } catch {
+    return [];
   }
 }
 
@@ -331,15 +299,25 @@ export async function fetchBusinessCustomers(businessId: string) {
   return apiGetBusinessCustomers(businessId, token);
 }
 
-export async function fetchCustomer(customerId: string) {
-  if (USE_MOCK) return mock.fetchCustomer(customerId);
+function toVisitor(raw: VisitorResponseRaw): VisitorResponse {
+  return {
+    id: raw.id,
+    name: raw.name,
+    phone: raw.phone,
+    email: raw.email,
+    source: raw.source,
+    visitCount: raw.visit_count,
+    lastVisit: raw.last_visit,
+    partySize: raw.party_size,
+  };
+}
+
+export async function fetchBusinessVisitors(businessId: string): Promise<VisitorResponse[]> {
+  if (USE_MOCK) return mock.fetchBusinessVisitors(businessId);
   const token = await getToken();
-  if (!token) return null;
-  try {
-    return await apiGetCustomer(customerId, token);
-  } catch {
-    return null;
-  }
+  if (!token) return [];
+  const raw = await apiGetBusinessVisitors(businessId, token);
+  return raw.map(toVisitor);
 }
 
 // ─── Staff ───────────────────────────────────────────────────────────────────

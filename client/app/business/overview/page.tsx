@@ -6,10 +6,7 @@ import {
   fetchBusinessDashboardStats,
   fetchServiceTypesByBusiness,
 } from "@/lib/api";
-import {
-  fetchMLDemandForecast,
-  fetchMLSegmentation,
-} from "@/lib/ml-api";
+import { fetchMLDemandForecast } from "@/lib/ml-api";
 
 export default async function BusinessOverview() {
   const user = await getCurrentUser();
@@ -18,13 +15,12 @@ export default async function BusinessOverview() {
     redirect("/auth/login");
   }
 
-  const [business, stats, serviceTypes, demandForecast, segmentation] =
+  const [business, stats, serviceTypes, demandForecast] =
     await Promise.all([
       fetchBusiness(user.businessId),
       fetchBusinessDashboardStats(user.businessId),
       fetchServiceTypesByBusiness(user.businessId),
       fetchMLDemandForecast(),
-      fetchMLSegmentation(),
     ]);
 
   if (!business || !stats) {
@@ -41,7 +37,6 @@ export default async function BusinessOverview() {
       stats={stats}
       serviceTypes={serviceTypes}
       demandForecast={demandForecast}
-      segmentation={segmentation}
     />
   );
 }

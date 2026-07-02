@@ -36,6 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import {
   AlertTriangle,
   ArrowDownCircle,
@@ -126,6 +127,9 @@ export function InventoryManagementClient({ businessId }: Props) {
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
+  // ── Delete confirmation ─────────────────────────────────────────────────────
+  const [itemToDelete, setItemToDelete] = useState<InventoryItem | null>(null);
+
   useEffect(() => {
     void loadItems();
   }, [businessId]);
@@ -193,8 +197,11 @@ export function InventoryManagementClient({ businessId }: Props) {
     }
   }
 
-  async function deleteItem(item: InventoryItem) {
-    if (!confirm(`Delete "${item.name}"? This will also delete all movement history.`)) return;
+  function deleteItem(item: InventoryItem) {
+    setItemToDelete(item);
+  }
+
+  async function confirmDeleteItem(item: InventoryItem) {
     try {
       await clientDeleteInventoryItem(businessId, item.id);
       setItems((prev) => prev.filter((i) => i.id !== item.id));
@@ -613,6 +620,19 @@ export function InventoryManagementClient({ businessId }: Props) {
           </div>
         </SheetContent>
       </Sheet>
+
+      <ConfirmationDialog
+        open={itemToDelete !== null}
+        onOpenChange={(open) => !open && setItemToDelete(null)}
+        title="Delete Item"
+        description={`"${itemToDelete?.name}" and all its movement history will be permanently deleted.`}
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={() => {
+          if (itemToDelete) void confirmDeleteItem(itemToDelete);
+          setItemToDelete(null);
+        }}
+      />
     </div>
   );
 }
