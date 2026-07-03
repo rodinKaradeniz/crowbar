@@ -76,7 +76,10 @@ async def update_item(
 ):
     if business.id != business_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    item = await inventory_service.update_item(db, item_id, business_id, body)
+    try:
+        item = await inventory_service.update_item(db, item_id, business_id, body)
+    except inventory_service.UnitTypeChangeBlocked as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
     await db.commit()

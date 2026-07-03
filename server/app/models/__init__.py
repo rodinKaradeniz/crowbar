@@ -7,6 +7,7 @@ from app.models.location import Location
 from app.models.menu import ItemLibrary, Menu, MenuCategory, MenuItem, Modifier, ModifierGroup
 from app.models.notification import Notification
 from app.models.order import Order, OrderLineItem, OrderStatusTimeline
+from app.models.recipe import MenuItemIngredient
 from app.models.reservation import Reservation
 from app.models.service_type import ServiceType
 from app.models.staff import Staff
@@ -34,6 +35,7 @@ __all__ = [
     "OrderStatusTimeline",
     "InventoryItem",
     "StockMovement",
+    "MenuItemIngredient",
     "Table",
     "BotConfig",
     "Tab",

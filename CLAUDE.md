@@ -176,6 +176,7 @@ rk-reservations/
 | `016_tabs.sql`                              | New `tabs` table (open/closed, opened_by/closed_by → users, `settled_method`, nullable `table_id`/`customer_id`); adds nullable `orders.tab_id` FK. Tabs group orders under one running total; total is computed on demand (no denormalized column)                                                                                                                                                                                                             |
 | `017_happy_hour_and_timezone.sql`           | Adds `businesses.timezone` (`VARCHAR(64)`, NOT NULL default `'UTC'`, IANA name). New `happy_hour_windows` table (business-wide windows: `name`, `days_of_week INT[]` with 0=Monday..6=Sunday, wall-clock `start_time`/`end_time` TIME interpreted against `businesses.timezone`, `is_active`). Adds nullable `menu_items.happy_hour_price NUMERIC(10,2)` (flat override; NULL = never discounts)                                                                  |
 | `018_age_verification.sql`                  | Age verification (self-attestation). Adds `menu_items.is_alcoholic BOOLEAN NOT NULL DEFAULT false`; `order_line_items.is_alcoholic BOOLEAN NOT NULL DEFAULT false` (snapshot at placement, like `routing_tag`); `orders.age_confirmed BOOLEAN NOT NULL DEFAULT false` (the attestation, recorded on the order); `businesses.legal_drinking_age INT NOT NULL DEFAULT 18` (configurable per country; never hardcoded). Whether an order "contains alcohol" is derived from its line items on demand — not stored                                          |
+| `019_pour_keg_and_recipes.sql`              | Pour/keg inventory + recipe wiring (Tier B ∪ Phase 8). Adds `inventory_items.unit_type VARCHAR(16) NOT NULL DEFAULT 'each'` (`each`=countable, unchanged; `bottle`/`keg`=liquid tracked in **ml**) and `inventory_items.container_volume_ml NUMERIC(10,3)` (ml per bottle/keg; NULL for `each`). Makes the dead `menu_item_ingredients` stub real: **drops its redundant `unit` column** and keeps `quantity` (reinterpreted as amount in the linked inventory item's native unit — ml for bottle/keg, count for `each`). Adds `'sale'` to the `stock_movements.movement_type` CHECK (auto recipe deduction, distinct from receive/adjust/waste) |
 
 ---
 
@@ -186,7 +187,7 @@ rk-reservations/
 | `reservations` | Complete             | Core booking flow, staff management, analytics                                                                                                                                                                                                                                 |
 | `queue`        | Complete (Phase 1.5) | Walk-in queue, WebSocket live board, SMS on call                                                                                                                                                                                                                               |
 | `ordering`     | Complete (Phase 2)   | QR menu, cart, order placement (idempotent), kitchen/bar ticket board, WebSocket; item library (reusable templates, copy-on-add); ordering on/off toggle (`is_accepting_orders`); **tabs** (Phase B.1) — group orders under one running total, close with simulated settlement; **happy hour** (Phase B.2) — timezone-aware windows discount opted-in items on both the menu read and order placement paths; **age verification** (Phase B.3) — `is_alcoholic` menu flag drives a checkout self-attestation (server-re-validated via `age_confirmed`, channel-scoped) + an alcohol badge on staff tickets |
-| `inventory`    | Complete (Phase 3)   | Stock items, movements (receive/adjust/waste), par levels, low-stock alerts; `menu_item_ingredients` recipe stub for future auto-deduction                                                                                                                                     |
+| `inventory`    | Complete (Phase 3)   | Stock items, movements (receive/adjust/waste + auto **sale** deductions), par levels, low-stock alerts. **Pour/keg (Phase B.4):** `unit_type` (`each`/`bottle`/`keg`) with liquid quantities tracked in ml; `container_volume_ml` for container→ml receive. **Recipes (Phase 8/B.4):** `menu_item_ingredients` is now live — recipes auto-deduct on order `served`, zero-stock auto-disables the menu item (manual re-enable), and below-par ingredients surface a menu-item low-stock badge |
 | `insights`     | Complete (Phase 5)   | ML outputs surfaced (segmentation, cancellation, demand forecast); operational KPIs (reservations/ordering/inventory); high-risk reservation flagging; overview carousel shows 3-day forecast slide                                                                            |
 
 ## Demo-Hardening Status (Phase 5.5)
@@ -245,8 +246,8 @@ All P0 and P1 hardening items are complete:
 9. **`alert_triggered` on `stock_movements`**
    When a movement causes `current_quantity < par_quantity`, the movement row's `alert_triggered` is set `true` and `notify_business_staff` fires with `kind="inventory_low_stock"`. The movement row itself serves as the audit record of when and why an alert was sent — no separate alerts table.
 
-10. **`menu_item_ingredients` is a stub — no order logic yet**
-    The `menu_item_ingredients` join table (menu_item_id → inventory_item_id + quantity) exists as a FK scaffold for future auto-deduction on order placement. Nothing currently reads or writes it via the API. It exists so Phase 8 (Recipe Management) can wire recipes without a schema migration.
+10. **`menu_item_ingredients` is now live (was a stub through Phase B.3)**
+    The `menu_item_ingredients` join table (menu_item_id → inventory_item_id + `quantity`) was a dead FK scaffold until Phase B.4 wired it into real recipe data + auto-deduction. The `unit` column was dropped in migration 019 (quantity is now in the linked inventory item's native unit). See Non-Obvious #37 for the full unit-type/ml/deduction design.
 
 11. **Event stream (Phase 4) — `publish()` is fire-and-forget**
     `publish(DomainEvent(...))` is always called _after_ `db.commit()`. Redis errors are caught and logged but never re-raised — a failed publish drops the WS push silently without crashing the HTTP response. The consumer (`stream_consumer.py`) runs as an asyncio background task in the FastAPI lifespan; it uses `XREADGROUP` with `ws_push` consumer group on stream `crowbar:events`. WS managers (`queue_ws_manager`, `order_ws_manager`) are unchanged — they still do the final `broadcast()`, but are now driven by the consumer rather than the router. `inventory.*` and `reservation.*` events flow through the stream but have no WS consumer yet (Phase 5).
@@ -329,6 +330,9 @@ All P0 and P1 hardening items are complete:
 36. **Age verification is self-attestation only, and the backend is authoritative — the checkbox is a formality, the staff glance is the real check**
     This is a speed bump plus a visual cue, **not** identity verification: no ID scan, no third-party service, no stored proof of age. `menu_items.is_alcoholic` flags an item. "Does this order contain alcohol" is **never stored** — it is derived on demand by `order_service.order_contains_alcohol(items)` (the single source of truth; accepts resolved `MenuItem` rows at placement or stored `OrderLineItem` rows at read, both carrying `is_alcoholic`). Order line items **snapshot** `is_alcoholic` at placement (like `routing_tag`/`unit_price`), so the staff alcohol badge survives later menu edits or item deletion (`item_id` is nullable). The attestation itself **is** persisted, but only as `orders.age_confirmed` on the order row — no session-level "already confirmed, skip next time" logic. **The backend re-validates, never trusting a client "box checked" flag:** `place_order` computes `order_contains_alcohol` from the resolved items and, when `require_age_confirmation` is set and the cart is alcoholic, raises `AgeConfirmationRequired` (→ 422) unless `request.age_confirmed` is true. **Channel scoping is structural, not a stored `channel` string:** the public order endpoint (customer self-service) calls `place_order` with the default `require_age_confirmation=True`; the tabs path (`tab_service.add_order_to_tab`, staff entering an order in person) passes `require_age_confirmation=False`. Those are the only two callers of `place_order`, so gating at the call site cleanly separates customer from staff without populating/reading `orders.channel`. **`businesses.legal_drinking_age` (default 18) is read for the checkout copy — no age is hardcoded** in logic or copy (different countries: 18 EU/Turkey, 21 US); it is editable on the Business Info settings page. The public order page pulls it from the resolved business and passes it to the checkout attestation ("I am at least N years old"). Frontend gates the Place Order button on the checkbox; the 422 is the safety net. **Deliberately NOT touched:** the item library carries no alcohol flag; only checkout/placement is gated (menu browsing is open); reservations/booking are unaffected.
 
+37. **Pour/keg inventory is ml-canonical, and bottle & keg share identical math — the unit_type only picks UI presets; recipe deduction is best-effort and never blocks a status transition**
+    `inventory_items.unit_type ∈ {each, bottle, keg}`. **`each` is the unchanged legacy behavior** (countable garnishes, napkins) — zero behavior change, fully backward compatible. **`bottle` and `keg` are the same underlying thing**: a liquid whose `current_quantity`, `par_quantity`, and recipe quantities are all stored and computed in **milliliters (ml)**. There is no fractional-bottle-count storage. `bottle` vs `keg` differ **only** in which container-size presets the frontend offers (`client/lib/units.ts`) — the DB and service math are byte-identical, so never special-case one vs the other. `container_volume_ml` is the ml capacity of one container; a container-count receipt (`StockMovementCreate.container_quantity`, receive-only) is converted to a ml delta server-side in `inventory_service.record_movement` (`container_quantity * container_volume_ml`), reusing the one `apply_movement` core — the movement row always stores the ml delta. **Recipe quantity is in the LINKED item's native unit** (ml for bottle/keg, count for `each`), so a cocktail's rum pour and its lime-wedge garnish coexist in one recipe; the deduction is `quantity * line_item.quantity` regardless of unit. The oz/ml toggle in the recipe builder is a **pure frontend convenience** — everything converts to ml before it leaves the client (`ozToMl`); the backend only ever sees the native unit. **Deduction fires once, on the `served` transition** (`order_service.advance_order_status` → `recipe_service.deduct_for_served_order`), writing `movement_type='sale'` rows via the shared `apply_movement`. It is **best-effort and non-blocking by design**: a missing recipe, a missing/deleted inventory item, or a negative result is logged and swallowed — a bar running out mid-service is expected, not an error, so it must never fail the status change (`served` is terminal, so no double-deduction risk). Par breaches from a `sale` still fire the existing `inventory_low_stock` notification (reused, not rebuilt). When an ingredient hits **`<= 0`, every menu item requiring it is auto-disabled** (`is_available=False`); **re-enable is manual** (decided up front — a single `is_available` flag can't distinguish an auto-disable from a staff 86, so auto-restore would clobber deliberate disables; manual re-enable is the safe choice). The menu-management **low-stock badge** reuses the same par check (`recipe_service.get_low_stock_menu_item_ids`), surfaced at the menu-item level. **Only two callers write `menu_item_ingredients`** (the recipe GET/PUT replace-all endpoints); the `'sale'` movement type is **system-generated only** — `StockMovementCreate` still rejects it (`^(receive|adjust|waste)$`). **Guarded mutation risk:** because `quantity` is native-unit, changing an item's `unit_type` across the **count↔ml boundary** (`each` ↔ `bottle`/`keg`) after a recipe references it would silently reinterpret that number (a `44` meaning "44 ml" becomes "44 units"). `inventory_service.update_item` blocks exactly that transition with a **409** (`UnitTypeChangeBlocked`) while any `menu_item_ingredients` row references the item — the staff must edit/remove the recipe reference first (no auto-reassign UI). `bottle` ↔ `keg` is **exempt** (identical ml math), and an item with no recipe references changes freely; the 409 detail surfaces in the inventory-edit form toast. This guards future edits only — no retroactive check on existing rows. **Out of scope (deferred):** waste/line-cleaning/pour-variance (Tier C), per-keg-instance tracking (inventory stays pooled), reorder suggestions (Phase 9).
+
 ---
 
 ## Key Files
@@ -369,8 +373,12 @@ All P0 and P1 hardening items are complete:
 | `server/app/services/order_service.py`                                   | Order placement (idempotent), status transitions                                                                                               |
 | `server/app/services/order_ws_manager.py`                                | In-memory WebSocket manager for orders                                                                                                         |
 | `client/hooks/use-order-socket.ts`                                       | WebSocket hook for live ticket board                                                                                                           |
-| `server/app/services/inventory_service.py`                               | Inventory CRUD, movement logic, par breach → notification                                                                                      |
+| `server/app/services/inventory_service.py`                               | Inventory CRUD, movement logic, par breach → notification; `apply_movement` (schema-free core reused by recipe `sale` deductions); container→ml receive conversion |
 | `server/app/routers/inventory.py`                                        | Inventory REST endpoints (all behind `require_module("inventory")`)                                                                            |
+| `server/app/models/recipe.py`                                            | `MenuItemIngredient` ORM model (recipe line; `quantity` in the linked item's native unit)                                                       |
+| `server/app/services/recipe_service.py`                                  | Recipe get/set (replace-all), `deduct_for_served_order` (best-effort, non-blocking + auto-disable on ≤0), `get_low_stock_menu_item_ids`         |
+| `server/app/schemas/recipe.py`                                           | `RecipeIngredientInput/Response`, `RecipeSetRequest`, `MenuItemStockFlag`                                                                       |
+| `client/lib/units.ts`                                                    | Unit-type helpers: container-volume presets (bottle/keg, US+metric), ml⇄oz conversion, `isLiquidUnitType`                                       |
 | `client/app/business/inventory/inventory-management-client.tsx`          | Inventory dashboard UI                                                                                                                         |
 | `server/app/core/events.py`                                              | `DomainEvent` class + `publish()` → writes to Redis Stream `crowbar:events`                                                                    |
 | `server/app/core/redis_client.py`                                        | Async Redis singleton (`redis.asyncio`)                                                                                                        |
@@ -613,6 +621,33 @@ Removed the surviving residue: `config.py` `google_client_id/secret/redirect_uri
 
 **Justified remaining grep hits (all legitimate, not live Google integration):** `OAuth2PasswordBearer`/`oauth2_scheme` in `dependencies.py` (FastAPI JWT bearer, not Google); `next/font/google` in `layout.tsx` (Google Fonts / Geist); "Google Chrome" in the FAQ supported-browsers list; migrations 003/006/013 (historical create→drop record); and CLAUDE.md's own historical removal notes.
 
+### Phase B.4 — Pour/Keg Inventory + Recipe Wiring ✅ (most recent)
+
+Fourth slice of Tier B, merged with **Phase 8** (Recipe Management & Inventory Sync) per the standing note that they overlap and shouldn't be built twice. Wires the previously-dead `menu_item_ingredients` stub (Non-Obvious #10) into real recipes, teaches inventory unit-of-measure so spirit pours and kegs are tracked accurately in ml, and auto-deducts inventory on order fulfillment. Additive — `each`-type inventory and items without recipes behave exactly as before.
+
+**Schema (migration 019):**
+
+- `inventory_items.unit_type` (`each`/`bottle`/`keg`; `bottle`/`keg` = liquid in ml) + `inventory_items.container_volume_ml` (ml per container, for container→ml receive).
+- `menu_item_ingredients`: dropped the redundant `unit` column; `quantity` is now the amount in the linked inventory item's native unit (ml for bottle/keg, count for `each`).
+- `stock_movements.movement_type` CHECK gains `'sale'` (system-generated recipe deduction).
+
+**Backend:**
+
+- `inventory_service.apply_movement` — schema-free movement core extracted from `record_movement`, reused by recipe `sale` deductions. `record_movement` resolves a container-count receipt (`container_quantity`) to a ml delta via `container_volume_ml`.
+- New `recipe_service`: `get_recipe`/`set_recipe` (replace-all), `deduct_for_served_order` (best-effort, non-blocking; auto-disables menu items whose ingredient hits ≤ 0), `get_low_stock_menu_item_ids`.
+- `order_service.advance_order_status` calls the deduction on the `served` transition only.
+- New `MenuItemIngredient` model + `recipe.py` schemas; recipe GET/PUT + `menu-item-stock-flags` endpoints on the ordering router (behind `require_module("ordering")`).
+
+**Frontend:**
+
+- Inventory item form: `unit_type` selector + `container_volume_ml` (with US+metric presets, free-entry override); receive dialog offers "containers vs ml" for bottle/keg with a live ml preview.
+- Menu management: per-item **Recipe** editor (inventory-item + quantity rows, ml/oz toggle that converts to ml on save) + a **low-stock badge** when any recipe ingredient is below par.
+- `client/lib/units.ts` — presets + ml⇄oz + `isLiquidUnitType`.
+
+**Resolved judgment calls (asked up front):** (a) auto-disabled items require **manual re-enable** (a single `is_available` flag can't distinguish auto-disable from a staff 86, so auto-restore would clobber deliberate disables); (b) recipe quantities are stored in the ingredient's **native unit** (not forced ml-only), so cocktail garnishes (`each`) and pours (ml) coexist in one recipe. **Not asked (handoff already decided):** out-of-stock at `served` never blocks the transition. See Non-Obvious #37.
+
+**Deliberately out of scope (deferred):** waste/line-cleaning/pour-variance accounting (Tier C), per-keg-instance tracking (inventory stays pooled), reorder suggestions (Phase 9 ML V2), and any change to how `each`-type inventory behaves (fully backward compatible). Demo seed (`002_seed_puzzles.sql`) adds ml liquid items + a Mojito recipe (rum below par → visible low-stock badge).
+
 ### Phase 6 — Stations & Routing (Planned)
 
 Replace the hardcoded `routing_tag` enum (`kitchen | bar | any`) on menu items with a proper stations model:
@@ -632,14 +667,14 @@ Proper role-based access control tailored to service businesses:
 - Platform admin scope (cross-business Crowbar superadmin)
 - Role management UI in staff/settings; roles assignable per staff member
 
-### Phase 8 — Recipe Management & Inventory Sync (Planned)
+### Phase 8 — Recipe Management & Inventory Sync ✅ (done in Phase B.4)
 
-Wire the `menu_item_ingredients` stub into real functionality:
+Wired the `menu_item_ingredients` stub into real functionality (merged with the Tier B pour/keg work — see Phase B.4 below and Non-Obvious #37):
 
-- Recipe builder UI per menu item: map ingredients + quantities
-- Auto-deduct inventory when an order line item reaches "served" status
-- Auto-disable menu items when any required ingredient hits zero stock
-- Low-stock warning badges on menu item cards in the management UI
+- [x] Recipe builder UI per menu item: map ingredients + quantities (ml/oz toggle)
+- [x] Auto-deduct inventory when an order reaches "served" status
+- [x] Auto-disable menu items when any required ingredient hits zero stock (manual re-enable)
+- [x] Low-stock warning badges on menu item cards in the management UI
 
 ### Phase 9 — ML V2 (Planned)
 
@@ -674,7 +709,7 @@ Sequenced cheapest-highest-impact first. Tiers are independent enough to stop af
 - [~] **Tabs**: DONE (Phase B.1, simplified) — a `tabs` table groups discrete orders under one running total, closed with a simulated `settled_method`. Additive (orders can still be standalone). Total computed on demand. **Not yet built:** GET list of open tabs, add-order-to-tab UI, split/guest-level attribution (all deliberately deferred — see Phase B.1 note).
 - [x] **Age verification**: DONE (Phase B.3) — `is_alcoholic` flag on menu items drives a self-attestation checkbox on the ordering checkout (server-re-validated via `age_confirmed`; channel-scoped so staff/tab orders skip it) and an alcohol badge on staff order tickets. `businesses.legal_drinking_age` (default 18) is configurable and read for the copy — no age hardcoded. Ordering-only; self-attestation, not ID verification (see Future — ID Verification). **Deferred:** the door/queue age gate and door ID-check flag were not built (this pass is ordering checkout only).
 - [x] **Happy hour**: DONE (Phase B.2) — business-wide `happy_hour_windows` (timezone-aware, day-of-week + wall-clock range) + a flat `menu_items.happy_hour_price` opt-in. One `is_happy_hour_active` function drives both the public menu display and order-placement pricing. Also landed `businesses.timezone` (IANA) and a single canonical day-of-week enum (Monday=0) shared front/back. Overnight (cross-midnight) windows are now supported (post-B.2 pass). **Deferred:** percentage/formula discounts, per-item schedules, promo notifications.
-- [ ] **Pour/keg inventory**: unit types for spirits (bottle → oz/ml pours) and draft (kegs); wire into Phase 8 recipe deduction. Fold into / precede Phase 8 rather than duplicating it.
+- [x] **Pour/keg inventory**: DONE (Phase B.4, merged with Phase 8) — `unit_type` (`each`/`bottle`/`keg`) with liquids tracked in ml, `container_volume_ml` for container→ml receive, and full recipe wiring (`menu_item_ingredients`) with auto-deduction on `served`, zero-stock auto-disable (manual re-enable), and menu-item low-stock badges. ml/oz toggle in the recipe builder is frontend-only. See Non-Obvious #37.
 
 ### Tier C — Nightlife Platform (larger — new surface)
 
@@ -819,9 +854,9 @@ enhancement.
 93. [ ] Platform admin scope (cross-business Crowbar superadmin).
 94. [ ] Frontend: role management UI in staff/settings; role picker on invite flow.
 
-### Phase 8 (Recipe Management & Inventory Sync) — Planned
+### Phase 8 (Recipe Management & Inventory Sync) — All Complete (Phase B.4)
 
-95. [ ] Recipe builder UI per menu item: map ingredients + quantities via menu_item_ingredients.
-96. [ ] Auto-deduct inventory when order line item → "served".
-97. [ ] Auto-disable menu items when any required ingredient hits zero stock.
-98. [ ] Low-stock warning badges on menu item cards.
+95. [DONE] Recipe builder UI per menu item: map ingredients + quantities via menu_item_ingredients (ml/oz toggle, functional).
+96. [DONE] Auto-deduct inventory when order → "served" (best-effort, non-blocking; `movement_type='sale'`).
+97. [DONE] Auto-disable menu items when any required ingredient hits ≤ 0 stock (manual re-enable).
+98. [DONE] Low-stock warning badges on menu item cards (below-par ingredient → menu-item badge).

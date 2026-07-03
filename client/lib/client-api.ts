@@ -15,6 +15,7 @@ import {
   Order,
   QueueEntry,
   QueueStatus,
+  RecipeIngredient,
   Reservation,
   ServiceType,
   StockMovement,
@@ -1304,6 +1305,9 @@ function toInventoryItem(raw: Record<string, unknown>): InventoryItem {
     locationId: raw.location_id as string | undefined,
     name: raw.name as string,
     unit: raw.unit as string,
+    unitType: (raw.unit_type as InventoryItem["unitType"]) ?? "each",
+    containerVolumeMl:
+      raw.container_volume_ml != null ? Number(raw.container_volume_ml) : undefined,
     currentQuantity: currentQty,
     parQuantity: parQty,
     costPerUnit: raw.cost_per_unit != null ? Number(raw.cost_per_unit) : undefined,
@@ -1320,7 +1324,7 @@ function toStockMovement(raw: Record<string, unknown>): StockMovement {
     businessId: raw.business_id as string,
     locationId: raw.location_id as string | undefined,
     itemId: raw.item_id as string,
-    movementType: raw.movement_type as "receive" | "adjust" | "waste",
+    movementType: raw.movement_type as StockMovement["movementType"],
     quantityDelta: Number(raw.quantity_delta),
     notes: raw.notes as string | undefined,
     createdBy: raw.created_by as string | undefined,
@@ -1345,6 +1349,8 @@ export async function clientCreateInventoryItem(
   data: {
     name: string;
     unit: string;
+    unitType?: string;
+    containerVolumeMl?: number;
     parQuantity?: number;
     costPerUnit?: number;
     notes?: string;
@@ -1352,6 +1358,9 @@ export async function clientCreateInventoryItem(
   },
 ): Promise<InventoryItem> {
   const body: Record<string, unknown> = { name: data.name, unit: data.unit };
+  if (data.unitType !== undefined) body.unit_type = data.unitType;
+  if (data.containerVolumeMl !== undefined)
+    body.container_volume_ml = data.containerVolumeMl;
   if (data.parQuantity !== undefined) body.par_quantity = data.parQuantity;
   if (data.costPerUnit !== undefined) body.cost_per_unit = data.costPerUnit;
   if (data.notes !== undefined) body.notes = data.notes;
@@ -1369,6 +1378,9 @@ export async function clientUpdateInventoryItem(
   data: {
     name?: string;
     unit?: string;
+    unitType?: string;
+    // null clears container_volume_ml (e.g. switching an item back to 'each').
+    containerVolumeMl?: number | null;
     parQuantity?: number;
     costPerUnit?: number;
     notes?: string;
@@ -1378,6 +1390,11 @@ export async function clientUpdateInventoryItem(
   const body: Record<string, unknown> = {};
   if (data.name !== undefined) body.name = data.name;
   if (data.unit !== undefined) body.unit = data.unit;
+  if (data.unitType !== undefined) body.unit_type = data.unitType;
+  // Send when explicitly provided (a number sets it, null clears it). Backend
+  // treats "field present" as set/clear via model_fields_set.
+  if (data.containerVolumeMl !== undefined)
+    body.container_volume_ml = data.containerVolumeMl;
   if (data.parQuantity !== undefined) body.par_quantity = data.parQuantity;
   if (data.costPerUnit !== undefined) body.cost_per_unit = data.costPerUnit;
   if (data.notes !== undefined) body.notes = data.notes;
@@ -1410,15 +1427,19 @@ export async function clientRecordStockMovement(
   itemId: string,
   data: {
     movementType: "receive" | "adjust" | "waste";
-    quantityDelta: number;
+    // Provide exactly one of quantityDelta (item's storage unit — ml for
+    // bottle/keg) or containerQuantity (number of containers for a bottle/keg
+    // receive; converted to ml server-side).
+    quantityDelta?: number;
+    containerQuantity?: number;
     notes?: string;
     locationId?: string;
   },
 ): Promise<StockMovement> {
-  const body: Record<string, unknown> = {
-    movement_type: data.movementType,
-    quantity_delta: data.quantityDelta,
-  };
+  const body: Record<string, unknown> = { movement_type: data.movementType };
+  if (data.quantityDelta !== undefined) body.quantity_delta = data.quantityDelta;
+  if (data.containerQuantity !== undefined)
+    body.container_quantity = data.containerQuantity;
   if (data.notes !== undefined) body.notes = data.notes;
   if (data.locationId !== undefined) body.location_id = data.locationId;
   const result = await authFetch<Record<string, unknown>>(
@@ -1426,6 +1447,59 @@ export async function clientRecordStockMovement(
     { method: "POST", body: JSON.stringify(body) },
   );
   return toStockMovement(result);
+}
+
+// ─── Recipes (menu_item_ingredients) ──────────────────────────────────────────
+
+function toRecipeIngredient(raw: Record<string, unknown>): RecipeIngredient {
+  return {
+    id: raw.id as string,
+    inventoryItemId: raw.inventory_item_id as string,
+    inventoryItemName: raw.inventory_item_name as string,
+    unitType: (raw.unit_type as RecipeIngredient["unitType"]) ?? "each",
+    unit: raw.unit as string,
+    quantity: Number(raw.quantity),
+  };
+}
+
+export async function clientGetRecipe(
+  businessId: string,
+  itemId: string,
+): Promise<RecipeIngredient[]> {
+  const result = await authFetch<Record<string, unknown>[]>(
+    `/ordering/${businessId}/items/${itemId}/recipe`,
+  );
+  return (result ?? []).map(toRecipeIngredient);
+}
+
+export async function clientSetRecipe(
+  businessId: string,
+  itemId: string,
+  ingredients: { inventoryItemId: string; quantity: number }[],
+): Promise<RecipeIngredient[]> {
+  const result = await authFetch<Record<string, unknown>[]>(
+    `/ordering/${businessId}/items/${itemId}/recipe`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        ingredients: ingredients.map((i) => ({
+          inventory_item_id: i.inventoryItemId,
+          quantity: i.quantity,
+        })),
+      }),
+    },
+  );
+  return (result ?? []).map(toRecipeIngredient);
+}
+
+/** Menu item ids that have at least one recipe ingredient below par (for badges). */
+export async function clientGetMenuItemStockFlags(
+  businessId: string,
+): Promise<string[]> {
+  const result = await authFetch<string[]>(
+    `/ordering/${businessId}/menu-item-stock-flags`,
+  );
+  return result ?? [];
 }
 
 export async function clientGetStockMovements(

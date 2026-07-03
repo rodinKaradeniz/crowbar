@@ -23,7 +23,17 @@ class InventoryItem(Base, UUIDMixin, TimestampMixin):
         nullable=True,
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Free-text display unit (e.g. "L", "kg", "oz"). Cosmetic label only.
     unit: Mapped[str] = mapped_column(String(50), default="each", nullable=False)
+    # Unit-of-measure semantics: 'each' = countable (unchanged legacy behavior);
+    # 'bottle'/'keg' = liquid tracked in ml (current_quantity/par_quantity are ml).
+    # bottle and keg share identical math — they differ only in UI size presets.
+    unit_type: Mapped[str] = mapped_column(String(16), default="each", nullable=False)
+    # ml capacity of one storage container (one bottle / one keg). Used to convert
+    # a container-count receipt into a ml delta. NULL for 'each' items.
+    container_volume_ml: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 3), nullable=True
+    )
     current_quantity: Mapped[Decimal] = mapped_column(
         Numeric(10, 3), default=0, nullable=False
     )
@@ -57,7 +67,8 @@ class StockMovement(Base, UUIDMixin):
         nullable=False,
     )
     movement_type: Mapped[str] = mapped_column(String(20), nullable=False)
-    # movement_type: receive | adjust | waste
+    # movement_type: receive | adjust | waste | sale
+    # 'sale' = automatic deduction from recipe on order fulfillment (see recipe_service).
     quantity_delta: Mapped[Decimal] = mapped_column(Numeric(10, 3), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(

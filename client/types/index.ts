@@ -274,13 +274,17 @@ export interface Tab {
 
 // ─── Inventory ────────────────────────────────────────────────────────────────
 
+export type InventoryUnitType = "each" | "bottle" | "keg";
+
 export interface InventoryItem {
   id: string;
   businessId: string;
   locationId?: string;
   name: string;
   unit: string;
-  currentQuantity: number;
+  unitType: InventoryUnitType; // 'each' countable; 'bottle'/'keg' liquid tracked in ml
+  containerVolumeMl?: number; // ml per container (bottle/keg); undefined for 'each'
+  currentQuantity: number; // ml for bottle/keg; count for 'each'
   parQuantity?: number;
   costPerUnit?: number;
   notes?: string;
@@ -294,12 +298,23 @@ export interface StockMovement {
   businessId: string;
   locationId?: string;
   itemId: string;
-  movementType: "receive" | "adjust" | "waste";
+  movementType: "receive" | "adjust" | "waste" | "sale"; // 'sale' = auto recipe deduction
   quantityDelta: number;
   notes?: string;
   createdBy?: string;
   alertTriggered: boolean;
   createdAt: string;
+}
+
+// A recipe line: one inventory item consumed by a menu item. quantity is in the
+// linked inventory item's native unit (ml for bottle/keg, count for 'each').
+export interface RecipeIngredient {
+  id: string;
+  inventoryItemId: string;
+  inventoryItemName: string;
+  unitType: InventoryUnitType;
+  unit: string;
+  quantity: number;
 }
 
 export interface Reservation {

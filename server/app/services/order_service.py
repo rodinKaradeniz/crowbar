@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.models.menu import MenuItem
 from app.models.order import Order, OrderLineItem, OrderStatusTimeline
 from app.schemas.order import OrderPlaceRequest, OrderStatusUpdateRequest
-from app.services import happy_hour_service
+from app.services import happy_hour_service, recipe_service
 
 # Valid status transitions
 _TRANSITIONS: dict[str, list[str]] = {
@@ -255,6 +255,12 @@ async def advance_order_status(
         )
     )
     await db.flush()
+
+    # On fulfillment, auto-deduct recipe ingredients from inventory. Best-effort:
+    # never blocks or fails the transition (recipe_service swallows its own errors).
+    if request.status == "served":
+        await recipe_service.deduct_for_served_order(db, order, business_id)
+
     await db.refresh(order, ["line_items", "status_timeline"])
     return order
 

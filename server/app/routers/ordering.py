@@ -37,7 +37,8 @@ from app.schemas.order import (
     OrderResponse,
     OrderStatusUpdateRequest,
 )
-from app.services import happy_hour_service, menu_service, order_service
+from app.schemas.recipe import RecipeIngredientResponse, RecipeSetRequest
+from app.services import happy_hour_service, menu_service, order_service, recipe_service
 from app.services.order_ws_manager import manager
 
 logger = logging.getLogger(__name__)
@@ -418,6 +419,68 @@ async def delete_item(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ─── Staff: Recipes (menu_item_ingredients) ────────────────────────────────────
+
+@router.get(
+    "/api/ordering/{business_id}/items/{item_id}/recipe",
+    response_model=list[RecipeIngredientResponse],
+    dependencies=[Depends(require_module("ordering"))],
+)
+async def get_item_recipe(
+    business_id: UUID,
+    item_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    business: Business = Depends(get_current_business),
+):
+    if business.id != business_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    recipe = await recipe_service.get_recipe(db, item_id, business_id)
+    if recipe is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
+    return recipe
+
+
+@router.put(
+    "/api/ordering/{business_id}/items/{item_id}/recipe",
+    response_model=list[RecipeIngredientResponse],
+    dependencies=[Depends(require_module("ordering"))],
+)
+async def set_item_recipe(
+    business_id: UUID,
+    item_id: UUID,
+    body: RecipeSetRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    business: Business = Depends(get_current_business),
+):
+    if business.id != business_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    recipe = await recipe_service.set_recipe(db, item_id, business_id, body.ingredients)
+    if recipe is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
+    await db.commit()
+    return recipe
+
+
+@router.get(
+    "/api/ordering/{business_id}/menu-item-stock-flags",
+    response_model=list[UUID],
+    dependencies=[Depends(require_module("ordering"))],
+)
+async def get_menu_item_stock_flags(
+    business_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    business: Business = Depends(get_current_business),
+):
+    """Menu item ids with at least one recipe ingredient below par (for badges)."""
+    if business.id != business_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    ids = await recipe_service.get_low_stock_menu_item_ids(db, business_id)
+    return list(ids)
 
 
 # ─── Staff: Modifier Groups ────────────────────────────────────────────────────

@@ -38,6 +38,12 @@ import {
 import { Label } from "@/components/ui/label";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import {
+  UNIT_TYPE_LABELS,
+  isLiquidUnitType,
+  presetsForUnitType,
+  type UnitType,
+} from "@/lib/units";
+import {
   AlertTriangle,
   ArrowDownCircle,
   ArrowUpCircle,
@@ -56,6 +62,8 @@ interface Props {
 type ItemFormState = {
   name: string;
   unit: string;
+  unitType: UnitType;
+  containerVolumeMl: string;
   parQuantity: string;
   costPerUnit: string;
   notes: string;
@@ -65,11 +73,15 @@ type MovementFormState = {
   movementType: "receive" | "adjust" | "waste";
   quantityDelta: string;
   notes: string;
+  // For a bottle/keg receive: enter number of containers instead of raw ml.
+  receiveAsContainers: boolean;
 };
 
 const EMPTY_ITEM_FORM: ItemFormState = {
   name: "",
   unit: "each",
+  unitType: "each",
+  containerVolumeMl: "",
   parQuantity: "",
   costPerUnit: "",
   notes: "",
@@ -79,6 +91,7 @@ const EMPTY_MOVEMENT_FORM: MovementFormState = {
   movementType: "receive",
   quantityDelta: "",
   notes: "",
+  receiveAsContainers: true,
 };
 
 function movementTypeLabel(type: string) {
@@ -159,6 +172,9 @@ export function InventoryManagementClient({ businessId }: Props) {
     setItemForm({
       name: item.name,
       unit: item.unit,
+      unitType: item.unitType ?? "each",
+      containerVolumeMl:
+        item.containerVolumeMl != null ? String(item.containerVolumeMl) : "",
       parQuantity: item.parQuantity != null ? String(item.parQuantity) : "",
       costPerUnit: item.costPerUnit != null ? String(item.costPerUnit) : "",
       notes: item.notes ?? "",
@@ -171,27 +187,53 @@ export function InventoryManagementClient({ businessId }: Props) {
       toast.error("Name is required");
       return;
     }
+    const isLiquid = isLiquidUnitType(itemForm.unitType);
+    let containerVolumeMl: number | null = null;
+    if (isLiquid) {
+      const parsed = Number(itemForm.containerVolumeMl);
+      if (!itemForm.containerVolumeMl || isNaN(parsed) || parsed <= 0) {
+        toast.error("Enter the container volume (ml) for a bottle/keg item");
+        return;
+      }
+      containerVolumeMl = parsed;
+    }
     setItemSaving(true);
     try {
-      const payload = {
-        name: itemForm.name.trim(),
-        unit: itemForm.unit.trim() || "each",
-        parQuantity: itemForm.parQuantity !== "" ? Number(itemForm.parQuantity) : undefined,
-        costPerUnit: itemForm.costPerUnit !== "" ? Number(itemForm.costPerUnit) : undefined,
-        notes: itemForm.notes.trim() || undefined,
-      };
       if (editingItem) {
-        const updated = await clientUpdateInventoryItem(businessId, editingItem.id, payload);
+        const updated = await clientUpdateInventoryItem(businessId, editingItem.id, {
+          name: itemForm.name.trim(),
+          unit: itemForm.unit.trim() || "each",
+          unitType: itemForm.unitType,
+          // null clears container_volume_ml when the item is (now) 'each'.
+          containerVolumeMl: isLiquid ? containerVolumeMl : null,
+          parQuantity:
+            itemForm.parQuantity !== "" ? Number(itemForm.parQuantity) : undefined,
+          costPerUnit:
+            itemForm.costPerUnit !== "" ? Number(itemForm.costPerUnit) : undefined,
+          notes: itemForm.notes.trim() || undefined,
+        });
         setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
         toast.success("Item updated");
       } else {
-        const created = await clientCreateInventoryItem(businessId, payload);
+        const created = await clientCreateInventoryItem(businessId, {
+          name: itemForm.name.trim(),
+          unit: itemForm.unit.trim() || "each",
+          unitType: itemForm.unitType,
+          containerVolumeMl: containerVolumeMl ?? undefined,
+          parQuantity:
+            itemForm.parQuantity !== "" ? Number(itemForm.parQuantity) : undefined,
+          costPerUnit:
+            itemForm.costPerUnit !== "" ? Number(itemForm.costPerUnit) : undefined,
+          notes: itemForm.notes.trim() || undefined,
+        });
         setItems((prev) => [...prev, created]);
         toast.success("Item added");
       }
       setItemDialog(false);
-    } catch {
-      toast.error("Failed to save item");
+    } catch (e) {
+      // Surface the server message (e.g. the 409 blocking a count↔ml unit_type
+      // change while recipes reference the item) instead of a generic failure.
+      toast.error((e as Error).message || "Failed to save item");
     } finally {
       setItemSaving(false);
     }
@@ -221,21 +263,36 @@ export function InventoryManagementClient({ businessId }: Props) {
 
   async function saveMovement() {
     if (!movementTargetId) return;
-    const delta = Number(movementForm.quantityDelta);
-    if (!movementForm.quantityDelta || isNaN(delta) || delta === 0) {
+    const target = items.find((i) => i.id === movementTargetId);
+    const value = Number(movementForm.quantityDelta);
+    if (!movementForm.quantityDelta || isNaN(value) || value === 0) {
       toast.error("Enter a non-zero quantity");
       return;
     }
+    const liquidReceive =
+      target != null &&
+      isLiquidUnitType(target.unitType) &&
+      movementForm.movementType === "receive" &&
+      movementForm.receiveAsContainers;
     setMovementSaving(true);
     try {
-      // For waste, delta should be negative (stock going out)
-      const effectiveDelta =
-        movementForm.movementType === "waste" ? -Math.abs(delta) : delta;
-      await clientRecordStockMovement(businessId, movementTargetId, {
-        movementType: movementForm.movementType,
-        quantityDelta: effectiveDelta,
-        notes: movementForm.notes.trim() || undefined,
-      });
+      if (liquidReceive) {
+        // Enter containers; backend multiplies by container_volume_ml → ml delta.
+        await clientRecordStockMovement(businessId, movementTargetId, {
+          movementType: "receive",
+          containerQuantity: Math.abs(value),
+          notes: movementForm.notes.trim() || undefined,
+        });
+      } else {
+        // For waste, delta should be negative (stock going out).
+        const effectiveDelta =
+          movementForm.movementType === "waste" ? -Math.abs(value) : value;
+        await clientRecordStockMovement(businessId, movementTargetId, {
+          movementType: movementForm.movementType,
+          quantityDelta: effectiveDelta,
+          notes: movementForm.notes.trim() || undefined,
+        });
+      }
       toast.success("Movement recorded");
       setMovementDialog(false);
       // Reload items to reflect updated current_quantity
@@ -268,6 +325,17 @@ export function InventoryManagementClient({ businessId }: Props) {
 
   const lowStockItems = items.filter((i) => i.isLowStock);
   const movementTarget = items.find((i) => i.id === movementTargetId);
+  const movementTargetIsLiquid = isLiquidUnitType(movementTarget?.unitType);
+  // Live "= N ml" hint when receiving a bottle/keg by container count.
+  const receiveMlPreview =
+    movementTargetIsLiquid &&
+    movementForm.movementType === "receive" &&
+    movementForm.receiveAsContainers &&
+    movementTarget?.containerVolumeMl != null &&
+    movementForm.quantityDelta !== "" &&
+    !isNaN(Number(movementForm.quantityDelta))
+      ? Math.abs(Number(movementForm.quantityDelta)) * movementTarget.containerVolumeMl
+      : null;
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
@@ -418,12 +486,83 @@ export function InventoryManagementClient({ businessId }: Props) {
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="inv-unit">Unit</Label>
+              <Label>Type</Label>
+              <Select
+                value={itemForm.unitType}
+                onValueChange={(v) =>
+                  setItemForm((f) => ({ ...f, unitType: v as UnitType }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="each">{UNIT_TYPE_LABELS.each}</SelectItem>
+                  <SelectItem value="bottle">{UNIT_TYPE_LABELS.bottle}</SelectItem>
+                  <SelectItem value="keg">{UNIT_TYPE_LABELS.keg}</SelectItem>
+                </SelectContent>
+              </Select>
+              {isLiquidUnitType(itemForm.unitType) && (
+                <p className="text-xs text-muted-foreground">
+                  Stock, par level and recipes for this item are tracked in
+                  milliliters (ml).
+                </p>
+              )}
+            </div>
+            {isLiquidUnitType(itemForm.unitType) && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="inv-container">Container volume (ml)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="inv-container"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={itemForm.containerVolumeMl}
+                    onChange={(e) =>
+                      setItemForm((f) => ({
+                        ...f,
+                        containerVolumeMl: e.target.value,
+                      }))
+                    }
+                    placeholder="e.g. 750"
+                    className="flex-1"
+                  />
+                  <Select
+                    value=""
+                    onValueChange={(v) =>
+                      setItemForm((f) => ({ ...f, containerVolumeMl: v }))
+                    }
+                  >
+                    <SelectTrigger className="w-[150px] shrink-0">
+                      <SelectValue placeholder="Presets" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {presetsForUnitType(itemForm.unitType).map((p) => (
+                        <SelectItem key={p.ml} value={String(p.ml)}>
+                          {p.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Volume of one {itemForm.unitType}. Used when receiving stock by the{" "}
+                  {itemForm.unitType}.
+                </p>
+              </div>
+            )}
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="inv-unit">Display unit label</Label>
               <Input
                 id="inv-unit"
                 value={itemForm.unit}
                 onChange={(e) => setItemForm((f) => ({ ...f, unit: e.target.value }))}
-                placeholder="e.g. L, kg, each, bottle"
+                placeholder={
+                  isLiquidUnitType(itemForm.unitType)
+                    ? "ml"
+                    : "e.g. each, kg, box"
+                }
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -528,6 +667,30 @@ export function InventoryManagementClient({ businessId }: Props) {
                 </SelectContent>
               </Select>
             </div>
+            {movementTargetIsLiquid && movementForm.movementType === "receive" && (
+              <div className="flex flex-col gap-1.5">
+                <Label>Enter as</Label>
+                <Select
+                  value={movementForm.receiveAsContainers ? "containers" : "ml"}
+                  onValueChange={(v) =>
+                    setMovementForm((f) => ({
+                      ...f,
+                      receiveAsContainers: v === "containers",
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="containers">
+                      Containers ({movementTarget?.unitType})
+                    </SelectItem>
+                    <SelectItem value="ml">Milliliters (ml)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="mv-qty">
                 Quantity
@@ -548,6 +711,11 @@ export function InventoryManagementClient({ businessId }: Props) {
                 }
                 placeholder="e.g. 5"
               />
+              {receiveMlPreview != null && (
+                <p className="text-xs text-muted-foreground">
+                  = {receiveMlPreview.toLocaleString()} ml
+                </p>
+              )}
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="mv-notes">Notes</Label>

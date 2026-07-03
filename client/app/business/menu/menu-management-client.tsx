@@ -19,8 +19,20 @@ import {
   clientUpdateLibraryItem,
   clientDeleteLibraryItem,
   clientAddLibraryItemToCategory,
+  clientGetRecipe,
+  clientSetRecipe,
+  clientGetMenuItemStockFlags,
+  clientGetInventoryItems,
 } from "@/lib/client-api";
-import type { LibraryItem, Menu, MenuCategory, MenuItem } from "@/types";
+import type {
+  InventoryItem,
+  LibraryItem,
+  Menu,
+  MenuCategory,
+  MenuItem,
+  RecipeIngredient,
+} from "@/types";
+import { isLiquidUnitType, mlToOz, ozToMl } from "@/lib/units";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -57,6 +69,8 @@ import {
   BookMarked,
   PlusCircle,
   Bookmark,
+  FlaskConical,
+  AlertTriangle,
 } from "lucide-react";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { EmptyState } from "@/components/empty-state";
@@ -131,12 +145,26 @@ export function MenuManagementClient({ businessId }: Props) {
     prepTime: "",
   });
 
+  // ── Recipe editor + low-stock badges ─────────────────────────────────────────
+  const [recipeItem, setRecipeItem] = useState<MenuItem | null>(null);
+  const [lowStockItemIds, setLowStockItemIds] = useState<Set<string>>(new Set());
+
   const selectedMenu = menus.find((m) => m.id === selectedMenuId) ?? null;
 
   useEffect(() => {
     void loadMenus();
+    void loadStockFlags();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [businessId]);
+
+  async function loadStockFlags() {
+    try {
+      const ids = await clientGetMenuItemStockFlags(businessId);
+      setLowStockItemIds(new Set(ids));
+    } catch {
+      // Non-critical (inventory module may be disabled) — leave badges off.
+    }
+  }
 
   async function loadMenus() {
     setLoading(true);
@@ -685,6 +713,7 @@ export function MenuManagementClient({ businessId }: Props) {
                     key={cat.id}
                     menu={selectedMenu}
                     category={cat}
+                    lowStockItemIds={lowStockItemIds}
                     onAddItem={openCreateItem}
                     onAddFromLibrary={openLibraryForCategory}
                     onEditItem={openEditItem}
@@ -692,6 +721,7 @@ export function MenuManagementClient({ businessId }: Props) {
                     onDeleteItem={deleteItem}
                     onDeleteCategory={deleteCategory}
                     onSaveToLibrary={saveToLibrary}
+                    onEditRecipe={setRecipeItem}
                   />
                 ))
               )}
@@ -917,6 +947,15 @@ export function MenuManagementClient({ businessId }: Props) {
         </DialogContent>
       </Dialog>
 
+      <RecipeEditorDialog
+        businessId={businessId}
+        item={recipeItem}
+        onClose={() => setRecipeItem(null)}
+        onSaved={() => {
+          void loadStockFlags();
+        }}
+      />
+
       <ConfirmationDialog
         open={deleteTarget !== null}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
@@ -1073,6 +1112,7 @@ function ItemFormFields({
 function CategorySection({
   menu,
   category,
+  lowStockItemIds,
   onAddItem,
   onAddFromLibrary,
   onEditItem,
@@ -1080,9 +1120,11 @@ function CategorySection({
   onDeleteItem,
   onDeleteCategory,
   onSaveToLibrary,
+  onEditRecipe,
 }: {
   menu: Menu;
   category: MenuCategory;
+  lowStockItemIds: Set<string>;
   onAddItem: (categoryId: string) => void;
   onAddFromLibrary: (categoryId: string) => void;
   onEditItem: (item: MenuItem, categoryId: string) => void;
@@ -1090,6 +1132,7 @@ function CategorySection({
   onDeleteItem: (item: MenuItem, menuId: string, categoryId: string) => void;
   onDeleteCategory: (menuId: string, categoryId: string) => void;
   onSaveToLibrary: (item: MenuItem) => void;
+  onEditRecipe: (item: MenuItem) => void;
 }) {
   return (
     <div className="rounded-lg border overflow-hidden">
@@ -1153,6 +1196,16 @@ function CategorySection({
                       unavailable
                     </Badge>
                   )}
+                  {lowStockItemIds.has(item.id) && (
+                    <Badge
+                      variant="outline"
+                      className="text-xs h-4 flex items-center gap-1 border-amber-300 bg-amber-50 text-amber-700"
+                      title="A recipe ingredient is below par level"
+                    >
+                      <AlertTriangle className="h-3 w-3" />
+                      low stock
+                    </Badge>
+                  )}
                 </div>
                 {item.description && (
                   <p className="text-xs text-muted-foreground truncate mt-0.5">
@@ -1171,6 +1224,15 @@ function CategorySection({
                   onClick={() => onToggleAvail(item, category.id)}
                 >
                   {item.isAvailable ? "86" : "Restore"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 w-7 p-0"
+                  title="Edit recipe"
+                  onClick={() => onEditRecipe(item)}
+                >
+                  <FlaskConical className="h-3.5 w-3.5" />
                 </Button>
                 <Button
                   size="sm"
@@ -1203,5 +1265,255 @@ function CategorySection({
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Recipe Editor ────────────────────────────────────────────────────────────
+
+type RecipeRow = {
+  inventoryItemId: string;
+  quantity: string; // in the row's displayed unit (ml/oz for liquids, count otherwise)
+  unit: "ml" | "oz"; // only meaningful for liquid ingredients
+};
+
+function RecipeEditorDialog({
+  businessId,
+  item,
+  onClose,
+  onSaved,
+}: {
+  businessId: string;
+  item: MenuItem | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [rows, setRows] = useState<RecipeRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!item) return;
+    let cancelled = false;
+    setLoading(true);
+    setRows([]);
+    void (async () => {
+      try {
+        const [inv, recipe] = await Promise.all([
+          clientGetInventoryItems(businessId),
+          clientGetRecipe(businessId, item.id),
+        ]);
+        if (cancelled) return;
+        setInventory(inv);
+        setRows(
+          recipe.map((r: RecipeIngredient) => ({
+            inventoryItemId: r.inventoryItemId,
+            quantity: String(r.quantity),
+            unit: "ml" as const,
+          })),
+        );
+      } catch {
+        if (!cancelled) toast.error("Failed to load recipe");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [item, businessId]);
+
+  function invItem(id: string): InventoryItem | undefined {
+    return inventory.find((i) => i.id === id);
+  }
+
+  function addRow() {
+    const firstUnused = inventory.find(
+      (i) => !rows.some((r) => r.inventoryItemId === i.id),
+    );
+    setRows((prev) => [
+      ...prev,
+      { inventoryItemId: firstUnused?.id ?? "", quantity: "", unit: "ml" },
+    ]);
+  }
+
+  function updateRow(idx: number, patch: Partial<RecipeRow>) {
+    setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  }
+
+  function toggleRowUnit(idx: number, nextUnit: "ml" | "oz") {
+    setRows((prev) =>
+      prev.map((r, i) => {
+        if (i !== idx || r.unit === nextUnit) return r;
+        // Convert the entered value so the physical amount is unchanged.
+        const val = Number(r.quantity);
+        let converted = r.quantity;
+        if (r.quantity !== "" && !isNaN(val)) {
+          converted =
+            nextUnit === "oz"
+              ? mlToOz(val).toFixed(2)
+              : ozToMl(val).toFixed(1);
+        }
+        return { ...r, unit: nextUnit, quantity: converted };
+      }),
+    );
+  }
+
+  function removeRow(idx: number) {
+    setRows((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  async function save() {
+    if (!item) return;
+    const ingredients: { inventoryItemId: string; quantity: number }[] = [];
+    for (const r of rows) {
+      if (!r.inventoryItemId) continue;
+      const val = Number(r.quantity);
+      if (r.quantity === "" || isNaN(val) || val <= 0) {
+        toast.error("Every ingredient needs a quantity greater than 0");
+        return;
+      }
+      const inv = invItem(r.inventoryItemId);
+      // Convert oz → ml for liquid ingredients; everything is stored in the
+      // inventory item's native unit (ml for bottle/keg, count for 'each').
+      const quantity =
+        inv && isLiquidUnitType(inv.unitType) && r.unit === "oz"
+          ? ozToMl(val)
+          : val;
+      ingredients.push({ inventoryItemId: r.inventoryItemId, quantity });
+    }
+    setSaving(true);
+    try {
+      await clientSetRecipe(businessId, item.id, ingredients);
+      toast.success("Recipe saved");
+      onSaved();
+      onClose();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={item !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FlaskConical className="h-4 w-4" />
+            Recipe — {item?.name}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="py-2 space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Ingredients are deducted from inventory automatically when an order
+            for this item is served. Liquid amounts are stored in ml; use the
+            ml/oz toggle to enter pours in ounces.
+          </p>
+
+          {loading ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              Loading…
+            </p>
+          ) : inventory.length === 0 ? (
+            <div className="rounded-lg border border-dashed p-6 text-center">
+              <Package className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+              <p className="text-sm text-muted-foreground">
+                No inventory items yet. Add stock items on the Inventory page
+                first, then build the recipe here.
+              </p>
+            </div>
+          ) : rows.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              No ingredients yet.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {rows.map((row, idx) => {
+                const inv = invItem(row.inventoryItemId);
+                const liquid = inv ? isLiquidUnitType(inv.unitType) : false;
+                return (
+                  <div key={idx} className="flex items-center gap-2">
+                    <Select
+                      value={row.inventoryItemId}
+                      onValueChange={(v) =>
+                        updateRow(idx, { inventoryItemId: v })
+                      }
+                    >
+                      <SelectTrigger className="flex-1">
+                        <SelectValue placeholder="Select ingredient" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {inventory.map((i) => (
+                          <SelectItem key={i.id} value={i.id}>
+                            {i.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={row.quantity}
+                      onChange={(e) =>
+                        updateRow(idx, { quantity: e.target.value })
+                      }
+                      placeholder="Qty"
+                      className="w-24 shrink-0"
+                    />
+                    {liquid ? (
+                      <Select
+                        value={row.unit}
+                        onValueChange={(v) =>
+                          toggleRowUnit(idx, v as "ml" | "oz")
+                        }
+                      >
+                        <SelectTrigger className="w-20 shrink-0">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ml">ml</SelectItem>
+                          <SelectItem value="oz">oz</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <span className="w-20 shrink-0 text-xs text-muted-foreground truncate">
+                        {inv?.unit ?? "each"}
+                      </span>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 w-8 p-0 text-destructive hover:text-destructive shrink-0"
+                      onClick={() => removeRow(idx)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {inventory.length > 0 && (
+            <Button size="sm" variant="outline" onClick={addRow}>
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              Add ingredient
+            </Button>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={save} disabled={saving || loading}>
+            {saving ? "Saving…" : "Save Recipe"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
