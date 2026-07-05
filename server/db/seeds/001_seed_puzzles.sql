@@ -68,42 +68,43 @@ INSERT INTO staff (id, user_id, business_id, role, created_at) VALUES
 ('00000000-0000-0000-0003-000000000012', '00000000-0000-0000-0002-000000000012', '00000000-0000-0000-0000-000000000002', 'staff',   NOW() - INTERVAL '43 days');
 
 -- ─── Customers ────────────────────────────────────────────────────────────────
+-- Business-scoped customer identities (Phase 5.9: reservations.customer_id → customers).
 -- Diverse RFM profiles: champions / loyal / promising / at-risk / lost / new
-INSERT INTO users (id, email, name, phone, password_hash, user_type, created_at) VALUES
+INSERT INTO customers (id, business_id, name, phone, email, created_at) VALUES
 -- Champions (high recency, high frequency, regular in last 2 weeks)
-('00000000-0000-0000-0001-000000000010', 'alex.morgan@example.com',   'Alex Morgan',   '+1-555-1010', '$2b$12$pW/3qXilEy10Dn.jG4ymteWBBwUvvserWRoGHNiDs07taImefGwwK', 'customer', NOW() - INTERVAL '42 days'),
-('00000000-0000-0000-0001-000000000011', 'maria.santos@example.com',  'Maria Santos',  '+1-555-1011', '$2b$12$pW/3qXilEy10Dn.jG4ymteWBBwUvvserWRoGHNiDs07taImefGwwK', 'customer', NOW() - INTERVAL '38 days'),
-('00000000-0000-0000-0001-000000000012', 'chris.patel@example.com',   'Chris Patel',   '+1-555-1012', '$2b$12$pW/3qXilEy10Dn.jG4ymteWBBwUvvserWRoGHNiDs07taImefGwwK', 'customer', NOW() - INTERVAL '35 days'),
+('00000000-0000-0000-0001-000000000010', '00000000-0000-0000-0000-000000000002', 'Alex Morgan',   '+1-555-1010', 'alex.morgan@example.com',   NOW() - INTERVAL '42 days'),
+('00000000-0000-0000-0001-000000000011', '00000000-0000-0000-0000-000000000002', 'Maria Santos',  '+1-555-1011', 'maria.santos@example.com',  NOW() - INTERVAL '38 days'),
+('00000000-0000-0000-0001-000000000012', '00000000-0000-0000-0000-000000000002', 'Chris Patel',   '+1-555-1012', 'chris.patel@example.com',   NOW() - INTERVAL '35 days'),
 -- Loyal (3-4 visits, last visit within 10 days)
-('00000000-0000-0000-0001-000000000013', 'pat.kim@example.com',       'Pat Kim',       '+1-555-1013', '$2b$12$pW/3qXilEy10Dn.jG4ymteWBBwUvvserWRoGHNiDs07taImefGwwK', 'customer', NOW() - INTERVAL '30 days'),
-('00000000-0000-0000-0001-000000000014', 'sam.lee@example.com',       'Sam Lee',       '+1-555-1014', '$2b$12$pW/3qXilEy10Dn.jG4ymteWBBwUvvserWRoGHNiDs07taImefGwwK', 'customer', NOW() - INTERVAL '25 days'),
+('00000000-0000-0000-0001-000000000013', '00000000-0000-0000-0000-000000000002', 'Pat Kim',       '+1-555-1013', 'pat.kim@example.com',       NOW() - INTERVAL '30 days'),
+('00000000-0000-0000-0001-000000000014', '00000000-0000-0000-0000-000000000002', 'Sam Lee',       '+1-555-1014', 'sam.lee@example.com',       NOW() - INTERVAL '25 days'),
 -- Promising (1-2 visits, very recent)
-('00000000-0000-0000-0001-000000000015', 'jordan.rivera@example.com', 'Jordan Rivera', '+1-555-1015', '$2b$12$pW/3qXilEy10Dn.jG4ymteWBBwUvvserWRoGHNiDs07taImefGwwK', 'customer', NOW() - INTERVAL '12 days'),
-('00000000-0000-0000-0001-000000000016', 'casey.chen@example.com',    'Casey Chen',    '+1-555-1016', '$2b$12$pW/3qXilEy10Dn.jG4ymteWBBwUvvserWRoGHNiDs07taImefGwwK', 'customer', NOW() - INTERVAL '9 days'),
+('00000000-0000-0000-0001-000000000015', '00000000-0000-0000-0000-000000000002', 'Jordan Rivera', '+1-555-1015', 'jordan.rivera@example.com', NOW() - INTERVAL '12 days'),
+('00000000-0000-0000-0001-000000000016', '00000000-0000-0000-0000-000000000002', 'Casey Chen',    '+1-555-1016', 'casey.chen@example.com',    NOW() - INTERVAL '9 days'),
 -- At Risk (multiple visits, none in last 17+ days)
-('00000000-0000-0000-0001-000000000017', 'taylor.brooks@example.com', 'Taylor Brooks', '+1-555-1017', '$2b$12$pW/3qXilEy10Dn.jG4ymteWBBwUvvserWRoGHNiDs07taImefGwwK', 'customer', NOW() - INTERVAL '40 days'),
-('00000000-0000-0000-0001-000000000018', 'morgan.davis@example.com',  'Morgan Davis',  '+1-555-1018', '$2b$12$pW/3qXilEy10Dn.jG4ymteWBBwUvvserWRoGHNiDs07taImefGwwK', 'customer', NOW() - INTERVAL '38 days'),
+('00000000-0000-0000-0001-000000000017', '00000000-0000-0000-0000-000000000002', 'Taylor Brooks', '+1-555-1017', 'taylor.brooks@example.com', NOW() - INTERVAL '40 days'),
+('00000000-0000-0000-0001-000000000018', '00000000-0000-0000-0000-000000000002', 'Morgan Davis',  '+1-555-1018', 'morgan.davis@example.com',  NOW() - INTERVAL '38 days'),
 -- Needs Attention (was frequent, dormant 4+ weeks)
-('00000000-0000-0000-0001-000000000019', 'riley.wilson@example.com',  'Riley Wilson',  '+1-555-1019', '$2b$12$pW/3qXilEy10Dn.jG4ymteWBBwUvvserWRoGHNiDs07taImefGwwK', 'customer', NOW() - INTERVAL '44 days'),
+('00000000-0000-0000-0001-000000000019', '00000000-0000-0000-0000-000000000002', 'Riley Wilson',  '+1-555-1019', 'riley.wilson@example.com',  NOW() - INTERVAL '44 days'),
 -- Lost (single visit 6 weeks ago, never returned)
-('00000000-0000-0000-0001-000000000020', 'quinn.foster@example.com',  'Quinn Foster',  '+1-555-1020', '$2b$12$pW/3qXilEy10Dn.jG4ymteWBBwUvvserWRoGHNiDs07taImefGwwK', 'customer', NOW() - INTERVAL '44 days'),
+('00000000-0000-0000-0001-000000000020', '00000000-0000-0000-0000-000000000002', 'Quinn Foster',  '+1-555-1020', 'quinn.foster@example.com',  NOW() - INTERVAL '44 days'),
 -- New (first reservation is tomorrow)
-('00000000-0000-0000-0001-000000000021', 'drew.nakamura@example.com', 'Drew Nakamura', '+1-555-1021', '$2b$12$pW/3qXilEy10Dn.jG4ymteWBBwUvvserWRoGHNiDs07taImefGwwK', 'customer', NOW() - INTERVAL '1 day');
+('00000000-0000-0000-0001-000000000021', '00000000-0000-0000-0000-000000000002', 'Drew Nakamura', '+1-555-1021', 'drew.nakamura@example.com', NOW() - INTERVAL '1 day');
 
 -- ─── Service Types ────────────────────────────────────────────────────────────
 INSERT INTO service_types (
   id, business_id, name, description,
-  capacity, max_concurrent_bookings, requires_payment, amount,
-  is_online, is_pending_enabled, duration, color, display_order, created_at
+  capacity, max_concurrent_bookings,
+  is_pending_enabled, duration, color, display_order, created_at
 ) VALUES
 ('00000000-0000-0000-0004-000000000010', '00000000-0000-0000-0000-000000000002',
   'Bar Seating',
   'Walk up to the bar or grab a stool — reserve your spot for the evening.',
-  2, 4, FALSE, NULL, FALSE, FALSE, 45, '#f97316', 1, NOW() - INTERVAL '45 days'),
+  2, 4, FALSE, 45, '#f97316', 1, NOW() - INTERVAL '45 days'),
 ('00000000-0000-0000-0004-000000000011', '00000000-0000-0000-0000-000000000002',
   'Table Reservation',
   'Book a full table for groups. Manager will confirm within the hour.',
-  6, 6, FALSE, NULL, FALSE, TRUE, 90, '#8b5cf6', 2, NOW() - INTERVAL '45 days');
+  6, 6, TRUE, 90, '#8b5cf6', 2, NOW() - INTERVAL '45 days');
 
 -- ─── Cleanup: remove any out-of-hours reservations left by prior seeds ─────────
 DELETE FROM reservations

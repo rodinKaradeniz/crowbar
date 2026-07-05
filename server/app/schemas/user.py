@@ -1,10 +1,12 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr
+from pydantic import EmailStr
+
+from app.schemas.base import AppBaseModel
 
 
-class UserCreate(BaseModel):
+class UserCreate(AppBaseModel):
     email: EmailStr
     name: str
     phone: str | None = None
@@ -12,23 +14,23 @@ class UserCreate(BaseModel):
     user_type: str = "customer"
 
 
-class UserUpdate(BaseModel):
+class UserUpdate(AppBaseModel):
     name: str | None = None
     phone: str | None = None
     avatar: str | None = None
 
 
-class ChangeEmailRequest(BaseModel):
+class ChangeEmailRequest(AppBaseModel):
     new_email: EmailStr
     password: str
 
 
-class ChangePasswordRequest(BaseModel):
+class ChangePasswordRequest(AppBaseModel):
     current_password: str
     new_password: str
 
 
-class UserResponse(BaseModel):
+class UserResponse(AppBaseModel):
     id: UUID
     email: str
     name: str
@@ -37,4 +39,3 @@ class UserResponse(BaseModel):
     user_type: str
     created_at: datetime
 
-    model_config = {"from_attributes": True}

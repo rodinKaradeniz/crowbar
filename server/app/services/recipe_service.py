@@ -1,10 +1,10 @@
 import logging
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.inventory import InventoryItem
+from app.models.inventory import InventoryItem, StockMovement
 from app.models.menu import MenuItem
 from app.models.order import Order
 from app.models.recipe import MenuItemIngredient
@@ -178,6 +178,7 @@ async def deduct_for_served_order(
                     inv,
                     movement_type="sale",
                     delta=-(ing.quantity * li.quantity),
+                    order_id=order.id,
                     notes=f"Auto-deduct: {li.item_name} ×{li.quantity}",
                 )
                 if inv.current_quantity is not None and inv.current_quantity <= 0:
@@ -195,3 +196,64 @@ async def deduct_for_served_order(
             await _disable_menu_items_for_ingredients(db, business_id, depleted)
         except Exception:  # noqa: BLE001
             logger.exception("Auto-disable on depletion failed for order %s", order.id)
+
+
+async def reverse_deduction_for_order(
+    db: AsyncSession, order: Order, business_id: UUID
+) -> None:
+    """Credit back inventory that a given order actually deducted, when it's moved
+    backward out of 'served'.
+
+    Precise-by-construction: we do NOT recompute from the current recipe (which may
+    have changed since the order was served). Instead we sum this order's own real
+    'sale' (negative) and 'sale_reversal' (positive) movements per inventory item;
+    the net still-deducted amount is exactly what to credit back. This also makes
+    repeated serve/un-serve cycles net out correctly and is idempotent — a second
+    reversal with nothing outstanding is a no-op.
+
+    Best-effort and NON-BLOCKING, mirroring deduct_for_served_order: a missing
+    inventory item or any error is logged and swallowed so it never fails the
+    status transition. Auto-disabled menu items are deliberately NOT re-enabled
+    here (manual re-enable policy — a single is_available flag can't tell an
+    auto-disable from a staff 86; see CLAUDE.md Non-Obvious #37).
+    """
+    result = await db.execute(
+        select(
+            StockMovement.item_id,
+            func.coalesce(func.sum(StockMovement.quantity_delta), 0),
+        )
+        .where(
+            StockMovement.order_id == order.id,
+            StockMovement.movement_type.in_(("sale", "sale_reversal")),
+        )
+        .group_by(StockMovement.item_id)
+    )
+    for item_id, net in result.all():
+        # net < 0 means this order still has that much deducted and outstanding.
+        if net is None or net >= 0:
+            continue
+        credit = -net  # positive amount to add back
+        try:
+            inv = await inventory_service.get_item(db, item_id, business_id)
+            if inv is None:
+                logger.warning(
+                    "Cannot reverse deduction: inventory item %s missing (order %s)",
+                    item_id,
+                    order.id,
+                )
+                continue
+            await inventory_service.apply_movement(
+                db,
+                inv,
+                movement_type="sale_reversal",
+                delta=credit,
+                order_id=order.id,
+                notes=f"Reversal: order {order.id} moved back from served",
+            )
+        except Exception:  # noqa: BLE001 — never block a status transition
+            logger.exception(
+                "Deduction reversal failed for item %s (order %s)",
+                item_id,
+                order.id,
+            )
+            continue

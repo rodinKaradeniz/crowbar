@@ -1,16 +1,17 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+
+from app.schemas.base import AppBaseModel
 
 
-class OperatingHoursEntry(BaseModel):
+class OperatingHoursEntry(AppBaseModel):
     open: str | None = None
     close: str | None = None
     closed: bool | None = None
 
 
-class BusinessCreate(BaseModel):
+class BusinessCreate(AppBaseModel):
     name: str
     slug: str
     email: str
@@ -28,7 +29,7 @@ class BusinessCreate(BaseModel):
     operating_hours: dict[str, OperatingHoursEntry] = {}
 
 
-class BusinessUpdate(BaseModel):
+class BusinessUpdate(AppBaseModel):
     name: str | None = None
     email: str | None = None
     phone: str | None = None
@@ -48,7 +49,7 @@ class BusinessUpdate(BaseModel):
     legal_drinking_age: int | None = None
 
 
-class BusinessResponse(BaseModel):
+class BusinessResponse(AppBaseModel):
     id: UUID
     name: str
     slug: str
@@ -71,4 +72,3 @@ class BusinessResponse(BaseModel):
     notification_channels: list[str] = ["email"]
     created_at: datetime
 
-    model_config = {"from_attributes": True}

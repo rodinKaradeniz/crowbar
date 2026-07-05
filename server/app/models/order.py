@@ -105,6 +105,10 @@ class OrderStatusTimeline(Base, UUIDMixin):
         ForeignKey("orders.id", ondelete="CASCADE"),
         nullable=False,
     )
+    # Source status of the transition. NULL only on the initial 'received' row
+    # written at placement (a creation, not a transition); every real transition
+    # (forward or backward) records the status it moved from.
+    from_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     changed_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

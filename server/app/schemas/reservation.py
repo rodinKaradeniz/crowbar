@@ -2,7 +2,9 @@ from datetime import datetime
 from uuid import UUID
 
 import phonenumbers
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import EmailStr, field_validator
+
+from app.schemas.base import AppBaseModel
 
 
 def _normalize_phone(v: str | None) -> str | None:
@@ -15,7 +17,7 @@ def _normalize_phone(v: str | None) -> str | None:
         return v
 
 
-class ReservationCreate(BaseModel):
+class ReservationCreate(AppBaseModel):
     business_id: UUID
     service_type_id: UUID
     time: datetime
@@ -30,7 +32,7 @@ class ReservationCreate(BaseModel):
         return _normalize_phone(v) or v
 
 
-class PublicReservationCreate(BaseModel):
+class PublicReservationCreate(AppBaseModel):
     """Schema for unauthenticated (public) reservation creation."""
     business_id: UUID
     service_type_id: UUID
@@ -47,7 +49,7 @@ class PublicReservationCreate(BaseModel):
         return _normalize_phone(v) or v
 
 
-class ReservationUpdate(BaseModel):
+class ReservationUpdate(AppBaseModel):
     service_type_id: UUID | None = None
     time: datetime | None = None
     phone: str | None = None
@@ -57,7 +59,7 @@ class ReservationUpdate(BaseModel):
     guests: int | None = None
 
 
-class ReservationResponse(BaseModel):
+class ReservationResponse(AppBaseModel):
     id: UUID
     business_id: UUID
     customer_id: UUID
@@ -71,4 +73,3 @@ class ReservationResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = {"from_attributes": True}

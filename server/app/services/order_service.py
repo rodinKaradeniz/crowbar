@@ -1,25 +1,38 @@
+import logging
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 from decimal import Decimal
 from uuid import UUID
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.business import Business
 from app.models.menu import MenuItem
 from app.models.order import Order, OrderLineItem, OrderStatusTimeline
 from app.schemas.order import OrderPlaceRequest, OrderStatusUpdateRequest
 from app.services import happy_hour_service, recipe_service
 
-# Valid status transitions
+logger = logging.getLogger(__name__)
+
+# Valid status transitions. Forward advances the fulfillment flow; the backward
+# entries (previous-step only) let staff correct an accidental click. Moving
+# backward out of 'served' reverses the recipe deduction (see advance_order_status);
+# every other backward step has no inventory side effect. 'cancelled' is a terminal
+# side-exit (no un-cancel in this pass).
 _TRANSITIONS: dict[str, list[str]] = {
     "received": ["preparing", "cancelled"],
-    "preparing": ["ready", "cancelled"],
-    "ready": ["served", "cancelled"],
-    "served": [],
+    "preparing": ["received", "ready", "cancelled"],
+    "ready": ["preparing", "served", "cancelled"],
+    "served": ["ready"],
     "cancelled": [],
 }
+
+# How many served orders the default board query surfaces in the 'served' column
+# (terminal + accumulates forever, so it's bounded to today, newest first).
+_SERVED_BOARD_LIMIT = 50
 
 
 def order_contains_alcohol(items) -> bool:
@@ -76,6 +89,18 @@ def order_to_dict(order: Order) -> dict:
                 "notes": li.notes,
             }
             for li in (order.line_items or [])
+        ],
+        "status_timeline": [
+            {
+                "id": str(t.id),
+                "from_status": t.from_status,
+                "status": t.status,
+                "changed_by": str(t.changed_by) if t.changed_by else None,
+                "changed_at": t.changed_at.isoformat() if t.changed_at else None,
+            }
+            for t in sorted(
+                order.status_timeline or [], key=lambda x: x.changed_at
+            )
         ],
     }
 
@@ -198,24 +223,90 @@ async def place_order(
     return order
 
 
+async def _business_day_start_utc(db: AsyncSession, business_id: UUID) -> datetime:
+    """Start of 'today' in the business's timezone, expressed in UTC.
+
+    Uses businesses.timezone (IANA); falls back to UTC on a missing/invalid zone
+    (same defensive posture as happy_hour_service)."""
+    tz_name = await db.scalar(
+        select(Business.timezone).where(Business.id == business_id)
+    )
+    try:
+        tz = ZoneInfo(tz_name) if tz_name else timezone.utc
+    except (ZoneInfoNotFoundError, ValueError):
+        tz = timezone.utc
+    now_local = datetime.now(tz)
+    start_local = datetime.combine(now_local.date(), time.min, tzinfo=tz)
+    return start_local.astimezone(timezone.utc)
+
+
 async def get_orders_for_board(
     db: AsyncSession,
     business_id: UUID,
     status_filter: list[str] | None = None,
     routing_tag: str | None = None,
 ) -> list[Order]:
-    active_statuses = status_filter or ["received", "preparing", "ready"]
-    q = (
-        select(Order)
-        .where(
-            Order.business_id == business_id,
-            Order.status.in_(active_statuses),
+    opts = (selectinload(Order.line_items), selectinload(Order.status_timeline))
+
+    if status_filter:
+        # Explicit caller-provided filter: honor it literally (no served bound).
+        q = (
+            select(Order)
+            .where(
+                Order.business_id == business_id,
+                Order.status.in_(status_filter),
+            )
+            .options(*opts)
+            .order_by(Order.placed_at)
         )
-        .options(selectinload(Order.line_items), selectinload(Order.status_timeline))
-        .order_by(Order.placed_at)
-    )
-    result = await db.execute(q)
-    orders = list(result.scalars().unique().all())
+        result = await db.execute(q)
+        orders = list(result.scalars().unique().all())
+    else:
+        # Default board: all active tickets, plus today's served tickets (bounded)
+        # so the 'served' column is useful for backward-correction without
+        # growing without limit.
+        active_q = (
+            select(Order)
+            .where(
+                Order.business_id == business_id,
+                Order.status.in_(["received", "preparing", "ready"]),
+            )
+            .options(*opts)
+            .order_by(Order.placed_at)
+        )
+        active_result = await db.execute(active_q)
+        orders = list(active_result.scalars().unique().all())
+
+        day_start = await _business_day_start_utc(db, business_id)
+        # Filter/sort by when the order actually ENTERED 'served' (the timeline
+        # row's changed_at), NOT placed_at — an order placed late last night but
+        # served this morning belongs in today's list; one served on a later day
+        # must not linger. An order can enter 'served' more than once (un-serve →
+        # re-serve, Non-Obvious #40), so key off the MOST RECENT →served row,
+        # which is the current serve.
+        served_at_subq = (
+            select(
+                OrderStatusTimeline.order_id.label("order_id"),
+                func.max(OrderStatusTimeline.changed_at).label("served_at"),
+            )
+            .where(OrderStatusTimeline.status == "served")
+            .group_by(OrderStatusTimeline.order_id)
+            .subquery()
+        )
+        served_q = (
+            select(Order)
+            .join(served_at_subq, served_at_subq.c.order_id == Order.id)
+            .where(
+                Order.business_id == business_id,
+                Order.status == "served",
+                served_at_subq.c.served_at >= day_start,
+            )
+            .options(*opts)
+            .order_by(served_at_subq.c.served_at.desc())
+            .limit(_SERVED_BOARD_LIMIT)
+        )
+        served_result = await db.execute(served_q)
+        orders.extend(served_result.scalars().unique().all())
 
     if routing_tag:
         # Filter to orders that have at least one line item matching the routing_tag
@@ -245,10 +336,14 @@ async def advance_order_status(
             f"Allowed: {allowed}"
         )
 
+    from_status = order.status
     order.status = request.status
+    # Audit row: records from → to for every transition (forward or backward),
+    # appended from this one handler (the audit log for the ticket board).
     db.add(
         OrderStatusTimeline(
             order_id=order.id,
+            from_status=from_status,
             status=request.status,
             changed_by=changed_by,
             changed_at=datetime.now(timezone.utc),
@@ -256,10 +351,14 @@ async def advance_order_status(
     )
     await db.flush()
 
-    # On fulfillment, auto-deduct recipe ingredients from inventory. Best-effort:
-    # never blocks or fails the transition (recipe_service swallows its own errors).
-    if request.status == "served":
+    # Inventory side effects at the 'served' boundary only (consistent with how
+    # deduction was originally scoped). Both are best-effort / non-blocking.
+    if from_status != "served" and request.status == "served":
+        # Forward into served: auto-deduct recipe ingredients from inventory.
         await recipe_service.deduct_for_served_order(db, order, business_id)
+    elif from_status == "served" and request.status != "served":
+        # Backward out of served: credit back exactly what this order deducted.
+        await recipe_service.reverse_deduction_for_order(db, order, business_id)
 
     await db.refresh(order, ["line_items", "status_timeline"])
     return order

@@ -1,12 +1,14 @@
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from app.schemas.base import AppBaseModel
 
 
 # ─── Item Library ─────────────────────────────────────────────────────────────
 
-class LibraryItemCreate(BaseModel):
+class LibraryItemCreate(AppBaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
     price: Decimal = Field(default=Decimal("0.00"), ge=0)
@@ -14,7 +16,7 @@ class LibraryItemCreate(BaseModel):
     prep_time_minutes: int | None = Field(None, ge=1)
 
 
-class LibraryItemUpdate(BaseModel):
+class LibraryItemUpdate(AppBaseModel):
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = None
     price: Decimal | None = None
@@ -22,7 +24,7 @@ class LibraryItemUpdate(BaseModel):
     prep_time_minutes: int | None = None
 
 
-class LibraryItemResponse(BaseModel):
+class LibraryItemResponse(AppBaseModel):
     id: UUID
     business_id: UUID
     name: str
@@ -31,30 +33,29 @@ class LibraryItemResponse(BaseModel):
     routing_tag: str
     prep_time_minutes: int | None = None
 
-    model_config = {"from_attributes": True}
 
 
 # ─── Ordering settings ────────────────────────────────────────────────────────
 
-class OrderingSettingsUpdate(BaseModel):
+class OrderingSettingsUpdate(AppBaseModel):
     is_accepting_orders: bool
 
 
 # ─── Modifiers ────────────────────────────────────────────────────────────────
 
-class ModifierCreate(BaseModel):
+class ModifierCreate(AppBaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     price_delta: Decimal = Field(default=Decimal("0.00"), ge=0)
     is_available: bool = True
 
 
-class ModifierUpdate(BaseModel):
+class ModifierUpdate(AppBaseModel):
     name: str | None = Field(None, min_length=1, max_length=255)
     price_delta: Decimal | None = None
     is_available: bool | None = None
 
 
-class ModifierResponse(BaseModel):
+class ModifierResponse(AppBaseModel):
     id: UUID
     group_id: UUID
     business_id: UUID
@@ -62,12 +63,11 @@ class ModifierResponse(BaseModel):
     price_delta: Decimal
     is_available: bool
 
-    model_config = {"from_attributes": True}
 
 
 # ─── Modifier Groups ──────────────────────────────────────────────────────────
 
-class ModifierGroupCreate(BaseModel):
+class ModifierGroupCreate(AppBaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     required: bool = False
     min_select: int = Field(default=0, ge=0)
@@ -75,7 +75,7 @@ class ModifierGroupCreate(BaseModel):
     modifiers: list[ModifierCreate] = []
 
 
-class ModifierGroupResponse(BaseModel):
+class ModifierGroupResponse(AppBaseModel):
     id: UUID
     item_id: UUID
     business_id: UUID
@@ -85,12 +85,11 @@ class ModifierGroupResponse(BaseModel):
     max_select: int
     modifiers: list[ModifierResponse] = []
 
-    model_config = {"from_attributes": True}
 
 
 # ─── Menu Items ───────────────────────────────────────────────────────────────
 
-class MenuItemCreate(BaseModel):
+class MenuItemCreate(AppBaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
     price: Decimal = Field(default=Decimal("0.00"), ge=0)
@@ -104,7 +103,7 @@ class MenuItemCreate(BaseModel):
     modifier_groups: list[ModifierGroupCreate] = []
 
 
-class MenuItemUpdate(BaseModel):
+class MenuItemUpdate(AppBaseModel):
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = None
     price: Decimal | None = None
@@ -119,7 +118,7 @@ class MenuItemUpdate(BaseModel):
     image: str | None = None
 
 
-class MenuItemResponse(BaseModel):
+class MenuItemResponse(AppBaseModel):
     id: UUID
     category_id: UUID
     business_id: UUID
@@ -137,24 +136,23 @@ class MenuItemResponse(BaseModel):
     image: str | None = None
     modifier_groups: list[ModifierGroupResponse] = []
 
-    model_config = {"from_attributes": True}
 
 
 # ─── Menu Categories ──────────────────────────────────────────────────────────
 
-class MenuCategoryCreate(BaseModel):
+class MenuCategoryCreate(AppBaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     display_order: int = 0
     items: list[MenuItemCreate] = []
 
 
-class MenuCategoryUpdate(BaseModel):
+class MenuCategoryUpdate(AppBaseModel):
     name: str | None = Field(None, min_length=1, max_length=255)
     display_order: int | None = None
     is_active: bool | None = None
 
 
-class MenuCategoryResponse(BaseModel):
+class MenuCategoryResponse(AppBaseModel):
     id: UUID
     menu_id: UUID
     business_id: UUID
@@ -163,25 +161,24 @@ class MenuCategoryResponse(BaseModel):
     is_active: bool
     items: list[MenuItemResponse] = []
 
-    model_config = {"from_attributes": True}
 
 
 # ─── Menus ────────────────────────────────────────────────────────────────────
 
-class MenuCreate(BaseModel):
+class MenuCreate(AppBaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
     location_id: UUID | None = None
     categories: list[MenuCategoryCreate] = []
 
 
-class MenuUpdate(BaseModel):
+class MenuUpdate(AppBaseModel):
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = None
     is_active: bool | None = None
 
 
-class MenuResponse(BaseModel):
+class MenuResponse(AppBaseModel):
     id: UUID
     business_id: UUID
     location_id: UUID | None = None
@@ -194,4 +191,3 @@ class MenuResponse(BaseModel):
     happy_hour_active: bool = False
     categories: list[MenuCategoryResponse] = []
 
-    model_config = {"from_attributes": True}

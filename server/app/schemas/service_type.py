@@ -1,10 +1,11 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+
+from app.schemas.base import AppBaseModel
 
 
-class ServiceTypeCreate(BaseModel):
+class ServiceTypeCreate(AppBaseModel):
     business_id: UUID
     name: str
     description: str | None = None
@@ -17,7 +18,7 @@ class ServiceTypeCreate(BaseModel):
     image: str | None = None
 
 
-class ServiceTypeUpdate(BaseModel):
+class ServiceTypeUpdate(AppBaseModel):
     name: str | None = None
     description: str | None = None
     capacity: int | None = None
@@ -29,7 +30,7 @@ class ServiceTypeUpdate(BaseModel):
     image: str | None = None
 
 
-class ServiceTypeResponse(BaseModel):
+class ServiceTypeResponse(AppBaseModel):
     id: UUID
     business_id: UUID
     name: str
@@ -44,4 +45,3 @@ class ServiceTypeResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = {"from_attributes": True}

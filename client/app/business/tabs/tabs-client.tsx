@@ -34,6 +34,7 @@ import {
   clientCloseTab,
 } from "@/lib/client-api";
 import type { Tab, TabSettledMethod } from "@/types";
+import { TabOrderCompose } from "./tab-order-compose";
 
 const SETTLED_METHODS: { value: TabSettledMethod; label: string }[] = [
   { value: "cash", label: "Cash" },
@@ -46,11 +47,12 @@ function money(n: number): string {
   return `$${n.toFixed(2)}`;
 }
 
-export function TabsClient() {
+export function TabsClient({ businessId }: { businessId: string }) {
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [closeOpen, setCloseOpen] = useState(false);
+  const [composeOpen, setComposeOpen] = useState(false);
   const [method, setMethod] = useState<TabSettledMethod>("card");
 
   const selected = tabs.find((t) => t.id === selectedId) ?? null;
@@ -193,16 +195,27 @@ export function TabsClient() {
                     <RefreshCw className="size-4" />
                   </Button>
                   {selected.status === "open" && (
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        setMethod("card");
-                        setCloseOpen(true);
-                      }}
-                      disabled={busy}
-                    >
-                      Close tab
-                    </Button>
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setComposeOpen(true)}
+                        disabled={busy}
+                      >
+                        <Plus className="size-4" />
+                        Add order
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setMethod("card");
+                          setCloseOpen(true);
+                        }}
+                        disabled={busy}
+                      >
+                        Close tab
+                      </Button>
+                    </>
                   )}
                 </div>
               </CardHeader>
@@ -250,6 +263,18 @@ export function TabsClient() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Add-order compose dialog — reuses the shared cart logic + the standard
+          order-placement path (happy-hour pricing applies; staff age-gate skip). */}
+      {selected && selected.status === "open" && (
+        <TabOrderCompose
+          businessId={businessId}
+          tabId={selected.id}
+          open={composeOpen}
+          onOpenChange={setComposeOpen}
+          onAdded={() => handleRefresh(selected.id)}
+        />
       )}
 
       {/* Close-tab settlement dialog (not a browser confirm) */}

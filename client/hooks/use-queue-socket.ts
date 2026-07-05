@@ -56,7 +56,10 @@ export function useQueueSocket(
   const delayRef = useRef(BASE_DELAY);
   const intentionalClose = useRef(false);
   const onUpdateRef = useRef(onUpdate);
-  onUpdateRef.current = onUpdate;
+  // Holds the latest `connect` so the reconnect timer can re-invoke it without
+  // referencing `connect` inside its own useCallback (self-reference-before-
+  // declaration). Both refs are synced in effects below, never during render.
+  const connectRef = useRef<() => void>(() => {});
 
   const connect = useCallback(async () => {
     const jwt = await fetchJwt();
@@ -94,13 +97,22 @@ export function useQueueSocket(
 
       const delay = delayRef.current;
       delayRef.current = Math.min(delay * 2, MAX_DELAY);
-      retryRef.current = setTimeout(() => void connect(), delay);
+      retryRef.current = setTimeout(() => connectRef.current(), delay);
     };
 
     ws.onerror = () => {
       ws.close();
     };
   }, [businessId]);
+
+  // Keep the refs pointed at the latest values (synced in effects, not during
+  // render). onUpdateRef is read in ws.onmessage; connectRef in the reconnect timer.
+  useEffect(() => {
+    onUpdateRef.current = onUpdate;
+  }, [onUpdate]);
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   useEffect(() => {
     intentionalClose.current = false;

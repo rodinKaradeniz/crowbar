@@ -1,12 +1,14 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import EmailStr
+
+from app.schemas.base import AppBaseModel
 
 
-class LoginRequest(BaseModel):
+class LoginRequest(AppBaseModel):
     email: EmailStr
     password: str
 
 
-class RegisterRequest(BaseModel):
+class RegisterRequest(AppBaseModel):
     email: EmailStr
     password: str
     name: str
@@ -14,7 +16,7 @@ class RegisterRequest(BaseModel):
     user_type: str = "customer"
 
 
-class BusinessRegisterRequest(BaseModel):
+class BusinessRegisterRequest(AppBaseModel):
     """Register a new business owner: creates user + business + staff assignment."""
     email: EmailStr
     password: str
@@ -26,13 +28,13 @@ class BusinessRegisterRequest(BaseModel):
     business_description: str | None = None
 
 
-class LoginResponse(BaseModel):
+class LoginResponse(AppBaseModel):
     access_token: str
     token_type: str = "bearer"
     user_id: str
     user_type: str
 
 
-class TokenData(BaseModel):
+class TokenData(AppBaseModel):
     sub: str
     user_type: str

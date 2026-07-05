@@ -12,7 +12,24 @@ import { useOrderSocket } from "@/hooks/use-order-socket";
 import type { Order, OrderLineItem } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChefHat, Wine, Wifi, WifiOff, Clock, PowerOff, Power } from "lucide-react";
+import {
+  ChefHat,
+  Wine,
+  Wifi,
+  WifiOff,
+  Clock,
+  PowerOff,
+  Power,
+  ChevronLeft,
+  ChevronRight,
+  History,
+  LayoutGrid,
+} from "lucide-react";
+
+// ─── Status model (Kanban columns are the primary axis) ───────────────────────
+
+const STATUS_COLUMNS = ["received", "preparing", "ready", "served"] as const;
+type BoardStatus = (typeof STATUS_COLUMNS)[number];
 
 const STATUS_LABEL: Record<string, string> = {
   received: "Received",
@@ -22,25 +39,51 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
-const STATUS_NEXT: Record<string, Order["status"] | null> = {
+// Forward advance and previous-step-only backward move. Moving backward out of
+// 'served' reverses the recipe inventory deduction server-side; every other step
+// has no inventory side effect (see order_service.advance_order_status).
+const STATUS_NEXT: Record<BoardStatus, BoardStatus | null> = {
   received: "preparing",
   preparing: "ready",
   ready: "served",
   served: null,
-  cancelled: null,
 };
-
+const STATUS_PREV: Record<BoardStatus, BoardStatus | null> = {
+  received: null,
+  preparing: "received",
+  ready: "preparing",
+  served: "ready",
+};
 const STATUS_NEXT_LABEL: Record<string, string> = {
   received: "Start Preparing",
   preparing: "Mark Ready",
   ready: "Mark Served",
 };
 
-const STATUS_COLOR: Record<string, string> = {
-  received: "bg-blue-50 border-blue-200",
-  preparing: "bg-amber-50 border-amber-200",
-  ready: "bg-green-50 border-green-200",
+const COLUMN_ACCENT: Record<BoardStatus, string> = {
+  received: "border-t-blue-400",
+  preparing: "border-t-amber-400",
+  ready: "border-t-green-400",
+  served: "border-t-muted-foreground/40",
 };
+
+// ─── Station filter (a filter toggle, NOT a second grid axis) ──────────────────
+
+type Station = "all" | "kitchen" | "bar";
+
+function itemMatchesStation(li: OrderLineItem, station: Station): boolean {
+  if (station === "all") return true;
+  return li.routingTag === station || li.routingTag === "any";
+}
+
+function stationItems(order: Order, station: Station): OrderLineItem[] {
+  return order.lineItems.filter((li) => itemMatchesStation(li, station));
+}
+
+function orderInStation(order: Order, station: Station): boolean {
+  if (station === "all") return true;
+  return order.lineItems.some((li) => itemMatchesStation(li, station));
+}
 
 function timeAgo(iso: string): string {
   const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -58,6 +101,7 @@ export function TicketBoardClient({ businessId }: Props) {
   const [loading, setLoading] = useState(true);
   const [isAcceptingOrders, setIsAcceptingOrders] = useState(true);
   const [togglingOrders, setTogglingOrders] = useState(false);
+  const [station, setStation] = useState<Station>("all");
   const knownIdsRef = useRef<Set<string>>(new Set());
   const [, tick] = useState(0);
 
@@ -95,44 +139,42 @@ export function TicketBoardClient({ businessId }: Props) {
   }
 
   const { connected } = useOrderSocket(businessId, (incoming) => {
-    // Toast new orders
+    // Toast genuinely new orders (not moves of ones we already know about).
     for (const o of incoming) {
       if (!knownIdsRef.current.has(o.id)) {
         knownIdsRef.current.add(o.id);
         toast(`New order${o.tableIdentifier ? ` — Table ${o.tableIdentifier}` : ""}`, {
-          description: `${o.lineItems.length} item(s) · €${Number(o.totalAmount).toFixed(2)}`,
+          description: `${o.lineItems.length} item(s) · €${o.totalAmount.toFixed(2)}`,
         });
       }
     }
     setOrders(incoming);
   });
 
-  async function advance(order: Order) {
-    const next = STATUS_NEXT[order.status];
-    if (!next) return;
+  async function move(order: Order, target: BoardStatus) {
+    const previous = order.status;
     // Optimistic update
     setOrders((prev) =>
-      prev.map((o) => (o.id === order.id ? { ...o, status: next } : o)),
+      prev.map((o) => (o.id === order.id ? { ...o, status: target } : o)),
     );
     try {
-      const updated = await clientAdvanceOrderStatus(businessId, order.id, next);
+      const updated = await clientAdvanceOrderStatus(businessId, order.id, target);
       setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
     } catch (e) {
       toast.error((e as Error).message);
       // Revert
       setOrders((prev) =>
-        prev.map((o) => (o.id === order.id ? { ...o, status: order.status } : o)),
+        prev.map((o) => (o.id === order.id ? { ...o, status: previous } : o)),
       );
     }
   }
 
-  const active = orders.filter((o) => !["served", "cancelled"].includes(o.status));
-  const kitchen = active.filter((o) =>
-    o.lineItems.some((li) => li.routingTag === "kitchen" || li.routingTag === "any"),
+  const visible = orders.filter(
+    (o) =>
+      (STATUS_COLUMNS as readonly string[]).includes(o.status) &&
+      orderInStation(o, station),
   );
-  const bar = active.filter((o) =>
-    o.lineItems.some((li) => li.routingTag === "bar" || li.routingTag === "any"),
-  );
+  const byStatus = (s: BoardStatus) => visible.filter((o) => o.status === s);
 
   if (loading) {
     return (
@@ -144,11 +186,11 @@ export function TicketBoardClient({ businessId }: Props) {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Orders</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Live ticket board — Kitchen &amp; Bar
+            Live ticket board — move tickets across statuses
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -186,6 +228,13 @@ export function TicketBoardClient({ businessId }: Props) {
         </div>
       </div>
 
+      {/* Station filter — filters which tickets are visible, same column view. */}
+      <div className="flex items-center gap-1 rounded-lg border p-1 w-fit">
+        <StationTab active={station === "all"} onClick={() => setStation("all")} icon={<LayoutGrid className="h-3.5 w-3.5" />} label="All" />
+        <StationTab active={station === "kitchen"} onClick={() => setStation("kitchen")} icon={<ChefHat className="h-3.5 w-3.5" />} label="Kitchen" />
+        <StationTab active={station === "bar"} onClick={() => setStation("bar")} icon={<Wine className="h-3.5 w-3.5" />} label="Bar" />
+      </div>
+
       {!isAcceptingOrders && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 flex items-center gap-2 text-sm text-destructive">
           <PowerOff className="h-4 w-4 shrink-0" />
@@ -193,70 +242,95 @@ export function TicketBoardClient({ businessId }: Props) {
         </div>
       )}
 
-      {active.length === 0 ? (
+      {visible.length === 0 ? (
         <div className="rounded-lg border border-dashed p-12 text-center">
           <Clock className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-          <p className="font-medium">No active orders</p>
+          <p className="font-medium">No orders to show</p>
           <p className="text-sm text-muted-foreground mt-1">
-            Orders will appear here in real-time as customers place them.
+            {station === "all"
+              ? "Orders will appear here in real-time as customers place them."
+              : `No ${station} orders right now.`}
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <BoardColumn
-            title="Kitchen"
-            icon={<ChefHat className="h-4 w-4" />}
-            orders={kitchen}
-            routingFilter="kitchen"
-            onAdvance={advance}
-          />
-          <BoardColumn
-            title="Bar"
-            icon={<Wine className="h-4 w-4" />}
-            orders={bar}
-            routingFilter="bar"
-            onAdvance={advance}
-          />
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          {STATUS_COLUMNS.map((s) => (
+            <StatusColumn
+              key={s}
+              status={s}
+              orders={byStatus(s)}
+              station={station}
+              onMove={move}
+            />
+          ))}
         </div>
       )}
     </div>
   );
 }
 
-// ─── Board Column ─────────────────────────────────────────────────────────────
+// ─── Station filter tab ────────────────────────────────────────────────────────
 
-function BoardColumn({
-  title,
+function StationTab({
+  active,
+  onClick,
   icon,
-  orders,
-  routingFilter,
-  onAdvance,
+  label,
 }: {
-  title: string;
+  active: boolean;
+  onClick: () => void;
   icon: React.ReactNode;
-  orders: Order[];
-  routingFilter: "kitchen" | "bar";
-  onAdvance: (order: Order) => void;
+  label: string;
 }) {
   return (
-    <div className="space-y-3">
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+        active
+          ? "bg-primary text-primary-foreground"
+          : "text-muted-foreground hover:bg-muted"
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+// ─── Status column ─────────────────────────────────────────────────────────────
+
+function StatusColumn({
+  status,
+  orders,
+  station,
+  onMove,
+}: {
+  status: BoardStatus;
+  orders: Order[];
+  station: Station;
+  onMove: (order: Order, target: BoardStatus) => void;
+}) {
+  return (
+    <div className={`rounded-lg border border-t-4 bg-muted/20 p-3 space-y-3 ${COLUMN_ACCENT[status]}`}>
       <div className="flex items-center gap-2">
-        {icon}
-        <h2 className="font-semibold">{title}</h2>
+        <h2 className="font-semibold text-sm uppercase tracking-wide">
+          {STATUS_LABEL[status]}
+        </h2>
         <Badge variant="secondary">{orders.length}</Badge>
       </div>
 
       {orders.length === 0 ? (
-        <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-          No active {title.toLowerCase()} orders
+        <div className="rounded-lg border border-dashed p-6 text-center text-xs text-muted-foreground">
+          Empty
         </div>
       ) : (
         orders.map((order) => (
           <OrderTicket
             key={order.id}
             order={order}
-            routingFilter={routingFilter}
-            onAdvance={onAdvance}
+            station={station}
+            onMove={onMove}
           />
         ))
       )}
@@ -264,26 +338,27 @@ function BoardColumn({
   );
 }
 
-// ─── Order Ticket ─────────────────────────────────────────────────────────────
+// ─── Order ticket ──────────────────────────────────────────────────────────────
 
 function OrderTicket({
   order,
-  routingFilter,
-  onAdvance,
+  station,
+  onMove,
 }: {
   order: Order;
-  routingFilter: "kitchen" | "bar";
-  onAdvance: (order: Order) => void;
+  station: Station;
+  onMove: (order: Order, target: BoardStatus) => void;
 }) {
-  const relevantItems = order.lineItems.filter(
-    (li) => li.routingTag === routingFilter || li.routingTag === "any",
-  );
-  const nextStatus = STATUS_NEXT[order.status];
-  const colorClass = STATUS_COLOR[order.status] ?? "bg-background";
+  const [showHistory, setShowHistory] = useState(false);
+  const status = order.status as BoardStatus;
+  const relevantItems = stationItems(order, station);
+  const nextStatus = STATUS_NEXT[status];
+  const prevStatus = STATUS_PREV[status];
+  const history = order.statusTimeline ?? [];
 
   return (
-    <div className={`rounded-lg border p-4 space-y-3 ${colorClass}`}>
-      <div className="flex items-start justify-between">
+    <div className="rounded-lg border bg-background p-3 space-y-3 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
         <div>
           {order.tableIdentifier && (
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -292,7 +367,7 @@ function OrderTicket({
           )}
           <p className="text-xs text-muted-foreground">{timeAgo(order.placedAt)}</p>
         </div>
-        <Badge variant="outline" className="text-xs">
+        <Badge variant="outline" className="text-xs shrink-0">
           {STATUS_LABEL[order.status]}
         </Badge>
       </div>
@@ -307,14 +382,58 @@ function OrderTicket({
         <p className="text-xs text-muted-foreground border-t pt-2">Note: {order.notes}</p>
       )}
 
-      {nextStatus && (
+      {/* Move controls: back one step (left) + advance (right). */}
+      <div className="flex items-center gap-2">
         <Button
           size="sm"
-          className="w-full"
-          onClick={() => onAdvance(order)}
+          variant="outline"
+          className="px-2"
+          disabled={!prevStatus}
+          onClick={() => prevStatus && onMove(order, prevStatus)}
+          title={prevStatus ? `Back to ${STATUS_LABEL[prevStatus]}` : undefined}
+          aria-label={prevStatus ? `Back to ${STATUS_LABEL[prevStatus]}` : "No earlier status"}
         >
-          {STATUS_NEXT_LABEL[order.status]}
+          <ChevronLeft className="h-4 w-4" />
         </Button>
+        {nextStatus ? (
+          <Button
+            size="sm"
+            className="flex-1"
+            onClick={() => onMove(order, nextStatus)}
+          >
+            {STATUS_NEXT_LABEL[order.status]}
+            <ChevronRight className="h-4 w-4 ml-1" />
+          </Button>
+        ) : (
+          <div className="flex-1 text-center text-xs text-muted-foreground py-1.5">
+            Served
+          </div>
+        )}
+      </div>
+
+      {history.length > 0 && (
+        <div className="border-t pt-2">
+          <button
+            type="button"
+            onClick={() => setShowHistory((v) => !v)}
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <History className="h-3 w-3" />
+            History ({history.length})
+          </button>
+          {showHistory && (
+            <ul className="mt-2 space-y-1">
+              {history.map((h) => (
+                <li key={h.id} className="text-xs text-muted-foreground">
+                  {h.fromStatus
+                    ? `${STATUS_LABEL[h.fromStatus] ?? h.fromStatus} → ${STATUS_LABEL[h.status] ?? h.status}`
+                    : `${STATUS_LABEL[h.status] ?? h.status} (placed)`}
+                  <span className="ml-1 opacity-70">· {timeAgo(h.changedAt)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
     </div>
   );

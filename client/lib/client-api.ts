@@ -21,7 +21,9 @@ import {
   StockMovement,
   Tab,
   TabSettledMethod,
+  WasteReason,
 } from "@/types";
+import { toMoney, toOptionalMoney } from "@/lib/money";
 
 /**
  * Client-side API calls.
@@ -756,7 +758,7 @@ function toModifier(m: Record<string, unknown>): Modifier {
     groupId: m.group_id as string,
     businessId: m.business_id as string,
     name: m.name as string,
-    priceDelta: m.price_delta as number,
+    priceDelta: toMoney(m.price_delta),
     isAvailable: m.is_available as boolean,
   };
 }
@@ -781,8 +783,8 @@ function toMenuItem(i: Record<string, unknown>): MenuItem {
     businessId: i.business_id as string,
     name: i.name as string,
     description: (i.description as string) || undefined,
-    price: i.price as number,
-    happyHourPrice: (i.happy_hour_price as number | null) ?? undefined,
+    price: toMoney(i.price),
+    happyHourPrice: toOptionalMoney(i.happy_hour_price),
     isAlcoholic: (i.is_alcoholic as boolean) ?? false,
     isAvailable: i.is_available as boolean,
     routingTag: i.routing_tag as MenuItem["routingTag"],
@@ -829,7 +831,9 @@ function toOrder(o: Record<string, unknown>): Order {
     tableIdentifier: (o.table_identifier as string) || undefined,
     status: o.status as Order["status"],
     idempotencyKey: o.idempotency_key as string,
-    totalAmount: o.total_amount as number,
+    // total_amount / prices are Decimal on the backend; toMoney guarantees the
+    // declared `number` type regardless of wire format (see lib/money.ts).
+    totalAmount: toMoney(o.total_amount),
     notes: (o.notes as string) || undefined,
     placedAt: o.placed_at as string,
     lineItems: lineItems.map((li) => ({
@@ -837,12 +841,12 @@ function toOrder(o: Record<string, unknown>): Order {
       orderId: li.order_id as string,
       itemId: (li.item_id as string) || undefined,
       itemName: li.item_name as string,
-      quantity: li.quantity as number,
-      unitPrice: li.unit_price as number,
+      quantity: Number(li.quantity),
+      unitPrice: toMoney(li.unit_price),
       selectedModifiers: ((li.selected_modifiers as Record<string, unknown>[]) ?? []).map((s) => ({
         modifierId: s.modifier_id as string,
         name: s.name as string,
-        priceDelta: s.price_delta as number,
+        priceDelta: toMoney(s.price_delta),
       })),
       routingTag: li.routing_tag as string,
       isAlcoholic: (li.is_alcoholic as boolean) ?? false,
@@ -850,6 +854,7 @@ function toOrder(o: Record<string, unknown>): Order {
     })),
     statusTimeline: timeline.map((t) => ({
       id: t.id as string,
+      fromStatus: (t.from_status as string) || undefined,
       status: t.status as string,
       changedBy: (t.changed_by as string) || undefined,
       changedAt: t.changed_at as string,
@@ -962,7 +967,7 @@ function toTab(t: Record<string, unknown>): Tab {
     closedBy: (t.closed_by as string) || undefined,
     closedAt: (t.closed_at as string) || undefined,
     settledMethod: (t.settled_method as TabSettledMethod) || undefined,
-    total: Number(t.total),
+    total: toMoney(t.total),
     orders: ((t.orders as Record<string, unknown>[]) ?? []).map(toOrder),
   };
 }
@@ -986,6 +991,47 @@ export async function clientOpenTab(): Promise<Tab> {
 export async function clientGetTab(tabId: string): Promise<Tab> {
   const result = await authFetch<Record<string, unknown>>(`/tabs/${tabId}`);
   return toTab(result);
+}
+
+// Add a staff-placed order to an open tab. Goes through the same
+// order_service.place_order path as public ordering (so happy-hour pricing
+// applies), but the tabs route calls it with require_age_confirmation=False —
+// staff entering an order in person skip the self-service age attestation.
+// Tenant is resolved from the JWT server-side, so no businessId in the path.
+export async function clientAddOrderToTab(
+  tabId: string,
+  data: {
+    tableIdentifier?: string;
+    items: Array<{
+      itemId: string;
+      quantity: number;
+      selectedModifiers?: Array<{ modifierId: string; name: string; priceDelta: number }>;
+      notes?: string;
+    }>;
+    notes?: string;
+    idempotencyKey: string;
+  },
+): Promise<Order> {
+  const body = {
+    table_identifier: data.tableIdentifier,
+    items: data.items.map((i) => ({
+      item_id: i.itemId,
+      quantity: i.quantity,
+      selected_modifiers: (i.selectedModifiers ?? []).map((m) => ({
+        modifier_id: m.modifierId,
+        name: m.name,
+        price_delta: m.priceDelta,
+      })),
+      notes: i.notes,
+    })),
+    notes: data.notes,
+    idempotency_key: data.idempotencyKey,
+  };
+  const result = await authFetch<Record<string, unknown>>(
+    `/tabs/${tabId}/orders`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+  return toOrder(result);
 }
 
 export async function clientCloseTab(
@@ -1216,7 +1262,7 @@ function toLibraryItem(d: Record<string, unknown>): LibraryItem {
     businessId: d.business_id as string,
     name: d.name as string,
     description: d.description as string | undefined,
-    price: Number(d.price),
+    price: toMoney(d.price),
     routingTag: d.routing_tag as string,
     prepTimeMinutes: d.prep_time_minutes as number | undefined,
   };
@@ -1297,8 +1343,8 @@ export async function clientAddLibraryItemToCategory(
 // ─── Inventory ────────────────────────────────────────────────────────────────
 
 function toInventoryItem(raw: Record<string, unknown>): InventoryItem {
-  const parQty = raw.par_quantity != null ? Number(raw.par_quantity) : undefined;
-  const currentQty = Number(raw.current_quantity ?? 0);
+  const parQty = toOptionalMoney(raw.par_quantity);
+  const currentQty = toMoney(raw.current_quantity);
   return {
     id: raw.id as string,
     businessId: raw.business_id as string,
@@ -1306,11 +1352,10 @@ function toInventoryItem(raw: Record<string, unknown>): InventoryItem {
     name: raw.name as string,
     unit: raw.unit as string,
     unitType: (raw.unit_type as InventoryItem["unitType"]) ?? "each",
-    containerVolumeMl:
-      raw.container_volume_ml != null ? Number(raw.container_volume_ml) : undefined,
+    containerVolumeMl: toOptionalMoney(raw.container_volume_ml),
     currentQuantity: currentQty,
     parQuantity: parQty,
-    costPerUnit: raw.cost_per_unit != null ? Number(raw.cost_per_unit) : undefined,
+    costPerUnit: toOptionalMoney(raw.cost_per_unit),
     notes: raw.notes as string | undefined,
     isLowStock: parQty != null && currentQty < parQty,
     createdAt: raw.created_at as string,
@@ -1325,7 +1370,8 @@ function toStockMovement(raw: Record<string, unknown>): StockMovement {
     locationId: raw.location_id as string | undefined,
     itemId: raw.item_id as string,
     movementType: raw.movement_type as StockMovement["movementType"],
-    quantityDelta: Number(raw.quantity_delta),
+    quantityDelta: toMoney(raw.quantity_delta),
+    reason: (raw.reason as StockMovement["reason"]) ?? undefined,
     notes: raw.notes as string | undefined,
     createdBy: raw.created_by as string | undefined,
     alertTriggered: raw.alert_triggered as boolean,
@@ -1432,6 +1478,7 @@ export async function clientRecordStockMovement(
     // receive; converted to ml server-side).
     quantityDelta?: number;
     containerQuantity?: number;
+    reason?: WasteReason;
     notes?: string;
     locationId?: string;
   },
@@ -1440,6 +1487,7 @@ export async function clientRecordStockMovement(
   if (data.quantityDelta !== undefined) body.quantity_delta = data.quantityDelta;
   if (data.containerQuantity !== undefined)
     body.container_quantity = data.containerQuantity;
+  if (data.reason !== undefined) body.reason = data.reason;
   if (data.notes !== undefined) body.notes = data.notes;
   if (data.locationId !== undefined) body.location_id = data.locationId;
   const result = await authFetch<Record<string, unknown>>(
@@ -1458,7 +1506,7 @@ function toRecipeIngredient(raw: Record<string, unknown>): RecipeIngredient {
     inventoryItemName: raw.inventory_item_name as string,
     unitType: (raw.unit_type as RecipeIngredient["unitType"]) ?? "each",
     unit: raw.unit as string,
-    quantity: Number(raw.quantity),
+    quantity: toMoney(raw.quantity),
   };
 }
 

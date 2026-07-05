@@ -146,15 +146,19 @@ async def apply_movement(
     *,
     movement_type: str,
     delta: Decimal,
+    reason: str | None = None,
     notes: str | None = None,
     created_by_id: UUID | None = None,
     location_id: UUID | None = None,
+    order_id: UUID | None = None,
 ) -> StockMovement:
     """Schema-free core: mutate current_quantity, write the movement audit row,
     and fire a low-stock notification on a par breach. Shared by the API-driven
     ``record_movement`` (receive/adjust/waste) and the automatic recipe deduction
-    in ``recipe_service`` (movement_type='sale'). ``delta`` is already in the
-    item's storage unit (ml for bottle/keg, count for 'each').
+    /reversal in ``recipe_service`` (movement_type='sale'/'sale_reversal'). ``delta``
+    is already in the item's storage unit (ml for bottle/keg, count for 'each').
+    ``order_id`` links a sale/reversal movement to its order so an un-serve can
+    credit back exactly what was deducted.
     """
     item.current_quantity = (item.current_quantity or Decimal(0)) + delta
 
@@ -167,8 +171,10 @@ async def apply_movement(
         business_id=item.business_id,
         location_id=location_id,
         item_id=item.id,
+        order_id=order_id,
         movement_type=movement_type,
         quantity_delta=delta,
+        reason=reason,
         notes=notes,
         created_by=created_by_id,
         alert_triggered=par_breached,
@@ -229,6 +235,7 @@ async def record_movement(
         item,
         movement_type=data.movement_type,
         delta=delta,
+        reason=data.reason,
         notes=data.notes,
         created_by_id=created_by_id,
         location_id=data.location_id,

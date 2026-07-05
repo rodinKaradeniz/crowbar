@@ -2,22 +2,24 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from app.schemas.base import AppBaseModel
 
 from app.schemas.order import OrderResponse
 
 
-class TabOpenRequest(BaseModel):
+class TabOpenRequest(AppBaseModel):
     table_id: UUID | None = None
     customer_id: UUID | None = None
     channel: str = Field(default="staff", max_length=16)
 
 
-class TabCloseRequest(BaseModel):
+class TabCloseRequest(AppBaseModel):
     settled_method: str = Field(..., pattern="^(cash|card|comp|other)$")
 
 
-class TabResponse(BaseModel):
+class TabResponse(AppBaseModel):
     id: UUID
     business_id: UUID
     table_id: UUID | None = None
@@ -33,4 +35,3 @@ class TabResponse(BaseModel):
     total: Decimal
     orders: list[OrderResponse] = []
 
-    model_config = {"from_attributes": True}

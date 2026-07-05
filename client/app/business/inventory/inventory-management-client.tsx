@@ -10,7 +10,7 @@ import {
   clientRecordStockMovement,
   clientGetStockMovements,
 } from "@/lib/client-api";
-import type { InventoryItem, StockMovement } from "@/types";
+import type { InventoryItem, StockMovement, WasteReason } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -40,6 +40,8 @@ import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import {
   UNIT_TYPE_LABELS,
   isLiquidUnitType,
+  mlToOz,
+  ozToMl,
   presetsForUnitType,
   type UnitType,
 } from "@/lib/units";
@@ -72,9 +74,32 @@ type ItemFormState = {
 type MovementFormState = {
   movementType: "receive" | "adjust" | "waste";
   quantityDelta: string;
+  // Structured cause, only used/sent for waste movements.
+  reason: WasteReason;
   notes: string;
   // For a bottle/keg receive: enter number of containers instead of raw ml.
   receiveAsContainers: boolean;
+  // Unit the quantity is typed in for a liquid item (ml/oz toggle, reused from
+  // the recipe builder). Ignored for `each` items and container-receive mode.
+  quantityUnit: "ml" | "oz";
+};
+
+// Structured waste causes (mirrors migration 021 + the backend enum). Kept
+// low-cardinality so waste can be aggregated per item later (Phase 9 ML V2).
+const WASTE_REASONS: { value: WasteReason; label: string }[] = [
+  { value: "spillage", label: "Spillage" },
+  { value: "wrong_measure", label: "Wrong measure / over-pour" },
+  { value: "breakage", label: "Breakage" },
+  { value: "spoilage", label: "Spoilage / expired" },
+  { value: "other", label: "Other" },
+];
+
+const WASTE_REASON_LABELS: Record<WasteReason, string> = {
+  spillage: "Spillage",
+  wrong_measure: "Wrong measure",
+  breakage: "Breakage",
+  spoilage: "Spoilage",
+  other: "Other",
 };
 
 const EMPTY_ITEM_FORM: ItemFormState = {
@@ -90,8 +115,10 @@ const EMPTY_ITEM_FORM: ItemFormState = {
 const EMPTY_MOVEMENT_FORM: MovementFormState = {
   movementType: "receive",
   quantityDelta: "",
+  reason: "spillage",
   notes: "",
   receiveAsContainers: true,
+  quantityUnit: "ml",
 };
 
 function movementTypeLabel(type: string) {
@@ -261,6 +288,21 @@ export function InventoryManagementClient({ businessId }: Props) {
     setMovementDialog(true);
   }
 
+  // ml/oz toggle for a liquid amount — reuses the recipe-builder conversion so
+  // switching units re-expresses the same amount (not a raw reinterpretation).
+  function toggleMovementUnit(nextUnit: "ml" | "oz") {
+    setMovementForm((f) => {
+      if (f.quantityUnit === nextUnit) return f;
+      const val = Number(f.quantityDelta);
+      let quantityDelta = f.quantityDelta;
+      if (f.quantityDelta !== "" && !isNaN(val)) {
+        quantityDelta =
+          nextUnit === "oz" ? mlToOz(val).toFixed(2) : ozToMl(val).toFixed(1);
+      }
+      return { ...f, quantityUnit: nextUnit, quantityDelta };
+    });
+  }
+
   async function saveMovement() {
     if (!movementTargetId) return;
     const target = items.find((i) => i.id === movementTargetId);
@@ -269,11 +311,16 @@ export function InventoryManagementClient({ businessId }: Props) {
       toast.error("Enter a non-zero quantity");
       return;
     }
+    const targetIsLiquid = target != null && isLiquidUnitType(target.unitType);
     const liquidReceive =
-      target != null &&
-      isLiquidUnitType(target.unitType) &&
+      targetIsLiquid &&
       movementForm.movementType === "receive" &&
       movementForm.receiveAsContainers;
+    // Convert an oz-entered liquid amount to ml before it leaves the client — the
+    // backend only ever stores the native unit (ml). Container-receive is exempt.
+    const useOz =
+      targetIsLiquid && !liquidReceive && movementForm.quantityUnit === "oz";
+    const nativeValue = useOz ? ozToMl(value) : value;
     setMovementSaving(true);
     try {
       if (liquidReceive) {
@@ -286,10 +333,17 @@ export function InventoryManagementClient({ businessId }: Props) {
       } else {
         // For waste, delta should be negative (stock going out).
         const effectiveDelta =
-          movementForm.movementType === "waste" ? -Math.abs(value) : value;
+          movementForm.movementType === "waste"
+            ? -Math.abs(nativeValue)
+            : nativeValue;
         await clientRecordStockMovement(businessId, movementTargetId, {
           movementType: movementForm.movementType,
           quantityDelta: effectiveDelta,
+          // reason is structured + required for waste; omitted otherwise.
+          reason:
+            movementForm.movementType === "waste"
+              ? movementForm.reason
+              : undefined,
           notes: movementForm.notes.trim() || undefined,
         });
       }
@@ -326,6 +380,11 @@ export function InventoryManagementClient({ businessId }: Props) {
   const lowStockItems = items.filter((i) => i.isLowStock);
   const movementTarget = items.find((i) => i.id === movementTargetId);
   const movementTargetIsLiquid = isLiquidUnitType(movementTarget?.unitType);
+  // Show the ml/oz toggle on the quantity for a liquid item, except when
+  // receiving by container count (where the amount is containers, not a volume).
+  const showMlOzToggle =
+    movementTargetIsLiquid &&
+    !(movementForm.movementType === "receive" && movementForm.receiveAsContainers);
   // Live "= N ml" hint when receiving a bottle/keg by container count.
   const receiveMlPreview =
     movementTargetIsLiquid &&
@@ -691,6 +750,28 @@ export function InventoryManagementClient({ businessId }: Props) {
                 </Select>
               </div>
             )}
+            {movementForm.movementType === "waste" && (
+              <div className="flex flex-col gap-1.5">
+                <Label>Reason</Label>
+                <Select
+                  value={movementForm.reason}
+                  onValueChange={(v) =>
+                    setMovementForm((f) => ({ ...f, reason: v as WasteReason }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {WASTE_REASONS.map((r) => (
+                      <SelectItem key={r.value} value={r.value}>
+                        {r.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="mv-qty">
                 Quantity
@@ -701,19 +782,41 @@ export function InventoryManagementClient({ businessId }: Props) {
                   <span className="ml-1 text-xs text-muted-foreground">(negative to reduce)</span>
                 )}
               </Label>
-              <Input
-                id="mv-qty"
-                type="number"
-                step="0.001"
-                value={movementForm.quantityDelta}
-                onChange={(e) =>
-                  setMovementForm((f) => ({ ...f, quantityDelta: e.target.value }))
-                }
-                placeholder="e.g. 5"
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="mv-qty"
+                  type="number"
+                  step="0.001"
+                  value={movementForm.quantityDelta}
+                  onChange={(e) =>
+                    setMovementForm((f) => ({ ...f, quantityDelta: e.target.value }))
+                  }
+                  placeholder="e.g. 5"
+                  className="flex-1"
+                />
+                {showMlOzToggle && (
+                  <Select
+                    value={movementForm.quantityUnit}
+                    onValueChange={(v) => toggleMovementUnit(v as "ml" | "oz")}
+                  >
+                    <SelectTrigger className="w-20 shrink-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ml">ml</SelectItem>
+                      <SelectItem value="oz">oz</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
               {receiveMlPreview != null && (
                 <p className="text-xs text-muted-foreground">
                   = {receiveMlPreview.toLocaleString()} ml
+                </p>
+              )}
+              {showMlOzToggle && movementForm.quantityUnit === "oz" && (
+                <p className="text-xs text-muted-foreground">
+                  Stored in ml; entered ounces are converted on save.
                 </p>
               )}
             </div>
@@ -764,6 +867,14 @@ export function InventoryManagementClient({ businessId }: Props) {
                       <Badge variant="outline" className="text-xs capitalize">
                         {movementTypeLabel(m.movementType)}
                       </Badge>
+                      {m.reason && (
+                        <Badge
+                          variant="outline"
+                          className="text-xs border-red-200 bg-red-50 text-red-700"
+                        >
+                          {WASTE_REASON_LABELS[m.reason]}
+                        </Badge>
+                      )}
                       {m.alertTriggered && (
                         <Badge
                           variant="outline"

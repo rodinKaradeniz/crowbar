@@ -1,16 +1,18 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from app.schemas.base import AppBaseModel
 
 
-class QueueJoinRequest(BaseModel):
+class QueueJoinRequest(AppBaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     party_size: int = Field(1, ge=1, le=20)
     phone: str | None = None
 
 
-class QueueEntryResponse(BaseModel):
+class QueueEntryResponse(AppBaseModel):
     id: UUID
     business_id: UUID
     session_token: str
@@ -23,10 +25,9 @@ class QueueEntryResponse(BaseModel):
     called_at: datetime | None = None
     seated_at: datetime | None = None
 
-    model_config = {"from_attributes": True}
 
 
-class QueueStatusResponse(BaseModel):
+class QueueStatusResponse(AppBaseModel):
     entry: QueueEntryResponse
     total_waiting: int
     estimated_wait_minutes: int | None = None  # position * 5 min heuristic

@@ -4,6 +4,15 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { clientGetMenu, clientGetOrderingSettings } from "@/lib/client-api";
 import type { Menu, MenuItem, ModifierGroup, SelectedModifier } from "@/types";
+import {
+  type CartItem,
+  addCartEntry,
+  cartItemCount,
+  cartTotal,
+  effectivePrice,
+  modifierTotal,
+  toggleModifier,
+} from "@/lib/cart";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -18,13 +27,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ShoppingCart, Plus, Minus, ChefHat } from "lucide-react";
 import Link from "next/link";
-
-interface CartItem {
-  item: MenuItem;
-  quantity: number;
-  selectedModifiers: SelectedModifier[];
-  notes: string;
-}
 
 interface MenuClientProps {
   businessId: string;
@@ -65,40 +67,19 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
   }
 
   function toggleMod(group: ModifierGroup, mod: { id: string; name: string; priceDelta: number }) {
-    setSheetMods((prev) => {
-      const exists = prev.some((m) => m.modifierId === mod.id);
-      if (exists) return prev.filter((m) => m.modifierId !== mod.id);
-      const groupSelected = prev.filter((m) =>
-        group.modifiers.some((gm) => gm.id === m.modifierId),
-      );
-      if (groupSelected.length >= group.maxSelect) {
-        const firstId = groupSelected[0].modifierId;
-        return [...prev.filter((m) => m.modifierId !== firstId), {
-          modifierId: mod.id,
-          name: mod.name,
-          priceDelta: mod.priceDelta,
-        }];
-      }
-      return [...prev, { modifierId: mod.id, name: mod.name, priceDelta: mod.priceDelta }];
-    });
+    setSheetMods((prev) => toggleModifier(prev, group, mod));
   }
 
   function addToCart() {
     if (!selectedItem) return;
-    setCart((prev) => {
-      const existing = prev.find(
-        (ci) =>
-          ci.item.id === selectedItem.id &&
-          JSON.stringify(ci.selectedModifiers) === JSON.stringify(sheetMods) &&
-          ci.notes === sheetNotes,
-      );
-      if (existing) {
-        return prev.map((ci) =>
-          ci === existing ? { ...ci, quantity: ci.quantity + sheetQty } : ci,
-        );
-      }
-      return [...prev, { item: selectedItem, quantity: sheetQty, selectedModifiers: sheetMods, notes: sheetNotes }];
-    });
+    setCart((prev) =>
+      addCartEntry(prev, {
+        item: selectedItem,
+        quantity: sheetQty,
+        selectedModifiers: sheetMods,
+        notes: sheetNotes,
+      }),
+    );
     setSelectedItem(null);
   }
 
@@ -109,14 +90,9 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
   // Happy hour is decided server-side (menu.happyHourActive). When active, an
   // item with happyHourPrice set is displayed and totalled at the lower price.
   const hhActive = menu?.happyHourActive ?? false;
-  const effectivePrice = (item: MenuItem) =>
-    hhActive && item.happyHourPrice != null ? item.happyHourPrice : item.price;
 
-  const totalItems = cart.reduce((sum, ci) => sum + ci.quantity, 0);
-  const totalPrice = cart.reduce((sum, ci) => {
-    const modTotal = ci.selectedModifiers.reduce((s, m) => s + m.priceDelta, 0);
-    return sum + (effectivePrice(ci.item) + modTotal) * ci.quantity;
-  }, 0);
+  const totalItems = cartItemCount(cart);
+  const totalPrice = cartTotal(cart, hhActive);
 
   if (loading) {
     return (
@@ -343,8 +319,8 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                 </div>
                 <Button className="w-full" onClick={addToCart}>
                   Add to Cart · €{(
-                    (effectivePrice(selectedItem) +
-                      sheetMods.reduce((s, m) => s + m.priceDelta, 0)) *
+                    (effectivePrice(selectedItem, hhActive) +
+                      modifierTotal(sheetMods)) *
                     sheetQty
                   ).toFixed(2)}
                 </Button>

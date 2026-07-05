@@ -1,10 +1,11 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+
+from app.schemas.base import AppBaseModel
 
 
-class CustomerResponse(BaseModel):
+class CustomerResponse(AppBaseModel):
     id: UUID
     business_id: UUID
     name: str | None = None
@@ -13,4 +14,3 @@ class CustomerResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = {"from_attributes": True}

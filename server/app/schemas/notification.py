@@ -1,10 +1,12 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from app.schemas.base import AppBaseModel
 
 
-class NotificationResponse(BaseModel):
+class NotificationResponse(AppBaseModel):
     id: UUID
     user_id: UUID
     business_id: UUID
@@ -17,8 +19,7 @@ class NotificationResponse(BaseModel):
     # Populated when merging linked-account notifications (same email, different user_type)
     source_type: str | None = None
 
-    model_config = {"from_attributes": True}
 
 
-class UnreadCountResponse(BaseModel):
+class UnreadCountResponse(AppBaseModel):
     count: int

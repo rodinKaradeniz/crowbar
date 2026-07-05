@@ -66,10 +66,24 @@ class StockMovement(Base, UUIDMixin):
         ForeignKey("inventory_items.id", ondelete="CASCADE"),
         nullable=False,
     )
+    # The order this movement belongs to, for 'sale'/'sale_reversal' recipe
+    # deductions. NULL for manual receive/adjust/waste. Lets an un-serve reverse
+    # exactly the movements a given order deducted (never a recipe recompute).
+    order_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("orders.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     movement_type: Mapped[str] = mapped_column(String(20), nullable=False)
-    # movement_type: receive | adjust | waste | sale
-    # 'sale' = automatic deduction from recipe on order fulfillment (see recipe_service).
+    # movement_type: receive | adjust | waste | sale | sale_reversal
+    # 'sale'          = automatic deduction from recipe on order fulfillment.
+    # 'sale_reversal' = credit-back when an order is moved backward out of 'served'.
+    # Both are system-generated (see recipe_service); StockMovementCreate rejects them.
     quantity_delta: Mapped[Decimal] = mapped_column(Numeric(10, 3), nullable=False)
+    # Structured cause for a `waste` movement (spillage | wrong_measure | breakage
+    # | spoilage | other), for later waste-per-item aggregation. NULL for older
+    # rows and for non-waste movements. `notes` holds the optional free-text detail.
+    reason: Mapped[str | None] = mapped_column(String(20), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

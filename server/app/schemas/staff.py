@@ -1,30 +1,31 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr
+from pydantic import EmailStr
+
+from app.schemas.base import AppBaseModel
 
 
-class StaffCreate(BaseModel):
+class StaffCreate(AppBaseModel):
     user_id: UUID
     business_id: UUID
     role: str = "staff"
 
 
-class StaffUpdate(BaseModel):
+class StaffUpdate(AppBaseModel):
     role: str | None = None
 
 
-class StaffResponse(BaseModel):
+class StaffResponse(AppBaseModel):
     id: UUID
     user_id: UUID
     business_id: UUID
     role: str
     created_at: datetime
 
-    model_config = {"from_attributes": True}
 
 
-class StaffWithUserResponse(BaseModel):
+class StaffWithUserResponse(AppBaseModel):
     id: UUID
     user_id: UUID
     business_id: UUID
@@ -34,24 +35,23 @@ class StaffWithUserResponse(BaseModel):
     user_email: str
     user_phone: str | None = None
 
-    model_config = {"from_attributes": True}
 
 
-class StaffInviteRequest(BaseModel):
+class StaffInviteRequest(AppBaseModel):
     email: EmailStr
     role: str = "staff"
 
 
-class StaffInviteResponse(BaseModel):
+class StaffInviteResponse(AppBaseModel):
     message: str
 
 
-class InviteDetailsResponse(BaseModel):
+class InviteDetailsResponse(AppBaseModel):
     email: str
     role: str
     business_name: str
 
 
-class AcceptInviteRequest(BaseModel):
+class AcceptInviteRequest(AppBaseModel):
     name: str
     password: str

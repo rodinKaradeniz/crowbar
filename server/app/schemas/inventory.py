@@ -2,15 +2,19 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import Field, model_validator
+
+from app.schemas.base import AppBaseModel
 
 # unit_type ∈ {each, bottle, keg}. bottle/keg store liquid quantities in ml.
 _UNIT_TYPE_PATTERN = "^(each|bottle|keg)$"
+# Structured waste cause (see migration 021). Scoped to waste movements.
+_WASTE_REASON_PATTERN = "^(spillage|wrong_measure|breakage|spoilage|other)$"
 
 
 # ─── Inventory Items ──────────────────────────────────────────────────────────
 
-class InventoryItemCreate(BaseModel):
+class InventoryItemCreate(AppBaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     unit: str = Field(default="each", max_length=50)
     unit_type: str = Field(default="each", pattern=_UNIT_TYPE_PATTERN)
@@ -21,7 +25,7 @@ class InventoryItemCreate(BaseModel):
     location_id: UUID | None = None
 
 
-class InventoryItemUpdate(BaseModel):
+class InventoryItemUpdate(AppBaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     unit: str | None = Field(default=None, max_length=50)
     unit_type: str | None = Field(default=None, pattern=_UNIT_TYPE_PATTERN)
@@ -32,7 +36,7 @@ class InventoryItemUpdate(BaseModel):
     location_id: UUID | None = None
 
 
-class InventoryItemResponse(BaseModel):
+class InventoryItemResponse(AppBaseModel):
     id: UUID
     business_id: UUID
     location_id: UUID | None = None
@@ -47,12 +51,11 @@ class InventoryItemResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = {"from_attributes": True}
 
 
 # ─── Stock Movements ──────────────────────────────────────────────────────────
 
-class StockMovementCreate(BaseModel):
+class StockMovementCreate(AppBaseModel):
     # 'sale' is system-generated (recipe deduction) and never accepted from the API.
     movement_type: str = Field(..., pattern="^(receive|adjust|waste)$")
     # Either quantity_delta (in the item's storage unit — ml for bottle/keg) OR,
@@ -60,6 +63,9 @@ class StockMovementCreate(BaseModel):
     # to ml server-side via the item's container_volume_ml). Exactly one is required.
     quantity_delta: Decimal | None = Field(default=None)
     container_quantity: Decimal | None = Field(default=None, gt=0)
+    # Structured cause, required for waste (so it aggregates later), optional for
+    # adjust, rejected for receive. `notes` carries any free-text detail.
+    reason: str | None = Field(default=None, pattern=_WASTE_REASON_PATTERN)
     notes: str | None = None
     location_id: UUID | None = None
 
@@ -73,19 +79,23 @@ class StockMovementCreate(BaseModel):
             raise ValueError("quantity_delta must be non-zero.")
         if self.container_quantity is not None and self.movement_type != "receive":
             raise ValueError("container_quantity is only valid for receive movements.")
+        if self.movement_type == "waste" and self.reason is None:
+            raise ValueError("reason is required for waste movements.")
+        if self.movement_type == "receive" and self.reason is not None:
+            raise ValueError("reason is not valid for receive movements.")
         return self
 
 
-class StockMovementResponse(BaseModel):
+class StockMovementResponse(AppBaseModel):
     id: UUID
     business_id: UUID
     location_id: UUID | None = None
     item_id: UUID
     movement_type: str
     quantity_delta: Decimal
+    reason: str | None = None
     notes: str | None = None
     created_by: UUID | None = None
     alert_triggered: bool
     created_at: datetime
 
-    model_config = {"from_attributes": True}

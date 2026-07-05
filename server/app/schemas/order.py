@@ -2,12 +2,14 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from app.schemas.base import AppBaseModel
 
 
 # ─── Selected modifier (embedded in line item) ────────────────────────────────
 
-class SelectedModifier(BaseModel):
+class SelectedModifier(AppBaseModel):
     modifier_id: str
     name: str
     price_delta: Decimal
@@ -15,14 +17,14 @@ class SelectedModifier(BaseModel):
 
 # ─── Order Line Items ─────────────────────────────────────────────────────────
 
-class OrderLineItemRequest(BaseModel):
+class OrderLineItemRequest(AppBaseModel):
     item_id: UUID
     quantity: int = Field(default=1, ge=1)
     selected_modifiers: list[SelectedModifier] = []
     notes: str | None = None
 
 
-class OrderLineItemResponse(BaseModel):
+class OrderLineItemResponse(AppBaseModel):
     id: UUID
     order_id: UUID
     item_id: UUID | None = None
@@ -34,12 +36,11 @@ class OrderLineItemResponse(BaseModel):
     is_alcoholic: bool = False
     notes: str | None = None
 
-    model_config = {"from_attributes": True}
 
 
 # ─── Orders ───────────────────────────────────────────────────────────────────
 
-class OrderPlaceRequest(BaseModel):
+class OrderPlaceRequest(AppBaseModel):
     table_identifier: str | None = Field(None, max_length=100)
     items: list[OrderLineItemRequest] = Field(..., min_length=1)
     notes: str | None = None
@@ -50,20 +51,20 @@ class OrderPlaceRequest(BaseModel):
     age_confirmed: bool = False
 
 
-class OrderStatusUpdateRequest(BaseModel):
+class OrderStatusUpdateRequest(AppBaseModel):
     status: str = Field(..., pattern="^(received|preparing|ready|served|cancelled)$")
 
 
-class OrderStatusTimelineResponse(BaseModel):
+class OrderStatusTimelineResponse(AppBaseModel):
     id: UUID
+    from_status: str | None = None
     status: str
     changed_by: UUID | None = None
     changed_at: datetime
 
-    model_config = {"from_attributes": True}
 
 
-class OrderResponse(BaseModel):
+class OrderResponse(AppBaseModel):
     id: UUID
     business_id: UUID
     location_id: UUID | None = None
@@ -77,4 +78,3 @@ class OrderResponse(BaseModel):
     line_items: list[OrderLineItemResponse] = []
     status_timeline: list[OrderStatusTimelineResponse] = []
 
-    model_config = {"from_attributes": True}

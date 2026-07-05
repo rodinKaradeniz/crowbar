@@ -1,7 +1,9 @@
 from datetime import time
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
+
+from app.schemas.base import AppBaseModel
 
 
 def _validate_days(days: list[int]) -> list[int]:
@@ -11,7 +13,7 @@ def _validate_days(days: list[int]) -> list[int]:
     return days
 
 
-class HappyHourWindowCreate(BaseModel):
+class HappyHourWindowCreate(AppBaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     days_of_week: list[int] = Field(..., min_length=1)
     start_time: time
@@ -24,7 +26,7 @@ class HappyHourWindowCreate(BaseModel):
         return _validate_days(v)
 
 
-class HappyHourWindowUpdate(BaseModel):
+class HappyHourWindowUpdate(AppBaseModel):
     name: str | None = Field(None, min_length=1, max_length=100)
     days_of_week: list[int] | None = Field(None, min_length=1)
     start_time: time | None = None
@@ -37,7 +39,7 @@ class HappyHourWindowUpdate(BaseModel):
         return _validate_days(v) if v is not None else v
 
 
-class HappyHourWindowResponse(BaseModel):
+class HappyHourWindowResponse(AppBaseModel):
     id: UUID
     business_id: UUID
     name: str
@@ -46,4 +48,3 @@ class HappyHourWindowResponse(BaseModel):
     end_time: time
     is_active: bool
 
-    model_config = {"from_attributes": True}

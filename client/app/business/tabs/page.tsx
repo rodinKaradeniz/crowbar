@@ -21,5 +21,5 @@ export default async function TabsPage() {
     return <ModuleDisabled moduleName="Ordering" />;
   }
 
-  return <TabsClient />;
+  return <TabsClient businessId={business.id} />;
 }

@@ -222,6 +222,7 @@ export interface OrderLineItem {
 
 export interface OrderStatusEvent {
   id: string;
+  fromStatus?: string; // null on the initial 'received' placement row
   status: string;
   changedBy?: string;
   changedAt: string;
@@ -293,6 +294,15 @@ export interface InventoryItem {
   updatedAt: string;
 }
 
+// Structured cause for a waste movement (see migration 021). Enables later
+// "how much do we typically waste per item" aggregation (Phase 9 ML V2).
+export type WasteReason =
+  | "spillage"
+  | "wrong_measure"
+  | "breakage"
+  | "spoilage"
+  | "other";
+
 export interface StockMovement {
   id: string;
   businessId: string;
@@ -300,6 +310,7 @@ export interface StockMovement {
   itemId: string;
   movementType: "receive" | "adjust" | "waste" | "sale"; // 'sale' = auto recipe deduction
   quantityDelta: number;
+  reason?: WasteReason; // structured cause on waste movements
   notes?: string;
   createdBy?: string;
   alertTriggered: boolean;

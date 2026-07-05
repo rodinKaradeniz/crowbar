@@ -32,6 +32,7 @@ import type {
   MenuItem,
   RecipeIngredient,
 } from "@/types";
+import Link from "next/link";
 import { isLiquidUnitType, mlToOz, ozToMl } from "@/lib/units";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,6 +72,9 @@ import {
   Bookmark,
   FlaskConical,
   AlertTriangle,
+  Copy,
+  Check,
+  ExternalLink,
 } from "lucide-react";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { EmptyState } from "@/components/empty-state";
@@ -83,12 +87,40 @@ const ROUTING_ICONS: Record<string, React.ReactNode> = {
 
 interface Props {
   businessId: string;
+  businessSlug: string;
 }
 
-export function MenuManagementClient({ businessId }: Props) {
+export function MenuManagementClient({ businessId, businessSlug }: Props) {
   const [menus, setMenus] = useState<Menu[]>([]);
   const [selectedMenuId, setSelectedMenuId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // ── Public QR-menu link (share/copy) ─────────────────────────────────────────
+  // The public menu route is keyed by slug (/menu/[slug]); build the absolute URL
+  // client-side so it's shareable. Reuses the clipboard pattern from the widget
+  // snippet page (navigator.clipboard + execCommand fallback).
+  const [menuLinkCopied, setMenuLinkCopied] = useState(false);
+  const [publicMenuUrl, setPublicMenuUrl] = useState(`/menu/${businessSlug}`);
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setPublicMenuUrl(`${window.location.origin}/menu/${businessSlug}`);
+    }
+  }, [businessSlug]);
+
+  async function handleCopyMenuLink() {
+    try {
+      await navigator.clipboard.writeText(publicMenuUrl);
+    } catch {
+      const el = document.createElement("textarea");
+      el.value = publicMenuUrl;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+    }
+    setMenuLinkCopied(true);
+    setTimeout(() => setMenuLinkCopied(false), 2000);
+  }
 
   // ── Dialog state ────────────────────────────────────────────────────────────
   const [menuDialog, setMenuDialog] = useState(false);
@@ -620,6 +652,34 @@ export function MenuManagementClient({ businessId }: Props) {
         </div>
       </div>
 
+      {/* Public QR-menu link — the URL customers scan/open to order */}
+      <div className="flex items-center justify-between gap-3 rounded-lg border bg-card p-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium">Public menu link</p>
+          <p className="text-xs text-muted-foreground truncate">
+            {publicMenuUrl}
+          </p>
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <Button size="sm" variant="outline" onClick={handleCopyMenuLink}>
+            {menuLinkCopied ? (
+              <>
+                <Check className="h-3.5 w-3.5 mr-1.5" /> Copied
+              </>
+            ) : (
+              <>
+                <Copy className="h-3.5 w-3.5 mr-1.5" /> Copy link
+              </>
+            )}
+          </Button>
+          <Link href={`/menu/${businessSlug}`} target="_blank">
+            <Button size="sm" variant="outline">
+              <ExternalLink className="h-3.5 w-3.5 mr-1.5" /> Open
+            </Button>
+          </Link>
+        </div>
+      </div>
+
       {menus.length === 0 ? (
         <EmptyState
           icon={ChefHat}
@@ -1062,7 +1122,14 @@ function ItemFormFields({
             placeholder="Leave blank for no discount"
           />
           <p className="text-xs text-muted-foreground">
-            Applied automatically during active happy-hour windows.
+            This is the discounted price (how much). It only applies during the
+            active windows (when) you define in{" "}
+            <Link
+              href="/business/happy-hour"
+              className="font-medium text-primary underline-offset-2 hover:underline"
+            >
+              Happy Hour settings →
+            </Link>
           </p>
         </div>
       )}

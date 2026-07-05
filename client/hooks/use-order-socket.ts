@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Order } from "@/types";
+import { toMoney } from "@/lib/money";
 
 function getWsBase(): string {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -29,6 +30,7 @@ async function fetchJwt(): Promise<string | null> {
 
 function toOrderFromWS(o: Record<string, unknown>): Order {
   const lineItems = (o.line_items as Record<string, unknown>[]) ?? [];
+  const timeline = (o.status_timeline as Record<string, unknown>[]) ?? [];
   return {
     id: o.id as string,
     businessId: o.business_id as string,
@@ -37,7 +39,9 @@ function toOrderFromWS(o: Record<string, unknown>): Order {
     tableIdentifier: (o.table_identifier as string) || undefined,
     status: o.status as Order["status"],
     idempotencyKey: o.idempotency_key as string,
-    totalAmount: o.total_amount as number,
+    // Decimal fields coerced via the shared toMoney helper (mirrors toOrder in
+    // client-api.ts) so callers can rely on the declared `number` type.
+    totalAmount: toMoney(o.total_amount),
     notes: (o.notes as string) || undefined,
     placedAt: o.placed_at as string,
     lineItems: lineItems.map((li) => ({
@@ -45,17 +49,24 @@ function toOrderFromWS(o: Record<string, unknown>): Order {
       orderId: li.order_id as string,
       itemId: (li.item_id as string) || undefined,
       itemName: li.item_name as string,
-      quantity: li.quantity as number,
-      unitPrice: li.unit_price as number,
+      quantity: Number(li.quantity),
+      unitPrice: toMoney(li.unit_price),
       selectedModifiers: ((li.selected_modifiers as Record<string, unknown>[]) ?? []).map((s) => ({
         modifierId: s.modifier_id as string,
         name: s.name as string,
-        priceDelta: s.price_delta as number,
+        priceDelta: toMoney(s.price_delta),
       })),
       routingTag: li.routing_tag as string,
+      isAlcoholic: (li.is_alcoholic as boolean) ?? false,
       notes: (li.notes as string) || undefined,
     })),
-    statusTimeline: [],
+    statusTimeline: timeline.map((t) => ({
+      id: t.id as string,
+      fromStatus: (t.from_status as string) || undefined,
+      status: t.status as string,
+      changedBy: (t.changed_by as string) || undefined,
+      changedAt: t.changed_at as string,
+    })),
   };
 }
 
@@ -72,7 +83,10 @@ export function useOrderSocket(
   const delayRef = useRef(BASE_DELAY);
   const intentionalClose = useRef(false);
   const onUpdateRef = useRef(onUpdate);
-  onUpdateRef.current = onUpdate;
+  // Holds the latest `connect` so the reconnect timer can re-invoke it without
+  // referencing `connect` inside its own useCallback (self-reference-before-
+  // declaration). Both refs are synced in effects below, never during render.
+  const connectRef = useRef<() => void>(() => {});
 
   const connect = useCallback(async () => {
     const jwt = await fetchJwt();
@@ -109,13 +123,22 @@ export function useOrderSocket(
 
       const delay = delayRef.current;
       delayRef.current = Math.min(delay * 2, MAX_DELAY);
-      retryRef.current = setTimeout(() => void connect(), delay);
+      retryRef.current = setTimeout(() => connectRef.current(), delay);
     };
 
     ws.onerror = () => {
       ws.close();
     };
   }, [businessId]);
+
+  // Keep the refs pointed at the latest values (synced in effects, not during
+  // render). onUpdateRef is read in ws.onmessage; connectRef in the reconnect timer.
+  useEffect(() => {
+    onUpdateRef.current = onUpdate;
+  }, [onUpdate]);
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   useEffect(() => {
     intentionalClose.current = false;

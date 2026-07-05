@@ -21,5 +21,10 @@ export default async function MenuPage() {
     return <ModuleDisabled moduleName="Ordering" />;
   }
 
-  return <MenuManagementClient businessId={business.id} />;
+  return (
+    <MenuManagementClient
+      businessId={business.id}
+      businessSlug={business.slug}
+    />
+  );
 }

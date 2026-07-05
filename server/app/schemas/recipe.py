@@ -1,10 +1,12 @@
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from app.schemas.base import AppBaseModel
 
 
-class RecipeIngredientInput(BaseModel):
+class RecipeIngredientInput(AppBaseModel):
     """One recipe line as submitted by the recipe builder.
 
     ``quantity`` is in the linked inventory item's native unit (ml for
@@ -16,13 +18,13 @@ class RecipeIngredientInput(BaseModel):
     quantity: Decimal = Field(..., gt=0)
 
 
-class RecipeSetRequest(BaseModel):
+class RecipeSetRequest(AppBaseModel):
     """Replace-all payload for a menu item's recipe."""
 
     ingredients: list[RecipeIngredientInput] = []
 
 
-class RecipeIngredientResponse(BaseModel):
+class RecipeIngredientResponse(AppBaseModel):
     id: UUID
     inventory_item_id: UUID
     inventory_item_name: str
@@ -31,7 +33,7 @@ class RecipeIngredientResponse(BaseModel):
     quantity: Decimal
 
 
-class MenuItemStockFlag(BaseModel):
+class MenuItemStockFlag(AppBaseModel):
     """Whether a menu item has any recipe ingredient below its par level."""
 
     menu_item_id: UUID
