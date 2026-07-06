@@ -38,6 +38,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import {
+  POUR_PRESETS,
   UNIT_TYPE_LABELS,
   isLiquidUnitType,
   mlToOz,
@@ -66,6 +67,10 @@ type ItemFormState = {
   unit: string;
   unitType: UnitType;
   containerVolumeMl: string;
+  // Optional reference pour size for the pours-remaining estimate (bottle/keg).
+  // Held in the currently-selected unit; converted to ml on save.
+  defaultPour: string;
+  defaultPourUnit: "ml" | "oz";
   parQuantity: string;
   costPerUnit: string;
   notes: string;
@@ -107,6 +112,8 @@ const EMPTY_ITEM_FORM: ItemFormState = {
   unit: "each",
   unitType: "each",
   containerVolumeMl: "",
+  defaultPour: "",
+  defaultPourUnit: "ml",
   parQuantity: "",
   costPerUnit: "",
   notes: "",
@@ -202,6 +209,9 @@ export function InventoryManagementClient({ businessId }: Props) {
       unitType: item.unitType ?? "each",
       containerVolumeMl:
         item.containerVolumeMl != null ? String(item.containerVolumeMl) : "",
+      // Prefill the pour size in ml (its stored unit); staff can toggle to oz.
+      defaultPour: item.defaultPourMl != null ? String(item.defaultPourMl) : "",
+      defaultPourUnit: "ml",
       parQuantity: item.parQuantity != null ? String(item.parQuantity) : "",
       costPerUnit: item.costPerUnit != null ? String(item.costPerUnit) : "",
       notes: item.notes ?? "",
@@ -216,6 +226,7 @@ export function InventoryManagementClient({ businessId }: Props) {
     }
     const isLiquid = isLiquidUnitType(itemForm.unitType);
     let containerVolumeMl: number | null = null;
+    let defaultPourMl: number | null = null;
     if (isLiquid) {
       const parsed = Number(itemForm.containerVolumeMl);
       if (!itemForm.containerVolumeMl || isNaN(parsed) || parsed <= 0) {
@@ -223,6 +234,16 @@ export function InventoryManagementClient({ businessId }: Props) {
         return;
       }
       containerVolumeMl = parsed;
+      // Optional reference pour size — convert an oz entry to ml before send.
+      if (itemForm.defaultPour.trim() !== "") {
+        const pour = Number(itemForm.defaultPour);
+        if (isNaN(pour) || pour <= 0) {
+          toast.error("Default pour size must be a positive number");
+          return;
+        }
+        defaultPourMl =
+          itemForm.defaultPourUnit === "oz" ? ozToMl(pour) : pour;
+      }
     }
     setItemSaving(true);
     try {
@@ -233,6 +254,8 @@ export function InventoryManagementClient({ businessId }: Props) {
           unitType: itemForm.unitType,
           // null clears container_volume_ml when the item is (now) 'each'.
           containerVolumeMl: isLiquid ? containerVolumeMl : null,
+          // null clears the pour size (item is 'each', or the field was cleared).
+          defaultPourMl: isLiquid ? defaultPourMl : null,
           parQuantity:
             itemForm.parQuantity !== "" ? Number(itemForm.parQuantity) : undefined,
           costPerUnit:
@@ -247,6 +270,7 @@ export function InventoryManagementClient({ businessId }: Props) {
           unit: itemForm.unit.trim() || "each",
           unitType: itemForm.unitType,
           containerVolumeMl: containerVolumeMl ?? undefined,
+          defaultPourMl: defaultPourMl ?? undefined,
           parQuantity:
             itemForm.parQuantity !== "" ? Number(itemForm.parQuantity) : undefined,
           costPerUnit:
@@ -286,6 +310,21 @@ export function InventoryManagementClient({ businessId }: Props) {
     setMovementTargetId(item.id);
     setMovementForm(EMPTY_MOVEMENT_FORM);
     setMovementDialog(true);
+  }
+
+  // ml/oz toggle for the default-pour-size field — same conversion pattern, so
+  // switching units re-expresses the same amount rather than reinterpreting it.
+  function toggleDefaultPourUnit(nextUnit: "ml" | "oz") {
+    setItemForm((f) => {
+      if (f.defaultPourUnit === nextUnit) return f;
+      const val = Number(f.defaultPour);
+      let defaultPour = f.defaultPour;
+      if (f.defaultPour !== "" && !isNaN(val)) {
+        defaultPour =
+          nextUnit === "oz" ? mlToOz(val).toFixed(2) : ozToMl(val).toFixed(1);
+      }
+      return { ...f, defaultPourUnit: nextUnit, defaultPour };
+    });
   }
 
   // ml/oz toggle for a liquid amount — reuses the recipe-builder conversion so
@@ -472,6 +511,21 @@ export function InventoryManagementClient({ businessId }: Props) {
                 </p>
               </div>
 
+              {/* Pours-remaining estimate (bottle/keg with a reference pour size).
+                  Rough — a generic reference size, not a recipe pour — so it's
+                  explicitly labeled "(est.)" to distinguish it from the recipe-exact
+                  "servings left" on menu items. */}
+              {item.defaultPourMl != null && item.defaultPourMl > 0 && (
+                <Badge
+                  variant="outline"
+                  className="border-slate-200 bg-slate-50 text-slate-600 tabular-nums"
+                  title={`Rough estimate from a ${item.defaultPourMl} ml reference pour — not tied to any recipe`}
+                >
+                  ~{Math.floor(item.currentQuantity / item.defaultPourMl)} pours left
+                  (est.)
+                </Badge>
+              )}
+
               {/* Quantity badge */}
               <Badge
                 variant="outline"
@@ -608,6 +662,64 @@ export function InventoryManagementClient({ businessId }: Props) {
                 <p className="text-xs text-muted-foreground">
                   Volume of one {itemForm.unitType}. Used when receiving stock by the{" "}
                   {itemForm.unitType}.
+                </p>
+              </div>
+            )}
+            {isLiquidUnitType(itemForm.unitType) && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="inv-pour">Default pour size (optional)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="inv-pour"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={itemForm.defaultPour}
+                    onChange={(e) =>
+                      setItemForm((f) => ({ ...f, defaultPour: e.target.value }))
+                    }
+                    placeholder="e.g. 44"
+                    className="flex-1"
+                  />
+                  <Select
+                    value={itemForm.defaultPourUnit}
+                    onValueChange={(v) => toggleDefaultPourUnit(v as "ml" | "oz")}
+                  >
+                    <SelectTrigger className="w-[80px] shrink-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ml">ml</SelectItem>
+                      <SelectItem value="oz">oz</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value=""
+                    onValueChange={(v) => {
+                      const p = POUR_PRESETS[Number(v)];
+                      if (!p) return;
+                      setItemForm((f) => ({
+                        ...f,
+                        defaultPour: String(p.value),
+                        defaultPourUnit: p.unit,
+                      }));
+                    }}
+                  >
+                    <SelectTrigger className="w-[130px] shrink-0">
+                      <SelectValue placeholder="Presets" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {POUR_PRESETS.map((p, i) => (
+                        <SelectItem key={p.label} value={String(i)}>
+                          {p.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Reference size for the rough “~N pours left (est.)” count. Leave
+                  blank for no estimate.
                 </p>
               </div>
             )}

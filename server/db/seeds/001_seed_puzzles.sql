@@ -658,12 +658,14 @@ ON CONFLICT (business_id, date) DO NOTHING;
 -- count whole bottles/kegs, unchanged). This block adds a few ml-tracked liquid
 -- ingredients + a real recipe so auto-deduction, low-stock badges, and the
 -- container-receive flow are demoable. See CLAUDE.md Non-Obvious "unit-type / ml".
+-- default_pour_ml is an optional reference size for the rough "~N pours left (est.)"
+-- staff estimate (independent of any recipe). Set here so the estimate is demoable.
 INSERT INTO inventory_items
-  (id, business_id, name, unit, unit_type, container_volume_ml, current_quantity, par_quantity, cost_per_unit) VALUES
+  (id, business_id, name, unit, unit_type, container_volume_ml, default_pour_ml, current_quantity, par_quantity, cost_per_unit) VALUES
 -- White rum: 5 × 750 ml bottles received, ~1.5 bottles poured out → 2625 ml, below par.
-('00000000-0000-0000-0010-000000000021', '00000000-0000-0000-0000-000000000002', 'White Rum (pour)',  'ml', 'bottle',   750,  2625, 3000, 0.04),
-('00000000-0000-0000-0010-000000000022', '00000000-0000-0000-0000-000000000002', 'Lime Juice (pour)', 'ml', 'bottle',  1000,  4200, 2000, 0.01),
-('00000000-0000-0000-0010-000000000023', '00000000-0000-0000-0000-000000000002', 'Soda Water (keg)',  'ml', 'keg',    20000, 15000, 8000, 0.002);
+('00000000-0000-0000-0010-000000000021', '00000000-0000-0000-0000-000000000002', 'White Rum (pour)',  'ml', 'bottle',   750,   44, 2625, 3000, 0.04),
+('00000000-0000-0000-0010-000000000022', '00000000-0000-0000-0000-000000000002', 'Lime Juice (pour)', 'ml', 'bottle',  1000,   15, 4200, 2000, 0.01),
+('00000000-0000-0000-0010-000000000023', '00000000-0000-0000-0000-000000000002', 'Soda Water (keg)',  'ml', 'keg',    20000,  120, 15000, 8000, 0.002);
 
 INSERT INTO stock_movements (id, business_id, item_id, movement_type, quantity_delta, notes, created_by, alert_triggered, created_at) VALUES
 (gen_random_uuid(), '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0010-000000000021', 'receive',  3750, 'Received 5 bottles', '00000000-0000-0000-0002-000000000010', FALSE, NOW() - INTERVAL '14 days'),

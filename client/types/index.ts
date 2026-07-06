@@ -285,6 +285,7 @@ export interface InventoryItem {
   unit: string;
   unitType: InventoryUnitType; // 'each' countable; 'bottle'/'keg' liquid tracked in ml
   containerVolumeMl?: number; // ml per container (bottle/keg); undefined for 'each'
+  defaultPourMl?: number; // reference pour size (ml) for the pours-remaining estimate; undefined = no estimate
   currentQuantity: number; // ml for bottle/keg; count for 'each'
   parQuantity?: number;
   costPerUnit?: number;
@@ -326,6 +327,15 @@ export interface RecipeIngredient {
   unitType: InventoryUnitType;
   unit: string;
   quantity: number;
+}
+
+// Per-menu-item stock info (only for items with a recipe). `servingsRemaining` is
+// the recipe-exact live count of makeable servings (min floor across ingredients);
+// `hasLowStockIngredient` drives the amber below-par badge. See CLAUDE.md #44.
+export interface MenuItemStockInfo {
+  menuItemId: string;
+  hasLowStockIngredient: boolean;
+  servingsRemaining: number | null;
 }
 
 export interface Reservation {

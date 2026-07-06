@@ -34,7 +34,14 @@ class RecipeIngredientResponse(AppBaseModel):
 
 
 class MenuItemStockFlag(AppBaseModel):
-    """Whether a menu item has any recipe ingredient below its par level."""
+    """Stock info for a menu item that has a recipe.
+
+    ``has_low_stock_ingredient`` — any recipe ingredient is below par (amber badge).
+    ``servings_remaining`` — recipe-exact live count of how many more servings can
+    be made from current stock (min floor across ingredients); never stored. Only
+    items with a recipe appear, so this is populated whenever the flag is returned.
+    """
 
     menu_item_id: UUID
     has_low_stock_ingredient: bool
+    servings_remaining: int | None = None

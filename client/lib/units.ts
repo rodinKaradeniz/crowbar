@@ -56,3 +56,21 @@ export function presetsForUnitType(t: string | undefined | null): ContainerPrese
   if (t === "keg") return KEG_PRESETS;
   return [];
 }
+
+// Reference pour-size presets for the optional default_pour_ml field (bottle/keg).
+// Each carries a canonical (value, unit) pair so selecting one sets both the input
+// and the ml/oz toggle unambiguously — US bar pours are oz-native, metric are ml.
+// The stored value is always ml (oz is converted via ozToMl before send).
+export interface PourPreset {
+  label: string;
+  value: number;
+  unit: "ml" | "oz";
+}
+
+export const POUR_PRESETS: PourPreset[] = [
+  { label: "1 oz", value: 1, unit: "oz" },
+  { label: "1.5 oz (jigger)", value: 1.5, unit: "oz" },
+  { label: "2 oz (double)", value: 2, unit: "oz" },
+  { label: "25 ml", value: 25, unit: "ml" },
+  { label: "50 ml", value: 50, unit: "ml" },
+];

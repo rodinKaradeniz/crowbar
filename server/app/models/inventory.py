@@ -34,6 +34,12 @@ class InventoryItem(Base, UUIDMixin, TimestampMixin):
     container_volume_ml: Mapped[Decimal | None] = mapped_column(
         Numeric(10, 3), nullable=True
     )
+    # Optional reference pour size (ml) for a bottle/keg, used ONLY for the rough
+    # "pours remaining" staff estimate (floor(current_quantity / default_pour_ml)).
+    # Independent of any recipe. NULL = no estimate shown (no fabricated fallback).
+    default_pour_ml: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 3), nullable=True
+    )
     current_quantity: Mapped[Decimal] = mapped_column(
         Numeric(10, 3), default=0, nullable=False
     )

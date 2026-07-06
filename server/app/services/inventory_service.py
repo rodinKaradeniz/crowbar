@@ -70,6 +70,7 @@ async def create_item(
         unit=data.unit,
         unit_type=data.unit_type,
         container_volume_ml=data.container_volume_ml,
+        default_pour_ml=data.default_pour_ml,
         par_quantity=data.par_quantity,
         cost_per_unit=data.cost_per_unit,
         notes=data.notes,
@@ -114,6 +115,10 @@ async def update_item(
     # Lets a client null it out when switching an item back to 'each'.
     if "container_volume_ml" in data.model_fields_set:
         item.container_volume_ml = data.container_volume_ml
+    # default_pour_ml: present (even as null) = set/clear; absent = unchanged, so a
+    # client can clear the reference pour size by sending null.
+    if "default_pour_ml" in data.model_fields_set:
+        item.default_pour_ml = data.default_pour_ml
     if data.par_quantity is not None:
         item.par_quantity = data.par_quantity
     if data.cost_per_unit is not None:

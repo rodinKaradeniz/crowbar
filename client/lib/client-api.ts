@@ -15,6 +15,7 @@ import {
   Order,
   QueueEntry,
   QueueStatus,
+  MenuItemStockInfo,
   RecipeIngredient,
   Reservation,
   ServiceType,
@@ -1353,6 +1354,7 @@ function toInventoryItem(raw: Record<string, unknown>): InventoryItem {
     unit: raw.unit as string,
     unitType: (raw.unit_type as InventoryItem["unitType"]) ?? "each",
     containerVolumeMl: toOptionalMoney(raw.container_volume_ml),
+    defaultPourMl: toOptionalMoney(raw.default_pour_ml),
     currentQuantity: currentQty,
     parQuantity: parQty,
     costPerUnit: toOptionalMoney(raw.cost_per_unit),
@@ -1397,6 +1399,7 @@ export async function clientCreateInventoryItem(
     unit: string;
     unitType?: string;
     containerVolumeMl?: number;
+    defaultPourMl?: number;
     parQuantity?: number;
     costPerUnit?: number;
     notes?: string;
@@ -1407,6 +1410,7 @@ export async function clientCreateInventoryItem(
   if (data.unitType !== undefined) body.unit_type = data.unitType;
   if (data.containerVolumeMl !== undefined)
     body.container_volume_ml = data.containerVolumeMl;
+  if (data.defaultPourMl !== undefined) body.default_pour_ml = data.defaultPourMl;
   if (data.parQuantity !== undefined) body.par_quantity = data.parQuantity;
   if (data.costPerUnit !== undefined) body.cost_per_unit = data.costPerUnit;
   if (data.notes !== undefined) body.notes = data.notes;
@@ -1427,6 +1431,8 @@ export async function clientUpdateInventoryItem(
     unitType?: string;
     // null clears container_volume_ml (e.g. switching an item back to 'each').
     containerVolumeMl?: number | null;
+    // null clears default_pour_ml (removes the pours-remaining estimate).
+    defaultPourMl?: number | null;
     parQuantity?: number;
     costPerUnit?: number;
     notes?: string;
@@ -1441,6 +1447,7 @@ export async function clientUpdateInventoryItem(
   // treats "field present" as set/clear via model_fields_set.
   if (data.containerVolumeMl !== undefined)
     body.container_volume_ml = data.containerVolumeMl;
+  if (data.defaultPourMl !== undefined) body.default_pour_ml = data.defaultPourMl;
   if (data.parQuantity !== undefined) body.par_quantity = data.parQuantity;
   if (data.costPerUnit !== undefined) body.cost_per_unit = data.costPerUnit;
   if (data.notes !== undefined) body.notes = data.notes;
@@ -1540,14 +1547,23 @@ export async function clientSetRecipe(
   return (result ?? []).map(toRecipeIngredient);
 }
 
-/** Menu item ids that have at least one recipe ingredient below par (for badges). */
+/**
+ * Per-menu-item stock info for items with a recipe: the low-stock (below-par)
+ * flag plus the recipe-exact live servings-remaining count. Menu items without a
+ * recipe are omitted (no meaningful count).
+ */
 export async function clientGetMenuItemStockFlags(
   businessId: string,
-): Promise<string[]> {
-  const result = await authFetch<string[]>(
+): Promise<MenuItemStockInfo[]> {
+  const result = await authFetch<Record<string, unknown>[]>(
     `/ordering/${businessId}/menu-item-stock-flags`,
   );
-  return result ?? [];
+  return (result ?? []).map((r) => ({
+    menuItemId: r.menu_item_id as string,
+    hasLowStockIngredient: Boolean(r.has_low_stock_ingredient),
+    servingsRemaining:
+      r.servings_remaining == null ? null : Number(r.servings_remaining),
+  }));
 }
 
 export async function clientGetStockMovements(

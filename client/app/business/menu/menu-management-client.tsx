@@ -30,6 +30,7 @@ import type {
   Menu,
   MenuCategory,
   MenuItem,
+  MenuItemStockInfo,
   RecipeIngredient,
 } from "@/types";
 import Link from "next/link";
@@ -72,6 +73,7 @@ import {
   Bookmark,
   FlaskConical,
   AlertTriangle,
+  Utensils,
   Copy,
   Check,
   ExternalLink,
@@ -179,7 +181,9 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
 
   // ── Recipe editor + low-stock badges ─────────────────────────────────────────
   const [recipeItem, setRecipeItem] = useState<MenuItem | null>(null);
-  const [lowStockItemIds, setLowStockItemIds] = useState<Set<string>>(new Set());
+  const [stockInfo, setStockInfo] = useState<Map<string, MenuItemStockInfo>>(
+    new Map(),
+  );
 
   const selectedMenu = menus.find((m) => m.id === selectedMenuId) ?? null;
 
@@ -191,8 +195,8 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
 
   async function loadStockFlags() {
     try {
-      const ids = await clientGetMenuItemStockFlags(businessId);
-      setLowStockItemIds(new Set(ids));
+      const info = await clientGetMenuItemStockFlags(businessId);
+      setStockInfo(new Map(info.map((i) => [i.menuItemId, i])));
     } catch {
       // Non-critical (inventory module may be disabled) — leave badges off.
     }
@@ -773,7 +777,7 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
                     key={cat.id}
                     menu={selectedMenu}
                     category={cat}
-                    lowStockItemIds={lowStockItemIds}
+                    stockInfo={stockInfo}
                     onAddItem={openCreateItem}
                     onAddFromLibrary={openLibraryForCategory}
                     onEditItem={openEditItem}
@@ -1179,7 +1183,7 @@ function ItemFormFields({
 function CategorySection({
   menu,
   category,
-  lowStockItemIds,
+  stockInfo,
   onAddItem,
   onAddFromLibrary,
   onEditItem,
@@ -1191,7 +1195,7 @@ function CategorySection({
 }: {
   menu: Menu;
   category: MenuCategory;
-  lowStockItemIds: Set<string>;
+  stockInfo: Map<string, MenuItemStockInfo>;
   onAddItem: (categoryId: string) => void;
   onAddFromLibrary: (categoryId: string) => void;
   onEditItem: (item: MenuItem, categoryId: string) => void;
@@ -1263,7 +1267,7 @@ function CategorySection({
                       unavailable
                     </Badge>
                   )}
-                  {lowStockItemIds.has(item.id) && (
+                  {stockInfo.get(item.id)?.hasLowStockIngredient && (
                     <Badge
                       variant="outline"
                       className="text-xs h-4 flex items-center gap-1 border-amber-300 bg-amber-50 text-amber-700"
@@ -1271,6 +1275,16 @@ function CategorySection({
                     >
                       <AlertTriangle className="h-3 w-3" />
                       low stock
+                    </Badge>
+                  )}
+                  {stockInfo.get(item.id)?.servingsRemaining != null && (
+                    <Badge
+                      variant="outline"
+                      className="text-xs h-4 flex items-center gap-1 border-slate-200 bg-slate-50 text-slate-600 tabular-nums"
+                      title="Servings you can still make from current stock (recipe-exact). Shared ingredients mean this drops when a related item sells too."
+                    >
+                      <Utensils className="h-3 w-3" />
+                      ~{stockInfo.get(item.id)!.servingsRemaining} servings left
                     </Badge>
                   )}
                 </div>

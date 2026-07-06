@@ -95,24 +95,60 @@ async def set_recipe(
     return await get_recipe(db, menu_item_id, business_id)
 
 
-async def get_low_stock_menu_item_ids(
+async def get_menu_item_stock_info(
     db: AsyncSession, business_id: UUID
-) -> set[UUID]:
-    """Menu item ids that have at least one recipe ingredient below its par level.
-    Powers the menu-management low-stock badge (surfaced at the menu-item level)."""
+) -> list[dict]:
+    """Per-menu-item stock info for every menu item that has a recipe:
+
+    - ``has_low_stock_ingredient``: any recipe ingredient is below its par level
+      (powers the menu-management low-stock badge, unchanged semantics).
+    - ``servings_remaining``: how many more servings the item could currently be
+      made from — recipe-exact, computed LIVE (never stored). For each ingredient,
+      floor(current_quantity / recipe_quantity); the item's value is the MINIMUM
+      across ingredients (the most-constrained one).
+
+    Note this number is NOT independent per menu item: two menu items sharing an
+    ingredient both drop when either one sells (pooled inventory). Expected —
+    see CLAUDE.md Non-Obvious #44.
+
+    Menu items without a recipe are omitted entirely (no meaningful count — the
+    caller shows nothing, never a fabricated 0).
+    """
     result = await db.execute(
-        select(MenuItemIngredient.menu_item_id)
-        .join(
+        select(
+            MenuItemIngredient.menu_item_id,
+            MenuItemIngredient.quantity,
+            InventoryItem.current_quantity,
+            InventoryItem.par_quantity,
+        ).join(
             InventoryItem, MenuItemIngredient.inventory_item_id == InventoryItem.id
-        )
-        .where(
+        ).where(
             InventoryItem.business_id == business_id,
-            InventoryItem.par_quantity.is_not(None),
-            InventoryItem.current_quantity < InventoryItem.par_quantity,
         )
-        .distinct()
     )
-    return set(result.scalars().all())
+    by_item: dict[UUID, dict] = {}
+    for menu_item_id, recipe_qty, current_qty, par_qty in result.all():
+        agg = by_item.setdefault(
+            menu_item_id, {"servings_remaining": None, "has_low_stock_ingredient": False}
+        )
+        if recipe_qty is not None and recipe_qty > 0:
+            servings = int(current_qty // recipe_qty)  # floor of Decimal//Decimal
+            agg["servings_remaining"] = (
+                servings
+                if agg["servings_remaining"] is None
+                else min(agg["servings_remaining"], servings)
+            )
+        if par_qty is not None and current_qty < par_qty:
+            agg["has_low_stock_ingredient"] = True
+
+    return [
+        {
+            "menu_item_id": menu_item_id,
+            "servings_remaining": agg["servings_remaining"],
+            "has_low_stock_ingredient": agg["has_low_stock_ingredient"],
+        }
+        for menu_item_id, agg in by_item.items()
+    ]
 
 
 async def _disable_menu_items_for_ingredients(

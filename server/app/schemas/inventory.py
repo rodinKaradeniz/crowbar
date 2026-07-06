@@ -19,6 +19,8 @@ class InventoryItemCreate(AppBaseModel):
     unit: str = Field(default="each", max_length=50)
     unit_type: str = Field(default="each", pattern=_UNIT_TYPE_PATTERN)
     container_volume_ml: Decimal | None = Field(default=None, gt=0)
+    # Reference pour size (ml) for the rough pours-remaining estimate. Optional.
+    default_pour_ml: Decimal | None = Field(default=None, gt=0)
     par_quantity: Decimal | None = Field(default=None, ge=0)
     cost_per_unit: Decimal | None = Field(default=None, ge=0)
     notes: str | None = None
@@ -30,6 +32,7 @@ class InventoryItemUpdate(AppBaseModel):
     unit: str | None = Field(default=None, max_length=50)
     unit_type: str | None = Field(default=None, pattern=_UNIT_TYPE_PATTERN)
     container_volume_ml: Decimal | None = Field(default=None, gt=0)
+    default_pour_ml: Decimal | None = Field(default=None, gt=0)
     par_quantity: Decimal | None = None
     cost_per_unit: Decimal | None = None
     notes: str | None = None
@@ -44,6 +47,7 @@ class InventoryItemResponse(AppBaseModel):
     unit: str
     unit_type: str
     container_volume_ml: Decimal | None = None
+    default_pour_ml: Decimal | None = None
     current_quantity: Decimal
     par_quantity: Decimal | None = None
     cost_per_unit: Decimal | None = None

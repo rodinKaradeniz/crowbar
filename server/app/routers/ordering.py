@@ -37,7 +37,11 @@ from app.schemas.order import (
     OrderResponse,
     OrderStatusUpdateRequest,
 )
-from app.schemas.recipe import RecipeIngredientResponse, RecipeSetRequest
+from app.schemas.recipe import (
+    MenuItemStockFlag,
+    RecipeIngredientResponse,
+    RecipeSetRequest,
+)
 from app.services import happy_hour_service, menu_service, order_service, recipe_service
 from app.services.order_ws_manager import manager
 
@@ -467,7 +471,7 @@ async def set_item_recipe(
 
 @router.get(
     "/api/ordering/{business_id}/menu-item-stock-flags",
-    response_model=list[UUID],
+    response_model=list[MenuItemStockFlag],
     dependencies=[Depends(require_module("ordering"))],
 )
 async def get_menu_item_stock_flags(
@@ -476,11 +480,11 @@ async def get_menu_item_stock_flags(
     current_user: User = Depends(get_current_user),
     business: Business = Depends(get_current_business),
 ):
-    """Menu item ids with at least one recipe ingredient below par (for badges)."""
+    """Per-menu-item stock info (only items with a recipe): low-stock flag for the
+    amber badge + recipe-exact live servings-remaining count."""
     if business.id != business_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    ids = await recipe_service.get_low_stock_menu_item_ids(db, business_id)
-    return list(ids)
+    return await recipe_service.get_menu_item_stock_info(db, business_id)
 
 
 # ─── Staff: Modifier Groups ────────────────────────────────────────────────────
