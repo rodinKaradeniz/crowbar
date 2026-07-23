@@ -6,8 +6,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-body-face);
+  --font-mono: var(--font-data-face);
+  --font-display: var(--font-display-face);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -37,6 +38,14 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-brass: var(--brass);
+  --color-brass-deep: var(--brass-deep);
+  --color-amber-pour: var(--amber-pour);
+  --color-lager: var(--lager);
+  --color-marzen: var(--marzen);
+  --color-dubbel: var(--dubbel);
+  --color-porter: var(--porter);
+  --color-oxblood: var(--oxblood);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -46,96 +55,115 @@
   --radius-4xl: calc(var(--radius) + 16px);
 }
 
+/*
+ * Crowbar design tokens v2 — "measured in SRM".
+ *
+ * The palette is pinned to the SRM scale (beer's own color measurement)
+ * plus the Phase-1 wood/brass constants — named referents, not generic
+ * beige-and-brown: pilsner (SRM 3) is the daylight taproom ground, lager
+ * (SRM 8) is the beer-gold accent, dubbel (SRM ~17) the interactive
+ * primary on light, porter (SRM 35) the after-dark ground.
+ *
+ * Two themes, one world:
+ *   :root        = taproom by day (staff dashboard light, landing)
+ *   .dark        = after dark — SHARED with the guest-facing .theme-night
+ *                  (one token block; the staff dark toggle and the guest
+ *                  night atmosphere are the same candlelit room)
+ *
+ * Brand constants (identical in both themes):
+ *   pilsner #F7F1E1  foam #FDFAF1  lager #E8B54A  dubbel #8A5A1C
+ *   porter  #251811  ink  #2B2016  brass #C89B3C  oxblood #8C3A34
+ */
+
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.129 0.042 264.695);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.208 0.042 265.755);
-  --primary-foreground: oklch(0.984 0.003 247.858);
-  --secondary: oklch(0.968 0.007 247.896);
-  --secondary-foreground: oklch(0.208 0.042 265.755);
-  --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.554 0.046 257.417);
-  --accent: oklch(0.968 0.007 247.896);
-  --accent-foreground: oklch(0.208 0.042 265.755);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.929 0.013 255.508);
-  --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.704 0.04 256.788);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.984 0.003 247.858);
-  --sidebar-foreground: oklch(0.129 0.042 264.695);
-  --sidebar-primary: oklch(0.208 0.042 265.755);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.968 0.007 247.896);
-  --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
-  --sidebar-border: oklch(0.929 0.013 255.508);
-  --sidebar-ring: oklch(0.704 0.04 256.788);
+  --radius: 0.5rem;
+
+  /* Brand constants */
+  --brass: #c89b3c;
+  --brass-deep: #7d5f1f; /* brass legible on light grounds */
+  --lager: #e8b54a; /* SRM 8 — the beer-gold accent */
+  --marzen: #b98733; /* SRM ~12 — interpolated midpoint of lager→dubbel (feature deck step 3) */
+  --dubbel: #8a5a1c; /* SRM ~17 — interactive primary on light */
+  --porter: #251811; /* SRM 35 — after-dark ground */
+  --amber-pour: #e8b54a;
+  --oxblood: #8c3a34;
+  --walnut: #201914;
+  --linen: #f7f1e1;
+
+  /* Taproom by day (staff / default) */
+  --background: #f7f1e1;
+  --foreground: #2b2016;
+  --card: #fdfaf1;
+  --card-foreground: #2b2016;
+  --popover: #fdfaf1;
+  --popover-foreground: #2b2016;
+  --primary: #8a5a1c;
+  --primary-foreground: #fdf8ec;
+  --secondary: #efe4cc;
+  --secondary-foreground: #2b2016;
+  --muted: #f1e8d4;
+  --muted-foreground: #6e6459;
+  --accent: #f3e3bc;
+  --accent-foreground: #2b2016;
+  --destructive: #8c3a34;
+  --border: #e3d6bc;
+  --input: #dccca9;
+  --ring: #b4762c;
+  --chart-1: #8a5a1c;
+  --chart-2: #e8b54a;
+  --chart-3: #8c3a34;
+  --chart-4: #6e6459;
+  --chart-5: #c89b3c;
+  --sidebar: #f1e8d2;
+  --sidebar-foreground: #2b2016;
+  --sidebar-primary: #8a5a1c;
+  --sidebar-primary-foreground: #fdf8ec;
+  --sidebar-accent: #e9ddc0;
+  --sidebar-accent-foreground: #2b2016;
+  --sidebar-border: #e3d6bc;
+  --sidebar-ring: #b4762c;
 }
 
+/*
+ * After dark — ONE warm dark theme. `.theme-night` is applied to <html> by
+ * the <NightTheme /> helper on guest pages; `.dark` is applied to <html> by
+ * the staff dashboard theme toggle (see components/staff-theme.tsx). They
+ * share this block on purpose: the staff dark mode and the guest night
+ * atmosphere are the same room after the lights go down.
+ */
+.theme-night,
 .dark {
-  /* Heavy black background - very dark, close to pure black */
-  --background: oklch(0.05 0 0);
-  --foreground: oklch(0.98 0 0);
-
-  /* Cards and surfaces - slightly lighter than background but still very dark */
-  --card: oklch(0.1 0 0);
-  --card-foreground: oklch(0.96 0 0);
-
-  /* Popovers - same as cards */
-  --popover: oklch(0.1 0 0);
-  --popover-foreground: oklch(0.96 0 0);
-
-  /* Primary - bright and visible against black, using subtle blue tint */
-  --primary: oklch(0.7 0.15 260);
-  --primary-foreground: oklch(0.05 0 0);
-
-  /* Secondary - dark gray with slight elevation from background */
-  --secondary: oklch(0.15 0 0);
-  --secondary-foreground: oklch(0.95 0 0);
-
-  /* Muted - for less important text and backgrounds */
-  --muted: oklch(0.12 0 0);
-  --muted-foreground: oklch(0.65 0 0);
-
-  /* Accent - slightly lighter than background for hover states */
-  --accent: oklch(0.13 0 0);
-  --accent-foreground: oklch(0.95 0 0);
-
-  /* Destructive - bright red for errors, visible on black */
-  --destructive: oklch(0.65 0.22 25);
-
-  /* Borders - very subtle white with low opacity */
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 15%);
-
-  /* Ring - visible focus indicator */
-  --ring: oklch(0.7 0.15 260);
-
-  /* Chart colors - vibrant but not overwhelming */
-  --chart-1: oklch(0.65 0.2 260);
-  --chart-2: oklch(0.7 0.18 180);
-  --chart-3: oklch(0.75 0.19 70);
-  --chart-4: oklch(0.68 0.22 300);
-  --chart-5: oklch(0.72 0.2 20);
-
-  /* Sidebar - slightly lighter than background */
-  --sidebar: oklch(0.08 0 0);
-  --sidebar-foreground: oklch(0.96 0 0);
-  --sidebar-primary: oklch(0.7 0.15 260);
-  --sidebar-primary-foreground: oklch(0.05 0 0);
-  --sidebar-accent: oklch(0.12 0 0);
-  --sidebar-accent-foreground: oklch(0.96 0 0);
-  --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: oklch(0.7 0.15 260);
+  --background: #251811;
+  --foreground: #f3ede3;
+  --card: #2f2015;
+  --card-foreground: #f3ede3;
+  --popover: #2f2015;
+  --popover-foreground: #f3ede3;
+  --primary: #e8b54a;
+  --primary-foreground: #251811;
+  --secondary: #3a2a1b;
+  --secondary-foreground: #f3ede3;
+  --muted: #322217;
+  --muted-foreground: #b6a78f;
+  --accent: #3a2a1b;
+  --accent-foreground: #f3ede3;
+  --destructive: #d96a5b;
+  --border: #c89b3c33;
+  --input: #c89b3c40;
+  --ring: #e8b54a;
+  --chart-1: #e8b54a;
+  --chart-2: #c89b3c;
+  --chart-3: #d96a5b;
+  --chart-4: #b6a78f;
+  --chart-5: #8ecbaa;
+  --sidebar: #2f2015;
+  --sidebar-foreground: #f3ede3;
+  --sidebar-primary: #e8b54a;
+  --sidebar-primary-foreground: #251811;
+  --sidebar-accent: #3a2a1b;
+  --sidebar-accent-foreground: #f3ede3;
+  --sidebar-border: #c89b3c33;
+  --sidebar-ring: #e8b54a;
 }
 
 @layer base {
@@ -151,30 +179,37 @@
 }
 
 @layer components {
-  /* Page Layout */
+  /* Page Layout — generous horizontal breathing room, consistent everywhere */
+  .page-pad {
+    @apply px-6 py-6 md:px-10 xl:px-14;
+  }
+
   .page-container {
-    @apply flex flex-col gap-6 p-6;
+    @apply flex flex-col gap-6 px-6 py-6 md:px-10 xl:px-14;
   }
 
   .page-container-split {
-    @apply flex flex-col lg:flex-row gap-6 p-6;
+    @apply flex flex-col lg:flex-row gap-6 px-6 py-6 md:px-10 xl:px-14;
   }
 
-  /* Page Headers */
+  /* Page Headers — display face carries the brand voice */
   .page-header {
     @apply mb-6;
   }
 
   .page-title {
     @apply text-2xl font-bold;
+    font-family: var(--font-display-face);
   }
 
   .page-title-lg {
     @apply text-3xl font-bold;
+    font-family: var(--font-display-face);
   }
 
   .page-title-xl {
     @apply text-4xl font-bold;
+    font-family: var(--font-display-face);
   }
 
   .page-description {
@@ -184,10 +219,12 @@
   /* Section Headers */
   .section-title {
     @apply text-xl font-bold;
+    font-family: var(--font-display-face);
   }
 
   .section-title-lg {
     @apply text-2xl font-bold;
+    font-family: var(--font-display-face);
   }
 
   .section-subtitle {
@@ -255,6 +292,106 @@
   .timeline-column-header {
     @apply sticky top-0 z-10 bg-card border-b border-border text-center font-medium text-sm flex flex-col items-center justify-center;
     height: 48px;
+  }
+
+  /* ── Crowbar print-menu vernacular ─────────────────────────────────── */
+
+  /* Small-caps letterpressed label (category names, card headers) */
+  .eyebrow {
+    @apply text-[0.6875rem] font-semibold uppercase text-muted-foreground;
+    letter-spacing: 0.14em;
+  }
+
+  /* Signature: the dot leader connecting a name to its price.
+     Usage: <span>Name</span><span class="leader-dots" /><span>€12.00</span>
+     inside a flex row with items-baseline. */
+  .leader-dots {
+    @apply flex-1 min-w-4 self-end;
+    margin-bottom: 0.32em;
+    border-bottom: 2px dotted color-mix(in oklab, currentColor 32%, transparent);
+  }
+
+  /* Classic menu double rule */
+  .rule-double {
+    height: 4px;
+    border-top: 1px solid color-mix(in oklab, var(--brass) 55%, transparent);
+    border-bottom: 1px solid color-mix(in oklab, var(--brass) 35%, transparent);
+  }
+
+  /* Numeric data set like register tape */
+  .figures {
+    font-family: var(--font-data-face);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Queue position: coaster ring */
+  .coaster {
+    @apply rounded-full flex items-center justify-center;
+    border: 1px solid color-mix(in oklab, var(--brass) 55%, transparent);
+    box-shadow:
+      inset 0 0 0 5px var(--background),
+      inset 0 0 0 6px color-mix(in oklab, var(--brass) 40%, transparent);
+  }
+}
+
+/* ── Viewport-entrance reveal (landing) — applied by <Reveal />, fires once ── */
+
+.reveal {
+  opacity: 0;
+  transform: translateY(14px);
+}
+
+.reveal.is-in {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.6s ease,
+    transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* ── Motion: one orchestrated load rise, staggered via animation-delay ── */
+
+@keyframes fade-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.fade-rise {
+  animation: fade-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes glow-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--amber-pour) 35%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 10px transparent;
+  }
+}
+
+.glow-pulse {
+  animation: glow-pulse 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-rise,
+  .glow-pulse {
+    animation: none;
   }
 }
 

@@ -144,9 +144,9 @@ export function ReservationForm({ businessId, serviceTypes: propServiceTypes, pr
   if (step === "success") {
     return (
       <div className="flex flex-col gap-6 p-6 items-center text-center">
-        <CheckCircle2 className="h-16 w-16 text-green-500" />
+        <CheckCircle2 className="h-14 w-14 text-primary" />
         <div>
-          <h2 className="text-2xl font-bold mb-2">Reservation Submitted!</h2>
+          <h2 className="font-display text-2xl mb-2">Reservation Submitted!</h2>
           <p className="text-muted-foreground">
             You&apos;ll receive a confirmation email shortly.
           </p>
@@ -164,52 +164,58 @@ export function ReservationForm({ businessId, serviceTypes: propServiceTypes, pr
     return (
       <div className="flex flex-col gap-6 p-6">
         <div className="text-center">
-          <h2 className="text-2xl font-bold mb-2">Review Your Reservation</h2>
+          <h2 className="font-display text-2xl mb-2">Review Your Reservation</h2>
           <p className="text-muted-foreground">
             Please confirm your details before submitting
           </p>
+          <div className="rule-double mt-4 mx-auto max-w-36" />
         </div>
-        <div className="space-y-4 p-4 bg-muted rounded-lg">
-          <div>
-            <p className="text-sm text-muted-foreground">Date & Time</p>
-            <p className="font-medium">
-              {date && format(date, "EEEE, MMMM d, yyyy")} at {selectedTime}
-            </p>
+        <div className="space-y-3 rounded-lg border bg-card p-5">
+          <div className="flex items-baseline gap-2.5 text-sm">
+            <span className="text-muted-foreground shrink-0">Date &amp; Time</span>
+            <span className="leader-dots text-brass" aria-hidden />
+            <span className="font-medium text-right">
+              {date && format(date, "EEE, MMM d, yyyy")} at <span className="figures">{selectedTime}</span>
+            </span>
           </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Guests</p>
-            <p className="font-medium">
-              {guests} {guests === "1" ? "guest" : "guests"}
-            </p>
+          <div className="flex items-baseline gap-2.5 text-sm">
+            <span className="text-muted-foreground shrink-0">Guests</span>
+            <span className="leader-dots text-brass" aria-hidden />
+            <span className="figures font-medium">{guests}</span>
           </div>
           {selectedServiceType && (
-            <div>
-              <p className="text-sm text-muted-foreground">Booking Type</p>
-              <div className="flex items-center gap-2">
-                <div
-                  className="w-3 h-3 rounded-full"
+            <div className="flex items-baseline gap-2.5 text-sm">
+              <span className="text-muted-foreground shrink-0">Booking Type</span>
+              <span className="leader-dots text-brass" aria-hidden />
+              <span className="flex items-center gap-2 font-medium">
+                <span
+                  className="w-2.5 h-2.5 rounded-full inline-block"
                   style={{ backgroundColor: selectedServiceType.color }}
                 />
-                <p className="font-medium">{selectedServiceType.name}</p>
-              </div>
+                {selectedServiceType.name}
+              </span>
             </div>
           )}
-          <div>
-            <p className="text-sm text-muted-foreground">Name</p>
-            <p className="font-medium">{firstName} {lastName}</p>
+          <div className="flex items-baseline gap-2.5 text-sm">
+            <span className="text-muted-foreground shrink-0">Name</span>
+            <span className="leader-dots text-brass" aria-hidden />
+            <span className="font-medium">{firstName} {lastName}</span>
           </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Phone</p>
-            <p className="font-medium">{phone}</p>
+          <div className="flex items-baseline gap-2.5 text-sm">
+            <span className="text-muted-foreground shrink-0">Phone</span>
+            <span className="leader-dots text-brass" aria-hidden />
+            <span className="figures font-medium">{phone}</span>
           </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Email</p>
-            <p className="font-medium">{email}</p>
+          <div className="flex items-baseline gap-2.5 text-sm">
+            <span className="text-muted-foreground shrink-0">Email</span>
+            <span className="leader-dots text-brass" aria-hidden />
+            <span className="font-medium break-all">{email}</span>
           </div>
           {note && (
-            <div>
-              <p className="text-sm text-muted-foreground">Note</p>
-              <p className="font-medium">{note}</p>
+            <div className="flex items-baseline gap-2.5 text-sm">
+              <span className="text-muted-foreground shrink-0">Note</span>
+              <span className="leader-dots text-brass" aria-hidden />
+              <span className="font-medium text-right">{note}</span>
             </div>
           )}
         </div>
@@ -283,7 +289,7 @@ export function ReservationForm({ businessId, serviceTypes: propServiceTypes, pr
       >
         <FieldGroup>
           <div className="text-center mb-4">
-            <h2 className="text-xl font-semibold mb-2">Your Information</h2>
+            <h2 className="font-display text-xl mb-2">Your Information</h2>
             <p className="text-sm text-muted-foreground">
               Please provide your contact details
             </p>
@@ -376,7 +382,7 @@ export function ReservationForm({ businessId, serviceTypes: propServiceTypes, pr
       >
         <FieldGroup>
           <div className="text-center mb-4">
-            <h2 className="text-xl font-semibold mb-2">Select Date & Time</h2>
+            <h2 className="font-display text-xl mb-2">Select Date & Time</h2>
             <p className="text-sm text-muted-foreground">
               Choose when you&apos;d like to visit
             </p>
@@ -500,7 +506,7 @@ export function ReservationForm({ businessId, serviceTypes: propServiceTypes, pr
     >
       <FieldGroup>
         <div className="text-center mb-4">
-          <h2 className="text-xl font-semibold mb-2">Select Booking Type</h2>
+          <h2 className="font-display text-xl mb-2">Select Booking Type</h2>
           <p className="text-sm text-muted-foreground">
             Choose the type of reservation you&apos;d like to make
           </p>

@@ -2,8 +2,13 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { BusinessSidebar } from "@/components/business-sidebar";
 import { DashboardLayoutWrapper } from "@/components/dashboard-layout-wrapper";
 import { DashboardErrorBoundary } from "@/components/dashboard-error-boundary";
+import { StaffThemeInit } from "@/components/staff-theme";
 import { getCurrentUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
+
+// Paints a stored dark preference before hydration so the dashboard doesn't
+// flash light. Mirrors the storage key in components/staff-theme.tsx.
+const THEME_BOOT_SCRIPT = `try{if(localStorage.getItem("crowbar-staff-theme")==="dark")document.documentElement.classList.add("dark")}catch(e){}`;
 
 export default async function BusinessLayout({
   children,
@@ -26,6 +31,8 @@ export default async function BusinessLayout({
   // User is authenticated staff - render layout
   return (
     <SidebarProvider defaultOpen={false}>
+      <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      <StaffThemeInit />
       <BusinessSidebar />
       <SidebarInset>
         <DashboardLayoutWrapper variant="business">

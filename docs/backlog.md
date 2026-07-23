@@ -1,6 +1,13 @@
 # Crowbar — Deferred Work Backlog
 
-This is a living document. Items are added here when they are explicitly deferred from a phase rather than dropped entirely. Mark items as **done** and link the commit/PR when resolved.
+> **Legacy ledger:** This file contains historical deferred work and is not the
+> current roadmap. Several entries below have already shipped or were removed.
+> Use `docs/TODO.md` for current plans, and verify any item here against source,
+> migrations, and `docs/HISTORY.md` before acting on it.
+
+Historically, items were added here when explicitly deferred from a phase
+rather than dropped entirely. Reconcile unresolved items into `docs/TODO.md`
+instead of extending this file.
 
 ---
 

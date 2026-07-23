@@ -7,10 +7,11 @@ import type { Order } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, ShoppingCart, CheckCircle2, Clock } from "lucide-react";
+import { Trash2, CheckCircle2, Clock } from "lucide-react";
 import Link from "next/link";
+import { NightTheme } from "@/components/night-theme";
+import { cn } from "@/lib/utils";
 
 const STATUS_LABEL: Record<string, string> = {
   received: "Order received",
@@ -21,11 +22,11 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const STATUS_COLOR: Record<string, string> = {
-  received: "bg-blue-100 text-blue-800",
-  preparing: "bg-amber-100 text-amber-800",
-  ready: "bg-green-100 text-green-800",
+  received: "bg-secondary text-foreground",
+  preparing: "bg-primary/15 text-primary",
+  ready: "bg-[#5f9c7e]/25 text-[#8ecbaa]",
   served: "bg-muted text-muted-foreground",
-  cancelled: "bg-red-100 text-red-800",
+  cancelled: "bg-destructive/15 text-destructive",
 };
 
 interface CartItem {
@@ -158,10 +159,11 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
   if (sessionToken) {
     return (
       <div className="min-h-screen bg-background p-6 max-w-md mx-auto">
-        <div className="text-center mb-6">
-          <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-2" />
-          <h1 className="text-xl font-semibold">Order placed!</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+        <NightTheme />
+        <div className="text-center mb-8 fade-rise">
+          <CheckCircle2 className="h-10 w-10 text-primary mx-auto mb-3" />
+          <h1 className="font-display text-2xl">Order placed</h1>
+          <p className="text-sm text-muted-foreground mt-2">
             We&apos;ll update this page as your order progresses.
           </p>
         </div>
@@ -173,41 +175,51 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
           </div>
         ) : (
           orders.map((order) => (
-            <div key={order.id} className="rounded-lg border p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium">
+            <div key={order.id} className="rounded-lg border bg-card p-5 space-y-4 fade-rise" style={{ animationDelay: "120ms" }}>
+              <div className="flex items-center justify-between gap-3">
+                <p className="eyebrow">
                   Order{order.tableIdentifier ? ` · Table ${order.tableIdentifier}` : ""}
                 </p>
-                <Badge className={`text-xs ${STATUS_COLOR[order.status] ?? ""}`}>
+                <span
+                  className={cn(
+                    "eyebrow rounded-full px-2.5 py-1",
+                    STATUS_COLOR[order.status] ?? "bg-muted text-muted-foreground",
+                    order.status === "ready" && "glow-pulse",
+                  )}
+                >
                   {STATUS_LABEL[order.status] ?? order.status}
-                </Badge>
+                </span>
               </div>
-              <div className="space-y-1">
+              <div className="space-y-2">
                 {order.lineItems.map((li) => (
-                  <p key={li.id} className="text-sm">
-                    {li.quantity}× {li.itemName}
+                  <div key={li.id} className="flex items-baseline gap-2.5 text-sm">
+                    <span className="figures text-muted-foreground shrink-0">{li.quantity}×</span>
+                    <span>{li.itemName}</span>
                     {li.selectedModifiers.length > 0 && (
-                      <span className="text-xs text-muted-foreground ml-1">
+                      <span className="text-xs text-muted-foreground">
                         ({li.selectedModifiers.map((m) => m.name).join(", ")})
                       </span>
                     )}
-                  </p>
+                  </div>
                 ))}
               </div>
-              <p className="text-sm font-semibold border-t pt-2">
-                Total: €{Number(order.totalAmount).toFixed(2)}
-              </p>
+              <div className="rule-double" />
+              <div className="flex items-baseline gap-2.5">
+                <span className="eyebrow">Total</span>
+                <span className="leader-dots text-brass" aria-hidden />
+                <span className="figures text-base">€{Number(order.totalAmount).toFixed(2)}</span>
+              </div>
             </div>
           ))
         )}
 
         {polling && (
-          <p className="text-center text-xs text-muted-foreground mt-4">
+          <p className="figures text-center text-xs text-muted-foreground mt-5">
             Auto-refreshing every 10 seconds…
           </p>
         )}
 
-        <div className="mt-6">
+        <div className="mt-8">
           <Link href={`/menu/${businessSlug}${table ? `?table=${encodeURIComponent(table)}` : ""}`}>
             <Button variant="outline" className="w-full">
               Order more
@@ -221,53 +233,58 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
   // ─── Cart view ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-background pb-28">
-      <div className="sticky top-0 z-10 bg-background border-b px-4 py-3 flex items-center gap-2">
+    <div className="min-h-screen bg-background pb-32">
+      <NightTheme />
+      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b px-6 py-3 flex items-center gap-2">
         <Link href={`/menu/${businessSlug}${table ? `?table=${encodeURIComponent(table)}` : ""}`}
-          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          className="eyebrow text-muted-foreground hover:text-primary transition-colors"
         >
           ← Back to menu
         </Link>
       </div>
 
-      <div className="p-4 max-w-md mx-auto space-y-6">
-        <div className="flex items-center gap-2">
-          <ShoppingCart className="h-5 w-5" />
-          <h1 className="text-xl font-semibold">Your order</h1>
+      <div className="px-6 py-8 max-w-md mx-auto space-y-8">
+        <div className="text-center fade-rise">
+          <h1 className="font-display text-2xl">Your order</h1>
+          <div className="rule-double mt-4 mx-auto max-w-36" />
         </div>
 
         {cart.length === 0 ? (
           <div className="text-center py-10">
             <p className="text-muted-foreground text-sm">Your cart is empty.</p>
             <Link href={`/menu/${businessSlug}${table ? `?table=${encodeURIComponent(table)}` : ""}`}>
-              <Button variant="outline" className="mt-3">Browse menu</Button>
+              <Button variant="outline" className="mt-4">Browse menu</Button>
             </Link>
           </div>
         ) : (
           <>
-            <div className="space-y-2">
+            <div className="divide-y divide-border/60 fade-rise" style={{ animationDelay: "90ms" }}>
               {cart.map((ci, i) => {
                 const modTotal = ci.selectedModifiers.reduce((s, m) => s + m.priceDelta, 0);
                 const lineTotal = (effectivePrice(ci.item) + modTotal) * ci.quantity;
                 return (
-                  <div key={i} className="flex items-start gap-3 rounded-lg border p-3">
+                  <div key={i} className="flex items-start gap-3 py-3.5">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">
-                        {ci.quantity}× {ci.item.name}
-                      </p>
+                      <div className="flex items-baseline gap-2.5">
+                        <span className="text-sm font-medium">
+                          <span className="figures text-muted-foreground">{ci.quantity}×</span> {ci.item.name}
+                        </span>
+                        <span className="leader-dots text-brass" aria-hidden />
+                        <span className="figures text-sm shrink-0">€{lineTotal.toFixed(2)}</span>
+                      </div>
                       {ci.selectedModifiers.length > 0 && (
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground mt-1">
                           {ci.selectedModifiers.map((m) => m.name).join(", ")}
                         </p>
                       )}
                       {ci.notes && (
-                        <p className="text-xs text-muted-foreground italic">{ci.notes}</p>
+                        <p className="text-xs text-muted-foreground italic mt-0.5">{ci.notes}</p>
                       )}
                     </div>
-                    <p className="text-sm font-semibold shrink-0">€{lineTotal.toFixed(2)}</p>
                     <button
                       onClick={() => removeItem(i)}
-                      className="text-muted-foreground hover:text-destructive shrink-0"
+                      className="text-muted-foreground hover:text-destructive shrink-0 mt-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                      aria-label={`Remove ${ci.item.name}`}
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -276,9 +293,9 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
               })}
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-4 fade-rise" style={{ animationDelay: "160ms" }}>
               <div className="space-y-1.5">
-                <Label>Table number (optional)</Label>
+                <Label className="eyebrow">Table number (optional)</Label>
                 <Input
                   value={tableInput}
                   onChange={(e) => setTableInput(e.target.value)}
@@ -286,7 +303,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Order notes (optional)</Label>
+                <Label className="eyebrow">Order notes (optional)</Label>
                 <Input
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
@@ -295,10 +312,11 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
               </div>
             </div>
 
-            <div className="fixed bottom-0 inset-x-0 p-4 bg-background border-t">
-              <div className="max-w-md mx-auto">
+            <div className="fixed bottom-0 inset-x-0 z-20 bg-background/95 backdrop-blur">
+              <div className="rule-double" />
+              <div className="p-4 max-w-md mx-auto">
                 {cartHasAlcohol && (
-                  <label className="flex items-start gap-2 mb-3 rounded-md border bg-muted/40 p-2.5 text-sm cursor-pointer">
+                  <label className="flex items-start gap-2.5 mb-3 rounded-md border bg-muted/40 p-3 text-sm cursor-pointer">
                     <Checkbox
                       checked={ageConfirmed}
                       onCheckedChange={(v) => setAgeConfirmed(v === true)}
@@ -310,9 +328,10 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
                     </span>
                   </label>
                 )}
-                <div className="flex justify-between text-sm mb-3">
-                  <span className="text-muted-foreground">Total</span>
-                  <span className="font-semibold">€{totalPrice.toFixed(2)}</span>
+                <div className="flex items-baseline gap-2.5 mb-3">
+                  <span className="eyebrow">Total</span>
+                  <span className="leader-dots text-brass" aria-hidden />
+                  <span className="figures text-base">€{totalPrice.toFixed(2)}</span>
                 </div>
                 <Button
                   className="w-full"

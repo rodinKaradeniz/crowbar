@@ -151,7 +151,7 @@ export default function OnboardingWizard({
       <div className="w-full max-w-2xl">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-semibold tracking-tight">Set up your business</h1>
+          <h1 className="page-title">Set up your business</h1>
           <p className="text-sm text-muted-foreground mt-1">Complete these steps to get started with Crowbar</p>
         </div>
 

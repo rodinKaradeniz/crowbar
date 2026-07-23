@@ -2,6 +2,7 @@
 
 import { BusinessDocsChatTrigger } from "@/components/business-docs-chat-trigger";
 import { NotificationTrigger } from "@/components/notification-trigger";
+import { StaffThemeToggle } from "@/components/staff-theme";
 import { useMounted } from "@/hooks/use-mounted";
 
 interface DashboardHeaderTrailingProps {
@@ -19,6 +20,7 @@ export function DashboardHeaderTrailing({ variant }: DashboardHeaderTrailingProp
     return (
       <div className="flex shrink-0 items-center gap-2">
         <span className="inline-block h-9 w-9 shrink-0" aria-hidden />
+        <span className="inline-block h-9 w-9 shrink-0" aria-hidden />
         {variant === "business" ? (
           <span className="inline-block h-9 w-9 shrink-0" aria-hidden />
         ) : null}
@@ -28,6 +30,7 @@ export function DashboardHeaderTrailing({ variant }: DashboardHeaderTrailingProp
 
   return (
     <>
+      <StaffThemeToggle />
       <NotificationTrigger />
       {variant === "business" ? <BusinessDocsChatTrigger /> : null}
     </>

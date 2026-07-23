@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Users, Clock, CheckCircle2, XCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { CheckCircle2, XCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { clientJoinQueue, clientGetQueueStatus, clientLeaveQueue } from "@/lib/client-api";
 import type { Business, QueueStatus } from "@/types";
-import { cn } from "@/lib/utils";
+import { NightTheme } from "@/components/night-theme";
 
 const POLL_INTERVAL = 30_000;
 const SESSION_KEY = (bizId: string) => `queue-session-${bizId}`;
@@ -62,7 +62,7 @@ function PartyStepper({
       >
         <ChevronDown className="h-4 w-4" />
       </Button>
-      <span className="w-8 text-center text-lg font-semibold tabular-nums">{value}</span>
+      <span className="figures w-8 text-center text-lg">{value}</span>
       <Button
         type="button"
         variant="outline"
@@ -172,40 +172,41 @@ export function QueueJoinClient({ business }: { business: Business }) {
     const isDone = entry.status === "seated" || entry.status === "removed";
 
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-12">
-        <div className="w-full max-w-sm space-y-6">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 py-12">
+        <NightTheme />
+        <div className="w-full max-w-sm space-y-8">
           {/* Business name */}
-          <div className="text-center">
-            <p className="text-sm font-medium text-muted-foreground">{business.name}</p>
+          <div className="text-center fade-rise">
+            <p className="eyebrow text-brass">{business.name}</p>
           </div>
 
           {isCalled && (
-            <div className="rounded-2xl border-2 border-emerald-500 bg-emerald-50 p-6 text-center dark:bg-emerald-950">
-              <CheckCircle2 className="mx-auto mb-3 h-12 w-12 text-emerald-500" />
-              <h2 className="text-xl font-bold text-emerald-700 dark:text-emerald-300">
-                Your table is ready!
+            <div className="rounded-xl border border-primary/50 bg-card p-8 text-center glow-pulse fade-rise">
+              <CheckCircle2 className="mx-auto mb-4 h-10 w-10 text-primary" />
+              <h2 className="font-display text-2xl text-primary">
+                Your table is ready
               </h2>
-              <p className="mt-1 text-sm text-emerald-600 dark:text-emerald-400">
+              <p className="mt-2 text-sm text-muted-foreground">
                 Please head to the host stand.
               </p>
             </div>
           )}
 
           {isDone && (
-            <div className="rounded-2xl border bg-card p-6 text-center">
+            <div className="rounded-xl border bg-card p-8 text-center fade-rise">
               {entry.status === "seated" ? (
                 <>
-                  <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
-                  <h2 className="text-lg font-semibold">Enjoy your visit!</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
+                  <CheckCircle2 className="mx-auto mb-4 h-8 w-8 text-muted-foreground" />
+                  <h2 className="font-display text-xl">Enjoy your visit</h2>
+                  <p className="mt-2 text-sm text-muted-foreground">
                     You&apos;ve been seated at {business.name}.
                   </p>
                 </>
               ) : (
                 <>
-                  <XCircle className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
-                  <h2 className="text-lg font-semibold">Queue entry closed</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
+                  <XCircle className="mx-auto mb-4 h-8 w-8 text-muted-foreground" />
+                  <h2 className="font-display text-xl">Queue entry closed</h2>
+                  <p className="mt-2 text-sm text-muted-foreground">
                     This queue entry is no longer active.
                   </p>
                 </>
@@ -213,7 +214,7 @@ export function QueueJoinClient({ business }: { business: Business }) {
               <Button
                 variant="outline"
                 size="sm"
-                className="mt-4"
+                className="mt-5"
                 onClick={() => void handleLeaveQueue()}
               >
                 Join again
@@ -222,32 +223,40 @@ export function QueueJoinClient({ business }: { business: Business }) {
           )}
 
           {!isCalled && !isDone && (
-            <div className="rounded-2xl border bg-card p-6 text-center space-y-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 mx-auto">
-                <Users className="h-8 w-8 text-primary" />
-              </div>
+            <div className="text-center space-y-7 fade-rise" style={{ animationDelay: "80ms" }}>
               <div>
-                <p className="text-sm text-muted-foreground">Hi, {entry.name}</p>
-                <p className="mt-3 text-5xl font-bold tabular-nums text-primary">
-                  #{entry.position ?? "—"}
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">in the queue</p>
+                <p className="text-sm text-muted-foreground">Hi, {entry.name} — you&apos;re</p>
+                {/* The coaster: your place at the bar */}
+                <div className="coaster mx-auto mt-5 h-40 w-40">
+                  <p className="figures text-6xl text-primary">
+                    {entry.position ?? "—"}
+                  </p>
+                </div>
+                <p className="eyebrow mt-5">in the queue</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <div className="rounded-xl bg-muted p-3 text-center">
-                  <p className="text-xs text-muted-foreground">Party size</p>
-                  <p className="text-lg font-semibold">{entry.partySize}</p>
+              <div className="mx-auto max-w-60 space-y-2.5 text-left">
+                <div className="flex items-baseline gap-2.5 text-sm">
+                  <span className="text-muted-foreground">Party size</span>
+                  <span className="leader-dots text-brass" aria-hidden />
+                  <span className="figures">{entry.partySize}</span>
                 </div>
-                <div className="rounded-xl bg-muted p-3 text-center">
-                  <Clock className="mx-auto mb-0.5 h-3.5 w-3.5 text-muted-foreground" />
-                  <p className="text-xs text-muted-foreground">Est. wait</p>
-                  <p className="text-sm font-semibold">{formatWait(estimatedWaitMinutes)}</p>
+                <div className="flex items-baseline gap-2.5 text-sm">
+                  <span className="text-muted-foreground">Est. wait</span>
+                  <span className="leader-dots text-brass" aria-hidden />
+                  <span className="figures">{formatWait(estimatedWaitMinutes)}</span>
+                </div>
+                <div className="flex items-baseline gap-2.5 text-sm">
+                  <span className="text-muted-foreground">Waiting</span>
+                  <span className="leader-dots text-brass" aria-hidden />
+                  <span className="figures">
+                    {totalWaiting} {totalWaiting === 1 ? "party" : "parties"}
+                  </span>
                 </div>
               </div>
 
-              <p className="text-xs text-muted-foreground">
-                {totalWaiting} {totalWaiting === 1 ? "party" : "parties"} waiting · updates every 30s
+              <p className="figures text-xs text-muted-foreground">
+                updates every 30s
               </p>
             </div>
           )}
@@ -270,20 +279,19 @@ export function QueueJoinClient({ business }: { business: Business }) {
   // ─── Join form ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-12">
-      <div className="w-full max-w-sm space-y-6">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 py-12">
+      <NightTheme />
+      <div className="w-full max-w-sm space-y-8">
         {/* Header */}
-        <div className="text-center space-y-1">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 mx-auto mb-4">
-            <Users className="h-7 w-7 text-primary" />
-          </div>
-          <h1 className="text-2xl font-bold">{business.name}</h1>
-          <p className="text-sm text-muted-foreground">Join the walk-in queue</p>
+        <div className="text-center fade-rise">
+          <p className="eyebrow text-brass mb-2">Walk-in queue</p>
+          <h1 className="font-display text-3xl tracking-tight">{business.name}</h1>
+          <div className="rule-double mt-5 mx-auto max-w-36" />
         </div>
 
-        <form onSubmit={(e) => void handleJoin(e)} className="space-y-4">
+        <form onSubmit={(e) => void handleJoin(e)} className="space-y-5 fade-rise" style={{ animationDelay: "100ms" }}>
           <div className="space-y-1.5">
-            <Label htmlFor="queue-name">Your name *</Label>
+            <Label htmlFor="queue-name" className="eyebrow">Your name *</Label>
             <Input
               id="queue-name"
               placeholder="e.g. Alex"
@@ -296,13 +304,13 @@ export function QueueJoinClient({ business }: { business: Business }) {
           </div>
 
           <div className="space-y-1.5">
-            <Label>Party size</Label>
+            <Label className="eyebrow">Party size</Label>
             <PartyStepper value={partySize} onChange={setPartySize} />
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="queue-phone">
-              Phone <span className="text-muted-foreground">(optional — for SMS when ready)</span>
+            <Label htmlFor="queue-phone" className="eyebrow">
+              Phone <span className="normal-case tracking-normal text-muted-foreground">(optional — for SMS when ready)</span>
             </Label>
             <Input
               id="queue-phone"
@@ -318,7 +326,7 @@ export function QueueJoinClient({ business }: { business: Business }) {
             <p className="text-sm text-destructive">{error}</p>
           )}
 
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button type="submit" className="w-full" size="lg" disabled={loading}>
             {loading ? "Joining…" : "Join queue"}
           </Button>
         </form>

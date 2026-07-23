@@ -438,11 +438,11 @@ export function InventoryManagementClient({ businessId }: Props) {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="page-container">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Inventory</h1>
+          <h1 className="page-title">Inventory</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             Track stock levels and record movements
           </p>

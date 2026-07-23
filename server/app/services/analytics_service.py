@@ -5,8 +5,13 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants.days import DAY_ABBREVIATIONS
+from app.models.inventory import InventoryItem
+from app.models.order import Order
+from app.models.queue_entry import QueueEntry
 from app.models.reservation import Reservation
 from app.models.service_type import ServiceType
+from app.models.tab import Tab
+from app.services.order_service import _business_day_start_utc
 
 
 async def get_business_dashboard_stats(db: AsyncSession, business_id: UUID) -> dict:
@@ -167,6 +172,71 @@ async def get_business_dashboard_stats(db: AsyncSession, business_id: UUID) -> d
         ],
         "month_change": month_change,
     }
+
+
+async def get_bar_ops_snapshot(
+    db: AsyncSession, business_id: UUID, enabled_modules: list
+) -> dict:
+    """Read-only operational snapshot for the Overview dashboard (visual
+    redesign Phase 2). Keys appear only for enabled modules — same gating
+    convention as the /kpis endpoint. No writes, no new tables.
+
+    "Today" for orders uses the business's local day start (same helper the
+    ticket board's served-today window uses), not UTC midnight.
+    """
+    ops: dict = {}
+
+    if "ordering" in enabled_modules:
+        day_start = await _business_day_start_utc(db, business_id)
+        orders_row = (
+            await db.execute(
+                select(
+                    func.count(),
+                    func.coalesce(func.sum(Order.total_amount), 0),
+                ).where(
+                    Order.business_id == business_id,
+                    Order.placed_at >= day_start,
+                    Order.status != "cancelled",
+                )
+            )
+        ).one()
+        ops["orders_today"] = int(orders_row[0] or 0)
+        ops["revenue_today"] = float(orders_row[1] or 0)
+
+        open_tabs = (
+            await db.execute(
+                select(func.count()).where(
+                    Tab.business_id == business_id,
+                    Tab.status == "open",
+                )
+            )
+        ).scalar() or 0
+        ops["open_tabs"] = int(open_tabs)
+
+    if "queue" in enabled_modules:
+        waiting = (
+            await db.execute(
+                select(func.count()).where(
+                    QueueEntry.business_id == business_id,
+                    QueueEntry.status == "waiting",
+                )
+            )
+        ).scalar() or 0
+        ops["queue_waiting"] = int(waiting)
+
+    if "inventory" in enabled_modules:
+        below_par = (
+            await db.execute(
+                select(func.count()).where(
+                    InventoryItem.business_id == business_id,
+                    InventoryItem.par_quantity.is_not(None),
+                    InventoryItem.current_quantity < InventoryItem.par_quantity,
+                )
+            )
+        ).scalar() or 0
+        ops["items_below_par"] = int(below_par)
+
+    return ops
 
 
 async def get_reservation_kpis(db: AsyncSession, business_id: UUID) -> dict:

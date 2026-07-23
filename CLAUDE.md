@@ -1,10 +1,16 @@
 # Crowbar — Claude Code Guide
 
+> **Cross-agent entry point:** Read [`AGENTS.md`](AGENTS.md) first, followed by
+> [`docs/RULES.md`](docs/RULES.md). This file is retained as the detailed legacy
+> phase archive; current architecture, decisions, and plans are organized under
+> `docs/`.
+
 ## Project Overview
 
 **Crowbar** is a multi-module operations platform for bars and restaurants.
 The stack is a Next.js frontend + FastAPI backend + PostgreSQL + Redis, with a separate ML service.
-All platform context, product direction, and phase history lives in this file.
+Current cross-agent context lives in `AGENTS.md` and `docs/`; detailed product
+direction and the legacy phase history remain in this file.
 
 ---
 
@@ -832,21 +838,200 @@ Sequenced cheapest-highest-impact first. Tiers are independent enough to stop af
 
 ---
 
-## Future — Visual Redesign (Not Scheduled)
+## Visual Redesign — Phase 1 ✅ + Phase 2 ✅
 
-A pass to bring the customer-facing UI (public menu, order, reserve, queue pages — these
-carry the most weight for guest-facing polish) up to a more premium, considered visual
-standard: refined spacing, subtle motion/animation, stronger typographic hierarchy.
+**Phase 1** landed the identity on the four public guest pages (`/menu`, `/order`,
+`/reserve`, `/queue` + shared `ReservationForm`) and the staff Overview.
+**Phase 2** replaced the green-based staff palette with the SRM beer palette (below),
+added a staff **dark/light toggle**, unified dashboard typography/padding, rebuilt the
+**landing page** (revised again in the follow-up pass below), the **Overview**
+(bar-general), and the **Schedule** (day-ledger layout), and added one read-only backend aggregation
+(`analytics_service.get_bar_ops_snapshot`) for the Overview. Both passes are
+styling/markup only otherwise — verified by construct-level diff audits (hook/handler/
+storage/API-call counts vs HEAD), tsc-output parity with HEAD, the 46-test backend
+suite, and live authenticated requests. The token system below is the durable
+contract; extend it rather than reintroducing ad-hoc colors/fonts.
 
-Not scheduled. Deliberately sequenced after Tier B stabilizes, since Happy Hour, Age
-Verification, and Pour/Keg Inventory will each still be reshaping the same UI surfaces
-(menu item cards, order flow) — restyling now means restyling twice.
+### Design token system v2 ("measured in SRM")
 
-When this is picked up: scope it to specific named screens, not "the whole app," and
-provide concrete direction (an animation library, a spacing scale, 1-2 reference sites)
-rather than a subjective bar like "award-winning" — vague visual-quality instructions
-tend to produce generic polish (more padding, a fade-in) rather than an actually
-distinctive result.
+All tokens live in `client/app/globals.css`; fonts are loaded in `client/app/layout.tsx`.
+Every tone is pinned to a named referent — the SRM beer-color scale plus wood/brass —
+not generic beige-and-brown.
+
+- **Palette (brand constants, same in both themes):** `--pilsner`-family light ground
+  `#F7F1E1` (SRM 3; `--background` light) with `foam #FDFAF1` cards; `--lager #E8B54A`
+  (SRM 8 — beer-gold accent: emphasis chips, dark-mode primary, happy-hour);
+  `--marzen #B98733` (SRM ~12 — **interpolated midpoint of lager→dubbel**, added in
+  the 2.2 pass as the feature deck's third tone; if another in-between tone is ever
+  needed, interpolate within the SRM ordering like this — never an unrelated hue);
+  `--dubbel #8A5A1C` (SRM ~17 — interactive primary on light); `--porter #251811`
+  (SRM 35 — the shared dark ground); `--brass #C89B3C` (rules, dot leaders) +
+  `--brass-deep #7D5F1F` (brass legible on light); `--oxblood #8C3A34` (destructive);
+  ink `#2B2016` / foam-text `#F3EDE3`. Utilities: `text-brass`, `bg-lager`,
+  `text-dubbel`, `bg-porter`, etc. (Phase 1's bottle green is **retired**.)
+- **Themes — one dark, two entry points:** `:root` = taproom by day (staff light +
+  landing). `.theme-night` (guest pages, applied to `<html>` by `<NightTheme />`) and
+  `.dark` (staff dashboard) **share one token block** — the staff dark mode and the
+  guest night atmosphere are deliberately the same warm room, never two dark concepts.
+- **Staff theme toggle:** `client/components/staff-theme.tsx` — `StaffThemeToggle`
+  (sun/moon in the dashboard header) + `StaffThemeInit` (applies stored choice while
+  the dashboard is mounted, removes on unmount) + an inline pre-hydration boot script
+  in `client/app/business/layout.tsx` (no light flash). Persisted in
+  `localStorage["crowbar-staff-theme"]`. Scoped to the dashboard; guest pages keep
+  forcing `.theme-night`.
+- **Type roles (unchanged from Phase 1, now applied uniformly):** Libre Caslon Text
+  (display — `font-display` / `.page-title`), Hanken Grotesk (body — `--font-sans`),
+  Spline Sans Mono (`.figures` — prices, timestamps, counts). **Every dashboard page
+  title must use `.page-title`** (raw `text-2xl font-semibold` headings were the
+  Phase 1 inconsistency and were all converted); page roots use `.page-container` /
+  `.page-pad` for the shared wide horizontal padding.
+- **Signature element:** the **dot-leader line** (`.leader-dots`) — menu rows, cart
+  lines, totals, hours, the landing module "menu" and pour-scene feature rows.
+- **Supporting vernacular:** `.eyebrow`, `.rule-double`, `.coaster`, `.glow-pulse`,
+  `.fade-rise` (reduced-motion-safe). **Hierarchy rule (dashboard-wide):** numbers and
+  charts dominate (`.figures`, big numerals), chrome recedes (borders at `/40`),
+  labels label — no narrating paragraphs next to figures.
+- **Charts:** use `var(--chart-1..5)` (theme-aware), not hex, for status/series hues;
+  service-type colors remain user data.
+
+### Landing page (Phase 2.1 revision — supersedes the Phase 2 pour scenes)
+
+The Phase 2 SVG pour-scene animation was **removed entirely** (`pour-scene.tsx`
+deleted, not orphaned) and replaced with a photography-led structure. Four real
+photographs live in `client/assets/` (`crowbar-hero.jpg`, `beer-tap.jpg`,
+`inventory.jpg`, `cocktail.jpg`) and are statically imported via `next/image`
+(blur placeholders). All scroll effects write to refs per frame (no re-renders)
+and go static under `prefers-reduced-motion`.
+
+- **Hero** (`components/landing-hero.tsx`): unchanged copy over `crowbar-hero.jpg`
+  at 35% base opacity; across the hero's own scroll range the photo fades 1 → 0
+  while the text parallax-drifts upward slower than the page and fades on the same
+  curve.
+- **Info sections** (`components/photo-panel-section.tsx`, "Never lose a round" /
+  "Every pour, accounted for", copy unchanged): three independent scroll layers —
+  text at document rate; a **non-full-bleed accent panel** (3/4-width color block,
+  `bg-lager` for the beer-tap section, `bg-dubbel` for the inventory section) with
+  a mild counter-drift; the photograph rendered 130% of its `overflow:hidden`
+  frame's height, translating within it faster than the panel, motion clipped to
+  the frame.
+- **Modules** (`components/feature-stack.tsx`): the five features as a **sticky
+  fanning deck** — each card `sticky top-[20vh]` with the whole section as its
+  containing block (mobile hairline separators are wrapped in `md:contents` so
+  they don't break that), so cards stack as later ones arrive; already-stuck cards
+  get a continued smoothstep drift (translate + slight scale-down + dim) per later
+  arrival. Card internals: name + mono `01`–`05` marker, hairline, display-face
+  motto, hairline, **prominent** description. Solid palette tints per card
+  (`bg-card/muted/secondary/accent`) keep the deck opaque but distinguishable.
+  **Mobile (< md): plain sequential list, no stacking.**
+- **Entrance animation** (`components/reveal.tsx` + `.reveal`/`.is-in` in
+  globals.css): subtle fade-in + slide-up on first viewport entry, once per
+  element (observer unobserves), used across the landing page's text. The feature
+  cards deliberately don't get it (no competing motion with the stack).
+- **Merged CTA + footer**: one `theme-night` `<footer>` (token re-scoping via the
+  shared night block) with `cocktail.jpg` at 20% opacity under a porter gradient;
+  CTA ("Last call" / register + `ContactDialog`), `rule-double`, footer columns
+  (About, `NewsletterForm`, Contact), and a dot-leader bottom line
+  (`Crowbar ····· © year`). The **"Setup in minutes / Replace 5 tools / Staff the
+  rush" band and the "Demo Notice" disclaimer were removed** (the only content
+  removals; the "Scroll to pour" cue text also went with the pour scenes — the
+  bounce arrow remains).
+- All functional pieces kept and construct-audited vs HEAD: `fetchBusinesses`,
+  `PricingModal` (hero + "View pricing →" after the deck), `ContactDialog` ×2,
+  `NewsletterForm`, `BusinessesCarouselSection`, register links. (The 2.2 pass
+  below deliberately changed two of these: `NewsletterForm` removed,
+  `ContactDialog` ×2 → ×1 + an inline footer form.)
+
+### Landing page (Phase 2.2 revision — FAQ, merged panel, wide deck, footer form)
+
+Refinement pass over 2.1 — same photo-led structure, no content rewrites outside
+what's listed. Same discipline: refs-per-frame scroll effects, reduced-motion-safe,
+construct-audited (tsc file-level parity, eslint-clean, SSR-render + compiled-CSS
+verified live).
+
+- **FAQ section** (`components/faq-section.tsx`, new — placed between social proof
+  and the footer): two columns split by a hairline. Left rail (sticky on lg) carries
+  an oversized display-italic numeral mirroring the currently-open question (re-runs
+  `.fade-rise` on change via a React `key` swap), an "of 0N" `.figures` caption,
+  eyebrow ("Questions"), heading ("Asked at the bar"), intro. Right column is a
+  numbered accordion — one open at a time, toggling closed allowed; the rail numeral
+  tracks the **last-opened** index so it never goes blank. Answers expand via the CSS
+  `grid-rows-[0fr→1fr]` trick (no JS measurement); rows have `aria-expanded` /
+  `aria-controls`. **The Q&A copy in `page.tsx` (`faqItems`) is DRAFT marketing copy**
+  — grounded in shipped features (module toggling, QR flows, ml pour tracking +
+  auto-86, tabs with settlement-but-no-card-processing, timezone-aware happy hour,
+  insights) but written by the 2.2 pass and awaiting owner review.
+- **Info sections — ONE shared panel** (`PhotoPanelGroup`, same file as
+  `PhotoPanelSection`): the two per-section accent panels merged into a single
+  continuous block spanning both sections' combined height, `left/right-[5%]`
+  (~90% viewport width), with a subtle `bg-linear-to-b from-lager to-dubbel`
+  gradient — lager behind the beer-tap section, dubbel behind the inventory one,
+  preserving each section's color identity in one shape. The group owns the panel
+  counter-drift; each section keeps its own image-in-frame layer. Because the copy
+  now sits **on** the panel, `PhotoPanelSection`'s `panelTone` prop became
+  `on: "lager" | "dubbel"` — it picks legible text tones (ink-derived tints on
+  lager; foam/lager tones on dubbel) instead of painting a panel.
+- **Parallax magnitude doubled:** panel drift −36px → −72px; the photo is now 160%
+  of its frame (was 130%, `-top-[30%]`) translating ±14% of its own height (≈±22%
+  of the frame, was ≈±8%) — still fully clipped to the frame.
+- **Feature deck widened + right-anchored** (`feature-stack.tsx`): cards run from a
+  visible left margin (`md:ml-[7vw]`) to a **flush right viewport edge**
+  (`rounded-r-none`); `transform-origin: top right` so the recede-shrink pins the
+  right edge/top-right corner and only the left + bottom edges pull inward — the
+  2.1 `translateY` fan drift was **removed** (it would have moved the pinned
+  corner). Internals went asymmetric: left zone = large `.figures` numeral + name
+  eyebrow, hairline, display-face motto; full-height hairline divider; right zone =
+  new 2–3-sentence prose description + the former dot-separated line converted to a
+  real `<ul>` (`StackFeature` gained `description` prose and `bullets: string[]`).
+  **Five distinct SRM-ordered tones** replace the old repeating tints: foam `bg-card`
+  → `bg-lager` → `bg-marzen` (the interpolated step) → `bg-dubbel` → `bg-porter`,
+  each with its own legible ink/foam text set (`CARD_TONES`). Mobile stays a plain
+  list.
+- **Footer**: CTA + brand copy left-aligned in a two-column grid; the right column
+  is a new **inline** contact form (`components/footer-contact-form.tsx` — same
+  fields/stub submit as `ContactDialog`, no dialog). **`NewsletterForm` deliberately
+  removed and `newsletter-form.tsx` deleted** — it was a frontend stub only
+  (`console.log` TODO; no backend endpoint ever existed, so nothing was orphaned
+  server-side). The footer's second `ContactDialog` ("Contact Us" button) was
+  replaced by the inline form; the CTA "Talk to us" `ContactDialog` remains.
+  `rule-double` + dot-leader bottom line unchanged.
+- **Navbar** (`landing-navbar.tsx`): standard auto-hiding header — slides away on
+  scroll-down (>4px delta), returns on scroll-up, never hides within 80px of the
+  top; rAF-throttled, cleanup on unmount, `motion-reduce:transition-none`. "Log in"
+  label → **"Login"**.
+- **Pricing modal** (`pricing-modal.tsx`): styling-only rework onto the token
+  system — `max-w-5xl` + `p-8 md:p-12` (was cramped 4xl), eyebrow + display-face
+  title, `rule-double`, brass `Check` icons (off-palette emerald removed), tier
+  header set as the signature `name ····· $price` dot-leader row with `.figures`
+  price, `bg-lager` "Most popular" chip. Tier data/copy and register links
+  unchanged.
+- **Heading sizes bumped** across landing sections: hero h1 → `text-5xl
+  sm:text-6xl md:text-8xl` (`max-w-4xl`); info-section h2s → `text-4xl md:text-5xl`;
+  social-proof h2 → `text-3xl md:text-4xl`; footer CTA h2 → `text-4xl md:text-5xl`;
+  deck mottos → `text-3xl md:text-4xl`.
+
+### Overview (Phase 2 refocus) & data sources
+
+Greeting band (`Welcome in, {business}`) with count chips (reservations today, pending
+requests, open tabs, queue waiting, items below par) and big figures (guests, orders,
+revenue today), then a mosaic (weekly reservations chart, upcoming list, 7-day status
+donut + cancellation rate, staffing-forecast tile). Data: the existing
+`get_business_dashboard_stats` payload + **`ops`** — a module-gated, read-only
+aggregation added in Phase 2 (`analytics_service.get_bar_ops_snapshot`, merged into
+`GET /api/analytics/business/{id}`): orders/revenue today (business-timezone day start
+via `order_service._business_day_start_utc`, non-cancelled orders), open tabs, waiting
+queue entries, items below par. Keys appear only for enabled modules; frontend type is
+`BusinessDashboardStats.ops?` in `client/lib/api-client.ts`. The old 3-slide carousel
+is gone; its actions live on as the forecast tile + quiet action links (docs chat,
+booking page). No new write paths, tables, or migrations.
+
+### Schedule (Phase 2 rebuild)
+
+Day-ledger layout (`business-schedule-client.tsx`): left rail = inline month calendar +
+booking-type legend; main = `LEDGER_DAYS` (3) consecutive day rows with giant date
+numerals, each listing that day's reservations (start–end from service-type duration,
+fallback `business.reservationTime`) as cards → `ReservationDetailsDialog` unchanged.
+Closed days render a "Closed on X" note (same operating-hours logic). The old
+hour-grid timeline (and its px-positioning math) was intentionally retired.
 
 ---
 

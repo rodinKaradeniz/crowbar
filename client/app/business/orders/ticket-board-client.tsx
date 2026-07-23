@@ -185,10 +185,10 @@ export function TicketBoardClient({ businessId }: Props) {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="page-pad space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Orders</h1>
+          <h1 className="page-title">Orders</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Live ticket board — move tickets across statuses
           </p>

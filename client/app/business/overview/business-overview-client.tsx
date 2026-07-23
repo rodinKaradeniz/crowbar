@@ -1,21 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Calendar,
-  Clock,
-  Users,
-  Bell,
   ArrowRight,
-  TrendingUp,
+  Banknote,
+  Clock,
+  MessageCircle,
+  Receipt,
+  Share2,
   TrendingDown,
-  UserCircle,
+  TrendingUp,
+  Users,
   ChevronDown,
   ChevronUp,
-  CalendarOff,
-  MessageCircle,
-  Share2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -78,21 +76,22 @@ export default function BusinessOverviewClient({
     });
   };
 
+  // Theme-aware status hues (resolve via CSS vars so dark mode recolors).
   const statusChartData = useMemo(
     () => [
-      { name: "Confirmed",  value: stats.status_breakdown.confirmed,  fill: "#22c55e" },
-      { name: "Pending",    value: stats.status_breakdown.pending,    fill: "#eab308" },
-      { name: "Cancelled",  value: stats.status_breakdown.cancelled,  fill: "#ef4444" },
-      { name: "Completed",  value: stats.status_breakdown.completed,  fill: "#6b7280" },
+      { name: "Confirmed", value: stats.status_breakdown.confirmed, fill: "var(--chart-1)" },
+      { name: "Pending", value: stats.status_breakdown.pending, fill: "var(--chart-2)" },
+      { name: "Cancelled", value: stats.status_breakdown.cancelled, fill: "var(--chart-3)" },
+      { name: "Completed", value: stats.status_breakdown.completed, fill: "var(--chart-4)" },
     ],
     [stats.status_breakdown],
   );
 
   const pieChartConfig: ChartConfig = {
-    confirmed: { label: "Confirmed", color: "#22c55e" },
-    pending:   { label: "Pending",   color: "#eab308" },
-    cancelled: { label: "Cancelled", color: "#ef4444" },
-    completed: { label: "Completed", color: "#6b7280" },
+    confirmed: { label: "Confirmed", color: "var(--chart-1)" },
+    pending: { label: "Pending", color: "var(--chart-2)" },
+    cancelled: { label: "Cancelled", color: "var(--chart-3)" },
+    completed: { label: "Completed", color: "var(--chart-4)" },
   };
 
   const formatTime = (isoString: string) =>
@@ -138,11 +137,6 @@ export default function BusinessOverviewClient({
     stats.status_breakdown.pending +
     stats.status_breakdown.completed;
 
-  const avgGuestsPerReservation =
-    totalReservations > 0
-      ? Math.round((stats.today_guest_count / Math.max(stats.today_reservations, 1)) * 10) / 10
-      : 0;
-
   const cancellationRate =
     totalReservations > 0
       ? Math.round(
@@ -152,124 +146,135 @@ export default function BusinessOverviewClient({
 
   const hasPieData = totalReservations > 0 || stats.status_breakdown.cancelled > 0;
 
-  // ─── KPI card definitions ──────────────────────────────────────────────────
-  const kpiCards = [
-    {
-      label: "Today's Reservations",
-      value: stats.today_reservations,
-      icon: Calendar,
-      trend: stats.month_change !== 0 ? stats.month_change : null,
-      trendLabel: "vs last month",
-      action: null,
-    },
-    {
-      label: "Pending Requests",
-      value: stats.pending_requests,
-      icon: Bell,
-      trend: null,
-      trendLabel: null,
-      action: { href: "/business/requests", label: "View all" },
-    },
-    {
-      label: "Guests Today",
-      value: stats.today_guest_count,
-      icon: Users,
-      trend: null,
-      trendLabel: null,
-      action: null,
-    },
-    {
-      label: "Total This Week",
-      value: totalReservations,
-      icon: Calendar,
-      trend: null,
-      trendLabel: null,
-      action: null,
-    },
-    {
-      label: "Avg Guests",
-      value: avgGuestsPerReservation,
-      icon: UserCircle,
-      trend: null,
-      trendLabel: "per reservation",
-      action: null,
-    },
-    {
-      label: "Cancellation Rate",
-      value: `${cancellationRate}%`,
-      icon: CalendarOff,
-      trend: null,
-      trendLabel: "last 7 days",
-      action: null,
-    },
+  const ops = stats.ops ?? {};
+
+  const todayLabel = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+
+  // Forecast (was carousel slide 0 — now a standing tile)
+  const hasForecast = demandForecast?.status === "success" && demandForecast.forecasts;
+  const allDays = hasForecast ? Object.values(demandForecast!.forecasts!).flat() : [];
+  const next3 = allDays.slice(0, 3);
+  const busiest = hasForecast
+    ? allDays.reduce(
+        (max, d) => (d.predicted_reservations > max.predicted_reservations ? d : max),
+        allDays[0],
+      )
+    : null;
+
+  // ─── Header chips (small counts; the big figures live on the right) ────────
+  const chips: Array<{
+    label: string;
+    value: number;
+    emphasis?: boolean;
+    href?: string;
+  }> = [
+    { label: "reservations today", value: stats.today_reservations, emphasis: true },
+    { label: "pending requests", value: stats.pending_requests, href: "/business/requests" },
+    ...(ops.open_tabs !== undefined ? [{ label: "open tabs", value: ops.open_tabs, href: "/business/tabs" }] : []),
+    ...(ops.queue_waiting !== undefined ? [{ label: "waiting in queue", value: ops.queue_waiting, href: "/business/queue" }] : []),
+    ...(ops.items_below_par !== undefined ? [{ label: "items below par", value: ops.items_below_par, href: "/business/inventory" }] : []),
+  ];
+
+  const bigStats: Array<{ label: string; value: string; icon: typeof Users }> = [
+    { label: "Guests today", value: String(stats.today_guest_count), icon: Users },
+    ...(ops.orders_today !== undefined
+      ? [{ label: "Orders today", value: String(ops.orders_today), icon: Receipt }]
+      : []),
+    ...(ops.revenue_today !== undefined
+      ? [{ label: "Revenue today", value: `€${Number(ops.revenue_today).toFixed(2)}`, icon: Banknote }]
+      : []),
   ];
 
   return (
-    <div className="p-3 h-[calc(100vh-3rem)] flex flex-col gap-3 overflow-hidden">
+    <div className="page-pad space-y-8">
 
-      {/* ── KPI Grid ──────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2.5 flex-none">
-        {kpiCards.map((card) => (
-          <Card key={card.label} className="border-border/60">
-            <CardContent className="p-2.5">
-              <div className="flex items-start justify-between mb-1">
-                <p className="text-xs text-muted-foreground leading-tight">{card.label}</p>
-                <card.icon className="h-3 w-3 text-muted-foreground/50 shrink-0 mt-0.5" />
-              </div>
-              <p className="text-lg font-semibold tracking-tight">{card.value}</p>
-              {card.trend !== null && (
-                <div className="flex items-center gap-1 mt-1">
-                  {card.trend >= 0
-                    ? <TrendingUp className="h-3 w-3 text-emerald-500" />
-                    : <TrendingDown className="h-3 w-3 text-red-500" />}
-                  <span className={cn("text-xs font-medium", card.trend >= 0 ? "text-emerald-500" : "text-red-500")}>
-                    {card.trend >= 0 ? "+" : ""}{card.trend}%
-                  </span>
-                  {card.trendLabel && (
-                    <span className="text-xs text-muted-foreground">{card.trendLabel}</span>
-                  )}
-                </div>
-              )}
-              {!card.trend && card.trendLabel && (
-                <p className="text-xs text-muted-foreground mt-1">{card.trendLabel}</p>
-              )}
-              {card.action && (
-                <Link href={card.action.href}>
-                  <Button variant="link" className="h-auto p-0 text-xs mt-1">
-                    {card.action.label} <ArrowRight className="ml-1 h-3 w-3" />
-                  </Button>
+      {/* ── Greeting + stat band ──────────────────────────────────────────── */}
+      <div className="flex flex-col gap-8 xl:flex-row xl:items-end xl:justify-between fade-rise">
+        <div className="min-w-0">
+          <p className="eyebrow text-brass-deep dark:text-brass">{todayLabel}</p>
+          <h1 className="font-display text-3xl md:text-4xl mt-1.5 tracking-tight">
+            Welcome in, {business.name}
+          </h1>
+
+          <div className="flex flex-wrap items-center gap-2 mt-6">
+            {chips.map((chip) => {
+              const inner = (
+                <>
+                  <span className="figures text-sm font-semibold">{chip.value}</span>
+                  <span className="text-xs">{chip.label}</span>
+                </>
+              );
+              const cls = cn(
+                "inline-flex items-baseline gap-1.5 rounded-full px-3.5 py-1.5 transition-colors",
+                chip.emphasis
+                  ? "bg-lager text-porter"
+                  : "bg-secondary text-secondary-foreground",
+                chip.href && "hover:bg-accent",
+              );
+              return chip.href ? (
+                <Link key={chip.label} href={chip.href} className={cls}>
+                  {inner}
                 </Link>
-              )}
-            </CardContent>
-          </Card>
-        ))}
+              ) : (
+                <span key={chip.label} className={cls}>
+                  {inner}
+                </span>
+              );
+            })}
+            {stats.month_change !== 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-1.5 text-xs text-muted-foreground">
+                {stats.month_change >= 0
+                  ? <TrendingUp className="h-3.5 w-3.5 text-primary" />
+                  : <TrendingDown className="h-3.5 w-3.5 text-destructive" />}
+                <span className={cn("figures font-medium", stats.month_change >= 0 ? "text-primary" : "text-destructive")}>
+                  {stats.month_change >= 0 ? "+" : ""}{stats.month_change}%
+                </span>
+                vs last month
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Big figures — the numbers carry the band */}
+        <div className="flex flex-wrap items-end gap-x-10 gap-y-4 shrink-0">
+          {bigStats.map((s) => (
+            <div key={s.label} className="min-w-0">
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <s.icon className="h-3.5 w-3.5" />
+                <span className="eyebrow">{s.label}</span>
+              </div>
+              <p className="figures text-4xl md:text-5xl tracking-tight mt-1">{s.value}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* ── Main Grid ─────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[5fr_4fr_minmax(220px,3fr)] gap-3 flex-1 min-h-0">
+      {/* ── Mosaic ────────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 fade-rise" style={{ animationDelay: "90ms" }}>
 
-        {/* Column 1: Weekly Bar Chart */}
-        <Card className="flex flex-col min-h-0">
-          <CardHeader className="pb-2 pt-3 px-3 flex-none">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-xs font-medium">Reservations</CardTitle>
-                <p className="text-xs text-muted-foreground mt-0.5">This week by type</p>
-              </div>
-              <Select value={selectedServiceType} onValueChange={setSelectedServiceType}>
-                <SelectTrigger className="w-[160px] h-8 text-xs">
-                  <SelectValue placeholder="Filter by type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  {serviceTypes.map((type) => (
-                    <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        {/* Weekly chart — wide */}
+        <Card className="lg:col-span-2 border-border/40 shadow-none">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="eyebrow">Reservations this week</CardTitle>
             </div>
+            <Select value={selectedServiceType} onValueChange={setSelectedServiceType}>
+              <SelectTrigger className="w-[160px] h-8 text-xs">
+                <SelectValue placeholder="Filter by type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                {serviceTypes.map((type) => (
+                  <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </CardHeader>
-          <CardContent className="flex-1 min-h-0 pb-3 px-3">
+          <CardContent className="h-64">
             <ChartContainer config={weeklyChartConfig} className="h-full w-full">
               <BarChart data={weeklyChartData} barCategoryGap="30%">
                 <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border/50" />
@@ -300,20 +305,17 @@ export default function BusinessOverviewClient({
           </CardContent>
         </Card>
 
-        {/* Column 2: Upcoming Reservations */}
-        <Card className="flex flex-col min-h-0">
-          <CardHeader className="flex flex-row items-start justify-between pb-2 pt-3 px-3 flex-none">
-            <div>
-              <CardTitle className="text-xs font-medium">Upcoming</CardTitle>
-              <p className="text-xs text-muted-foreground mt-0.5">Next reservations</p>
-            </div>
+        {/* Upcoming — tall right rail */}
+        <Card className="lg:row-span-2 border-border/40 shadow-none flex flex-col">
+          <CardHeader className="flex flex-row items-start justify-between pb-2">
+            <CardTitle className="eyebrow">Upcoming</CardTitle>
             <Link href="/business/reservations">
               <Button variant="ghost" size="sm" className="h-auto p-0 text-xs text-muted-foreground hover:text-foreground">
                 See all <ArrowRight className="ml-1 h-3 w-3" />
               </Button>
             </Link>
           </CardHeader>
-          <CardContent className="flex-1 overflow-auto min-h-0 pb-3 px-3">
+          <CardContent className="flex-1 overflow-auto max-h-136">
             {stats.upcoming_reservations.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center py-8">
                 <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
@@ -323,7 +325,7 @@ export default function BusinessOverviewClient({
                 <p className="text-xs text-muted-foreground/70 mt-1">No upcoming reservations</p>
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {stats.upcoming_reservations.map((reservation) => {
                   const serviceTypeName = getServiceTypeName(reservation.service_type_id);
                   const serviceType = serviceTypes.find((st) => st.id === reservation.service_type_id);
@@ -335,40 +337,40 @@ export default function BusinessOverviewClient({
                       open={isExpanded}
                       onOpenChange={() => toggleReservation(reservation.id)}
                     >
-                      <div className="border border-border/60 rounded-lg hover:bg-muted/30 transition-colors">
+                      <div className="rounded-lg hover:bg-muted/40 transition-colors">
                         <CollapsibleTrigger className="w-full text-left">
-                          <div className="flex items-center justify-between p-3">
-                            <div className="flex flex-col min-w-0 flex-1">
-                              <span className="text-sm font-medium truncate">{serviceTypeName}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {reservation.guests} {reservation.guests === 1 ? "guest" : "guests"}
+                          <div className="flex items-center justify-between px-2.5 py-2.5">
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                              <span className="figures text-sm shrink-0 w-16 text-muted-foreground">
+                                {formatTime(reservation.time)}
                               </span>
-                            </div>
-                            <div className="flex items-center gap-2 ml-2 shrink-0">
-                              <div className="text-right">
-                                <p className="text-xs font-medium">{formatDate(reservation.time)}</p>
-                                <p className="text-xs text-muted-foreground">{formatTime(reservation.time)}</p>
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-sm font-medium truncate">{serviceTypeName}</span>
+                                <span className="figures text-xs text-muted-foreground">
+                                  {formatDate(reservation.time)} · {reservation.guests}{" "}
+                                  {reservation.guests === 1 ? "guest" : "guests"}
+                                </span>
                               </div>
-                              {isExpanded
-                                ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
-                                : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
                             </div>
+                            {isExpanded
+                              ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
                           </div>
                         </CollapsibleTrigger>
                         <CollapsibleContent>
-                          <div className="px-3 pb-3 border-t border-border/60 space-y-3 pt-3">
+                          <div className="px-2.5 pb-3 space-y-3 pt-1">
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <p className="text-xs font-medium text-muted-foreground mb-1">Service</p>
+                                <p className="eyebrow mb-1">Service</p>
                                 <p className="text-xs">{serviceType?.description || "—"}</p>
                                 {serviceType?.duration && (
-                                  <p className="text-xs text-muted-foreground mt-0.5">{serviceType.duration} min</p>
+                                  <p className="figures text-xs text-muted-foreground mt-0.5">{serviceType.duration} min</p>
                                 )}
                               </div>
                               <div>
-                                <p className="text-xs font-medium text-muted-foreground mb-1">Status</p>
+                                <p className="eyebrow mb-1">Status</p>
                                 <p className="text-xs capitalize">{reservation.status}</p>
-                                <p className="text-xs text-muted-foreground mt-0.5">#{reservation.id.slice(0, 8)}</p>
+                                <p className="figures text-xs text-muted-foreground mt-0.5">#{reservation.id.slice(0, 8)}</p>
                               </div>
                             </div>
                             <div className="flex gap-2">
@@ -390,217 +392,132 @@ export default function BusinessOverviewClient({
           </CardContent>
         </Card>
 
-        {/* Column 3: Status Breakdown + Insights Carousel */}
-        <div className="flex flex-col gap-3 min-h-0">
-
-          {/* Status Breakdown */}
-          <Card className="flex-none">
-            <CardHeader className="pb-1 pt-2 px-3">
-              <CardTitle className="text-xs font-medium">Status Breakdown</CardTitle>
-              <p className="text-xs text-muted-foreground">Last 7 days</p>
-            </CardHeader>
-            <CardContent className="px-3 pb-2">
-              {hasPieData ? (
-                <>
-                  <div className="flex justify-center">
-                    <ChartContainer config={pieChartConfig} className="h-[80px] w-[80px]">
-                      <PieChart>
-                        <ChartTooltip content={<ChartTooltipContent hideLabel />} />
-                        <Pie
-                          data={statusChartData}
-                          dataKey="value"
-                          nameKey="name"
-                          innerRadius={20}
-                          outerRadius={38}
-                          strokeWidth={2}
-                          isAnimationActive={false}
-                        >
-                          {statusChartData.map((entry, i) => (
-                            <Cell key={i} fill={entry.fill} />
-                          ))}
-                        </Pie>
-                      </PieChart>
-                    </ChartContainer>
+        {/* Status breakdown — donut + rate figure */}
+        <Card className="border-border/40 shadow-none">
+          <CardHeader className="pb-1">
+            <CardTitle className="eyebrow">Last 7 days</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {hasPieData ? (
+              <div className="flex items-center gap-5">
+                <ChartContainer config={pieChartConfig} className="h-[110px] w-[110px] shrink-0">
+                  <PieChart>
+                    <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+                    <Pie
+                      data={statusChartData}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={30}
+                      outerRadius={52}
+                      strokeWidth={2}
+                      isAnimationActive={false}
+                    >
+                      {statusChartData.map((entry, i) => (
+                        <Cell key={i} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ChartContainer>
+                <div className="flex-1 min-w-0 space-y-1.5">
+                  {statusChartData.map((s) => (
+                    <div key={s.name} className="flex items-center gap-1.5 min-w-0">
+                      <div className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: s.fill }} />
+                      <span className="text-xs text-muted-foreground truncate">{s.name}</span>
+                      <span className="figures text-xs font-medium ml-auto">{s.value}</span>
+                    </div>
+                  ))}
+                  <div className="flex items-baseline gap-1.5 pt-1.5">
+                    <span className="figures text-xl">{cancellationRate}%</span>
+                    <span className="text-xs text-muted-foreground">cancelled</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-1 mt-2">
-                    {statusChartData.map((s) => (
-                      <div key={s.name} className="flex items-center gap-1.5 min-w-0">
-                        <div className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: s.fill }} />
-                        <span className="text-xs text-muted-foreground truncate">{s.name}</span>
-                        <span className="text-xs font-medium ml-auto">{s.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-4 text-center">
-                  <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center mb-2">
-                    <Calendar className="h-4 w-4 text-muted-foreground/40" />
-                  </div>
-                  <p className="text-xs font-medium text-muted-foreground">No data yet</p>
-                  <p className="text-xs text-muted-foreground/60 mt-0.5 max-w-[150px]">
-                    Stats appear once bookings come in
-                  </p>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Overview Carousel */}
-          <OverviewCarousel
-            businessSlug={business.slug}
-            demandForecast={demandForecast}
-            onOpenChat={() => setChatOpen(true)}
-          />
-        </div>
-      </div>
-
-      {/* Hidden chat sheet — controlled by carousel */}
-      <BusinessDocsChatTrigger open={chatOpen} onOpenChange={setChatOpen} hideTrigger />
-    </div>
-  );
-}
-
-// ─── Overview Carousel ────────────────────────────────────────────────────────
-
-function OverviewCarousel({
-  businessSlug,
-  demandForecast,
-  onOpenChat,
-}: {
-  businessSlug: string;
-  demandForecast?: MLDemandForecastResult | null;
-  onOpenChat: () => void;
-}) {
-  const [slide, setSlide] = useState(0);
-  const [paused, setPaused] = useState(false);
-  const TOTAL = 3;
-
-  useEffect(() => {
-    if (paused) return;
-    const t = setInterval(() => setSlide((s) => (s + 1) % TOTAL), 5000);
-    return () => clearInterval(t);
-  }, [paused]);
-
-  const hasForecast = demandForecast?.status === "success" && demandForecast.forecasts;
-  const allDays = hasForecast ? Object.values(demandForecast!.forecasts!).flat() : [];
-  const next3 = allDays.slice(0, 3);
-  const busiest = hasForecast
-    ? allDays.reduce(
-        (max, d) => (d.predicted_reservations > max.predicted_reservations ? d : max),
-        allDays[0],
-      )
-    : null;
-
-  const slides = [
-    {
-      icon: TrendingUp,
-      iconBg: "bg-blue-50 dark:bg-blue-900/20",
-      iconColor: "text-blue-600 dark:text-blue-400",
-      title: "Staffing Forecast",
-      description: hasForecast
-        ? busiest
-          ? `Staff up ${new Date(busiest.date).toLocaleDateString("en-US", { weekday: "long" })}`
-          : "Next 3 days demand"
-        : "Run ML pipeline to see demand predictions",
-      action: hasForecast ? (
-        <div className="flex gap-1.5 w-full">
-          {next3.map((day) => {
-            const dow = new Date(day.date).toLocaleDateString("en-US", { weekday: "short" });
-            const isBusiest = busiest && day.date === busiest.date;
-            return (
-              <div
-                key={day.date}
-                className={cn(
-                  "flex-1 rounded-md p-1.5 text-center",
-                  isBusiest
-                    ? "bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800"
-                    : "bg-muted/40 border border-transparent",
-                )}
-              >
-                <p className="text-xs text-muted-foreground">{dow}</p>
-                <p className="text-sm font-bold leading-tight">
-                  {Math.round(day.predicted_reservations)}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-6 text-center">
+                <p className="text-xs font-medium text-muted-foreground">No data yet</p>
+                <p className="text-xs text-muted-foreground/60 mt-0.5 max-w-[180px]">
+                  Stats appear once bookings come in
                 </p>
               </div>
-            );
-          })}
-        </div>
-      ) : (
-        <Link href="/business/insights">
-          <Button variant="outline" size="sm" className="text-xs">
-            Run <ArrowRight className="ml-1 h-3 w-3" />
-          </Button>
-        </Link>
-      ),
-    },
-    {
-      icon: MessageCircle,
-      iconBg: "bg-emerald-50 dark:bg-emerald-900/20",
-      iconColor: "text-emerald-600 dark:text-emerald-400",
-      title: "Any Questions?",
-      description: "Ask the docs assistant how to use the dashboard, accept requests, or anything else",
-      action: (
-        <Button variant="outline" size="sm" className="text-xs" onClick={onOpenChat}>
-          Ask Now <ArrowRight className="ml-1 h-3 w-3" />
-        </Button>
-      ),
-    },
-    {
-      icon: Share2,
-      iconBg: "bg-purple-50 dark:bg-purple-900/20",
-      iconColor: "text-purple-600 dark:text-purple-400",
-      title: "Share Your Booking Page",
-      description: "Let customers book directly with your unique booking link",
-      action: (
-        <Link href={`/reserve/${businessSlug}`} target="_blank">
-          <Button variant="outline" size="sm" className="text-xs">
-            View Page <ArrowRight className="ml-1 h-3 w-3" />
-          </Button>
-        </Link>
-      ),
-    },
-  ];
+            )}
+          </CardContent>
+        </Card>
 
-  const current = slides[slide];
-  const Icon = current.icon;
+        {/* Staffing forecast — standing tile (was carousel slide) */}
+        <Card className="border-border/40 shadow-none">
+          <CardHeader className="pb-1 flex flex-row items-center justify-between">
+            <CardTitle className="eyebrow">Staffing forecast</CardTitle>
+            <TrendingUp className="h-3.5 w-3.5 text-brass-deep/70 dark:text-brass" />
+          </CardHeader>
+          <CardContent>
+            {hasForecast ? (
+              <>
+                {busiest && (
+                  <p className="text-sm mb-3">
+                    Staff up{" "}
+                    <span className="font-medium">
+                      {new Date(busiest.date).toLocaleDateString("en-US", { weekday: "long" })}
+                    </span>
+                  </p>
+                )}
+                <div className="flex gap-2">
+                  {next3.map((day) => {
+                    const dow = new Date(day.date).toLocaleDateString("en-US", { weekday: "short" });
+                    const isBusiest = busiest && day.date === busiest.date;
+                    return (
+                      <div
+                        key={day.date}
+                        className={cn(
+                          "flex-1 rounded-lg p-2.5 text-center",
+                          isBusiest ? "bg-lager/25" : "bg-muted/50",
+                        )}
+                      >
+                        <p className="text-xs text-muted-foreground">{dow}</p>
+                        <p className="figures text-2xl leading-tight mt-0.5">
+                          {Math.round(day.predicted_reservations)}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <div className="py-2">
+                <p className="text-sm text-muted-foreground mb-3">
+                  Run the ML pipeline to see demand predictions.
+                </p>
+                <Link href="/business/insights">
+                  <Button variant="outline" size="sm" className="text-xs">
+                    Run <ArrowRight className="ml-1 h-3 w-3" />
+                  </Button>
+                </Link>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
-  return (
-    <Card
-      className="flex-1 min-h-0"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-    >
-      <CardContent className="flex flex-col items-center justify-center h-full py-4 text-center px-4 overflow-hidden">
-        <div
-          className={cn(
-            "h-12 w-12 rounded-full flex items-center justify-center mb-3",
-            current.iconBg,
-          )}
+      {/* ── Quiet actions row (was carousel slides 1–2) ───────────────────── */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 fade-rise" style={{ animationDelay: "160ms" }}>
+        <button
+          onClick={() => setChatOpen(true)}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
         >
-          <Icon className={cn("h-5 w-5", current.iconColor)} />
-        </div>
-        <p className="text-sm font-medium">{current.title}</p>
-        <p className="text-xs text-muted-foreground mt-1 max-w-[180px]">
-          {current.description}
-        </p>
-        <div className="mt-4 w-full flex justify-center">{current.action}</div>
-        <div className="flex items-center gap-1.5 mt-4">
-          {slides.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => setSlide(i)}
-              className={cn(
-                "h-1.5 rounded-full transition-all duration-300",
-                i === slide
-                  ? "w-4 bg-foreground/60"
-                  : "w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/50",
-              )}
-              aria-label={`Go to slide ${i + 1}`}
-            />
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+          <MessageCircle className="h-4 w-4" />
+          Ask the docs assistant
+        </button>
+        <Link
+          href={`/reserve/${business.slug}`}
+          target="_blank"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
+        >
+          <Share2 className="h-4 w-4" />
+          View your booking page
+        </Link>
+      </div>
+
+      {/* Hidden chat sheet — opened from the actions row */}
+      <BusinessDocsChatTrigger open={chatOpen} onOpenChange={setChatOpen} hideTrigger />
+    </div>
   );
 }

@@ -299,6 +299,14 @@ export interface BusinessDashboardStats {
     customer_id: string;
   }>;
   month_change: number;
+  /** Bar-wide operational snapshot; keys present only for enabled modules. */
+  ops?: {
+    orders_today?: number;
+    revenue_today?: number;
+    open_tabs?: number;
+    queue_waiting?: number;
+    items_below_par?: number;
+  };
 }
 
 export async function apiGetBusinessStats(

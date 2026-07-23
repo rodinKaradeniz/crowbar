@@ -22,7 +22,12 @@ async def get_business_stats(
     """Get dashboard stats for the authenticated user's business."""
     if current_business.id != business_id:
         raise forbidden("Not authorized for this business")
-    return await analytics_service.get_business_dashboard_stats(db, business_id)
+    stats = await analytics_service.get_business_dashboard_stats(db, business_id)
+    # Bar-wide operational snapshot (module-gated, read-only) for the Overview.
+    stats["ops"] = await analytics_service.get_bar_ops_snapshot(
+        db, business_id, current_business.enabled_modules or []
+    )
+    return stats
 
 
 @router.get(

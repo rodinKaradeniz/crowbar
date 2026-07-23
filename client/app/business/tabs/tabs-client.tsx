@@ -118,10 +118,10 @@ export function TabsClient({ businessId }: { businessId: string }) {
   }
 
   return (
-    <div className="p-6">
+    <div className="page-pad">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Tabs</h1>
+          <h1 className="page-title">Tabs</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Group multiple orders under one running total and settle at the end.
           </p>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CheckCircle2, Calendar, Users2, ShoppingCart, Package, BarChart3 } from "lucide-react";
+import { Check, Calendar, Users2, ShoppingCart, Package, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,6 +11,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 interface PricingModalProps {
   children: React.ReactNode;
@@ -71,53 +72,64 @@ export function PricingModal({ children }: PricingModalProps) {
   return (
     <Dialog>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="max-w-4xl overflow-y-auto max-h-[90svh]">
-        <DialogHeader>
-          <DialogTitle className="text-2xl">Simple, transparent pricing</DialogTitle>
-          <DialogDescription>
-            All 5 modules included in every plan. Choose based on scale.
+      <DialogContent className="max-w-5xl overflow-y-auto max-h-[92svh] p-8 md:p-12 gap-8">
+        <DialogHeader className="gap-3">
+          <p className="eyebrow text-brass-deep">Pricing</p>
+          <DialogTitle className="font-display font-normal text-3xl md:text-4xl tracking-tight leading-none">
+            Simple, transparent pricing
+          </DialogTitle>
+          <DialogDescription className="text-base">
+            All five modules included in every plan — choose by scale.
           </DialogDescription>
         </DialogHeader>
 
+        <div className="rule-double" aria-hidden />
+
         {/* Module ribbon */}
-        <div className="flex flex-wrap gap-2 py-2">
+        <div className="flex flex-wrap gap-2">
           {modules.map(({ icon: Icon, name }) => (
             <div
               key={name}
-              className="flex items-center gap-1.5 rounded-full border bg-muted/40 px-3 py-1 text-xs font-medium"
+              className="flex items-center gap-2 rounded-full border border-border/80 px-3.5 py-1.5 text-xs font-medium"
             >
-              <Icon className="h-3.5 w-3.5 text-primary" />
+              <Icon className="h-3.5 w-3.5 text-brass-deep" />
               {name}
-              <span className="text-emerald-600 font-semibold">✓</span>
+              <Check className="h-3 w-3 text-brass-deep" aria-hidden />
             </div>
           ))}
         </div>
 
         {/* Pricing grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {tiers.map((tier) => (
             <div
               key={tier.name}
-              className={`relative rounded-xl border p-6 flex flex-col gap-4 ${
-                tier.popular ? "border-2 border-primary shadow-md" : ""
-              }`}
+              className={cn(
+                "relative rounded-xl border p-7 flex flex-col gap-5 bg-card",
+                tier.popular ? "border-2 border-primary shadow-md" : "border-border/60",
+              )}
             >
               {tier.popular && (
-                <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary px-3 py-0.5 text-xs font-semibold text-primary-foreground">
-                  Most Popular
+                <span className="eyebrow absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full bg-lager px-3 py-1 text-[#2B2016]">
+                  Most popular
                 </span>
               )}
+              {/* Name ····· price — the house dot leader */}
               <div>
-                <h3 className="font-semibold text-lg">{tier.name}</h3>
-                <div className="mt-1 flex items-baseline gap-1">
-                  <span className="text-3xl font-bold">${tier.price}</span>
-                  <span className="text-sm text-muted-foreground">/month</span>
+                <div className="flex items-baseline gap-3">
+                  <h3 className="eyebrow text-foreground">{tier.name}</h3>
+                  <span className="leader-dots text-brass" aria-hidden />
+                  <span className="figures text-3xl">${tier.price}</span>
                 </div>
+                <p className="text-xs text-muted-foreground mt-1.5 text-right">
+                  per month
+                </p>
               </div>
-              <ul className="flex flex-col gap-2 flex-1">
+              <div className="h-px bg-border" aria-hidden />
+              <ul className="flex flex-col gap-2.5 flex-1">
                 {tier.limits.map((item) => (
-                  <li key={item} className="flex items-start gap-2 text-sm">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500 mt-0.5 shrink-0" />
+                  <li key={item} className="flex items-start gap-2.5 text-sm">
+                    <Check className="h-4 w-4 text-brass-deep mt-0.5 shrink-0" />
                     {item}
                   </li>
                 ))}

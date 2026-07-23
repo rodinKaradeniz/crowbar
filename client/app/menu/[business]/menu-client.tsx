@@ -27,6 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ShoppingCart, Plus, Minus, ChefHat } from "lucide-react";
 import Link from "next/link";
+import { NightTheme } from "@/components/night-theme";
 
 interface MenuClientProps {
   businessId: string;
@@ -97,7 +98,8 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-muted-foreground">Loading menu…</p>
+        <NightTheme />
+        <p className="eyebrow">Opening the menu…</p>
       </div>
     );
   }
@@ -105,93 +107,101 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
   if (!menu) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <ChefHat className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
-          <p className="font-medium">No menu available</p>
-          <p className="text-sm text-muted-foreground mt-1">This business hasn&apos;t set up their menu yet.</p>
+        <NightTheme />
+        <div className="text-center px-6">
+          <ChefHat className="h-10 w-10 mx-auto text-muted-foreground mb-4" />
+          <p className="font-display text-xl">No menu available</p>
+          <p className="text-sm text-muted-foreground mt-2">This business hasn&apos;t set up their menu yet.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background pb-28">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-background border-b px-4 py-3">
-        <h1 className="text-lg font-semibold">{menu.name}</h1>
-        {table && (
-          <p className="text-sm text-muted-foreground">Table {table}</p>
-        )}
-      </div>
+    <div className="min-h-screen bg-background pb-32">
+      <NightTheme />
+
+      {/* Masthead — set like the cover of a printed list */}
+      <header className="px-6 pt-10 pb-6 text-center fade-rise">
+        {table && <p className="eyebrow text-brass mb-2">Table {table}</p>}
+        <h1 className="font-display text-3xl tracking-tight">{menu.name}</h1>
+        <div className="rule-double mt-5 mx-auto max-w-36" />
+      </header>
 
       {/* Not-accepting-orders banner */}
       {!isAcceptingOrders && (
-        <div className="bg-destructive/10 border-b border-destructive/30 px-4 py-2.5 text-sm text-destructive font-medium text-center">
+        <div className="mx-6 mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-2.5 text-sm text-destructive text-center">
           Ordering is temporarily unavailable. Please check back shortly.
         </div>
       )}
 
       {/* Category nav */}
-      <div className="overflow-x-auto flex gap-2 px-4 py-3 border-b">
-        {menu.categories.filter((c) => c.isActive).map((cat) => (
-          <a
-            key={cat.id}
-            href={`#cat-${cat.id}`}
-            className="shrink-0 text-sm px-3 py-1 rounded-full border hover:bg-muted transition-colors"
-          >
-            {cat.name}
-          </a>
-        ))}
-      </div>
+      <nav className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border fade-rise" style={{ animationDelay: "80ms" }}>
+        <div className="overflow-x-auto scrollbar-hide flex gap-6 px-6 py-3">
+          {menu.categories.filter((c) => c.isActive).map((cat) => (
+            <a
+              key={cat.id}
+              href={`#cat-${cat.id}`}
+              className="eyebrow shrink-0 text-foreground/70 hover:text-primary border-b border-transparent hover:border-primary/60 pb-0.5 transition-colors"
+            >
+              {cat.name}
+            </a>
+          ))}
+        </div>
+      </nav>
 
       {/* Menu items */}
-      <div className="px-4 space-y-8 mt-4">
+      <div className="px-6 space-y-10 mt-8 max-w-xl mx-auto">
         {menu.categories
           .filter((c) => c.isActive)
-          .map((cat) => (
-            <section key={cat.id} id={`cat-${cat.id}`}>
-              <h2 className="text-base font-semibold mb-3">{cat.name}</h2>
-              <div className="space-y-2">
+          .map((cat, catIndex) => (
+            <section key={cat.id} id={`cat-${cat.id}`} className="scroll-mt-16 fade-rise" style={{ animationDelay: `${Math.min(catIndex, 4) * 90 + 140}ms` }}>
+              <div className="flex items-center gap-4 mb-4">
+                <span className="h-px flex-1 bg-border" aria-hidden />
+                <h2 className="eyebrow text-brass">{cat.name}</h2>
+                <span className="h-px flex-1 bg-border" aria-hidden />
+              </div>
+              <div className="divide-y divide-border/60">
                 {cat.items
                   .filter((i) => i.isAvailable)
                   .map((item) => (
                     <button
                       key={item.id}
                       onClick={() => openItem(item)}
-                      className="w-full text-left rounded-lg border p-3 hover:bg-muted/50 transition-colors"
+                      className="group w-full text-left py-3.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm">{item.name}</p>
-                          {item.description && (
-                            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                              {item.description}
-                            </p>
-                          )}
-                          {item.prepTimeMinutes && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              ~{item.prepTimeMinutes} min
-                            </p>
-                          )}
-                        </div>
-                        <div className="shrink-0 text-right">
-                          {hhActive && item.happyHourPrice != null ? (
-                            <>
-                              <p className="text-sm font-semibold text-primary">
-                                €{Number(item.happyHourPrice).toFixed(2)}
-                              </p>
-                              <p className="text-xs text-muted-foreground line-through">
-                                €{Number(item.price).toFixed(2)}
-                              </p>
-                              <span className="mt-1 inline-block rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                                Happy Hour
-                              </span>
-                            </>
-                          ) : (
-                            <p className="text-sm font-semibold">€{Number(item.price).toFixed(2)}</p>
-                          )}
-                          <Plus className="h-4 w-4 text-primary mt-1 ml-auto" />
-                        </div>
+                      <div className="flex items-baseline gap-2.5">
+                        <span className="font-medium text-[15px] group-hover:text-primary transition-colors">
+                          {item.name}
+                        </span>
+                        <span className="leader-dots text-brass" aria-hidden />
+                        {hhActive && item.happyHourPrice != null ? (
+                          <span className="shrink-0 text-right">
+                            <span className="figures text-sm text-primary">
+                              €{Number(item.happyHourPrice).toFixed(2)}
+                            </span>{" "}
+                            <span className="figures text-xs text-muted-foreground line-through">
+                              €{Number(item.price).toFixed(2)}
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="figures text-sm shrink-0">€{Number(item.price).toFixed(2)}</span>
+                        )}
+                      </div>
+                      {item.description && (
+                        <p className="text-[13px] leading-relaxed text-muted-foreground mt-1 pr-10 line-clamp-2">
+                          {item.description}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-3 mt-1">
+                        {hhActive && item.happyHourPrice != null && (
+                          <span className="eyebrow text-primary">Happy Hour</span>
+                        )}
+                        {item.prepTimeMinutes && (
+                          <span className="figures text-xs text-muted-foreground">
+                            ~{item.prepTimeMinutes} min
+                          </span>
+                        )}
                       </div>
                     </button>
                   ))}
@@ -202,70 +212,72 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
 
       {/* Cart bar */}
       {cart.length > 0 && (
-        <div className="fixed bottom-0 inset-x-0 p-4 bg-background border-t">
-          {isAcceptingOrders ? (
-            <Link
-              href={`/order/${businessSlug}${table ? `?table=${encodeURIComponent(table)}` : ""}`}
-              onClick={() => {
-                if (typeof window !== "undefined") {
-                  sessionStorage.setItem(`cart_${businessSlug}`, JSON.stringify(cart));
-                  // Carry the server-decided happy-hour state to the checkout
-                  // page so its running total matches the menu display.
-                  sessionStorage.setItem(`cart_hh_${businessSlug}`, JSON.stringify(hhActive));
-                }
-              }}
-            >
-              <Button className="w-full" size="lg">
+        <div className="fixed bottom-0 inset-x-0 z-20 bg-background/95 backdrop-blur">
+          <div className="rule-double" />
+          <div className="p-4 max-w-xl mx-auto">
+            {isAcceptingOrders ? (
+              <Link
+                href={`/order/${businessSlug}${table ? `?table=${encodeURIComponent(table)}` : ""}`}
+                onClick={() => {
+                  if (typeof window !== "undefined") {
+                    sessionStorage.setItem(`cart_${businessSlug}`, JSON.stringify(cart));
+                    // Carry the server-decided happy-hour state to the checkout
+                    // page so its running total matches the menu display.
+                    sessionStorage.setItem(`cart_hh_${businessSlug}`, JSON.stringify(hhActive));
+                  }
+                }}
+              >
+                <Button className="w-full" size="lg">
+                  <ShoppingCart className="h-5 w-5 mr-2" />
+                  View Cart · {totalItems} item{totalItems !== 1 ? "s" : ""} ·{" "}
+                  <span className="figures">€{totalPrice.toFixed(2)}</span>
+                </Button>
+              </Link>
+            ) : (
+              <Button className="w-full" size="lg" disabled>
                 <ShoppingCart className="h-5 w-5 mr-2" />
-                View Cart · {totalItems} item{totalItems !== 1 ? "s" : ""} · €{totalPrice.toFixed(2)}
+                Ordering unavailable
               </Button>
-            </Link>
-          ) : (
-            <Button className="w-full" size="lg" disabled>
-              <ShoppingCart className="h-5 w-5 mr-2" />
-              Ordering unavailable
-            </Button>
-          )}
+            )}
+          </div>
         </div>
       )}
 
       {/* Item detail sheet */}
       <Sheet open={!!selectedItem} onOpenChange={(open) => { if (!open) setSelectedItem(null); }}>
-        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
+        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto border-t-brass/40">
           {selectedItem && (
             <>
               <SheetHeader className="text-left">
-                <SheetTitle>{selectedItem.name}</SheetTitle>
+                <SheetTitle className="font-display text-xl font-normal">{selectedItem.name}</SheetTitle>
                 {selectedItem.description && (
-                  <p className="text-sm text-muted-foreground">{selectedItem.description}</p>
+                  <p className="text-sm leading-relaxed text-muted-foreground">{selectedItem.description}</p>
                 )}
                 {hhActive && selectedItem.happyHourPrice != null ? (
-                  <div className="flex items-center gap-2">
-                    <p className="text-base font-semibold text-primary">
+                  <div className="flex items-baseline gap-2">
+                    <p className="figures text-base text-primary">
                       €{Number(selectedItem.happyHourPrice).toFixed(2)}
                     </p>
-                    <p className="text-sm text-muted-foreground line-through">
+                    <p className="figures text-sm text-muted-foreground line-through">
                       €{Number(selectedItem.price).toFixed(2)}
                     </p>
-                    <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                      Happy Hour
-                    </span>
+                    <span className="eyebrow text-primary">Happy Hour</span>
                   </div>
                 ) : (
-                  <p className="text-base font-semibold">€{Number(selectedItem.price).toFixed(2)}</p>
+                  <p className="figures text-base">€{Number(selectedItem.price).toFixed(2)}</p>
                 )}
               </SheetHeader>
 
-              <div className="space-y-4 mt-4">
+              <div className="space-y-5 mt-4">
                 {selectedItem.modifierGroups.map((group) => (
                   <div key={group.id}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <p className="text-sm font-medium">{group.name}</p>
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <p className="eyebrow">{group.name}</p>
                       {group.required && <Badge variant="secondary" className="text-xs">Required</Badge>}
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-2.5">
                       {group.modifiers.filter((m) => m.isAvailable).map((mod) => (
-                        <div key={mod.id} className="flex items-center gap-2">
+                        <div key={mod.id} className="flex items-center gap-2.5">
                           <Checkbox
                             id={mod.id}
                             checked={sheetMods.some((m) => m.modifierId === mod.id)}
@@ -277,7 +289,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                             {mod.name}
                           </Label>
                           {mod.priceDelta > 0 && (
-                            <span className="text-xs text-muted-foreground">
+                            <span className="figures text-xs text-muted-foreground">
                               +€{Number(mod.priceDelta).toFixed(2)}
                             </span>
                           )}
@@ -288,9 +300,9 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                 ))}
 
                 <div>
-                  <Label className="text-sm">Special request (optional)</Label>
+                  <Label className="eyebrow">Special request (optional)</Label>
                   <Textarea
-                    className="mt-1.5"
+                    className="mt-2"
                     rows={2}
                     value={sheetNotes}
                     onChange={(e) => setSheetNotes(e.target.value)}
@@ -308,7 +320,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                   >
                     <Minus className="h-4 w-4" />
                   </Button>
-                  <span className="text-lg font-semibold w-8 text-center">{sheetQty}</span>
+                  <span className="figures text-lg w-8 text-center">{sheetQty}</span>
                   <Button
                     variant="outline"
                     size="icon"
@@ -318,11 +330,14 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                   </Button>
                 </div>
                 <Button className="w-full" onClick={addToCart}>
-                  Add to Cart · €{(
-                    (effectivePrice(selectedItem, hhActive) +
-                      modifierTotal(sheetMods)) *
-                    sheetQty
-                  ).toFixed(2)}
+                  Add to Cart ·{" "}
+                  <span className="figures">
+                    €{(
+                      (effectivePrice(selectedItem, hhActive) +
+                        modifierTotal(sheetMods)) *
+                      sheetQty
+                    ).toFixed(2)}
+                  </span>
                 </Button>
               </SheetFooter>
             </>

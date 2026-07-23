@@ -1,6 +1,12 @@
 # Crowbar
 
-A reservation management system for businesses and customers.
+A multi-module operations platform for bars and restaurants.
+
+## Agent and Contributor Context
+
+Start with [`AGENTS.md`](AGENTS.md). It routes coding agents and contributors
+to the current architecture, development rules, decision history, roadmap, and
+project-local skills strategy under [`docs/`](docs/README.md).
 
 ## Project Structure
 
