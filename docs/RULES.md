@@ -4,6 +4,30 @@ These rules apply on every agent pass. More specific `AGENTS.md` files may add
 local constraints in the future but must not weaken repository-wide safety,
 tenancy, or data-integrity rules.
 
+## Confirmation Gate
+
+- Do not begin implementation until the requested outcome, affected users,
+  scope, constraints, and meaningful acceptance criteria are clear.
+- Do not convert an unknown into a silent assumption. Ask the user whenever the
+  answer could materially change product behavior, UX, architecture, data,
+  security, delivery, or effort.
+- If the user suggests one possible solution, treat it as a candidate unless
+  they explicitly require it. Consider patterns used by strong modern
+  applications, propose better-fitting alternatives, explain tradeoffs, and
+  obtain confirmation before implementing a direction.
+- Challenge the solution shape constructively, not the user's goal. Examples:
+  modal versus sheet or dedicated page; sidebar versus dropdown or command
+  menu; polling versus push; synchronous work versus a background job; custom
+  code versus an existing project abstraction.
+- Read-only inspection, tracing, and evidence gathering may happen before the
+  confirmation. Code edits, schema changes, dependency changes, generated
+  artifacts, and external mutations must wait.
+- A specific, unambiguous instruction is already confirmation. Do not create
+  ceremony by asking the user to repeat a settled choice.
+- Combine related clarification questions and include a recommendation when
+  enough evidence exists. If an answer will not affect the implementation, do
+  not ask it.
+
 ## Do
 
 - Start by reading `AGENTS.md`, this file, and the task-relevant context.
@@ -36,6 +60,9 @@ tenancy, or data-integrity rules.
 ## Do Not
 
 - Do not discard, rewrite, or reformat unrelated worktree changes.
+- Do not present inferred requirements as confirmed requirements.
+- Do not implement a proposed UI or architecture pattern before considering
+  relevant alternatives and receiving confirmation when the choice is open.
 - Do not trust `business_id`, `user_id`, price, discount, age, status, or
   inventory effects supplied by a browser when the server can derive them.
 - Do not query tenant-owned data without a business predicate.
@@ -127,4 +154,3 @@ tenancy, or data-integrity rules.
   prose when a manifest is the better source.
 - Correct stale documentation in the same change when it would mislead the next
   agent.
-

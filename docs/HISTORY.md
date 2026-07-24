@@ -25,8 +25,24 @@ to this structure.
   root `AGENTS.md` orchestrates stable architecture, rules, history, TODO, and
   skills documents. The large `CLAUDE.md` was retained as a legacy phase
   archive rather than discarded.
+- **2026-07-24:** A pre-development confirmation gate was added. Agents must
+  surface material unknowns and compare credible modern solution shapes before
+  implementing an open product, UX, or architecture choice.
 
 ## Durable Decisions
+
+### Development starts after product-shape confirmation
+
+**Decision:** Agents may investigate first but must not silently fill material
+requirements or implement an unresolved solution shape. When the user suggests
+one possible pattern, the agent compares relevant alternatives, recommends a
+direction with tradeoffs, and obtains confirmation. A clear, explicit
+instruction is already confirmed and should not trigger redundant ceremony.
+
+**Consequences:** Clarification happens before code, schema, dependency, or
+external changes. Questions focus on answers that could change the result.
+Agents are expected to improve the option set—not merely choose between the
+first examples named—while leaving the final product decision with the user.
 
 ### A business is the tenant
 
@@ -151,4 +167,3 @@ need and an explicit consistency strategy.
 
 **References:** Files, migration, issue, PR, or commit.
 ```
-

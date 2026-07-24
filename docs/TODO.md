@@ -29,15 +29,53 @@ Status labels:
   develops genuinely different recurring instructions. Avoid duplicating the
   root guide.
 
-## Production and Delivery
+## Testing and Quality
+
+- **Needs decision:** Define the repository-wide testing strategy and risk-based
+  quality gates: which behavior belongs in unit, integration, contract,
+  end-to-end, visual, accessibility, performance, security, and migration
+  tests.
+- **Ready:** Expand frontend tests beyond the current focused Vitest and MSW
+  coverage, especially for ordering, reservations, module gates, money/time
+  mapping, error states, and HTTP/WebSocket mapper parity.
+- **Ready:** Expand PostgreSQL-backed backend integration coverage for every
+  module, tenant isolation, roles, public endpoint abuse cases, idempotency,
+  legal state transitions, and inventory ledger effects.
+- **Needs decision:** Select an end-to-end browser framework and a small set of
+  critical user journeys. Evaluate Playwright against the value of
+  browser-level coverage before introducing it.
+- **Ready:** Add migration-chain tests against a fresh database in addition to
+  ORM-metadata tests, including seed validation and a reliable disposable reset
+  path.
+- **Ready:** Add ML unit, pipeline, minimum-data, reproducibility, and
+  leakage-regression tests.
+- **Ready:** Establish accessibility checks, responsive/visual regression,
+  performance budgets, and failure-mode tests for critical flows.
+
+## CI/CD
+
+- **Ready:** Add a simple pull-request CI pipeline: frontend lint/test/build;
+  backend tests with PostgreSQL; fresh-database migrations; ML import/tests;
+  and documentation/link checks.
+- **Ready:** Add dependency, secret, and vulnerability scanning with actionable
+  failure policies rather than noisy report-only tooling.
+- **Needs decision:** Choose branch protection and required checks, including
+  whether expensive end-to-end or performance suites run per pull request,
+  nightly, or before release.
+- **Needs decision:** Add a simple CD pipeline after choosing the deployment
+  target. Include staging, environment-specific configuration, migration
+  ordering, health checks, smoke tests, rollback, and a manual production gate
+  until releases are proven routine.
+- **Ready:** Make releases traceable to a commit and preserve deploy, migration,
+  worker, and model versions in operational metadata.
+
+## Deployment
 
 - **Needs decision:** Choose and implement the production topology. The Vercel
   + EC2 design in `docs/deployment.md` is a proposal; its Dockerfile, production
-  Compose file, and GitHub Actions workflow do not exist.
-- **Ready:** Add CI for frontend lint/test/build and backend tests. Decide how
-  CI provisions PostgreSQL and validates the SQL migration chain.
-- **Ready:** Add backend formatting/linting/type-check policy and ML tests
-  deliberately; none is currently established.
+  Compose file, and GitHub Actions workflow do not exist. Compare it with
+  managed container/application platforms before committing to operational
+  ownership.
 - **Ready:** Define production process topology for FastAPI, Redis stream
   consumption, Celery worker, Celery beat, and ML.
 - **Ready:** Add backup/restore testing, migration rollout and rollback
@@ -87,9 +125,50 @@ Status labels:
   refresh-driven.
 - **Deferred:** Public servings/pours display, stronger ID verification, and
   table registration for tabs.
-- **Deferred:** Reviews, WhatsApp, and billing/subscription processing. Stripe
-  packages remain installed, but current payment columns and product flows were
-  removed.
+- **Deferred:** Reviews and billing/subscription processing. Stripe packages
+  remain installed, but current payment columns and product flows were removed.
+
+## Client Applications
+
+- **Needs decision — Mobile app:** Define the primary audience and native-only
+  value before choosing technology. Staff shift operations, owner analytics,
+  and customer booking/ordering are different products. Compare a stronger
+  responsive web/PWA experience with React Native, Expo, Flutter, and native
+  apps based on offline behavior, push notifications, camera/QR, background
+  work, device integrations, distribution, and team capacity.
+- **Needs decision — Desktop app:** Identify desktop-specific workflows before
+  wrapping the web app. Compare an installable PWA with Tauri or Electron based
+  on offline resilience, kitchen/bar display mode, receipt printers, cash
+  drawers, local networking, automatic updates, kiosk operation, and OS
+  integration.
+- **Needs decision:** Define a shared API, authentication, entitlement,
+  observability, release, and design-system strategy across web, mobile, and
+  desktop without forcing every client into identical interaction patterns.
+
+## Conversational AI
+
+- **Needs decision — WhatsApp reservation bot:** Let customers discover
+  availability and create, confirm, change, or cancel reservations through a
+  WhatsApp conversation. Decide whether Twilio WhatsApp or Meta's Cloud API is
+  the initial transport and whether the first release is deterministic,
+  AI-assisted, or fully tool-calling.
+- **Ready:** Reuse the existing reservation, customer-identity, notification,
+  channel, and idempotency paths rather than creating a second booking engine.
+  Use the existing `bot_configs` and `bot_enabled` foundations only after
+  verifying they fit the agreed conversation model.
+- **Needs decision:** Design explicit confirmation before writes, business and
+  location resolution, human handoff, unsupported-request recovery,
+  multilingual behavior, message-window/template rules, opt-in/opt-out,
+  transcript retention, deletion, and staff visibility.
+- **Ready:** Threat-model prompt injection, impersonation, duplicate webhook
+  delivery, replay, stale availability, PII exposure, unsafe tool calls,
+  provider outages, cost spikes, and hallucinated policies. The model must
+  never invent availability, pricing, booking status, or business rules.
+- **Ready:** Build conversation simulations and evaluation sets for successful
+  booking, ambiguity, corrections, cancellations, no availability, abusive
+  input, provider retry, and human escalation before production rollout.
+- **Deferred:** Generalize the channel adapter to Instagram, web chat, SMS, or
+  voice only after the WhatsApp workflow and operational model are validated.
 
 ## Data and ML
 

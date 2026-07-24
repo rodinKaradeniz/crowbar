@@ -29,6 +29,22 @@ For focused work, also read:
 detail but is no longer the orchestration file. When documentation disagrees
 with executable source, inspect the source and update the stale document.
 
+## Confirmation Before Development
+
+- Do not silently assume missing product behavior, scope, user experience,
+  architecture, data semantics, or acceptance criteria.
+- Read-only investigation is allowed before confirmation. Do not begin
+  implementation while a material ambiguity or unresolved choice remains.
+- When the user proposes a possible implementation shape rather than a fixed
+  requirement (for example, a modal or sidebar), compare it with modern
+  alternatives such as a dropdown, popover, sheet, inline flow, command menu,
+  or dedicated page. Explain the recommendation and material tradeoffs, then
+  ask the user to confirm the direction before editing code.
+- Treat a clear, explicit user instruction as confirmation. Do not ask the user
+  to reconfirm facts or choices they have already specified.
+- Ask focused questions in one batch where practical. State what is known, what
+  is unknown, and which answers would change the implementation.
+
 ## Project in One Minute
 
 Crowbar is a multi-tenant operations platform for bars and restaurants:
@@ -125,4 +141,3 @@ A change is complete when:
 6. `docs/HISTORY.md` records durable decisions and `docs/TODO.md` reflects any
    newly deferred work; routine code changes do not need documentation churn.
 7. The handoff reports what changed, what was verified, and any remaining risk.
-
