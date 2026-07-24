@@ -6,7 +6,7 @@ import { ReservationAccordion } from "@/components/reservation-accordion";
 import { ReservationSearchFilter } from "@/components/reservation-search-filter";
 import { Button } from "@/components/ui/button";
 import { Reservation, ServiceType } from "@/types";
-import { UserResponse } from "@/lib/api-client";
+import { CustomerResponse } from "@/lib/api-client";
 import { clientUpdateReservation } from "@/lib/client-api";
 import { toast } from "sonner";
 
@@ -14,7 +14,7 @@ interface RequestsClientProps {
   businessId: string;
   initialReservations: Reservation[];
   serviceTypes: ServiceType[];
-  customers: UserResponse[];
+  customers: CustomerResponse[];
   customerSegments?: Record<string, string>;
 }
 
@@ -39,7 +39,7 @@ export default function RequestsClient({
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const customerMap = useMemo(() => {
-    const map = new Map<string, UserResponse>();
+    const map = new Map<string, CustomerResponse>();
     customers.forEach((c) => map.set(c.id, c));
     return map;
   }, [customers]);
@@ -52,8 +52,8 @@ export default function RequestsClient({
         const customer = customerMap.get(reservation.customerId);
         const searchLower = searchQuery.toLowerCase();
         const matchesSearch =
-          customer?.name.toLowerCase().includes(searchLower) ||
-          customer?.email.toLowerCase().includes(searchLower) ||
+          customer?.name?.toLowerCase().includes(searchLower) ||
+          customer?.email?.toLowerCase().includes(searchLower) ||
           customer?.phone?.toLowerCase().includes(searchLower) ||
           reservation.phone.toLowerCase().includes(searchLower) ||
           reservation.email.toLowerCase().includes(searchLower);

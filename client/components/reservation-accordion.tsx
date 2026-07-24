@@ -19,14 +19,14 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Reservation, ServiceType } from "@/types";
-import { UserResponse } from "@/lib/api-client";
+import { CustomerResponse } from "@/lib/api-client";
 import { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 interface ReservationAccordionProps {
   reservations: Reservation[];
   serviceTypes?: ServiceType[];
-  customers?: UserResponse[];
+  customers?: CustomerResponse[];
   actionButtons?: (reservation: Reservation) => ReactNode;
   emptyMessage?: string;
 }
@@ -39,7 +39,7 @@ export function ReservationAccordion({
   emptyMessage = "No reservations found.",
 }: ReservationAccordionProps) {
   const customerMap = useMemo(() => {
-    const map = new Map<string, UserResponse>();
+    const map = new Map<string, CustomerResponse>();
     customers.forEach((c) => map.set(c.id, c));
     return map;
   }, [customers]);

@@ -657,7 +657,7 @@ ON CONFLICT (business_id, date) DO NOTHING;
 -- The bottle/keg inventory rows above intentionally stay unit_type='each' (they
 -- count whole bottles/kegs, unchanged). This block adds a few ml-tracked liquid
 -- ingredients + a real recipe so auto-deduction, low-stock badges, and the
--- container-receive flow are demoable. See CLAUDE.md Non-Obvious "unit-type / ml".
+-- container-receive flow are demoable.
 -- default_pour_ml is an optional reference size for the rough "~N pours left (est.)"
 -- staff estimate (independent of any recipe). Set here so the estimate is demoable.
 INSERT INTO inventory_items

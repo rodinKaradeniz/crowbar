@@ -112,6 +112,7 @@ function toBusiness(b: Record<string, unknown>): Business {
     enabledModules: (b.enabled_modules as string[]) ?? [],
     onboardingComplete: (b.onboarding_complete as boolean) ?? false,
     notificationChannels: (b.notification_channels as string[]) ?? ["email"],
+    isAcceptingOrders: (b.is_accepting_orders as boolean) ?? true,
   };
 }
 
@@ -1722,4 +1723,3 @@ export async function clientUpdateHappyHourWindow(
 export async function clientDeleteHappyHourWindow(windowId: string): Promise<void> {
   await authFetch(`/happy-hour/windows/${windowId}`, { method: "DELETE" });
 }
-

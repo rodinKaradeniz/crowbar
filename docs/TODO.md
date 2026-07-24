@@ -17,17 +17,21 @@ Status labels:
   useful quick start, but endpoint inventory and some narrative details drift
   as features evolve.
 - **Ready:** Reconcile environment examples with every supported mode,
-  including frontend mock mode, `ML_SERVICE_URL`, and the eventual production
-  CORS configuration.
-- **Ready:** Gradually decompose unique, still-valid detail from `CLAUDE.md`
-  into `ARCHITECTURE.md`, `HISTORY.md`, or focused references; then reduce
-  `CLAUDE.md` to a compatibility pointer for Claude-based tools.
+  including frontend mock mode and production CORS configuration.
 - **Ready:** Reconcile or retire `docs/backlog.md`. It still lists implemented
   work (staff invitations, phone normalization, SMS reminder deduplication) and
   removed payment columns as if they were current.
 - **Ready:** Add nested `AGENTS.md` files only when client, server, or ML work
   develops genuinely different recurring instructions. Avoid duplicating the
   root guide.
+
+## Product and UX
+
+- **Ready:** Connect `ContactDialog` and `FooterContactForm` to a real,
+  abuse-protected delivery path. Both currently log locally and show a false
+  success state without sending anything.
+- **Needs decision:** Review and approve the landing FAQ and pricing copy before
+  treating it as published product messaging.
 
 ## Testing and Quality
 
@@ -71,13 +75,12 @@ Status labels:
 
 ## Deployment
 
-- **Needs decision:** Choose and implement the production topology. The Vercel
-  + EC2 design in `docs/deployment.md` is a proposal; its Dockerfile, production
-  Compose file, and GitHub Actions workflow do not exist. Compare it with
-  managed container/application platforms before committing to operational
-  ownership.
-- **Ready:** Define production process topology for FastAPI, Redis stream
-  consumption, Celery worker, Celery beat, and ML.
+- **Ready:** Implement the confirmed single-project Railway topology in EU
+  West: public Next.js and FastAPI; private PostgreSQL, Redis, ML, scheduled
+  work, and object storage. Replace the superseded Vercel + EC2 proposal in
+  `docs/deployment.md` with the verified Railway runbook as deployment proceeds.
+- **Ready:** Deploy and verify the checked-in production process topology for
+  FastAPI, its Redis stream consumer, the hourly reminder cron, and ML.
 - **Ready:** Add backup/restore testing, migration rollout and rollback
   procedures, secret management, HTTPS, restricted service networking, durable
   upload storage, health checks, and deployment observability.
@@ -91,8 +94,8 @@ Status labels:
 
 - **Ready:** Replace `frame-ancestors *` on embeddable reservation pages with an
   intentional per-business or deployment allowlist.
-- **Ready:** Keep the unauthenticated ML API private or add service
-  authentication before exposing it beyond a trusted network.
+- **Ready:** Persist tenant-scoped ML result summaries so an ML service restart
+  does not empty the Insights dashboard until the next pipeline run.
 - **Ready:** Add rate limiting and abuse controls to public reservation, queue,
   ordering, auth, and docs-assistant endpoints.
 - **Ready:** Decide whether Redis event delivery needs a transactional outbox,
@@ -102,8 +105,8 @@ Status labels:
   publish after a flush but before the request dependency commits, unlike
   queue/order/inventory paths; either commit first or solve this as part of an
   outbox design before adding reservation event consumers.
-- **Ready:** Evaluate the Celery async task design under the chosen production
-  worker pool.
+- **Ready:** Add scheduled-job failure alerting and delivery reconciliation for
+  the hourly reservation-reminder cron.
 - **Ready:** Add structured tracing, metrics, SLOs, alerting, and request/event
   correlation beyond current request logs.
 - **Ready:** Harden onboarding redirects across all business routes rather than
@@ -111,6 +114,14 @@ Status labels:
 
 ## Product Architecture
 
+- **Needs decision:** Design privacy-preserving shared learning across tenants.
+  Start with anonymous venue-level operational aggregates rather than
+  cross-tenant customer profiles. Define the approved feature allowlist,
+  purpose and legal basis, anonymization/reidentification tests, minimum cohort
+  sizes, differential-privacy needs, retention/deletion handling, model
+  lineage, tenant transparency or opt-in, and fairness evaluation before using
+  any shared training dataset. Pseudonymized or hashed identifiers alone do
+  not make personal data anonymous.
 - **Needs decision:** Replace hard-coded `kitchen | bar | any` routing tags with
   configurable stations.
 - **Needs decision:** Implement granular permission-based RBAC and a full audit

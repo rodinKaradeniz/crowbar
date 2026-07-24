@@ -37,6 +37,9 @@ class Business(Base, UUIDMixin, TimestampMixin):
     notification_channels: Mapped[list] = mapped_column(
         JSONB, default=lambda: ["email"], nullable=False
     )
+    is_accepting_orders: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
     ordering_config: Mapped[dict] = mapped_column(
         JSONB,
         default=lambda: {"allowed_fulfillment_types": ["dine_in"]},

@@ -94,11 +94,12 @@ export default function InsightsClient({
   const handleRunPipeline = async () => {
     setIsRunning(true);
     try {
-      const mlBase =
-        process.env.NEXT_PUBLIC_ML_SERVICE_URL || "http://localhost:8001";
-      await fetch(`${mlBase}/pipeline/run?store_results=true`, {
+      const response = await fetch("/api/proxy/insights/run", {
         method: "POST",
       });
+      if (!response.ok) {
+        throw new Error("Failed to run insights pipeline");
+      }
       router.refresh();
     } catch {
       // ML service unavailable

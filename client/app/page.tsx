@@ -17,6 +17,10 @@ import beerTapPhoto from "@/assets/beer-tap.jpg";
 import inventoryPhoto from "@/assets/inventory.jpg";
 import cocktailPhoto from "@/assets/cocktail.jpg";
 
+// The business carousel comes from FastAPI at request time. Railway's private
+// API is not available while the frontend image is being built.
+export const dynamic = "force-dynamic";
+
 // The five modules — shown as a sticky fanning deck (see FeatureStack).
 const features: StackFeature[] = [
   {

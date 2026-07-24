@@ -8,6 +8,7 @@ need to load one large, mixed-lifecycle file.
 | [`../AGENTS.md`](../AGENTS.md) | Automatic repository entry point and command map | Every task |
 | [`RULES.md`](RULES.md) | Development do's, don'ts, and completion criteria | Every task |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Current system and infrastructure map | Code or infrastructure work |
+| [`DESIGN.md`](DESIGN.md) | Current visual system and intentional interaction patterns | Product UI work |
 | [`HISTORY.md`](HISTORY.md) | Durable decisions and meaningful project events | Before revisiting established behavior |
 | [`TODO.md`](TODO.md) | Canonical current plans, gaps, and reminders | Planning and scoping |
 | [`SKILLS.md`](SKILLS.md) | Skill strategy and proposed project-local workflows | Agent tooling work |
@@ -29,8 +30,3 @@ Specialized references remain close to their owners:
 - Add a rule only after a real failure mode or repeated source of ambiguity.
 - Verify claims against manifests, migrations, tests, and source before
   changing a document.
-
-`CLAUDE.md` is retained as a detailed legacy handoff and phase archive. It may
-contain version or status drift and should gradually be decomposed into these
-documents rather than expanded indefinitely.
-

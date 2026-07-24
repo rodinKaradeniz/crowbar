@@ -77,7 +77,7 @@ examples. The first five offer the highest project-specific value.
     offline state, sync conflicts, push, hardware access, auth, releases,
     observability, and shared-versus-native UX.
 12. **`release-crowbar`** — Run a risk-based release checklist covering builds,
-   tests, migrations, worker/beat, event delivery, environment variables,
+   tests, migrations, scheduled jobs, event delivery, environment variables,
    health checks, rollback, backup, and smoke tests once deployment exists.
 13. **`record-crowbar-decision`** — Turn a resolved design choice or incident
    into a concise `HISTORY.md` entry and update rules/TODO only when warranted.

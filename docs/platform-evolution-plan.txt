@@ -1,4 +1,0 @@
-This document has been consolidated into CLAUDE.md at the repository root.
-
-All platform context, product direction, phase history, agreed clarifications,
-roles/UI strategy, and the full backlog now live in CLAUDE.md.

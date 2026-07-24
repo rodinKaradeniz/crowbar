@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { setTokenCookie, serverGetMe } from "@/lib/api";
 import { ApiError } from "@/lib/api-client";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE =
+  process.env.API_INTERNAL_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:8000";
 
 export async function POST(request: NextRequest) {
   try {

@@ -15,8 +15,7 @@ python-jose[cryptography]==3.3.0
 bcrypt>=4.0
 python-multipart==0.0.20
 
-# Background tasks
-celery==5.4.0
+# Event stream and real-time projections
 redis==5.2.1
 
 # Storage (for future S3 support)

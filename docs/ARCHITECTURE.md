@@ -1,6 +1,6 @@
 # Crowbar Architecture
 
-Last verified against the repository on 2026-07-23.
+Last verified against the repository on 2026-07-24.
 
 ## Product Boundary
 
@@ -25,21 +25,22 @@ Next.js :3000
   |-- authenticated BFF /api/proxy/* -- JWT |
   |-- server-side typed fetches -------------+--> FastAPI :8000
   |-- docs assistant ----------------------------> OpenAI API (optional)
-  |-- ML server-component fetches ----------------> ML FastAPI :8001
-                                                     |
-FastAPI :8000 ---------------------------------------+--> PostgreSQL :5432
-  |                                                      ^
-  +--> Redis :6379 (events, Celery broker/backend)        |
-          |                                               |
-          +--> in-process stream consumer --> WS managers |
-          +--> Celery worker/beat ------------------------+
-
-ML FastAPI :8001 -----------------------------------------> PostgreSQL :5432
+                                                    |
+FastAPI :8000 --------------------------------------+--> PostgreSQL :5432
+  |                                                 ^
+  +--> private, tenant-scoped ML gateway ----------+--> ML FastAPI :8001
+  |                                                 |      |
+  +--> Redis :6379 (domain-event stream)            |      +--> PostgreSQL
+          |                                         |
+          +--> in-process stream consumer --> WS managers
+                                                    |
+Railway hourly cron --------------------------------+
 ```
 
 Local Docker Compose starts PostgreSQL, Redis, and ML. `scripts/dev.sh` starts
 FastAPI and Next.js as host processes after running migrations and demo seeds.
-Celery worker and beat are separate manual processes.
+The reservation-reminder job is a separate one-shot command in every
+environment and is scheduled hourly by Railway in production.
 
 ## Repository Ownership
 
@@ -59,9 +60,11 @@ Celery worker and beat are separate manual processes.
   contracts.
 - `lib/api.ts`: server-component facade, auth-cookie access, mock switching,
   and snake_case-to-camelCase mapping.
-- `lib/ml-api.ts`: server-side, failure-tolerant ML client with a five-minute
-  Next.js cache.
+- `lib/ml-api.ts`: server-side, failure-tolerant insights client. It sends the
+  user's JWT to FastAPI and never addresses the private ML service.
 - `types/`: shared frontend domain types.
+- `docs/DESIGN.md`: visual tokens, typography, responsive interaction, and
+  accessibility conventions for product UI work.
 - `content/docs/`: MDX end-user docs.
 - `scripts/build-doc-chunks.mjs`: builds the docs assistant's checked-in chunk
   index before a production build.
@@ -83,7 +86,8 @@ components and FastAPI dependencies perform the authoritative auth checks.
   checks, and module entitlements.
 - `app/core/`: Redis client, domain events, stream consumer, WebSocket
   projections, and structured API errors.
-- `app/celery_app.py`: hourly reservation reminder scheduler and task.
+- `app/jobs/reservation_reminders.py`: one-shot, platform-wide reservation
+  reminder batch.
 - `db/migrations/`: ordered, append-only SQL migrations.
 - `db/migrate.py`: custom filename-tracked migration and seed runner.
 - `db/seeds/001_seed_puzzles.sql`: canonical rich demo tenant.
@@ -104,13 +108,27 @@ The ML service is an internal FastAPI process with:
 - Cancellation prediction using LightGBM classification.
 - Seven-day demand forecasting using per-business LightGBM regression.
 
-The pipeline reads the main database with a synchronous SQLAlchemy connection
-for pandas, exposes an async health check, stores durable outputs in
-`ml_predictions` and `business_daily_metrics`, and keeps the latest API result
-in process memory. Its endpoints have no application auth and must remain on a
-trusted network in production.
+FastAPI derives the tenant from the authenticated staff context and proxies
+insights requests to tenant-scoped ML endpoints. The private call includes a
+shared service credential outside development. The pipeline requires that
+business ID, applies it in its reservation and customer queries, stores output
+with the business ID, and keeps latest API results in per-business process
+memory. The ML service has no browser CORS surface.
 
 ## Core Request Flows
+
+### Tenant-scoped insights
+
+1. Browser mutations use the authenticated Next.js BFF; server components send
+   the httpOnly-cookie JWT to FastAPI.
+2. FastAPI validates the user, resolves the current business, and enforces the
+   insights module entitlement.
+3. FastAPI calls the private ML service with the authoritative business ID and
+   `X-ML-Internal-Token`.
+4. ML data loaders include the business predicate at the SQL source and store
+   outputs under that business.
+
+Neither the browser nor a request-supplied business ID selects the ML tenant.
 
 ### Authenticated staff HTTP
 
@@ -154,11 +172,11 @@ same business board.
 
 ### Reservation reminders
 
-Celery beat schedules an hourly sweep. The worker selects confirmed
-reservations 23–25 hours ahead with `sms_reminder_sent=false`, checks the
-business SMS channel, sends through Twilio, and marks successful deliveries.
-The current async task wrapper is intended for the development `solo` pool and
-needs production pool validation.
+Railway starts `python -m app.jobs.reservation_reminders` at the beginning of
+each UTC hour. The short-lived process selects confirmed reservations 23–25
+hours ahead with `sms_reminder_sent=false`, checks the business SMS channel,
+sends through Twilio, marks successful deliveries, closes its database engine,
+and exits. There is no Celery worker or in-process scheduler.
 
 ### Inventory and order fulfillment
 
@@ -171,6 +189,12 @@ needs production pool validation.
   from the order's actual outstanding recorded deductions.
 - Deduction/reversal is best-effort and must not block a service status change.
 - Items depleted to zero are auto-disabled and must be manually re-enabled.
+- `inventory_items.current_quantity` is a maintained balance updated with each
+  movement. `recompute_quantity_from_movements` exists for reconciliation; it
+  is not the normal read path.
+- Item-library entries are templates. Adding one to a menu copies its values
+  into a new business-owned menu item rather than retaining a live link, so a
+  later template edit cannot silently change an active menu.
 
 Tab totals, recipe servings remaining, and reference pours remaining are
 computed rather than denormalized.
@@ -186,10 +210,15 @@ Backend integration tests do not run migrations. Their autouse fixture creates
 and drops ORM metadata in a dedicated `crowbar_test` PostgreSQL database. This
 means both migrations and ORM metadata require deliberate validation.
 
+Migrations 005 and 006 were renamed early in the project. A database restored
+from an old backup may still contain their former names in `_migrations`; use
+the compatibility procedure in `server/DATABASE.md` before running the current
+migration chain.
+
 ## Optional and External Services
 
 - PostgreSQL 16: authoritative product and ML data.
-- Redis 7: domain-event stream plus Celery broker/result backend.
+- Redis 7: domain-event stream for WebSocket projections.
 - Resend: email; configuration is optional and services degrade gracefully.
 - Twilio: SMS; optional and failure-tolerant.
 - OpenAI: optional staff docs assistant in a Next.js server route. It embeds the
@@ -200,9 +229,9 @@ means both migrations and ORM metadata require deliberate validation.
 
 ## Delivery State
 
-There is no checked-in CI workflow, backend production Dockerfile, or
-production Compose file. `docs/deployment.md` describes a proposed Vercel +
-EC2/GitHub Actions topology, not current deployed infrastructure. Production
-readiness work must account for HTTPS, secret management, CORS, storage,
-private database/Redis/ML networking, migrations, worker processes, backups,
-observability, and multi-replica WebSocket behavior.
+Railway is the confirmed deployment target, but the services are not deployed
+yet. Service build, start, healthcheck, migration, and cron definitions are
+checked in; `docs/deployment.md` tracks the rollout. Production readiness work
+must still account for HTTPS, secret management, CORS, storage, private
+database/Redis/ML networking, backups, observability, and multi-replica
+WebSocket behavior.

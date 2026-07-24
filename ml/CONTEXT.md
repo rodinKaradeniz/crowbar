@@ -1,27 +1,28 @@
 # ML Insights Microservice — Context
 
 > This file provides fast orientation for AI agents and developers working on the ML service.
-> Last updated: 2026-02-19
+> Last updated: 2026-07-24
 
 ## What This Is
 
-A standalone FastAPI microservice (`ml/`) that reads from the main PostgreSQL database and produces ML-powered insights for business users. It runs independently from the main backend (`server/`) and frontend (`client/`), communicating only through the shared database and its own REST API.
+A private FastAPI microservice (`ml/`) that reads tenant-scoped data from the
+main PostgreSQL database and produces ML-powered insights. The authenticated
+FastAPI backend is its gateway; browser and frontend code never call ML
+directly.
 
 ## Architecture
 
 ```
-┌─────────────┐      ┌─────────────┐      ┌─────────────────┐
-│   client/    │─────▶│   ml/       │─────▶│   PostgreSQL    │
-│  (Next.js)   │ HTTP │  (FastAPI)  │ SQL  │  (shared DB)    │
-│  port 3000   │◀─────│  port 8001  │◀─────│  port 5432      │
-└─────────────┘      └─────────────┘      └─────────────────┘
-                           │
-                     reads: reservations, users, businesses, service_types
-                     writes: ml_predictions, business_daily_metrics
+Next.js ── JWT ──> FastAPI gateway ── business ID + service token ──> ML
+                         │                                      │
+                         └──────────── PostgreSQL <──────────────┘
 ```
 
-- **No direct coupling** to the main FastAPI backend (`server/`). The ML service only touches the database.
-- **Client integration**: `client/lib/ml-api.ts` fetches from the ML service. The Insights page lives at `client/app/business/insights/`.
+- **Gateway coupling**: `server/app/routers/insights.py` derives tenant scope
+  from authenticated context and calls ML privately.
+- **Client integration**: `client/lib/ml-api.ts` fetches tenant-scoped results
+  through FastAPI. The Insights page lives at
+  `client/app/business/insights/`.
 - **Docker**: Defined as the `ml` service in `server/docker-compose.yml`, depends on `postgres`.
 
 ## Directory Layout
@@ -76,8 +77,9 @@ ml/
 ## Pipeline Flow (`pipelines/insights_pipeline.py`)
 
 ```
-InsightsPipeline.run()
-  ├── Step 1: load_reservations() + load_customers()       ← db.py
+InsightsPipeline(business_id).run()
+  ├── Step 1: load_reservations(business_id)
+  │           + load_customers(business_id)                 ← db.py
   ├── Step 2: build_reservation_features()                  ← features/reservation_features.py
   │           build_customer_features()                     ← features/customer_features.py
   │           build_rfm_features()
@@ -94,13 +96,15 @@ InsightsPipeline.run()
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/health` | Service health + DB connectivity |
-| GET | `/status` | Latest pipeline run info |
-| POST | `/pipeline/run?store_results=true` | Trigger full pipeline |
-| GET | `/results/summary` | High-level results from all models |
-| GET | `/results/segmentation` | Customer segment details |
-| GET | `/results/cancellation` | Cancellation model metrics + feature importance |
-| GET | `/results/demand` | 7-day forecast per business |
-| GET | `/history` | List of all pipeline runs in session |
+| GET | `/businesses/{business_id}/status` | Latest pipeline run info |
+| POST | `/businesses/{business_id}/pipeline/run` | Trigger the tenant pipeline |
+| GET | `/businesses/{business_id}/results/summary` | High-level model results |
+| GET | `/businesses/{business_id}/results/segmentation` | Customer segments |
+| GET | `/businesses/{business_id}/results/cancellation` | Cancellation metrics |
+| GET | `/businesses/{business_id}/results/demand` | Seven-day forecast |
+| GET | `/businesses/{business_id}/history` | Tenant run history in this process |
+
+All business endpoints require `X-ML-Internal-Token` outside development.
 
 ## Database Tables (owned by ML service)
 
@@ -111,7 +115,8 @@ Defined in `server/db/migrations/002_ml_tables.sql`:
 
 ## Frontend Integration
 
-- **API client**: `client/lib/ml-api.ts` — typed fetch functions with 5-min cache, graceful null returns
+- **API client**: `client/lib/ml-api.ts` — typed, no-store FastAPI gateway
+  requests with graceful null returns
 - **Insights page**: `client/app/business/insights/` — full ML dashboard with demand forecast chart, segmentation donut, cancellation metrics + feature importance
 - **Overview page**: `client/app/business/overview/` — forecast teaser card (7-day total + busiest day) and segmentation teaser card (customer count + largest segment), with "Details →" links to Insights. Falls back to a "Set up" CTA when no ML data exists.
 - **Customers page**: `client/app/business/customers/` — segment badge column in the customers table (Champions, Loyal, At Risk, etc.) when segmentation data is available. Column auto-hides when no ML data.
@@ -122,10 +127,15 @@ Defined in `server/db/migrations/002_ml_tables.sql`:
 ## Key Design Decisions
 
 1. **Sync engine for pipeline** — Pandas `read_sql` requires synchronous connections. The async engine is only used for FastAPI health checks.
-2. **In-memory results** — Pipeline results are stored in a module-level dict (`_latest_results`). They persist for the lifetime of the process but are lost on restart. DB persistence is the durable store.
-3. **Per-business models** — Demand forecasting trains a separate LightGBM model per business. Segmentation and cancellation are global.
+2. **Tenant-keyed in-memory results** — `_latest_results` is keyed by business.
+   Results are lost on restart; durable result-summary restoration is tracked
+   in `docs/TODO.md`.
+3. **Per-business pipeline** — Data loading, segmentation, cancellation, and
+   demand forecasting are scoped to the gateway-supplied business.
 4. **Recursive forecasting** — Demand forecast uses a recursive approach: predict day N, use that prediction as a lag feature for day N+1.
-5. **No auth on ML endpoints** — The ML service is internal-only. In production, it should be behind a VPN or API gateway.
+5. **Private service authentication** — Outside development, tenant endpoints
+   reject calls without the shared `ML_INTERNAL_TOKEN`. `/health` remains
+   available for private platform health checks.
 
 ## Common Tasks
 
@@ -145,5 +155,6 @@ Defined in `server/db/migrations/002_ml_tables.sql`:
 cd ml && source venv/bin/activate
 # Ensure Postgres is running (via docker compose up postgres)
 uvicorn src.main:app --reload --port 8001
-# Then: curl -X POST http://localhost:8001/pipeline/run
+# Then call through FastAPI with an authenticated staff session:
+# POST http://localhost:8000/api/insights/run
 ```

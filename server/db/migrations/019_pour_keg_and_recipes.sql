@@ -4,7 +4,7 @@
 -- teaches inventory about units of measure so spirit pours (ml) and kegs (ml)
 -- can be tracked accurately, and enables auto-deduction on order fulfillment.
 --
--- Design decisions (see CLAUDE.md Non-Obvious "unit-type / ml recipes"):
+-- Design decisions:
 --   * Canonical storage unit for liquids is ml. For unit_type in ('bottle','keg')
 --     both current_quantity and par_quantity are ml, NOT container counts. 'bottle'
 --     and 'keg' share identical underlying math — the only difference is which

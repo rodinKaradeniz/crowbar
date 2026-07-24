@@ -22,12 +22,11 @@ For focused work, also read:
 - Database or migrations: `server/DATABASE.md`
 - ML service or insight models: `ml/CONTEXT.md`
 - Deployment: `docs/deployment.md` (a plan, not deployed infrastructure)
+- Product UI or visual language: `docs/DESIGN.md`
 - Project-specific agent skills: `docs/SKILLS.md`
-- Detailed legacy phase narrative: `CLAUDE.md`
 
-`README.md` is the human quick start. `CLAUDE.md` contains valuable historical
-detail but is no longer the orchestration file. When documentation disagrees
-with executable source, inspect the source and update the stale document.
+`README.md` is the human quick start. When documentation disagrees with
+executable source, inspect the source and update the stale document.
 
 ## Confirmation Before Development
 
@@ -52,13 +51,13 @@ Crowbar is a multi-tenant operations platform for bars and restaurants:
 - `client/`: Next.js 16 App Router, React 19, TypeScript, Tailwind 4, Radix and
   shadcn/ui.
 - `server/`: FastAPI, async SQLAlchemy, PostgreSQL, Redis Streams, WebSockets,
-  and Celery.
+  and short-lived scheduled jobs.
 - `ml/`: internal FastAPI service using pandas, scikit-learn, and LightGBM
   against the main PostgreSQL database.
 - `server/db/migrations/`: ordered SQL migrations run by a custom migrator; no
   Alembic.
 - `scripts/dev.sh`: starts PostgreSQL, Redis, and ML in Docker, then starts the
-  backend and frontend natively. It does not start Celery worker or beat.
+  backend and frontend natively. It does not run scheduled jobs.
 
 Default local ports are frontend `3000`, backend `8000`, ML `8001`,
 PostgreSQL `5432`, and Redis `6379`.
@@ -90,10 +89,9 @@ venv/bin/python -m pytest
 cd server
 venv/bin/python -m db.migrate
 
-# Celery, each in a separate terminal
+# Reservation reminder batch (mutates data and may send SMS)
 cd server
-venv/bin/celery -A app.celery_app worker --loglevel=info --pool=solo
-venv/bin/celery -A app.celery_app beat --loglevel=info
+venv/bin/python -m app.jobs.reservation_reminders
 ```
 
 Do not run `python -m db.migrate reset`, delete Docker volumes, seed shared
@@ -115,6 +113,9 @@ it.
   is best-effort and drives WebSocket projections through Redis Streams.
 - Keep the JWT in the `rk-token` httpOnly cookie. Browser-side authenticated
   calls go through the Next.js proxy; do not expose the token to client code.
+- Keep ML private. Browser and frontend code call the authenticated FastAPI
+  insights gateway; FastAPI derives the business ID and ML loaders enforce it
+  at the SQL source.
 - Preserve API snake_case and map to frontend camelCase at the API boundary.
 - Use `AppBaseModel` for Pydantic schemas and `toMoney()` /
   `toOptionalMoney()` for frontend money mapping.

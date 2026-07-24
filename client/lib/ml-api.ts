@@ -1,17 +1,25 @@
 /**
  * ML Insights API client.
  *
- * Fetches data from the ML microservice (port 8001).
- * Used by server components to get ML predictions and insights.
- * Gracefully returns null when the ML service is unavailable.
+ * Fetches tenant-scoped insights through the authenticated FastAPI gateway.
+ * The private ML service is never addressed by browser or frontend code.
  */
 
-const ML_BASE = process.env.ML_SERVICE_URL || "http://localhost:8001";
+import { getToken } from "@/lib/api";
+
+const API_BASE =
+  process.env.API_INTERNAL_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:8000";
 
 async function mlFetch<T>(path: string): Promise<T | null> {
+  const token = await getToken();
+  if (!token) return null;
+
   try {
-    const response = await fetch(`${ML_BASE}${path}`, {
-      next: { revalidate: 300 }, // Cache for 5 minutes
+    const response = await fetch(`${API_BASE}/api/insights${path}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
     });
 
     if (!response.ok) return null;
@@ -160,7 +168,7 @@ export interface MLResultsSummary {
 // ─── API Functions ──────────────────────────────────────────────────────────
 
 export async function fetchMLHealth(): Promise<MLHealthResponse | null> {
-  return mlFetch("/health");
+  return null;
 }
 
 export async function fetchMLStatus(): Promise<MLStatusResponse | null> {
@@ -172,25 +180,26 @@ export async function fetchMLResultsSummary(): Promise<MLResultsSummary | null> 
 }
 
 export async function fetchMLSegmentation(): Promise<MLSegmentationResult | null> {
-  return mlFetch("/results/segmentation");
+  return mlFetch("/segmentation");
 }
 
 export async function fetchMLCancellation(): Promise<MLCancellationResult | null> {
-  return mlFetch("/results/cancellation");
+  return mlFetch("/cancellation");
 }
 
 export async function fetchMLDemandForecast(): Promise<MLDemandForecastResult | null> {
-  return mlFetch("/results/demand");
+  return mlFetch("/demand");
 }
 
-export async function triggerMLPipeline(
-  storeResults: boolean = true
-): Promise<MLPipelineResult | null> {
+export async function triggerMLPipeline(): Promise<MLPipelineResult | null> {
   try {
-    const response = await fetch(
-      `${ML_BASE}/pipeline/run?store_results=${storeResults}`,
-      { method: "POST" }
-    );
+    const token = await getToken();
+    if (!token) return null;
+    const response = await fetch(`${API_BASE}/api/insights/run`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
     if (!response.ok) return null;
     return response.json();
   } catch {

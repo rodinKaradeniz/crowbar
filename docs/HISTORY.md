@@ -5,9 +5,6 @@ commit. Add an entry when a decision constrains future implementation, when a
 failure teaches a reusable lesson, or when project direction materially
 changes.
 
-Detailed pre-2026-07-23 phase notes remain in `CLAUDE.md` during the transition
-to this structure.
-
 ## Product and Repository Milestones
 
 - **2025-12-16:** Repository began as a Create Next App project.
@@ -23,11 +20,13 @@ to this structure.
   017–022.
 - **2026-07-23:** A cross-agent documentation contract was introduced:
   root `AGENTS.md` orchestrates stable architecture, rules, history, TODO, and
-  skills documents. The large `CLAUDE.md` was retained as a legacy phase
-  archive rather than discarded.
+  skills documents.
 - **2026-07-24:** A pre-development confirmation gate was added. Agents must
   surface material unknowns and compare credible modern solution shapes before
   implementing an open product, UX, or architecture choice.
+- **2026-07-24:** The legacy `CLAUDE.md` phase archive was retired after its
+  current design, architecture, migration-recovery, and open-work contracts
+  were moved into agent-neutral documentation.
 
 ## Durable Decisions
 
@@ -153,6 +152,68 @@ remaining are computed from authoritative state rather than stored.
 
 **Consequences:** Do not add denormalized copies without a measured performance
 need and an explicit consistency strategy.
+
+### Item-library entries are copied templates
+
+**Decision:** Adding an item-library entry to a menu creates an independent menu
+item. There is no live foreign-key relationship back to the template.
+
+**Consequences:** Editing a reusable template cannot change an active menu
+without an explicit menu edit. Future bulk-sync behavior would require a new,
+confirmed product contract.
+
+### Inventory balances are maintained and reconcilable
+
+**Decision:** `inventory_items.current_quantity` is updated in the same domain
+operation that writes each stock movement. Normal reads use that maintained
+balance; the movement ledger can recompute it for reconciliation.
+
+**Consequences:** New inventory write paths must update the balance and ledger
+together. A reconciliation mismatch is an integrity incident, not a reason to
+silently switch every read to aggregation.
+
+## 2026-07-24 — Railway is the deployment target and ML stays private
+
+**Context:** Crowbar needs a low-operations initial deployment without
+splitting the Next.js frontend, FastAPI gateway, ML process, PostgreSQL, Redis,
+scheduled work, and uploads across unrelated platforms. The ML API previously
+accepted browser calls and loaded global reservation/customer data.
+
+**Decision:** Deploy the Crowbar topology in one Railway project in EU West.
+Next.js and FastAPI are the public services; PostgreSQL, Redis, ML, scheduled
+work, and file storage remain private. FastAPI is the authenticated insights
+gateway: it derives the business from staff context and passes that ID plus a
+shared service credential to tenant-scoped ML endpoints. ML loaders require a
+business predicate and in-memory results are keyed per business.
+
+**Consequences:** The browser never receives an ML address. Next.js uses a
+server-only `API_INTERNAL_URL` for normal BFF/server traffic while
+`NEXT_PUBLIC_API_URL` remains available for direct browser WebSockets. Future
+domain microservices stay private behind the stable FastAPI gateway. Raw ML
+result durability across process restarts remains separate production
+hardening work.
+
+**References:** `server/app/routers/insights.py`, `ml/src/main.py`,
+`ml/src/db.py`, `client/lib/ml-api.ts`
+
+## 2026-07-24 — Scheduled reminders use a Railway Cron job
+
+**Context:** Celery existed only to schedule one hourly reservation-reminder
+task. No request path queued work, so deploying an always-on worker and beat
+would add two idle processes and a second scheduling system.
+
+**Decision:** Production invokes the reminder sweep as a short-lived Railway
+Cron service at `0 * * * *` UTC. The shared Python module owns the job and exits
+after closing its database engine. Celery is removed; Redis remains the domain
+event stream.
+
+**Consequences:** Scheduled work must be safe as a one-shot process and expose
+failures through its exit status and logs. If Crowbar later needs queued,
+retryable, or high-throughput asynchronous work, choose a worker/queue design
+for those requirements rather than putting scheduling back into the API.
+
+**References:** `server/app/jobs/reservation_reminders.py`,
+`server/railway.reminders.json`
 
 ## Entry Template
 

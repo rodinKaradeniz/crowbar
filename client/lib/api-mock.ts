@@ -7,6 +7,7 @@
 
 import { Business, ServiceType, Reservation, VisitorResponse } from "@/types";
 import type {
+  CustomerResponse,
   UserResponse,
   StaffResponse,
   BusinessDashboardStats,
@@ -105,7 +106,7 @@ export async function fetchBusinessDashboardStats(
 
 export async function fetchBusinessCustomers(
   _businessId: string
-): Promise<UserResponse[]> {
+): Promise<CustomerResponse[]> {
   return mockCustomers;
 }
 
@@ -114,7 +115,7 @@ export async function fetchBusinessVisitors(
 ): Promise<VisitorResponse[]> {
   const reservationVisitors: VisitorResponse[] = mockCustomers.map((c) => ({
     id: c.id,
-    name: c.name,
+    name: c.name ?? "Unknown",
     email: c.email,
     phone: c.phone ?? null,
     source: "reservation",

@@ -27,7 +27,7 @@ describe("clientGetBusinesses", () => {
 
   it("does not leak snake_case keys into the result", async () => {
     const businesses = await clientGetBusinesses();
-    const biz = businesses[0] as Record<string, unknown>;
+    const biz = businesses[0] as unknown as Record<string, unknown>;
 
     expect(biz).not.toHaveProperty("max_guests");
     expect(biz).not.toHaveProperty("time_slot_interval");
@@ -63,7 +63,7 @@ describe("clientGetServiceTypesByBusiness", () => {
 
   it("does not leak snake_case keys into service type result", async () => {
     const serviceTypes = await clientGetServiceTypesByBusiness("biz-1");
-    const st = serviceTypes[0] as Record<string, unknown>;
+    const st = serviceTypes[0] as unknown as Record<string, unknown>;
 
     expect(st).not.toHaveProperty("business_id");
     expect(st).not.toHaveProperty("requires_payment");

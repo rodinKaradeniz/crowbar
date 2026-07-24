@@ -6,11 +6,12 @@ view results, and check service health.
 """
 
 import logging
+import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from uuid import UUID
 
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Response, status
 
 from src.config import settings
 from src.db import check_db_connection
@@ -24,9 +25,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# In-memory store for the latest pipeline results
-_latest_results: dict = {}
-_pipeline_history: list[dict] = []
+# In-memory stores are tenant-keyed so one business can never read another
+# business's latest run. Durable predictions remain in PostgreSQL.
+_latest_results: dict[str, dict] = {}
+_pipeline_history: dict[str, list[dict]] = {}
 
 
 @asynccontextmanager
@@ -52,22 +54,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
 # ── Health & Status ──
 
 
 @app.get("/health")
-async def health_check():
+async def health_check(response: Response):
     """Service health check."""
     db_ok = await check_db_connection()
+    if not db_ok:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     return {
         "status": "ok" if db_ok else "degraded",
         "service": "ml-insights",
@@ -77,10 +72,38 @@ async def health_check():
     }
 
 
-@app.get("/status")
-async def pipeline_status():
+def require_internal_token(
+    token: str | None = Header(default=None, alias="X-ML-Internal-Token"),
+) -> None:
+    """Allow only the trusted API gateway to call tenant-scoped ML routes."""
+    expected = settings.ml_internal_token
+    if expected is None:
+        if settings.environment == "development":
+            return
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="ML internal authentication is not configured",
+        )
+
+    if token is None or not secrets.compare_digest(token, expected):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid internal service credentials",
+        )
+
+
+business_router = APIRouter(
+    prefix="/businesses/{business_id}",
+    dependencies=[Depends(require_internal_token)],
+)
+
+
+@business_router.get("/status")
+async def pipeline_status(business_id: UUID):
     """Get the status of the latest pipeline run."""
-    if not _latest_results:
+    business_key = str(business_id)
+    latest = _latest_results.get(business_key)
+    if not latest:
         return {
             "status": "no_runs",
             "message": "No pipeline has been executed yet. POST /pipeline/run to start one.",
@@ -89,25 +112,25 @@ async def pipeline_status():
     return {
         "status": "ok",
         "latest_run": {
-            "run_id": _latest_results.get("run_id"),
-            "timestamp": _latest_results.get("timestamp"),
-            "elapsed_seconds": _latest_results.get("elapsed_seconds"),
-            "data_summary": _latest_results.get("data"),
+            "run_id": latest.get("run_id"),
+            "timestamp": latest.get("timestamp"),
+            "elapsed_seconds": latest.get("elapsed_seconds"),
+            "data_summary": latest.get("data"),
         },
-        "total_runs": len(_pipeline_history),
+        "total_runs": len(_pipeline_history.get(business_key, [])),
     }
 
 
 # ── Pipeline Execution ──
 
 
-@app.post("/pipeline/run")
-async def run_pipeline(store_results: bool = True):
+@business_router.post("/pipeline/run")
+async def run_pipeline(business_id: UUID, store_results: bool = True):
     """
     Trigger a full ML insights pipeline run.
 
     This will:
-    1. Load all reservation and customer data from the database
+    1. Load this business's reservation and customer data from the database
     2. Engineer features (RFM, temporal, behavioral)
     3. Train models (segmentation, cancellation, demand forecast)
     4. Optionally store predictions in the database
@@ -115,16 +138,15 @@ async def run_pipeline(store_results: bool = True):
     Args:
         store_results: Whether to persist predictions to the DB (default: True)
     """
-    global _latest_results
-
-    logger.info("Pipeline run triggered via API")
+    business_key = str(business_id)
+    logger.info("Pipeline run triggered for business %s", business_key)
 
     try:
-        pipeline = InsightsPipeline()
+        pipeline = InsightsPipeline(business_id=business_key)
         results = pipeline.run(store_results=store_results)
 
-        _latest_results = results
-        _pipeline_history.append(
+        _latest_results[business_key] = results
+        _pipeline_history.setdefault(business_key, []).append(
             {
                 "run_id": results.get("run_id"),
                 "timestamp": results.get("timestamp"),
@@ -142,15 +164,19 @@ async def run_pipeline(store_results: bool = True):
 # ── Results Endpoints ──
 
 
-@app.get("/results/segmentation")
-async def get_segmentation_results():
-    """Get the latest customer segmentation results."""
-    if not _latest_results:
+def _get_latest_results(business_id: UUID) -> dict:
+    latest = _latest_results.get(str(business_id))
+    if latest is None:
         raise HTTPException(
             status_code=404, detail="No pipeline results. Run the pipeline first."
         )
+    return latest
 
-    segmentation = _latest_results.get("segmentation", {})
+
+@business_router.get("/results/segmentation")
+async def get_segmentation_results(business_id: UUID):
+    """Get the latest customer segmentation results."""
+    segmentation = _get_latest_results(business_id).get("segmentation", {})
     if segmentation.get("status") != "success":
         raise HTTPException(
             status_code=404,
@@ -160,15 +186,10 @@ async def get_segmentation_results():
     return segmentation
 
 
-@app.get("/results/cancellation")
-async def get_cancellation_results():
+@business_router.get("/results/cancellation")
+async def get_cancellation_results(business_id: UUID):
     """Get the latest cancellation prediction model results."""
-    if not _latest_results:
-        raise HTTPException(
-            status_code=404, detail="No pipeline results. Run the pipeline first."
-        )
-
-    cancellation = _latest_results.get("cancellation", {})
+    cancellation = _get_latest_results(business_id).get("cancellation", {})
     if cancellation.get("status") != "success":
         raise HTTPException(
             status_code=404,
@@ -178,15 +199,10 @@ async def get_cancellation_results():
     return cancellation
 
 
-@app.get("/results/demand")
-async def get_demand_forecast_results():
+@business_router.get("/results/demand")
+async def get_demand_forecast_results(business_id: UUID):
     """Get the latest demand forecast results."""
-    if not _latest_results:
-        raise HTTPException(
-            status_code=404, detail="No pipeline results. Run the pipeline first."
-        )
-
-    demand = _latest_results.get("demand_forecast", {})
+    demand = _get_latest_results(business_id).get("demand_forecast", {})
     if demand.get("status") != "success":
         raise HTTPException(
             status_code=404,
@@ -196,24 +212,21 @@ async def get_demand_forecast_results():
     return demand
 
 
-@app.get("/results/summary")
-async def get_results_summary():
+@business_router.get("/results/summary")
+async def get_results_summary(business_id: UUID):
     """Get a high-level summary of all latest results."""
-    if not _latest_results:
-        raise HTTPException(
-            status_code=404, detail="No pipeline results. Run the pipeline first."
-        )
+    latest = _get_latest_results(business_id)
 
     summary = {
-        "run_id": _latest_results.get("run_id"),
-        "timestamp": _latest_results.get("timestamp"),
-        "elapsed_seconds": _latest_results.get("elapsed_seconds"),
-        "data": _latest_results.get("data"),
+        "run_id": latest.get("run_id"),
+        "timestamp": latest.get("timestamp"),
+        "elapsed_seconds": latest.get("elapsed_seconds"),
+        "data": latest.get("data"),
         "models": {},
     }
 
     for model_key in ["segmentation", "cancellation", "demand_forecast"]:
-        model_data = _latest_results.get(model_key, {})
+        model_data = latest.get(model_key, {})
         summary["models"][model_key] = {
             "status": model_data.get("status", "not_run"),
         }
@@ -233,11 +246,14 @@ async def get_results_summary():
 
     return summary
 
-
-@app.get("/history")
-async def get_pipeline_history():
-    """Get a list of all pipeline runs in this session."""
+@business_router.get("/history")
+async def get_pipeline_history(business_id: UUID):
+    """Get this business's pipeline runs from the current service session."""
+    runs = _pipeline_history.get(str(business_id), [])
     return {
-        "total_runs": len(_pipeline_history),
-        "runs": list(reversed(_pipeline_history)),
+        "total_runs": len(runs),
+        "runs": list(reversed(runs)),
     }
+
+
+app.include_router(business_router)

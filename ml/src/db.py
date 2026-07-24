@@ -66,8 +66,8 @@ def load_dataframe(query: str, params: dict | None = None) -> pd.DataFrame:
         return pd.read_sql(text(query), conn, params=params or {})
 
 
-def load_reservations() -> pd.DataFrame:
-    """Load all reservations with business and service type info."""
+def load_reservations(business_id: str) -> pd.DataFrame:
+    """Load one business's reservations with service type information."""
     query = """
         SELECT
             r.id AS reservation_id,
@@ -93,24 +93,27 @@ def load_reservations() -> pd.DataFrame:
         FROM reservations r
         JOIN businesses b ON r.business_id = b.id
         JOIN service_types st ON r.service_type_id = st.id
+        WHERE r.business_id = :business_id
         ORDER BY r.time
     """
-    return load_dataframe(query)
+    return load_dataframe(query, {"business_id": business_id})
 
 
-def load_customers() -> pd.DataFrame:
-    """Load all customer users."""
+def load_customers(business_id: str) -> pd.DataFrame:
+    """Load customers who have reservations with one business."""
     query = """
-        SELECT
-            id AS customer_id,
-            email,
-            name,
-            phone,
-            created_at AS registered_at
-        FROM users
-        WHERE user_type = 'customer'
+        SELECT DISTINCT
+            u.id AS customer_id,
+            u.email,
+            u.name,
+            u.phone,
+            u.created_at AS registered_at
+        FROM users u
+        JOIN reservations r ON r.customer_id = u.id
+        WHERE u.user_type = 'customer'
+          AND r.business_id = :business_id
     """
-    return load_dataframe(query)
+    return load_dataframe(query, {"business_id": business_id})
 
 
 def load_businesses() -> pd.DataFrame:

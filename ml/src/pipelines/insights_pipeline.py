@@ -41,11 +41,14 @@ class InsightsPipeline:
     Main ML pipeline that orchestrates all insight generation.
 
     Usage:
-        pipeline = InsightsPipeline()
+        pipeline = InsightsPipeline(business_id="...")
         results = pipeline.run()
     """
 
-    def __init__(self):
+    def __init__(self, business_id: str):
+        if not business_id:
+            raise ValueError("business_id is required")
+        self.business_id = business_id
         self.run_id = str(uuid.uuid4())[:8]
         self.run_timestamp = datetime.now(timezone.utc)
         self.results: dict = {}
@@ -65,8 +68,8 @@ class InsightsPipeline:
 
         # ── Step 1: Load raw data ──
         logger.info("Step 1: Loading data from database...")
-        reservations_raw = load_reservations()
-        customers_raw = load_customers()
+        reservations_raw = load_reservations(self.business_id)
+        customers_raw = load_customers(self.business_id)
 
         if reservations_raw.empty:
             logger.warning("No reservations found — aborting pipeline")
@@ -123,6 +126,7 @@ class InsightsPipeline:
             "timestamp": self.run_timestamp.isoformat(),
             "elapsed_seconds": round(elapsed, 2),
             "data": {
+                "business_id": self.business_id,
                 "reservations": len(reservations_raw),
                 "customers": len(customers_raw),
             },
@@ -265,11 +269,12 @@ class InsightsPipeline:
                                 "INSERT INTO ml_predictions "
                                 "(id, business_id, model_name, model_version, "
                                 "entity_type, entity_id, prediction, computed_at) "
-                                "VALUES (:id, NULL, :model, :version, "
+                                "VALUES (:id, :business_id, :model, :version, "
                                 "'customer', :entity_id, :prediction, NOW())"
                             ),
                             {
                                 "id": str(uuid.uuid4()),
+                                "business_id": self.business_id,
                                 "model": "customer_segmentation",
                                 "version": f"run_{self.run_id}",
                                 "entity_id": str(seg["customer_id"]),

@@ -108,8 +108,7 @@ async def get_menu_item_stock_info(
       across ingredients (the most-constrained one).
 
     Note this number is NOT independent per menu item: two menu items sharing an
-    ingredient both drop when either one sells (pooled inventory). Expected —
-    see CLAUDE.md Non-Obvious #44.
+    ingredient both drop when either one sells because inventory is pooled.
 
     Menu items without a recipe are omitted entirely (no meaningful count — the
     caller shows nothing, never a fabricated 0).
@@ -155,8 +154,8 @@ async def _disable_menu_items_for_ingredients(
     db: AsyncSession, business_id: UUID, inventory_item_ids: set[UUID]
 ) -> None:
     """Set is_available=False on every menu item that requires any of the given
-    (now depleted) inventory items. Manual re-enable is required afterwards — see
-    CLAUDE.md Non-Obvious 'recipe auto-deduction'."""
+    depleted inventory items. Manual re-enable is required afterwards because
+    one availability flag cannot distinguish an automatic 86 from a staff 86."""
     result = await db.execute(
         select(MenuItemIngredient.menu_item_id)
         .where(MenuItemIngredient.inventory_item_id.in_(inventory_item_ids))
@@ -250,8 +249,8 @@ async def reverse_deduction_for_order(
     Best-effort and NON-BLOCKING, mirroring deduct_for_served_order: a missing
     inventory item or any error is logged and swallowed so it never fails the
     status transition. Auto-disabled menu items are deliberately NOT re-enabled
-    here (manual re-enable policy — a single is_available flag can't tell an
-    auto-disable from a staff 86; see CLAUDE.md Non-Obvious #37).
+    here: a single is_available flag cannot distinguish an automatic disable
+    from a staff 86, so re-enabling is an explicit staff action.
     """
     result = await db.execute(
         select(

@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -9,6 +10,10 @@ class Settings(BaseSettings):
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"
+
+    # Private ML service
+    ml_service_url: str = "http://localhost:8001"
+    ml_internal_token: str | None = None
 
     # Auth
     secret_key: str = "your-secret-key-change-in-production"
@@ -39,6 +44,16 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ]
+
+    @field_validator("database_url")
+    @classmethod
+    def normalize_async_database_url(cls, value: str) -> str:
+        """Accept provider-standard Postgres URLs with the async engine."""
+        if value.startswith("postgres://"):
+            return value.replace("postgres://", "postgresql+asyncpg://", 1)
+        if value.startswith("postgresql://"):
+            return value.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return value
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

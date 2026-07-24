@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Reservation, ServiceType } from "@/types";
-import { UserResponse } from "@/lib/api-client";
+import { CustomerResponse } from "@/lib/api-client";
 
 interface ReservationDetailsDialogProps {
   reservation: Reservation | null;
@@ -19,7 +19,7 @@ interface ReservationDetailsDialogProps {
   title?: string;
   description?: string;
   serviceTypes?: ServiceType[];
-  customers?: UserResponse[];
+  customers?: CustomerResponse[];
 }
 
 export function ReservationDetailsDialog({

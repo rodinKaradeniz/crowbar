@@ -8,6 +8,10 @@ export interface User {
   createdAt: string;
 }
 
+export interface Customer extends User {
+  type: "customer";
+}
+
 export interface Staff extends User {
   type: "staff";
   businessId: string;
@@ -331,7 +335,7 @@ export interface RecipeIngredient {
 
 // Per-menu-item stock info (only for items with a recipe). `servingsRemaining` is
 // the recipe-exact live count of makeable servings (min floor across ingredients);
-// `hasLowStockIngredient` drives the amber below-par badge. See CLAUDE.md #44.
+// `hasLowStockIngredient` drives the amber below-par badge.
 export interface MenuItemStockInfo {
   menuItemId: string;
   hasLowStockIngredient: boolean;

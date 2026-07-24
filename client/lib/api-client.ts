@@ -1,4 +1,7 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE =
+  process.env.API_INTERNAL_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:8000";
 
 interface FetchOptions extends RequestInit {
   token?: string;
@@ -93,6 +96,12 @@ export interface BusinessResponse {
   time_slot_interval: number;
   advance_booking_days: number;
   operating_hours: Record<string, { open?: string; close?: string; closed?: boolean }>;
+  timezone?: string;
+  legal_drinking_age?: number;
+  enabled_modules?: string[];
+  onboarding_complete?: boolean;
+  notification_channels?: string[];
+  is_accepting_orders?: boolean;
   created_at: string;
 }
 

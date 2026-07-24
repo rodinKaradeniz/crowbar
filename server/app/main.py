@@ -5,22 +5,26 @@ import uuid
 from contextlib import asynccontextmanager
 
 import redis.asyncio as aioredis
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.errors import http_exception_handler, validation_exception_handler
 from app.core.events import STREAM_KEY
 from app.core.redis_client import close_redis, get_redis
 from app.core.stream_consumer import GROUP_NAME, ws_push_consumer
+from app.database import get_db
 from app.routers import (
     analytics,
     auth,
     businesses,
     customers,
     happy_hour,
+    insights,
     inventory,
     notifications,
     ordering,
@@ -130,6 +134,7 @@ app.include_router(ordering.router)
 app.include_router(inventory.router)
 app.include_router(tabs.router)
 app.include_router(happy_hour.router)
+app.include_router(insights.router)
 
 # ─── Static files (dev only) ──────────────────────────────────────────────────
 
@@ -141,5 +146,11 @@ if settings.environment == "development":
 
 
 @app.get("/api/health")
-async def health_check():
-    return {"status": "ok", "environment": settings.environment}
+async def health_check(db: AsyncSession = Depends(get_db)):
+    await db.execute(text("SELECT 1"))
+    return {
+        "status": "ok",
+        "service": "api",
+        "database": "connected",
+        "environment": settings.environment,
+    }

@@ -5,7 +5,7 @@ import { addDays, addMinutes, format, isSameDay, isToday, parseISO } from "date-
 import { Clock, Users } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Business, Reservation, ServiceType } from "@/types";
-import { UserResponse } from "@/lib/api-client";
+import { CustomerResponse } from "@/lib/api-client";
 import { ReservationDetailsDialog } from "@/components/reservation-details-dialog";
 import { cn } from "@/lib/utils";
 
@@ -13,7 +13,7 @@ interface BusinessScheduleClientProps {
   business: Business;
   initialReservations: Reservation[];
   serviceTypes: ServiceType[];
-  customers: UserResponse[];
+  customers: CustomerResponse[];
 }
 
 /** How many consecutive days the ledger shows, starting at the selected date. */
@@ -30,7 +30,7 @@ export default function BusinessScheduleClient({
     useState<Reservation | null>(null);
 
   const customerMap = useMemo(() => {
-    const map = new Map<string, UserResponse>();
+    const map = new Map<string, CustomerResponse>();
     customers.forEach((c) => map.set(c.id, c));
     return map;
   }, [customers]);

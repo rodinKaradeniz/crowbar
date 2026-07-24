@@ -41,6 +41,8 @@ services:
       DATABASE_URL_SYNC: postgresql://postgres:postgres@postgres:5432/crowbar
       ENVIRONMENT: development
       LOG_LEVEL: INFO
+      # Optional locally; required for production private-service authentication.
+      # ML_INTERNAL_TOKEN: replace-with-a-strong-random-value
     depends_on:
       postgres:
         condition: service_healthy

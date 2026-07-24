@@ -94,6 +94,7 @@ function toBusiness(b: BusinessResponse): Business {
     enabledModules: raw.enabled_modules ?? [],
     onboardingComplete: raw.onboarding_complete ?? false,
     notificationChannels: raw.notification_channels ?? ["email"],
+    isAcceptingOrders: raw.is_accepting_orders ?? true,
   };
 }
 
@@ -159,7 +160,10 @@ export async function serverGetMeContext(): Promise<MeContext | null> {
   if (!token) return null;
 
   try {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    const apiUrl =
+      process.env.API_INTERNAL_URL ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      "http://localhost:8000";
     const res = await fetch(`${apiUrl}/api/auth/me/context`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
@@ -306,7 +310,7 @@ export async function fetchBusinessCustomers(businessId: string) {
 function toVisitor(raw: VisitorResponseRaw): VisitorResponse {
   return {
     id: raw.id,
-    name: raw.name,
+    name: raw.name ?? "Unknown",
     phone: raw.phone,
     email: raw.email,
     source: raw.source,

@@ -70,5 +70,5 @@ class BusinessResponse(AppBaseModel):
     enabled_modules: list[str] = []
     onboarding_complete: bool = False
     notification_channels: list[str] = ["email"]
+    is_accepting_orders: bool = True
     created_at: datetime
-

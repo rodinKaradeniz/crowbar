@@ -71,11 +71,11 @@ A normalization step at reservation creation time (using a library like `phonenu
 
 ---
 
-## SMS Reminder Deduplication
+## SMS Reminder Deduplication — Resolved
 
-The Celery reminder task (`send_reservation_reminders`) does not track which reminders have been sent.
-If the worker restarts or runs twice in the same window, customers could receive duplicate SMS messages.
-Fix: add `sms_reminder_sent BOOLEAN DEFAULT FALSE` column to `reservations` and set it after sending.
+Migration 011 added `sms_reminder_sent`, and the one-shot reminder job marks
+successful deliveries. This historical item is retained only to explain the
+deduplication field.
 
 ---
 
@@ -104,11 +104,11 @@ For production, this should be locked down to a known allowlist of customer doma
 
 ---
 
-## Celery Async Pool Configuration
+## Celery Async Pool Configuration — Resolved by Removal
 
-The `send_reservation_reminders` Celery task uses `asyncio.run()` to run async DB queries from within a synchronous Celery task.
-This works with `--pool=solo` or `--pool=threads` in development but may not work with the default `prefork` pool.
-For production deployment, evaluate `celery-aiohttp` or restructure to use a sync DB session (SQLAlchemy sync engine) inside the Celery task.
+Celery was removed when Railway became the deployment target. Reservation
+reminders now run as a short-lived hourly Railway Cron process; see
+`docs/HISTORY.md` and `server/app/jobs/reservation_reminders.py`.
 
 ---
 

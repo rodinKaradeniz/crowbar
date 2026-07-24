@@ -8,7 +8,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { useAuth } from "@/contexts/auth-context";
 import {
   clientUpdateBusiness,
   clientCreateServiceType,
@@ -25,7 +24,14 @@ const DAY_LABELS: Record<string, string> = Object.fromEntries(
   DAYS_OF_WEEK.map((d) => [d.key, d.label]),
 );
 
-const AVAILABLE_MODULES = [
+interface AvailableModule {
+  id: string;
+  label: string;
+  description: string;
+  disabled?: boolean;
+}
+
+const AVAILABLE_MODULES: AvailableModule[] = [
   { id: "reservations", label: "Reservations", description: "Accept and manage bookings from customers" },
   { id: "insights", label: "Insights", description: "Analytics and demand forecasting for your business" },
   { id: "queue", label: "Queue", description: "Virtual walk-in queue management for your venue" },

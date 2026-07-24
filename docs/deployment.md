@@ -1,267 +1,112 @@
-# Backend Deployment Plan
+# Railway Deployment Runbook
 
-## Overview
+Last verified against the repository and Railway documentation on 2026-07-24.
 
-Deploy the FastAPI backend + PostgreSQL + Redis + ML service to an **AWS EC2 t2.micro** instance using Docker Compose, triggered automatically via **GitHub Actions** on pushes to `main`.
+## Confirmed Topology
 
-> **Note:** The EC2 free tier (t2.micro: 1 vCPU, 1GB RAM) is free for 12 months only. Oracle Cloud Free Tier (4 ARM VMs, 6GB RAM total) is free forever and would work with the same workflow.
+Crowbar deploys into one Railway project in EU West.
 
----
+```text
+Internet
+  |
+  +--> web (Next.js) ----------+
+  |                            |
+  +--> api (FastAPI) ----------+--> PostgreSQL
+                               +--> Redis
+                               +--> ml (private FastAPI)
 
-## Architecture
-
-```
-┌─────────────────────┐         ┌──────────────────────────────────┐
-│  Vercel (Frontend)   │ ──────▶ │  EC2 Instance (Backend)          │
-│  Next.js Client      │  HTTPS  │  ┌────────────────────────────┐  │
-│                      │         │  │ docker compose              │  │
-│  NEXT_PUBLIC_API_URL │         │  │  ├─ api (FastAPI :8000)     │  │
-│  = https://ec2-ip    │         │  │  ├─ postgres (:5432)        │  │
-└─────────────────────┘         │  │  ├─ redis (:6379)           │  │
-                                │  │  └─ ml (FastAPI :8001)       │  │
-                                │  └────────────────────────────┘  │
-                                └──────────────────────────────────┘
+reminders (hourly private cron) ---> PostgreSQL ---> Twilio
 ```
 
----
+Only `web` and `api` receive public domains. PostgreSQL, Redis, `ml`, and
+`reminders` remain private. Future domain microservices remain private behind
+the FastAPI gateway unless a new architecture decision says otherwise.
 
-## Files to Create
+## Source and Process Contract
 
-### 1. `server/Dockerfile`
+Each code service uses the same GitHub repository with an isolated root
+directory. Railway config files use absolute repository paths because a
+service's Root Directory does not automatically relocate its config-as-code
+file.
 
-```dockerfile
-FROM python:3.12-slim
+| Service | Root directory | Config file | Builder | Process |
+| --- | --- | --- | --- | --- |
+| `web` | `/client` | `/client/railway.json` | Railpack | `npm run start` |
+| `api` | `/server` | `/server/railway.api.json` | Railpack | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
+| `ml` | `/ml` | `/ml/railway.json` | Dockerfile | Docker `CMD`, listening on `$PORT` |
+| `reminders` | `/server` | `/server/railway.reminders.json` | Railpack | `python -m app.jobs.reservation_reminders` |
 
-WORKDIR /app
+Watch patterns prevent unrelated monorepo changes from rebuilding every
+service.
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+## Deployment Lifecycle
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+- `web` must return HTTP 200 from `/api/health` before Railway activates a new
+  deployment.
+- `api` must connect to PostgreSQL and return HTTP 200 from `/api/health`.
+- `ml` must connect to PostgreSQL and return HTTP 200 from `/health`.
+- `api` runs `python -m db.migrate` as a pre-deploy command. A migration failure
+  stops the new deployment before it becomes active.
+- `reminders` runs at `0 * * * *` UTC, completes one batch, closes its database
+  engine, and exits. It has no public domain and no persistent worker.
 
-COPY . .
+Do not seed production data or use `db.migrate reset`.
 
-EXPOSE 8000
+## Networking Contract
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
+- Next.js uses `API_INTERNAL_URL` for server components, route handlers, and
+  BFF traffic over Railway private networking.
+- `NEXT_PUBLIC_API_URL` is the public FastAPI origin used only where browser
+  access is required, including WebSockets. It is compiled into the Next.js
+  build and is not secret.
+- FastAPI uses `ML_SERVICE_URL` for the private ML origin and sends
+  `ML_INTERNAL_TOKEN`.
+- FastAPI and ML receive PostgreSQL connection URLs through Railway reference
+  variables. Their settings normalize Railway's provider-standard URL for the
+  async and sync SQLAlchemy drivers.
+- FastAPI receives Redis through a Railway reference variable.
+- Database, Redis, and ML services do not receive public domains.
 
-### 2. `server/docker-compose.prod.yml`
+## Secrets and Configuration
 
-Production compose file — includes the `api` service (unlike the dev compose which only has infrastructure).
+Values belong in Railway Variables, never committed environment files.
 
-```yaml
-services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: crowbar-db
-    restart: always
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-crowbar}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+At minimum:
 
-  redis:
-    image: redis:7-alpine
-    container_name: crowbar-redis
-    restart: always
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+- `web`: `API_INTERNAL_URL`, `NEXT_PUBLIC_API_URL`, `OPENAI_API_KEY` when the
+  docs assistant is enabled, and any optional OpenAI model overrides.
+- `api`: `DATABASE_URL`, `REDIS_URL`, `SECRET_KEY`, `ENVIRONMENT=production`,
+  `FRONTEND_URL`, `CORS_ORIGINS`, `ML_SERVICE_URL`, `ML_INTERNAL_TOKEN`, and
+  configured email/SMS provider credentials.
+- `ml`: set both `DATABASE_URL` and `DATABASE_URL_SYNC` to the Postgres
+  `DATABASE_URL` reference; Crowbar selects the appropriate driver.
+  Also set `ENVIRONMENT=production`, `ML_INTERNAL_TOKEN`, and logging
+  configuration.
+- `reminders`: `DATABASE_URL`, `ENVIRONMENT=production`, and Twilio
+  credentials. It does not need Redis.
 
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: crowbar-api
-    restart: always
-    ports:
-      - "8000:8000"
-    environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-crowbar}
-      REDIS_URL: redis://redis:6379/0
-      SECRET_KEY: ${SECRET_KEY}
-      ENVIRONMENT: production
-      STORAGE_TYPE: ${STORAGE_TYPE:-local}
-      UPLOAD_DIR: /app/uploads
-      CORS_ORIGINS: ${CORS_ORIGINS}
-    volumes:
-      - uploads_data:/app/uploads
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+Use one strong generated value for `ML_INTERNAL_TOKEN` on both `api` and `ml`.
+Use a different strong generated value for `SECRET_KEY`.
 
-  ml:
-    build:
-      context: ../ml
-      dockerfile: Dockerfile
-    container_name: crowbar-ml
-    restart: always
-    ports:
-      - "8001:8001"
-    environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-crowbar}
-      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-crowbar}
-      ENVIRONMENT: production
-    depends_on:
-      postgres:
-        condition: service_healthy
+## Storage
 
-volumes:
-  postgres_data:
-  redis_data:
-  uploads_data:
-```
+The backend's current local upload service is not production-durable on
+ephemeral application filesystems. Do not expose uploads until a Railway volume
+or object-storage adapter is configured and its backup/deletion behavior is
+confirmed. Object storage remains the preferred long-term shape.
 
-### 3. `.github/workflows/deploy-backend.yml`
+## Rollout State
 
-```yaml
-name: Deploy Backend
+- Complete: Railway project created.
+- Complete: public/private trust boundaries and tenant-scoped ML gateway.
+- Complete: production build and backend regression verification.
+- Complete: service build/start/health/migration/cron definitions checked in.
+- Pending: managed PostgreSQL and Redis services.
+- Pending: GitHub-backed `api`, `ml`, `reminders`, and `web` services.
+- Pending: reference variables and secrets.
+- Pending: initial migrations, domains, CORS, private connectivity, and smoke
+  tests.
+- Pending: durable uploads, backups, monitoring, and release automation.
 
-on:
-  push:
-    branches: [main]
-    paths:
-      - "server/**"
-      - "ml/**"
-      - ".github/workflows/deploy-backend.yml"
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Deploy to EC2 via SSH
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            set -e
-            cd ~/crowbar
-            git pull origin main
-
-            # Write prod env file from secret
-            echo "${{ secrets.PROD_ENV_FILE }}" > server/.env.prod
-
-            cd server
-            docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
-
-            # Run DB migrations
-            docker exec crowbar-api python -m db.migrate
-
-            # Clean up old images
-            docker image prune -f
-```
-
----
-
-## Code Changes Required
-
-### `server/app/config.py`
-
-Add env-based CORS so the Vercel URL can be injected:
-
-```python
-cors_origins: list[str] = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
-
-@property
-def all_cors_origins(self) -> list[str]:
-    import os
-    extra = os.getenv("CORS_ORIGINS", "")
-    extra_list = [o.strip() for o in extra.split(",") if o.strip()]
-    return self.cors_origins + extra_list
-```
-
-Then in `server/app/main.py`, change `settings.cors_origins` → `settings.all_cors_origins`.
-
-### `client/next.config.ts`
-
-Use the env var for the rewrite destination:
-
-```typescript
-const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-// ...
-destination: `${backendUrl}/api/:path*`,
-```
-
----
-
-## One-Time EC2 Setup
-
-```bash
-# On your EC2 instance (Amazon Linux 2023):
-sudo dnf install -y git docker
-sudo systemctl enable --now docker
-sudo usermod -aG docker ec2-user
-
-# Install Docker Compose plugin
-sudo mkdir -p /usr/local/lib/docker/cli-plugins
-sudo curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
-  -o /usr/local/lib/docker/cli-plugins/docker-compose
-sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
-
-# Clone repo
-git clone https://github.com/rodinKaradeniz/crowbar.git ~/crowbar
-```
-
----
-
-## GitHub Secrets
-
-In your repo → Settings → Secrets → Actions, add:
-
-| Secret | Value |
-|--------|-------|
-| `EC2_HOST` | Your EC2 public IP or Elastic IP |
-| `EC2_USER` | `ec2-user` |
-| `EC2_SSH_KEY` | Your EC2 private key (`.pem` contents) |
-| `PROD_ENV_FILE` | Full contents of your prod `.env` (see below) |
-
-**`PROD_ENV_FILE` contents:**
-
-```
-POSTGRES_PASSWORD=a-strong-password
-SECRET_KEY=a-very-long-random-string
-CORS_ORIGINS=https://crowbar.vercel.app
-STORAGE_TYPE=local
-```
-
----
-
-## Environment Awareness
-
-| Context | How it works |
-|---------|-------------|
-| **Local dev** | `docker compose up` in `server/` starts postgres + redis + ml; FastAPI runs natively via `uvicorn` |
-| **Production** | GitHub Actions SSHs into EC2 on every push to `main`, runs `docker compose -f docker-compose.prod.yml up -d --build` |
-| **Frontend (Vercel)** | Set `NEXT_PUBLIC_API_URL` to EC2 public URL; until backend is deployed, set `NEXT_PUBLIC_USE_MOCK_API=true` to use mock data |
-
----
-
-## Security Checklist
-
-- [ ] Change `SECRET_KEY` to a strong random value
-- [ ] Change `POSTGRES_PASSWORD` to a strong random value
-- [ ] Set up EC2 Security Group: allow inbound 8000 (API), 22 (SSH), block everything else
-- [ ] Consider adding HTTPS via Caddy or nginx reverse proxy with Let's Encrypt
-- [ ] Set up Elastic IP so the address doesn't change on reboot
+Deployment actions remain explicit user-confirmed steps. A TODO entry or this
+runbook is not authorization to mutate Railway.

@@ -6,7 +6,12 @@
  */
 
 import { Business, ServiceType, Reservation } from "@/types";
-import type { UserResponse, StaffResponse, BusinessDashboardStats } from "./api-client";
+import type {
+  BusinessDashboardStats,
+  CustomerResponse,
+  StaffResponse,
+  UserResponse,
+} from "./api-client";
 
 // ─── Helper: relative dates so data always looks fresh ──────────────────────
 
@@ -44,6 +49,10 @@ export const mockBusinesses: Business[] = [
       saturday: { open: "11:00", close: "00:00" },
       sunday: { open: "11:00", close: "22:00" },
     },
+    enabledModules: ["reservations", "queue", "ordering", "inventory", "insights"],
+    onboardingComplete: true,
+    notificationChannels: ["email"],
+    isAcceptingOrders: true,
     createdAt: "2024-01-15T10:00:00Z",
   },
   {
@@ -70,6 +79,10 @@ export const mockBusinesses: Business[] = [
       saturday: { open: "10:00", close: "02:00" },
       sunday: { open: "10:00", close: "02:00" },
     },
+    enabledModules: ["reservations", "queue", "ordering", "inventory", "insights"],
+    onboardingComplete: true,
+    notificationChannels: ["email"],
+    isAcceptingOrders: true,
     createdAt: "2024-01-20T10:00:00Z",
   },
   {
@@ -96,6 +109,10 @@ export const mockBusinesses: Business[] = [
       saturday: { closed: true },
       sunday: { closed: true },
     },
+    enabledModules: ["reservations", "insights"],
+    onboardingComplete: true,
+    notificationChannels: ["email"],
+    isAcceptingOrders: true,
     createdAt: "2024-01-25T10:00:00Z",
   },
   {
@@ -122,6 +139,10 @@ export const mockBusinesses: Business[] = [
       saturday: { open: "09:00", close: "16:00" },
       sunday: { open: "10:00", close: "14:00" },
     },
+    enabledModules: ["reservations", "insights"],
+    onboardingComplete: true,
+    notificationChannels: ["email"],
+    isAcceptingOrders: true,
     createdAt: "2024-01-30T10:00:00Z",
   },
 ];
@@ -265,51 +286,51 @@ export const mockServiceTypes: ServiceType[] = [
 
 // ─── Users ──────────────────────────────────────────────────────────────────
 
-export const mockCustomers: UserResponse[] = [
+export const mockCustomers: CustomerResponse[] = [
   {
     id: "00000000-0000-0000-0001-000000000001",
+    business_id: "00000000-0000-0000-0000-000000000001",
     email: "john.doe@example.com",
     name: "John Doe",
     phone: "+1-555-1001",
-    avatar: null,
-    user_type: "customer",
     created_at: "2024-02-01T10:00:00Z",
+    updated_at: "2024-02-01T10:00:00Z",
   },
   {
     id: "00000000-0000-0000-0001-000000000002",
+    business_id: "00000000-0000-0000-0000-000000000001",
     email: "jane.smith@example.com",
     name: "Jane Smith",
     phone: "+1-555-1002",
-    avatar: null,
-    user_type: "customer",
     created_at: "2024-02-05T10:00:00Z",
+    updated_at: "2024-02-05T10:00:00Z",
   },
   {
     id: "00000000-0000-0000-0001-000000000003",
+    business_id: "00000000-0000-0000-0000-000000000001",
     email: "mike.johnson@example.com",
     name: "Mike Johnson",
     phone: "+1-555-1003",
-    avatar: null,
-    user_type: "customer",
     created_at: "2024-02-10T10:00:00Z",
+    updated_at: "2024-02-10T10:00:00Z",
   },
   {
     id: "00000000-0000-0000-0001-000000000004",
+    business_id: "00000000-0000-0000-0000-000000000001",
     email: "sarah.williams@example.com",
     name: "Sarah Williams",
     phone: "+1-555-1004",
-    avatar: null,
-    user_type: "customer",
     created_at: "2024-02-15T10:00:00Z",
+    updated_at: "2024-02-15T10:00:00Z",
   },
   {
     id: "00000000-0000-0000-0001-000000000005",
+    business_id: "00000000-0000-0000-0000-000000000001",
     email: "david.brown@example.com",
     name: "David Brown",
     phone: "+1-555-1005",
-    avatar: null,
-    user_type: "customer",
     created_at: "2024-02-20T10:00:00Z",
+    updated_at: "2024-02-20T10:00:00Z",
   },
 ];
 
@@ -654,4 +675,3 @@ export function getMockBusinessDashboardStats(businessId: string): BusinessDashb
     month_change: 12.5,
   };
 }
-

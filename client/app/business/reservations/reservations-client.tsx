@@ -9,7 +9,7 @@ import { ReservationDialog } from "@/components/reservation-dialog";
 import { Button } from "@/components/ui/button";
 import { Pencil, X } from "lucide-react";
 import { Reservation, ServiceType } from "@/types";
-import { UserResponse } from "@/lib/api-client";
+import { CustomerResponse } from "@/lib/api-client";
 import { clientUpdateReservation } from "@/lib/client-api";
 import { toast } from "sonner";
 
@@ -17,7 +17,7 @@ interface ReservationsClientProps {
   businessId: string;
   initialReservations: Reservation[];
   serviceTypes: ServiceType[];
-  customers: UserResponse[];
+  customers: CustomerResponse[];
 }
 
 export default function ReservationsClient({
@@ -37,7 +37,7 @@ export default function ReservationsClient({
 
   // Build a lookup map for customers
   const customerMap = useMemo(() => {
-    const map = new Map<string, UserResponse>();
+    const map = new Map<string, CustomerResponse>();
     customers.forEach((c) => map.set(c.id, c));
     return map;
   }, [customers]);
@@ -57,8 +57,8 @@ export default function ReservationsClient({
         const customer = customerMap.get(reservation.customerId);
         const searchLower = searchQuery.toLowerCase();
         const matchesSearch =
-          customer?.name.toLowerCase().includes(searchLower) ||
-          customer?.email.toLowerCase().includes(searchLower) ||
+          customer?.name?.toLowerCase().includes(searchLower) ||
+          customer?.email?.toLowerCase().includes(searchLower) ||
           customer?.phone?.toLowerCase().includes(searchLower) ||
           reservation.phone.toLowerCase().includes(searchLower) ||
           reservation.email.toLowerCase().includes(searchLower);
