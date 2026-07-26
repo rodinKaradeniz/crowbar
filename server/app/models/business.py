@@ -53,6 +53,9 @@ class Business(Base, UUIDMixin, TimestampMixin):
     service_types: Mapped[list["ServiceType"]] = relationship(
         back_populates="business", lazy="selectin"
     )
+    booking_schedules: Mapped[list["BookingSchedule"]] = relationship(
+        back_populates="business", lazy="selectin", passive_deletes="all"
+    )
     reservations: Mapped[list["Reservation"]] = relationship(
         back_populates="business", lazy="selectin"
     )
@@ -66,6 +69,7 @@ class Business(Base, UUIDMixin, TimestampMixin):
 
 from app.models.queue_entry import QueueEntry  # noqa: E402
 from app.models.location import Location  # noqa: E402
+from app.models.booking_schedule import BookingSchedule  # noqa: E402
 from app.models.reservation import Reservation  # noqa: E402
 from app.models.service_type import ServiceType  # noqa: E402
 from app.models.staff import Staff  # noqa: E402

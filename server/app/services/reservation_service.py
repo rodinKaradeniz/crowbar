@@ -1,9 +1,11 @@
+from datetime import timedelta
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.business import Business
 from app.models.reservation import Reservation
 from app.models.service_type import ServiceType
 from app.schemas.reservation import (
@@ -49,6 +51,9 @@ async def create_reservation(
 ) -> Reservation:
     service_type = await _get_service_type(db, data.service_type_id)
     status = "pending" if service_type and service_type.is_pending_enabled else "confirmed"
+    duration_minutes = await _get_reservation_duration_minutes(
+        db, data.business_id, service_type
+    )
 
     customer = await upsert_customer(
         db, business_id=data.business_id, phone=data.phone, email=data.email
@@ -59,6 +64,7 @@ async def create_reservation(
         customer_id=customer.id,
         service_type_id=data.service_type_id,
         time=data.time,
+        ends_at=data.time + timedelta(minutes=duration_minutes),
         phone=data.phone,
         email=data.email,
         note=data.note,
@@ -81,6 +87,15 @@ async def update_reservation(
     update_data = data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(reservation, key, value)
+
+    if "time" in update_data or "service_type_id" in update_data:
+        service_type = await _get_service_type(db, reservation.service_type_id)
+        duration_minutes = await _get_reservation_duration_minutes(
+            db, reservation.business_id, service_type
+        )
+        reservation.ends_at = reservation.time + timedelta(
+            minutes=duration_minutes
+        )
 
     await db.flush()
     await db.refresh(reservation)
@@ -105,6 +120,25 @@ async def _get_service_type(
     return result.scalar_one_or_none()
 
 
+async def _get_reservation_duration_minutes(
+    db: AsyncSession,
+    business_id: UUID,
+    service_type: ServiceType | None,
+) -> int:
+    """Resolve today's legacy duration while the availability service is built.
+
+    Persisting the result on each reservation prevents future configuration
+    changes from rewriting the historical occupied interval.
+    """
+    if service_type is not None and service_type.duration is not None:
+        return max(service_type.duration, 1)
+
+    result = await db.execute(
+        select(Business.reservation_time).where(Business.id == business_id)
+    )
+    return max(result.scalar_one_or_none() or 60, 1)
+
+
 async def create_public_reservation(
     db: AsyncSession, data: PublicReservationCreate
 ) -> Reservation:
@@ -115,6 +149,9 @@ async def create_public_reservation(
     """
     service_type = await _get_service_type(db, data.service_type_id)
     status = "pending" if service_type and service_type.is_pending_enabled else "confirmed"
+    duration_minutes = await _get_reservation_duration_minutes(
+        db, data.business_id, service_type
+    )
 
     customer = await upsert_customer(
         db,
@@ -129,6 +166,7 @@ async def create_public_reservation(
         customer_id=customer.id,
         service_type_id=data.service_type_id,
         time=data.time,
+        ends_at=data.time + timedelta(minutes=duration_minutes),
         phone=data.phone,
         email=data.email,
         note=data.note,

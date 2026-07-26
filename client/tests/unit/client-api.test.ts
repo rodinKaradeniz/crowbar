@@ -59,6 +59,7 @@ describe("clientGetServiceTypesByBusiness", () => {
     expect(serviceTypes[0].name).toBe("VIP Table");
     expect(serviceTypes[0].businessId).toBe("biz-1");
     expect(serviceTypes[0].color).toBe("#ff0000");
+    expect(serviceTypes[0].maxConcurrentBookings).toBe(1);
   });
 
   it("does not leak snake_case keys into service type result", async () => {

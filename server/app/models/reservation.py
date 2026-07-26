@@ -1,7 +1,17 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -10,6 +20,26 @@ from app.models.base import Base, TimestampMixin, UUIDMixin
 
 class Reservation(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "reservations"
+    __table_args__ = (
+        CheckConstraint(
+            "ends_at > time", name="ck_reservations_positive_interval"
+        ),
+        CheckConstraint(
+            "(availability_override_reason IS NULL "
+            "AND availability_overridden_at IS NULL) "
+            "OR (availability_override_reason IS NOT NULL "
+            "AND availability_overridden_at IS NOT NULL)",
+            name="ck_reservations_override_audit",
+        ),
+        Index(
+            "idx_reservations_active_overlap",
+            "business_id",
+            "service_type_id",
+            "time",
+            "ends_at",
+            postgresql_where=text("status IN ('pending', 'confirmed')"),
+        ),
+    )
 
     business_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -27,6 +57,9 @@ class Reservation(Base, UUIDMixin, TimestampMixin):
         nullable=False,
     )
     time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ends_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
     phone: Mapped[str] = mapped_column(String(50), nullable=False)
     email: Mapped[str] = mapped_column(String(255), nullable=False)
     note: Mapped[str | None] = mapped_column(Text)
@@ -34,13 +67,28 @@ class Reservation(Base, UUIDMixin, TimestampMixin):
     guests: Mapped[int] = mapped_column(Integer, default=1)
     channel: Mapped[str | None] = mapped_column(String(16), nullable=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    sms_reminder_sent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="false")
+    sms_reminder_sent: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="false"
+    )
+    availability_override_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    availability_override_reason: Mapped[str | None] = mapped_column(Text)
+    availability_overridden_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
 
     business: Mapped["Business"] = relationship(back_populates="reservations")
     customer: Mapped["Customer"] = relationship()
     service_type: Mapped["ServiceType"] = relationship(back_populates="reservations")
+    availability_override_user: Mapped["User | None"] = relationship(
+        foreign_keys=[availability_override_by]
+    )
 
 
 from app.models.business import Business  # noqa: E402
 from app.models.customer import Customer  # noqa: E402
 from app.models.service_type import ServiceType  # noqa: E402
+from app.models.user import User  # noqa: E402

@@ -91,7 +91,7 @@ export interface ServiceType {
   name: string;
   description?: string;
   capacity: number;
-  maxConcurrentBookings?: number;
+  maxConcurrentBookings: number;
   isPendingEnabled: boolean;
   duration?: number;
   color: string;

@@ -2,12 +2,19 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.errors import api_error, forbidden, not_found
+from app.core.rate_limit import (
+    INVITE_ACCEPT_IP_LIMIT,
+    RateLimitCheck,
+    enforce_public_read_limit,
+    enforce_rate_limits,
+    get_client_ip,
+)
 from app.database import get_db
 from app.dependencies import get_current_business, get_current_user, require_roles
 from app.models.business import Business
@@ -154,7 +161,11 @@ async def send_invite(
     return StaffInviteResponse(message="Invitation sent")
 
 
-@router.get("/invite/{token}", response_model=InviteDetailsResponse)
+@router.get(
+    "/invite/{token}",
+    response_model=InviteDetailsResponse,
+    dependencies=[Depends(enforce_public_read_limit)],
+)
 async def get_invite(token: str, db: AsyncSession = Depends(get_db)):
     """Get invitation details by token. Public endpoint."""
     result = await db.execute(
@@ -186,8 +197,20 @@ async def get_invite(token: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/invite/{token}/accept", response_model=LoginResponse, status_code=status.HTTP_201_CREATED)
-async def accept_invite(token: str, data: AcceptInviteRequest, db: AsyncSession = Depends(get_db)):
+async def accept_invite(
+    token: str,
+    data: AcceptInviteRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
     """Accept an invitation and create a staff account. Public endpoint."""
+    await enforce_rate_limits(
+        RateLimitCheck(
+            policy=INVITE_ACCEPT_IP_LIMIT,
+            key_parts=(get_client_ip(request),),
+        ),
+    )
+
     result = await db.execute(
         select(StaffInvitation).where(StaffInvitation.token == token)
     )

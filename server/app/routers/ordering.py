@@ -1,13 +1,20 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect, status
 from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.events import DomainEvent, publish
+from app.core.rate_limit import (
+    PUBLIC_ORDER_IP_LIMIT,
+    RateLimitCheck,
+    enforce_public_read_limit,
+    enforce_rate_limits,
+    get_client_ip,
+)
 from app.database import get_db
 from app.dependencies import get_current_business, get_current_user, require_module
 from app.models.business import Business
@@ -63,7 +70,11 @@ async def _load_business_or_404(db: AsyncSession, business_id: UUID) -> Business
 
 # ─── Public: Menu ──────────────────────────────────────────────────────────────
 
-@router.get("/api/ordering/{business_id}/menu", response_model=MenuResponse | None)
+@router.get(
+    "/api/ordering/{business_id}/menu",
+    response_model=MenuResponse | None,
+    dependencies=[Depends(enforce_public_read_limit)],
+)
 async def get_public_menu(
     business_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -90,9 +101,17 @@ async def get_public_menu(
 async def place_order(
     business_id: UUID,
     body: OrderPlaceRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
     """Customer places an order. Idempotent via idempotency_key."""
+    await enforce_rate_limits(
+        RateLimitCheck(
+            policy=PUBLIC_ORDER_IP_LIMIT,
+            key_parts=("order_place", str(business_id), get_client_ip(request)),
+        ),
+    )
+
     b = await _load_business_or_404(db, business_id)
     if not getattr(b, "is_accepting_orders", True):
         raise HTTPException(
@@ -118,6 +137,7 @@ async def place_order(
 @router.get(
     "/api/ordering/{business_id}/orders/status",
     response_model=list[OrderResponse],
+    dependencies=[Depends(enforce_public_read_limit)],
 )
 async def get_order_status(
     business_id: UUID,

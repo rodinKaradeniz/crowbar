@@ -105,7 +105,7 @@ function toServiceType(st: ServiceTypeResponse): ServiceType {
     name: st.name,
     description: st.description || undefined,
     capacity: st.capacity,
-    maxConcurrentBookings: st.max_concurrent_bookings || undefined,
+    maxConcurrentBookings: st.max_concurrent_bookings,
     isPendingEnabled: st.is_pending_enabled ?? true,
     duration: st.duration || undefined,
     color: st.color,

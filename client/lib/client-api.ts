@@ -123,7 +123,7 @@ function toServiceType(st: Record<string, unknown>): ServiceType {
     name: st.name as string,
     description: (st.description as string) || undefined,
     capacity: st.capacity as number,
-    maxConcurrentBookings: (st.max_concurrent_bookings as number) || undefined,
+    maxConcurrentBookings: st.max_concurrent_bookings as number,
     isPendingEnabled: (st.is_pending_enabled as boolean) ?? true,
     duration: (st.duration as number) || undefined,
     color: st.color as string,

@@ -22,6 +22,7 @@ class ErrorCode:
     MODULE_DISABLED = "MODULE_DISABLED"
     # Input
     VALIDATION_ERROR = "VALIDATION_ERROR"
+    RATE_LIMITED = "RATE_LIMITED"
     # Generic
     INTERNAL_ERROR = "INTERNAL_ERROR"
     BAD_REQUEST = "BAD_REQUEST"
@@ -34,6 +35,7 @@ _STATUS_TO_CODE: dict[int, str] = {
     404: ErrorCode.NOT_FOUND,
     409: ErrorCode.CONFLICT,
     422: ErrorCode.VALIDATION_ERROR,
+    429: ErrorCode.RATE_LIMITED,
     500: ErrorCode.INTERNAL_ERROR,
 }
 
@@ -49,11 +51,13 @@ def api_error(
     code: str,
     message: str,
     details=None,
+    headers: dict[str, str] | None = None,
 ) -> HTTPException:
     """Build an HTTPException whose detail is already in our standard shape."""
     return HTTPException(
         status_code=status_code,
         detail={"code": code, "message": message, "details": details},
+        headers=headers,
     )
 
 
@@ -92,7 +96,11 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
             "message": str(detail) if detail else "An error occurred",
             "details": None,
         }
-    return JSONResponse(status_code=exc.status_code, content=body)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=body,
+        headers=exc.headers,
+    )
 
 
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:

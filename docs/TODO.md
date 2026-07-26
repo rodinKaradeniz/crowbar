@@ -7,9 +7,161 @@ them.
 Status labels:
 
 - **Ready:** sufficiently understood to plan.
+- **In progress:** an approved stage has landed partially and names its next
+  boundary explicitly.
 - **Needs decision:** product or architecture choice is unresolved.
 - **Blocked:** requires external state or authority.
 - **Deferred:** intentionally not current.
+
+## Active Product Sequence
+
+The current product priority is to complete Crowbar's operational loop before
+starting the broader planned improvements below. Work through these stages in
+order unless the user explicitly reprioritizes them. A 2026-07-25 review of
+operator-oriented product research reinforced this order and added the
+dependency-aware workflow, adoption, workforce, offline, and integration items
+below; it did not promote them ahead of the current availability stage.
+
+### 1. Authoritative availability and capacity — current
+
+- **In progress — local data foundation complete:** Migration 023 adds one
+  business booking schedule plus optional complete service-type overrides,
+  multiple/overnight weekly windows, date closures/custom hours, policy
+  settings, non-null positive concurrency, persisted reservation end times,
+  and override-audit fields. Existing operating hours seed initial defaults;
+  missing hours produce a closed schedule. ORM, Pydantic, seed, and focused
+  PostgreSQL tests are aligned. This migration is not deployed while the
+  Railway arc is shelved.
+- **Ready:** Build one server-authoritative availability contract for public
+  booking, staff booking, future bots, and later table assignment. Operating
+  hours remain public venue information; reservation availability uses a
+  separate schedule with business defaults and optional service-type overrides,
+  initialized from existing operating hours.
+- **Ready:** Enforce business timezone, multiple/overnight booking windows,
+  date exceptions, minimum notice, advance-booking window, slot interval,
+  maximum party size, service duration, and service concurrency on the backend.
+  Pending and confirmed reservations consume capacity; cancellation releases
+  it; rescheduling atomically moves it. Return only bookable slots and reject
+  stale or conflicting submissions safely.
+- **Ready:** Prevent race-condition overbooking with a
+  transaction/concurrency design that remains valid when floor-plan resources
+  are introduced. Reuse the same availability service for creation and
+  rescheduling rather than duplicating rules in routes or clients.
+- **Ready:** Guests use returned slots only. Owners and managers may make an
+  explicit, reason-recorded availability override; ordinary staff follow the
+  same rules as guests.
+- **Ready:** Reconcile the existing meanings of `businesses.max_guests`,
+  `reservation_time`, `time_slot_interval`, `advance_booking_days`,
+  `operating_hours`, `service_types.capacity`, `duration`, and
+  `max_concurrent_bookings`; several are stored or displayed but not currently
+  enforced.
+- **Needs decision:** Before the next implementation slice, confirm the
+  transaction/locking strategy and availability API wire contract. Storage,
+  migration behavior, and override-audit persistence are now concrete; the
+  endpoints, computation service, authorization, and UI do not exist yet.
+
+### 2. Floor plan and table management
+
+- **Needs decision:** Design floor-plan editing, table shapes/capacities,
+  combinable tables, areas, turn times, temporary closures, and the operational
+  states required during service.
+- **Ready after decision:** Assign reservations and queue parties to tables;
+  unify upcoming reservations, walk-ins, occupied tables, cleaning, and
+  availability in one service view.
+- **Needs decision:** Define host-managed table and meal/service stages without
+  making the floor plan depend on a future POS. Start with states Crowbar can
+  know directly, then allow orders or POS integrations to enrich stages such as
+  ordered, mains, dessert, check requested, and paid.
+- **Ready after decision:** Preserve one business-scoped guest journey from
+  queue or reservation through seating, table, tab, orders, and departure so
+  staff do not re-enter the same party at each module boundary.
+- **Ready after decision:** Replace free-form table identifiers with registered
+  business-scoped tables and safe QR revisions. Keep the model location-ready
+  without expanding the product to multi-location management in this stage.
+
+### 3. Rich guest CRM
+
+- **Needs decision:** Define the hospitality profile boundary: reservation,
+  queue, order, tab and spend history; notes; preferences; dietary restrictions
+  and allergies; seating preferences; birthdays; VIP/regular/no-show tags; and
+  marketing consent.
+- **Ready after decision:** Build one business-scoped guest timeline on the
+  existing phone-keyed customer identity path. Add merge/reconciliation,
+  correction, portable export, retention, deletion, and consent behavior before
+  using profiles for automation. Define Crowbar's controller/processor roles
+  rather than assuming them, and ensure venues have practical access to and
+  export of their guest data without a marketplace dependency.
+- **Ready after decision:** Add pre-shift guest context and useful segments
+  without exposing one venue's customer data to another. Surface actionable
+  context such as first visits, VIPs, allergies, prior no-shows, high-risk
+  reservations, and relevant preferences rather than only another analytics
+  chart.
+
+### 4. No-show and reservation protection
+
+- **Needs decision:** Define cancellation windows, no-show/late policies,
+  reconfirmation, grace periods, waitlist backfilling, and which experiences
+  require stronger protection.
+- **Ready after decision:** Add automated confirmations and reminders,
+  cancellation/no-show history, staff intervention queues, and released-slot
+  offers to eligible waitlisted guests.
+- **Ready after decision:** Add secure, one-click guest cancellation and
+  rescheduling without requiring an account. A successful change must
+  atomically release the old capacity, claim any new capacity, and trigger the
+  same waitlist-backfill rules as a staff action. Design expiry, replay,
+  impersonation, and notification behavior for the guest-management token.
+- **Deferred within this stage:** Monetary deposits and card holds depend on
+  the confirmed POS/payment integration stage; design the policy now without
+  introducing a second payment architecture.
+
+### 5. Purchasing and cost control
+
+- **Needs decision:** Define suppliers, purchase orders, receiving, invoice
+  capture, price history, units/conversions, transfers, cycle counts, and the
+  accounting boundary.
+- **Ready after decision:** Add recipe cost, menu margin, actual-versus-
+  theoretical consumption, controllable COGS, waste/variance analysis, and
+  explainable reorder suggestions.
+- **Needs decision:** Add bar-native counting workflows on top of canonical ml:
+  open-container/tenthing entry, category-level pour cost, keg level and
+  shrinkage signals, fast cycle counts, and an offline-capable cellar/walk-in
+  count flow. Preserve the movement ledger as authority and treat visual
+  fractions as input conveniences, not a second unit system.
+- **Needs decision:** Define accounting exports, initially evaluating
+  QuickBooks and Xero, without turning Crowbar into a general ledger. Keep
+  purchase, inventory, waste, and future settlement identifiers reconcilable.
+- **Ready after decision:** Merge the existing ML V2 candidates for waste/loss,
+  reorder suggestions, richer forecasting, preparation hints, and margin-change
+  alerts into this operational workflow rather than building isolated
+  dashboards.
+
+### 6. POS and payment integrations
+
+- **Needs decision:** Choose initial POS and payment providers based on target
+  customers and geography. Prefer integrating with established POS/payment
+  systems before attempting to build terminal hardware, acquiring, payroll, or
+  a full general-purpose POS.
+- **Ready after decision:** Define authoritative ownership and reconciliation
+  for menus, sales, taxes, tips, tenders, refunds, tabs, deposits/card holds,
+  offline events, webhook retries, and provider outages.
+- **Ready after decision:** Provide a transparent settlement-to-bank breakdown
+  and preserve provider portability. Integration credentials, processor choice,
+  and a venue's historical operational data must not create avoidable payment-
+  processor lock-in.
+- **Ready after decision:** Make item availability a single authoritative
+  action: an "86" in Crowbar must stop sale across Crowbar menus and every
+  connected channel, with per-channel delivery status and reconciliation when
+  an integration is unavailable.
+- **Needs decision:** Reconcile delivery-marketplace orders, commissions,
+  promotions, refunds, and payouts after the core POS contract is proven;
+  importing an order without its fees would produce misleading margin data.
+- **Ready after decision:** Connect imported sales and settlement data to guest
+  history, inventory consumption, margin reporting, and operational insights.
+
+All other product plans remain active below, but their implementation begins
+after this sequence unless explicitly pulled forward. Cross-cutting discovery,
+especially the initial customer profile, may run earlier when it materially
+changes a stage's design.
 
 ## Documentation Transition
 
@@ -27,9 +179,32 @@ Status labels:
 
 ## Product and UX
 
+- **Needs decision:** Confirm Crowbar's initial ideal customer profile and
+  product wedge before later stages diverge: cocktail/bar-led venues,
+  full-service restaurants, or small multi-venue groups have materially
+  different floor, inventory, labor, and integration priorities. Define the
+  operational outcome and time-to-value that makes the first segment adopt.
+- **Needs decision:** Design a cross-module shift command center after its
+  source workflows are authoritative. Combine today's reservations, queue,
+  table state, open tabs, stock risks, no-show risk, demand, and material alerts
+  into one prioritized service view rather than copying every dashboard.
+- **Ready after source stages:** Add configurable pre-service and handover
+  checklists populated by large parties, guest needs, expected covers,
+  preparation risks, staffing gaps, and below-par items. Alerts should explain
+  the action and deep-link to its owner workflow.
+- **Ready:** Optimize onboarding for early value through guided setup,
+  opinionated venue templates, safe CSV/import tools, progress recovery, and a
+  measurable path to first bookable service or first live menu. Do not require
+  a venue to model its entire operation before receiving value.
+- **Needs decision:** Add lightweight loyalty and consented retention
+  automation only after the CRM contract exists: birthday/regular recognition,
+  post-visit thanks, rebook nudges, and simple rewards. Measure incremental
+  return visits and opt-outs rather than message volume.
 - **Ready:** Connect `ContactDialog` and `FooterContactForm` to a real,
-  abuse-protected delivery path. Both currently log locally and show a false
-  success state without sending anything.
+  abuse-protected delivery and support-triage path. Include acknowledgement,
+  routing, diagnostic context with consent, status/ownership, and realistic
+  response expectations. Both currently log locally and show a false success
+  state without sending anything.
 - **Needs decision:** Review and approve the landing FAQ and pricing copy before
   treating it as published product messaging.
 
@@ -66,29 +241,35 @@ Status labels:
 - **Needs decision:** Choose branch protection and required checks, including
   whether expensive end-to-end or performance suites run per pull request,
   nightly, or before release.
-- **Needs decision:** Add a simple CD pipeline after choosing the deployment
-  target. Include staging, environment-specific configuration, migration
-  ordering, health checks, smoke tests, rollback, and a manual production gate
-  until releases are proven routine.
+- **Deferred:** Add a simple CD pipeline when the deployment arc resumes.
+  Include staging, environment-specific configuration, migration ordering,
+  health checks, smoke tests, rollback, and a manual production gate until
+  releases are proven routine.
 - **Ready:** Make releases traceable to a commit and preserve deploy, migration,
   worker, and model versions in operational metadata.
 
 ## Deployment
 
-- **Ready:** Implement the confirmed single-project Railway topology in EU
-  West: public Next.js and FastAPI; private PostgreSQL, Redis, ML, scheduled
-  work, and object storage. Replace the superseded Vercel + EC2 proposal in
-  `docs/deployment.md` with the verified Railway runbook as deployment proceeds.
-- **Ready:** Deploy and verify the checked-in production process topology for
-  FastAPI, its Redis stream consumer, the hourly reminder cron, and ML.
-- **Ready:** Add backup/restore testing, migration rollout and rollback
-  procedures, secret management, HTTPS, restricted service networking, durable
-  upload storage, health checks, and deployment observability.
+- **Deferred — Railway rollout:** Deployment is intentionally shelved while the
+  user observes Railway and product development continues. In project
+  `crowbar`, private PostgreSQL, private Redis, and the public FastAPI service
+  are online in EU West. API health, database connectivity, migrations 001–022,
+  and the Redis stream consumer were verified. Do not resume external changes
+  without an explicit user request.
+- **Deferred — resume point:** Deploy and enable the local FastAPI rate-limit
+  change; then add public Next.js plus private ML, scheduled reminders, and
+  durable object storage. Reconcile reference variables, secrets, the web
+  domain, CORS, private ML connectivity, and end-to-end smoke tests as each
+  service is added.
+- **Deferred — production hardening:** Add backup/restore testing, migration
+  rollout and rollback procedures, secret management, restricted service
+  networking, durable uploads, health checks, monitoring, and release
+  automation when the deployment arc resumes.
 - **Ready:** Repair or remove the documented `python -m db.migrate reset`
   workflow. Its drop list predates many current tables, so it is destructive
   without being a reliable full reset.
-- **Needs decision:** Design multi-replica WebSocket fan-out. Current connection
-  managers live in one FastAPI process.
+- **Deferred:** Design multi-replica WebSocket fan-out before scaling the API
+  beyond one replica. Current connection managers live in one FastAPI process.
 
 ## Security and Reliability
 
@@ -96,8 +277,11 @@ Status labels:
   intentional per-business or deployment allowlist.
 - **Ready:** Persist tenant-scoped ML result summaries so an ML service restart
   does not empty the Insights dashboard until the next pipeline run.
-- **Ready:** Add rate limiting and abuse controls to public reservation, queue,
-  ordering, auth, and docs-assistant endpoints.
+- **Ready:** Complete abuse controls for the Next.js docs assistant and
+  evaluate whether an edge/WAF layer is warranted. FastAPI now has local,
+  Redis-backed rolling-window limits for auth, public reservation, queue,
+  ordering, and related public reads. Deploying them and verifying Railway
+  proxy/IP behavior remain part of the shelved deployment arc.
 - **Ready:** Decide whether Redis event delivery needs a transactional outbox,
   dead-letter handling, replay tools, and metrics. Publishing is currently
   best-effort.
@@ -122,22 +306,39 @@ Status labels:
   lineage, tenant transparency or opt-in, and fairness evaluation before using
   any shared training dataset. Pseudonymized or hashed identifiers alone do
   not make personal data anonymous.
-- **Needs decision:** Replace hard-coded `kitchen | bar | any` routing tags with
-  configurable stations.
+- **Needs decision:** After the operational loop, replace hard-coded
+  `kitchen | bar | any` routing tags with configurable stations.
 - **Needs decision:** Implement granular permission-based RBAC and a full audit
   system. Current owner/manager/staff roles are coarse, and the order timeline
   is not a platform audit log.
 - **Needs decision:** Design active context for dual-role or multi-business
   accounts before changing the one-business tenancy assumption.
-- **Deferred:** Multi-location management and location filtering UI.
+- **Deferred:** Multi-location management and location filtering UI. The
+  floor-plan stage stays location-ready but does not pull this scope forward.
 - **Ready:** Replace the sidebar queue-count poll with shared real-time state
   when the queue socket is lifted into a common provider.
 - **Needs decision:** Add real-time tab updates; tab detail is currently
   refresh-driven.
-- **Deferred:** Public servings/pours display, stronger ID verification, and
-  table registration for tabs.
+- **Deferred:** Public servings/pours display and stronger ID verification.
+  Registered tables move into operational-loop stage 2.
 - **Deferred:** Reviews and billing/subscription processing. Stripe packages
   remain installed, but current payment columns and product flows were removed.
+  Customer payments belong to operational-loop stage 6; Crowbar subscription
+  billing remains a separate product/business decision.
+
+## Workforce Operations
+
+- **Needs decision:** After the operational loop, evaluate a focused workforce
+  module: staff availability, scheduling, time clock, shift swaps, call-out
+  coverage, role/station requirements, and forecasted labor needs. Confirm the
+  target venue's existing scheduling stack before replacing it.
+- **Needs decision:** Combine worked hours with POS sales, covers, waste, comps,
+  and purchasing data for a simple shift contribution view. Keep it an
+  operational explanation of "did this shift make money?", not uncertified
+  accounting or payroll.
+- **Ready after decision:** Export approved hours, roles, tips, and adjustments
+  to payroll providers instead of building payroll, tax filing, or employee
+  benefits into Crowbar.
 
 ## Client Applications
 
@@ -155,6 +356,15 @@ Status labels:
 - **Needs decision:** Define a shared API, authentication, entitlement,
   observability, release, and design-system strategy across web, mobile, and
   desktop without forcing every client into identical interaction patterns.
+- **Needs decision:** Define an offline survival contract for live service:
+  which queue, table, order, and inventory views remain readable; which writes
+  may queue locally; how staff see stale state; and how conflicts reconcile
+  after connectivity returns. Do not promise generic "offline mode" without
+  per-operation safety rules.
+- **Ready:** Treat mobile-first staff operation as a measurable workflow
+  requirement now, independent of whether a native app is chosen later. Audit
+  host, bartender, server, inventory-count, and manager tasks for taps, latency,
+  one-handed use, interruption recovery, and accessibility during service.
 
 ## Conversational AI
 
@@ -183,9 +393,10 @@ Status labels:
 
 ## Data and ML
 
-- **Needs decision:** Define ML V2 outcomes before adding models. Existing
-  candidates include waste/loss analysis, reorder suggestions, and richer
-  operational forecasting.
+- **Needs decision:** Define ML V2 outcomes before adding models. Waste/loss
+  analysis, reorder suggestions, and richer operational forecasting move into
+  operational-loop stage 5 so they are attached to purchasing and cost-control
+  actions rather than isolated predictions.
 - **Ready:** Establish reproducible training/evaluation artifacts and tests;
   current latest results are process-memory state backed by durable prediction
   tables.

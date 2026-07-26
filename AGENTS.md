@@ -21,7 +21,8 @@ For focused work, also read:
 
 - Database or migrations: `server/DATABASE.md`
 - ML service or insight models: `ml/CONTEXT.md`
-- Deployment: `docs/deployment.md` (a plan, not deployed infrastructure)
+- Deployment: `docs/deployment.md` (verified runbook and partial rollout state;
+  deployment remains an explicit user-authorized activity)
 - Product UI or visual language: `docs/DESIGN.md`
 - Project-specific agent skills: `docs/SKILLS.md`
 
@@ -61,6 +62,51 @@ Crowbar is a multi-tenant operations platform for bars and restaurants:
 
 Default local ports are frontend `3000`, backend `8000`, ML `8001`,
 PostgreSQL `5432`, and Redis `6379`.
+
+## Current Checkpoint
+
+The current product priority is the operational loop, in this confirmed order:
+
+1. Authoritative reservation availability and capacity.
+2. Floor plan and table management.
+3. Rich guest CRM.
+4. No-show and reservation protection.
+5. Purchasing and cost control.
+6. POS and payment integrations.
+
+Start with discovery and product-rule confirmation for the current stage; do
+not silently pull a later stage forward. `docs/TODO.md` owns the detailed
+acceptance boundary and the remaining planned improvements after this arc.
+
+Availability stage checkpoint as of 2026-07-26:
+
+- Local migration 023 and matching ORM/Pydantic contracts establish business
+  default and service-override booking schedules, weekly/date windows,
+  persisted reservation intervals, positive concurrency, and override audit
+  fields. The fresh migration-plus-seed chain and all backend tests pass.
+- Reservation creation currently derives and stores `ends_at`, but the shared
+  availability computation, concurrency lock, API endpoints, override
+  authorization, and booking UI are not implemented. Existing routes still
+  accept arbitrary timestamps, so do not treat availability as enforced.
+- Migration 023 is local only. Railway remains at migrations 001–022 because
+  deployment is shelved.
+
+Railway rollout is intentionally shelved as of 2026-07-25:
+
+- Project `crowbar` is in workspace `Rodin Karadeniz's Projects`.
+- Three services are online in EU West: private `Postgres`, private `Redis`,
+  and public `api`.
+- The API domain is
+  `https://api-production-e3f8a.up.railway.app`; health, database connectivity,
+  migrations 001–022, and the Redis stream consumer were verified.
+- `web`, `ml`, reminders, and durable object storage are not deployed. A web
+  service was not partially created when the trial provisioning limit was hit.
+- Redis-backed FastAPI rate limiting is implemented and verified locally, but
+  that local change is not deployed or enabled on Railway.
+
+Do not resume Railway provisioning, configuration, or deployment until the
+user explicitly reopens that arc. See `docs/deployment.md` for the exact
+handoff state.
 
 ## Commands
 

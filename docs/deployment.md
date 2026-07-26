@@ -1,6 +1,6 @@
 # Railway Deployment Runbook
 
-Last verified against the repository and Railway documentation on 2026-07-24.
+Last verified against the repository and Railway rollout on 2026-07-25.
 
 ## Confirmed Topology
 
@@ -76,8 +76,8 @@ At minimum:
 - `web`: `API_INTERNAL_URL`, `NEXT_PUBLIC_API_URL`, `OPENAI_API_KEY` when the
   docs assistant is enabled, and any optional OpenAI model overrides.
 - `api`: `DATABASE_URL`, `REDIS_URL`, `SECRET_KEY`, `ENVIRONMENT=production`,
-  `FRONTEND_URL`, `CORS_ORIGINS`, `ML_SERVICE_URL`, `ML_INTERNAL_TOKEN`, and
-  configured email/SMS provider credentials.
+  `RATE_LIMIT_ENABLED=true`, `FRONTEND_URL`, `CORS_ORIGINS`, `ML_SERVICE_URL`,
+  `ML_INTERNAL_TOKEN`, and configured email/SMS provider credentials.
 - `ml`: set both `DATABASE_URL` and `DATABASE_URL_SYNC` to the Postgres
   `DATABASE_URL` reference; Crowbar selects the appropriate driver.
   Also set `ENVIRONMENT=production`, `ML_INTERNAL_TOKEN`, and logging
@@ -97,15 +97,23 @@ confirmed. Object storage remains the preferred long-term shape.
 
 ## Rollout State
 
+**Status:** Intentionally shelved on 2026-07-25 while product development
+continues and the user observes Railway. Do not resume external deployment
+changes without a new explicit instruction.
+
 - Complete: Railway project created.
 - Complete: public/private trust boundaries and tenant-scoped ML gateway.
 - Complete: production build and backend regression verification.
 - Complete: service build/start/health/migration/cron definitions checked in.
-- Pending: managed PostgreSQL and Redis services.
-- Pending: GitHub-backed `api`, `ml`, `reminders`, and `web` services.
-- Pending: reference variables and secrets.
-- Pending: initial migrations, domains, CORS, private connectivity, and smoke
-  tests.
+- Complete: managed PostgreSQL and Redis services online in EU West.
+- Complete: public FastAPI service online in EU West with its database and
+  Redis references, current migrations, stream consumer, public domain, and
+  health check verified.
+- Pending: deploy the local rate-limit change to FastAPI, set
+  `RATE_LIMIT_ENABLED=true`, and verify 429/proxy behavior in Railway.
+- Pending: GitHub-backed `ml`, `reminders`, and `web` services.
+- Pending: their reference variables and secrets, the web domain and CORS,
+  private ML connectivity, and end-to-end smoke tests.
 - Pending: durable uploads, backups, monitoring, and release automation.
 
 Deployment actions remain explicit user-confirmed steps. A TODO entry or this

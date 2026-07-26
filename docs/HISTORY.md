@@ -27,6 +27,11 @@ changes.
 - **2026-07-24:** The legacy `CLAUDE.md` phase archive was retired after its
   current design, architecture, migration-recovery, and open-work contracts
   were moved into agent-neutral documentation.
+- **2026-07-25:** Operator-oriented product research was reconciled into the
+  roadmap. It reinforced the operational-loop order and added dependency-aware
+  work for shift operations, self-service booking changes, bar-native counts,
+  workforce economics, offline survival, retention, and provider-neutral
+  integrations without promoting those ideas ahead of availability.
 
 ## Durable Decisions
 
@@ -214,6 +219,121 @@ for those requirements rather than putting scheduling back into the API.
 
 **References:** `server/app/jobs/reservation_reminders.py`,
 `server/railway.reminders.json`
+
+## 2026-07-25 — Public API abuse controls use Redis rolling windows
+
+**Context:** Authentication and unauthenticated guest endpoints had no
+application-level request ceilings. Crowbar needs useful protection without
+penalizing many guests behind venue Wi-Fi or turning a Redis incident into an
+ordering and reservation outage.
+
+**Decision:** FastAPI applies Redis-backed rolling-window policies to login,
+registration, invite acceptance, public reservations, queue mutations, public
+orders, and related public reads when `RATE_LIMIT_ENABLED=true`. Limits combine
+generous per-IP ceilings with tighter identity or business-scoped keys where
+appropriate. Every key component is HMACed before Redis storage, Redis supplies
+the shared clock, Railway's `X-Real-IP` is trusted only in production, and
+blocked requests use the standard `RATE_LIMITED` response plus `Retry-After`.
+The limiter logs and fails open when Redis is unavailable.
+
+**Consequences:** Every API replica shares the same counters without storing
+raw email addresses, phone numbers, IPs, or session tokens in rate-limit keys.
+Redis protects but does not become a hard dependency for guest transactions.
+The Next.js docs assistant remains a separate abuse-control task because its
+requests do not pass through FastAPI.
+
+**References:** `server/app/core/rate_limit.py`,
+`server/tests/integration/test_rate_limit_redis.py`,
+`server/tests/integration/test_rate_limit_routes.py`
+
+## 2026-07-25 — Product work follows the operational loop
+
+**Context:** Crowbar has working reservation, queue, ordering, inventory, tabs,
+customer, and insight foundations, but key operational concepts are not yet a
+single coherent loop. In particular, reservation settings are stored without a
+server-authoritative availability engine, and later table, CRM, cost, and
+payment work could otherwise create competing concepts.
+
+**Decision:** Product development proceeds in this order: authoritative
+availability and capacity; floor plan and tables; rich guest CRM; no-show and
+reservation protection; purchasing and cost control; then POS and payment
+integrations. Existing roadmap items are merged into the applicable stage, and
+later planned improvements remain after this sequence unless explicitly
+reprioritized.
+
+**Consequences:** Availability is designed for later resource/table assignment,
+guest identity remains business-scoped and phone-keyed, purchasing/ML work
+shares one cost model, and POS/payment work starts with integrations rather
+than silently expanding into terminal hardware or a complete POS.
+
+**References:** `docs/TODO.md`, `server/app/models/business.py`,
+`server/app/models/service_type.py`, `server/app/services/reservation_service.py`
+
+## 2026-07-25 — Railway rollout is intentionally shelved
+
+**Context:** PostgreSQL, Redis, and FastAPI are online in Railway EU West, while
+the web, ML, reminders, storage, and the local rate-limit deployment remain.
+The user wants time to observe Railway and prioritize product functionality.
+
+**Decision:** Preserve the verified three-service Railway state and stop the
+rollout until the user explicitly resumes it.
+
+**Consequences:** Agents may inspect or document the deployment but must not
+provision, configure, deploy, or delete Railway resources as part of unrelated
+work. The precise resume point remains in `docs/deployment.md` and
+`docs/TODO.md`.
+
+**References:** `AGENTS.md`, `docs/deployment.md`, `docs/TODO.md`
+
+## 2026-07-25 — Bookable time is separate from operating hours
+
+**Context:** Public operating hours do not fully describe when a venue accepts
+reservations. A venue may remain open after its last seating, use split or
+overnight booking windows, offer different availability for a booking type, or
+close bookings for a particular date without changing its published hours.
+
+**Decision:** Keep operating hours as public venue information and introduce a
+separate server-authoritative booking schedule. The schedule has business
+defaults, optional service-type overrides, multiple and overnight windows,
+date-specific exceptions, and minimum-notice rules. Initial schedules are
+derived from existing operating hours to avoid empty availability after the
+cutover.
+
+**Consequences:** Public, staff, future bot, and later table-allocation flows
+must use the availability service rather than infer slots from operating hours.
+Changing published hours does not silently rewrite an intentionally customized
+booking schedule; the product must offer an explicit copy/synchronize action if
+that behavior is desired.
+
+**References:** `docs/TODO.md`, `server/app/models/business.py`,
+`server/app/models/service_type.py`
+
+## 2026-07-26 — Availability foundation persists schedules and occupied intervals
+
+**Context:** The confirmed availability contract needed a forward-compatible
+database shape before slot computation, conflict locking, endpoints, or UI
+could share one source of truth. Existing businesses only had public operating
+hours, nullable service concurrency, and reservation start timestamps.
+
+**Decision:** Migration 023 adds one default booking schedule per business and
+optional complete service-type overrides, with multiple/overnight weekly
+windows and date-specific closures or custom hours. Existing valid operating
+hours seed the default; no configured hours means no availability. Legacy NULL
+`max_concurrent_bookings` values become `1`. Reservations persist `ends_at`
+plus optional override actor, reason, and timestamp; current writes derive the
+end from service duration or the business fallback until the availability
+service owns that decision.
+
+**Consequences:** Later availability consumers must use the schedule tables and
+stored reservation intervals rather than reinterpret operating hours or
+current duration settings. Service-specific schedules cannot cross tenants at
+the database layer. Migration 023 remains local while deployment is shelved,
+and the current API still needs slot calculation, transaction locking,
+conflict responses, override authorization, and UI integration.
+
+**References:** `server/db/migrations/023_booking_availability_foundation.sql`,
+`server/app/models/booking_schedule.py`, `server/app/models/reservation.py`,
+`docs/TODO.md`
 
 ## Entry Template
 

@@ -1,13 +1,21 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect, status
 from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.events import DomainEvent, publish
+from app.core.rate_limit import (
+    PUBLIC_IDENTITY_WRITE_LIMIT,
+    PUBLIC_WRITE_IP_LIMIT,
+    RateLimitCheck,
+    enforce_public_read_limit,
+    enforce_rate_limits,
+    get_client_ip,
+)
 from app.database import get_db
 from app.dependencies import get_current_user, get_current_business, require_module
 from app.models.business import Business
@@ -49,8 +57,29 @@ async def _load_business_or_404(db: AsyncSession, business_id: UUID) -> Business
 async def join_queue(
     business_id: UUID,
     body: QueueJoinRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
+    client_ip = get_client_ip(request)
+    checks = [
+        RateLimitCheck(
+            policy=PUBLIC_WRITE_IP_LIMIT,
+            key_parts=("queue_join", str(business_id), client_ip),
+        ),
+    ]
+    if body.phone:
+        checks.append(
+            RateLimitCheck(
+                policy=PUBLIC_IDENTITY_WRITE_LIMIT,
+                key_parts=(
+                    "queue_join",
+                    str(business_id),
+                    body.phone.strip(),
+                ),
+            )
+        )
+    await enforce_rate_limits(*checks)
+
     # Verify business exists
     await _load_business_or_404(db, business_id)
 
@@ -89,10 +118,26 @@ async def join_queue(
 @router.post("/api/queue/{business_id}/leave", status_code=status.HTTP_204_NO_CONTENT)
 async def leave_queue(
     business_id: UUID,
+    request: Request,
     session_token: str = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
     """Customer-initiated removal from the queue using their session token."""
+    await enforce_rate_limits(
+        RateLimitCheck(
+            policy=PUBLIC_WRITE_IP_LIMIT,
+            key_parts=(
+                "queue_leave",
+                str(business_id),
+                get_client_ip(request),
+            ),
+        ),
+        RateLimitCheck(
+            policy=PUBLIC_IDENTITY_WRITE_LIMIT,
+            key_parts=("queue_leave", str(business_id), session_token),
+        ),
+    )
+
     entry = await queue_service.remove_by_token(db, business_id, session_token)
     if entry is None:
         # Entry not found or already inactive — treat as success (idempotent)
@@ -118,7 +163,11 @@ async def leave_queue(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/api/queue/{business_id}/status", response_model=QueueStatusResponse)
+@router.get(
+    "/api/queue/{business_id}/status",
+    response_model=QueueStatusResponse,
+    dependencies=[Depends(enforce_public_read_limit)],
+)
 async def get_queue_status(
     business_id: UUID,
     session_token: str = Query(...),

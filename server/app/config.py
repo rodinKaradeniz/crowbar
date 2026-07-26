@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str = "redis://localhost:6379/0"
 
+    # Application-level abuse controls
+    rate_limit_enabled: bool = False
+
     # Private ML service
     ml_service_url: str = "http://localhost:8001"
     ml_internal_token: str | None = None

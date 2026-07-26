@@ -1,6 +1,6 @@
 # Crowbar Architecture
 
-Last verified against the repository on 2026-07-24.
+Last verified against the repository on 2026-07-26.
 
 ## Product Boundary
 
@@ -30,7 +30,7 @@ FastAPI :8000 --------------------------------------+--> PostgreSQL :5432
   |                                                 ^
   +--> private, tenant-scoped ML gateway ----------+--> ML FastAPI :8001
   |                                                 |      |
-  +--> Redis :6379 (domain-event stream)            |      +--> PostgreSQL
+  +--> Redis :6379 (events + rate limits)            |      +--> PostgreSQL
           |                                         |
           +--> in-process stream consumer --> WS managers
                                                     |
@@ -84,8 +84,8 @@ components and FastAPI dependencies perform the authoritative auth checks.
 - `app/schemas/`: Pydantic wire contracts based on `AppBaseModel`.
 - `app/dependencies.py`: JWT authentication, current-business resolution, role
   checks, and module entitlements.
-- `app/core/`: Redis client, domain events, stream consumer, WebSocket
-  projections, and structured API errors.
+- `app/core/`: Redis client, application rate limiting, domain events, stream
+  consumer, WebSocket projections, and structured API errors.
 - `app/jobs/reservation_reminders.py`: one-shot, platform-wide reservation
   reminder batch.
 - `db/migrations/`: ordered, append-only SQL migrations.
@@ -150,6 +150,16 @@ Public write endpoints therefore rely on server-side validation, explicit
 business scoping, idempotency/session tokens where implemented, and business
 configuration such as ordering availability.
 
+FastAPI applies Redis-backed rolling-window limits to authentication, public
+reservation, queue, ordering, and related public-read routes when
+`RATE_LIMIT_ENABLED=true`. Keys HMAC client IPs, identity values, business IDs,
+paths, and opaque session tokens before storing them in Redis.
+Production trusts Railway's `X-Real-IP`; non-production uses the direct peer
+address. A blocked request uses the standard `RATE_LIMITED` error body and
+`Retry-After`. Redis failure is logged and fails open so a protection-layer
+incident does not take reservations or ordering offline. The Next.js docs
+assistant has no equivalent control yet.
+
 ### Real-time queue and orders
 
 1. Authenticated browser code requests a short-lived WebSocket token from
@@ -177,6 +187,33 @@ each UTC hour. The short-lived process selects confirmed reservations 23–25
 hours ahead with `sms_reminder_sent=false`, checks the business SMS channel,
 sends through Twilio, marks successful deliveries, closes its database engine,
 and exits. There is no Celery worker or in-process scheduler.
+
+### Reservation availability foundation
+
+Migration 023 and the matching ORM models establish a separate booking domain:
+
+- `booking_schedules` stores one business default plus an optional complete
+  override for each service type. Its policy includes minimum notice, advance
+  horizon, slot interval, and default duration.
+- `booking_schedule_windows` stores multiple Monday=`0` weekly windows and
+  represents overnight windows explicitly.
+- `booking_schedule_exceptions` and their child windows replace the schedule
+  for one business-local calendar date or close that date completely.
+- A schedule with no windows is closed. Missing configuration never implies
+  24/7 availability.
+- `reservations.ends_at` persists the interval accepted at booking time;
+  pending and confirmed rows have a partial overlap-query index. Optional
+  override actor, reason, and timestamp columns preserve the audit foundation.
+- `service_types.max_concurrent_bookings` is now positive and non-null. Legacy
+  NULL values migrate to `1`, not unlimited capacity.
+
+The current reservation service derives `ends_at` from service duration, then
+the business reservation duration fallback, so the new database invariant does
+not break existing writes. The shared slot computation, transactional conflict
+protection, availability/read endpoints, override authorization, and booking UI
+are the next slice. Until those land, existing reservation endpoints still
+accept caller-selected timestamps and must not be described as enforcing the
+new schedule.
 
 ### Inventory and order fulfillment
 
@@ -210,6 +247,10 @@ Backend integration tests do not run migrations. Their autouse fixture creates
 and drops ORM metadata in a dedicated `crowbar_test` PostgreSQL database. This
 means both migrations and ORM metadata require deliberate validation.
 
+Migration 023 is implemented and validated locally against a disposable fresh
+database plus the canonical seed. Railway remains at migrations 001–022 while
+deployment is shelved.
+
 Migrations 005 and 006 were renamed early in the project. A database restored
 from an old backup may still contain their former names in `_migrations`; use
 the compatibility procedure in `server/DATABASE.md` before running the current
@@ -218,7 +259,8 @@ migration chain.
 ## Optional and External Services
 
 - PostgreSQL 16: authoritative product and ML data.
-- Redis 7: domain-event stream for WebSocket projections.
+- Redis 7: domain-event stream for WebSocket projections and application
+  rolling-window rate limits.
 - Resend: email; configuration is optional and services degrade gracefully.
 - Twilio: SMS; optional and failure-tolerant.
 - OpenAI: optional staff docs assistant in a Next.js server route. It embeds the
@@ -229,9 +271,12 @@ migration chain.
 
 ## Delivery State
 
-Railway is the confirmed deployment target, but the services are not deployed
-yet. Service build, start, healthcheck, migration, and cron definitions are
-checked in; `docs/deployment.md` tracks the rollout. Production readiness work
-must still account for HTTPS, secret management, CORS, storage, private
-database/Redis/ML networking, backups, observability, and multi-replica
-WebSocket behavior.
+Railway is the confirmed deployment target. Managed PostgreSQL, Redis, and the
+public FastAPI service are online in EU West; the API health check and current
+migration chain have been verified. Next.js, ML, reminders, and durable uploads
+are not deployed yet, and the local rate-limit implementation is not active in
+Railway until its code is deployed with `RATE_LIMIT_ENABLED=true`.
+The rollout is intentionally shelved while product development continues;
+`docs/deployment.md` records the resume point. Production readiness work must
+still account for the web origin and CORS, secret management, storage, private
+ML networking, backups, observability, and multi-replica WebSocket behavior.

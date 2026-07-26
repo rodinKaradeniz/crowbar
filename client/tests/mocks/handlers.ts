@@ -89,7 +89,7 @@ export const handlers = [
         name: "VIP Table",
         description: "Premium seating",
         capacity: 8,
-        max_concurrent_bookings: null,
+        max_concurrent_bookings: 1,
         is_pending_enabled: true,
         duration: 120,
         color: "#ff0000",

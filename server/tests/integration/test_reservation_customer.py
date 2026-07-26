@@ -11,7 +11,7 @@ Verifies the post-cutover invariants:
   - The Customer row picks up name/email if the public-form path supplies them.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 import pytest_asyncio
@@ -64,6 +64,7 @@ async def test_create_public_reservation_creates_customer(
 
     assert r.customer_id is not None
     assert r.channel == "web"
+    assert r.ends_at == r.time + timedelta(minutes=60)
 
     customer = (
         await db_session.execute(select(Customer).where(Customer.id == r.customer_id))

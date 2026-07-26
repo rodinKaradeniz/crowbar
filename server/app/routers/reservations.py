@@ -1,9 +1,16 @@
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import forbidden, not_found
+from app.core.rate_limit import (
+    PUBLIC_IDENTITY_WRITE_LIMIT,
+    PUBLIC_WRITE_IP_LIMIT,
+    RateLimitCheck,
+    enforce_rate_limits,
+    get_client_ip,
+)
 from app.database import get_db
 from app.dependencies import get_current_business, get_current_user
 from app.models.business import Business
@@ -88,10 +95,23 @@ async def get_reservation(
 @router.post("/public", response_model=ReservationResponse, status_code=status.HTTP_201_CREATED)
 async def create_public_reservation(
     data: PublicReservationCreate,
+    request: Request,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
     """Create a reservation from the public booking form (no auth required)."""
+    client_ip = get_client_ip(request)
+    await enforce_rate_limits(
+        RateLimitCheck(
+            policy=PUBLIC_WRITE_IP_LIMIT,
+            key_parts=("reservation", str(data.business_id), client_ip),
+        ),
+        RateLimitCheck(
+            policy=PUBLIC_IDENTITY_WRITE_LIMIT,
+            key_parts=("reservation", str(data.business_id), data.phone),
+        ),
+    )
+
     reservation = await reservation_service.create_public_reservation(db, data)
     await db.refresh(reservation, ["business", "service_type", "customer"])
     await notify_after_reservation_create(

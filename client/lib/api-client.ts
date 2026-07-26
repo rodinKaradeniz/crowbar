@@ -125,7 +125,7 @@ export interface ServiceTypeResponse {
   name: string;
   description: string | null;
   capacity: number;
-  max_concurrent_bookings: number | null;
+  max_concurrent_bookings: number;
   is_pending_enabled: boolean;
   duration: number | null;
   color: string;

@@ -1,4 +1,10 @@
 from app.models.bot_config import BotConfig
+from app.models.booking_schedule import (
+    BookingSchedule,
+    BookingScheduleException,
+    BookingScheduleExceptionWindow,
+    BookingScheduleWindow,
+)
 from app.models.business import Business
 from app.models.customer import Customer
 from app.models.happy_hour_window import HappyHourWindow
@@ -38,6 +44,10 @@ __all__ = [
     "MenuItemIngredient",
     "Table",
     "BotConfig",
+    "BookingSchedule",
+    "BookingScheduleWindow",
+    "BookingScheduleException",
+    "BookingScheduleExceptionWindow",
     "Tab",
     "HappyHourWindow",
 ]

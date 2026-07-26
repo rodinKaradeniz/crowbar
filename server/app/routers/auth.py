@@ -1,6 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.rate_limit import (
+    ACCOUNT_REGISTRATION_IP_LIMIT,
+    LOGIN_IDENTITY_LIMIT,
+    LOGIN_IP_LIMIT,
+    RateLimitCheck,
+    enforce_rate_limits,
+    get_client_ip,
+)
 from app.database import get_db
 from app.dependencies import get_current_business, get_current_user
 from app.models.business import Business
@@ -21,7 +29,23 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(
+    data: LoginRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    client_ip = get_client_ip(request)
+    await enforce_rate_limits(
+        RateLimitCheck(
+            policy=LOGIN_IP_LIMIT,
+            key_parts=(client_ip,),
+        ),
+        RateLimitCheck(
+            policy=LOGIN_IDENTITY_LIMIT,
+            key_parts=(client_ip, str(data.email).strip().casefold()),
+        ),
+    )
+
     user = await authenticate_user(db, data.email, data.password)
     if user is None:
         raise HTTPException(
@@ -38,7 +62,18 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/register", response_model=LoginResponse, status_code=status.HTTP_201_CREATED)
-async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
+async def register(
+    data: RegisterRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    await enforce_rate_limits(
+        RateLimitCheck(
+            policy=ACCOUNT_REGISTRATION_IP_LIMIT,
+            key_parts=(get_client_ip(request),),
+        ),
+    )
+
     user = await register_user(
         db,
         email=data.email,
@@ -57,7 +92,18 @@ async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/register-business", response_model=LoginResponse, status_code=status.HTTP_201_CREATED)
-async def register_business(data: BusinessRegisterRequest, db: AsyncSession = Depends(get_db)):
+async def register_business(
+    data: BusinessRegisterRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    await enforce_rate_limits(
+        RateLimitCheck(
+            policy=ACCOUNT_REGISTRATION_IP_LIMIT,
+            key_parts=(get_client_ip(request),),
+        ),
+    )
+
     user, business = await register_business_owner(
         db,
         email=data.email,
@@ -226,5 +272,4 @@ async def disable_account(
     current_user.user_type = f"disabled_{current_user.user_type}"
     await db.flush()
     return {"message": "Account disabled successfully"}
-
 

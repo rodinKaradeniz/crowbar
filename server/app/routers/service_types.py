@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_user
+from app.core.rate_limit import enforce_public_read_limit
 from app.models.user import User
 from app.schemas.service_type import (
     ServiceTypeCreate,
@@ -16,14 +17,22 @@ from app.services import service_type_service
 router = APIRouter(prefix="/api/service-types", tags=["service-types"])
 
 
-@router.get("/business/{business_id}", response_model=list[ServiceTypeResponse])
+@router.get(
+    "/business/{business_id}",
+    response_model=list[ServiceTypeResponse],
+    dependencies=[Depends(enforce_public_read_limit)],
+)
 async def list_service_types(
     business_id: UUID, db: AsyncSession = Depends(get_db)
 ):
     return await service_type_service.get_service_types_by_business(db, business_id)
 
 
-@router.get("/{service_type_id}", response_model=ServiceTypeResponse)
+@router.get(
+    "/{service_type_id}",
+    response_model=ServiceTypeResponse,
+    dependencies=[Depends(enforce_public_read_limit)],
+)
 async def get_service_type(
     service_type_id: UUID, db: AsyncSession = Depends(get_db)
 ):

@@ -106,6 +106,29 @@ INSERT INTO service_types (
   'Book a full table for groups. Manager will confirm within the hour.',
   6, 6, TRUE, 90, '#8b5cf6', 2, NOW() - INTERVAL '45 days');
 
+-- ─── Default Booking Schedule ────────────────────────────────────────────────
+-- Booking time is intentionally separate from the public operating_hours JSON.
+-- This default starts from the same seven overnight windows for demo parity.
+INSERT INTO booking_schedules (
+  id, business_id, minimum_notice_minutes, advance_booking_days,
+  slot_interval_minutes, default_duration_minutes, created_at
+) VALUES (
+  '00000000-0000-0000-0006-000000000001',
+  '00000000-0000-0000-0000-000000000002',
+  0, 14, 30, 90, NOW() - INTERVAL '45 days'
+);
+
+INSERT INTO booking_schedule_windows (
+  schedule_id, weekday, start_time, end_time, ends_next_day, created_at
+) VALUES
+('00000000-0000-0000-0006-000000000001', 0, '17:00', '02:00', TRUE, NOW() - INTERVAL '45 days'),
+('00000000-0000-0000-0006-000000000001', 1, '17:00', '02:00', TRUE, NOW() - INTERVAL '45 days'),
+('00000000-0000-0000-0006-000000000001', 2, '17:00', '02:00', TRUE, NOW() - INTERVAL '45 days'),
+('00000000-0000-0000-0006-000000000001', 3, '17:00', '02:00', TRUE, NOW() - INTERVAL '45 days'),
+('00000000-0000-0000-0006-000000000001', 4, '17:00', '02:00', TRUE, NOW() - INTERVAL '45 days'),
+('00000000-0000-0000-0006-000000000001', 5, '17:00', '02:00', TRUE, NOW() - INTERVAL '45 days'),
+('00000000-0000-0000-0006-000000000001', 6, '17:00', '02:00', TRUE, NOW() - INTERVAL '45 days');
+
 -- ─── Cleanup: remove any out-of-hours reservations left by prior seeds ─────────
 DELETE FROM reservations
 WHERE business_id = '00000000-0000-0000-0000-000000000002'
