@@ -19,7 +19,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events import STREAM_KEY
 from app.core.redis_client import get_redis
-from app.core.ws_projections import broadcast_order_board, broadcast_queue_state
+from app.core.ws_projections import (
+    broadcast_floor_plan_invalidation,
+    broadcast_order_board,
+    broadcast_queue_state,
+)
 from app.database import async_session
 
 logger = logging.getLogger("crowbar.stream_consumer")
@@ -79,9 +83,14 @@ async def _dispatch(fields: dict) -> bool:
         async with async_session() as db:
             if event_type.startswith("queue."):
                 await broadcast_queue_state(db, business_id)
+                await broadcast_floor_plan_invalidation(business_id)
+            elif event_type.startswith("reservation.") or event_type.startswith(
+                "floor_plan."
+            ):
+                await broadcast_floor_plan_invalidation(business_id)
             elif event_type.startswith("order."):
                 await broadcast_order_board(db, business_id)
-            # inventory.* and reservation.* — no WS push in Phase 4; ACK cleanly
+            # inventory.* events do not currently drive a WebSocket projection.
         return True
     except Exception:
         logger.exception(

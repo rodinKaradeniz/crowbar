@@ -37,6 +37,26 @@ def create_access_token(user_id: str, user_type: str) -> str:
     return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
 
 
+WEBSOCKET_TOKEN_TTL_SECONDS = 120
+
+
+def create_websocket_token(user_id: str, business_id: str) -> str:
+    """Create a short-lived token that is valid only for staff WebSockets."""
+    expire = datetime.now(timezone.utc) + timedelta(
+        seconds=WEBSOCKET_TOKEN_TTL_SECONDS
+    )
+    return jwt.encode(
+        {
+            "sub": user_id,
+            "business_id": business_id,
+            "token_use": "websocket",
+            "exp": expire,
+        },
+        settings.secret_key,
+        algorithm=settings.algorithm,
+    )
+
+
 async def authenticate_user(
     db: AsyncSession, email: str, password: str
 ) -> User | None:

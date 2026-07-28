@@ -97,11 +97,22 @@ below; it did not promote them ahead of the current availability stage.
   cleaning. Capacity is enforced unless an owner/manager records an override
   reason. Configuration is owner/manager-only while all staff can operate
   table state, assignments, and seatings.
+- **Complete — authoritative host-board backend:** Migration 025 adds a
+  configurable business-local service-day cutoff, defaulting to 05:00. One
+  tenant- and location-scoped HTTP projection returns areas, table display
+  state, current/next assignments, open seatings, unassigned reservations, and
+  active queue parties for the resolved service day. Assignment read/remove
+  commands are available, new reservation/queue records use the primary
+  location, and all floor-plan mutations commit before publishing invalidation
+  events. Staff WebSockets use short-lived business-bound credentials and only
+  invalidate the board; HTTP remains the authoritative fallback.
 - **Next — host service board and management UI:** Add responsive area/table
-  configuration and one operational board for upcoming assigned and unassigned
-  reservations, queue parties, occupied tables, cleaning, temporary closure,
-  and availability. Replace the queue's legacy table-less accept/seat actions
-  with the seating command, and expose assignment from reservation surfaces.
+  configuration and consume the authoritative board for upcoming assigned and
+  unassigned reservations, queue parties, occupied tables, cleaning, temporary
+  closure, and availability. Replace the queue's legacy table-less accept/seat
+  actions with the seating command, remove their now-unused client/backend
+  path once callers have moved, and expose assignment from reservation
+  surfaces.
 - **Ready — ordering and tab continuity:** Replace new free-form dine-in table
   identifiers with registered business-scoped tables and opaque, revisioned QR
   tokens. Validate tab tables within the tenant and carry the same table and

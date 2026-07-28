@@ -495,6 +495,35 @@ their named volumes rather than allowing Compose to initialize empty ones.
 
 **References:** `server/docker-compose.yml`, `docs/ARCHITECTURE.md`
 
+## 2026-07-28 — Host boards use service-day snapshots and socket invalidation
+
+**Context:** The operational-table foundation could assign and seat parties,
+but staff had no single read model for a shift. Calendar dates are also a poor
+boundary for venues operating after midnight, and returning the primary JWT
+through the Next.js WebSocket-token route exposed an httpOnly credential to
+browser JavaScript.
+
+**Decision:** Add a configurable business-local service-day cutoff, defaulting
+to 05:00, and make one tenant/location-scoped HTTP board the authoritative
+projection for tables, assignments, seatings, reservations, and queue parties.
+Publish floor-plan events only after commit and use reservation/queue events to
+invalidate a dedicated staff socket; clients re-fetch the board rather than
+merging socket-owned state. FastAPI now issues a 120-second, business-bound
+WebSocket credential. Next.js exchanges the primary cookie-backed token
+server-side, and normal HTTP authentication rejects the scoped credential.
+
+**Consequences:** Shift boundaries remain correct across midnight and DST,
+socket loss degrades to ordinary HTTP refetch, and the main access token never
+reaches browser JavaScript. Legacy location-null parties are visible only at
+the primary location while new reservation and queue writes set that location
+explicitly. The next slice owns the responsive host-board/configuration UI and
+removal of table-less queue actions when their callers migrate.
+
+**References:** `server/db/migrations/025_service_day_cutoff.sql`,
+`server/app/services/floor_plan_service.py`,
+`server/app/routers/floor_plan.py`, `server/app/services/websocket_auth.py`,
+`client/app/api/ws-token/route.ts`
+
 ## Entry Template
 
 ```markdown

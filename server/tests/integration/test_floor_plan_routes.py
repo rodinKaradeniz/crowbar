@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
 from httpx import AsyncClient
@@ -13,6 +13,7 @@ from app.models.service_type import ServiceType
 from app.models.staff import Staff
 from app.models.user import User
 from app.services.auth_service import create_access_token
+from app.services.floor_plan_service import resolve_service_window
 
 
 async def _tenant(
@@ -156,6 +157,24 @@ async def test_multiple_tables_require_configured_combination(
     assert assigned.status_code == 200, assigned.text
     assert set(assigned.json()["table_ids"]) == {first["id"], second["id"]}
 
+    fetched = await client.get(
+        f"/api/floor-plan/reservations/{reservation.id}/tables",
+        headers=headers,
+    )
+    assert fetched.status_code == 200
+    assert set(fetched.json()["table_ids"]) == {first["id"], second["id"]}
+
+    removed = await client.delete(
+        f"/api/floor-plan/reservations/{reservation.id}/tables",
+        headers=headers,
+    )
+    assert removed.status_code == 204
+    missing = await client.get(
+        f"/api/floor-plan/reservations/{reservation.id}/tables",
+        headers=headers,
+    )
+    assert missing.status_code == 404
+
 
 @pytest.mark.asyncio
 async def test_staff_capacity_override_is_forbidden(
@@ -250,3 +269,172 @@ async def test_floor_plan_requires_an_operational_module(
     response = await client.get("/api/floor-plan/tables", headers=headers)
     assert response.status_code == 403
     assert response.json()["code"] == "MODULE_DISABLED"
+
+
+@pytest.mark.asyncio
+async def test_settings_are_manager_owned_and_service_day_is_business_local(
+    client: AsyncClient, db_session: AsyncSession
+):
+    business, _, _, owner_headers = await _tenant(
+        db_session, slug="service-day"
+    )
+    staff_user = User(
+        email="service-day-staff@example.com",
+        name="Staff",
+        password_hash="unused",
+        user_type="staff",
+    )
+    db_session.add(staff_user)
+    await db_session.flush()
+    db_session.add(
+        Staff(user_id=staff_user.id, business_id=business.id, role="staff")
+    )
+    await db_session.commit()
+    staff_headers = {
+        "Authorization": f"Bearer {create_access_token(str(staff_user.id), 'staff')}"
+    }
+
+    forbidden = await client.put(
+        "/api/floor-plan/settings",
+        headers=staff_headers,
+        json={"service_day_cutoff": "04:30:00"},
+    )
+    updated = await client.put(
+        "/api/floor-plan/settings",
+        headers=owner_headers,
+        json={"service_day_cutoff": "04:30:00"},
+    )
+
+    assert forbidden.status_code == 403
+    assert updated.status_code == 200
+    assert updated.json()["service_day_cutoff"] == "04:30:00"
+    timezone_bearing = await client.put(
+        "/api/floor-plan/settings",
+        headers=owner_headers,
+        json={"service_day_cutoff": "04:30:00+03:00"},
+    )
+    assert timezone_bearing.status_code == 422
+
+    business.timezone = "Europe/Amsterdam"
+    business.service_day_cutoff = time(5, 0)
+    resolved, starts_at, ends_at = resolve_service_window(
+        business,
+        now=datetime(2026, 7, 28, 0, 30, tzinfo=timezone.utc),
+    )
+    assert resolved == date(2026, 7, 27)
+
+    _, dst_start, dst_end = resolve_service_window(
+        business,
+        service_date=date(2026, 3, 28),
+    )
+    assert dst_end - dst_start == timedelta(hours=23)
+
+
+@pytest.mark.asyncio
+async def test_board_projects_assignments_seatings_and_unassigned_parties(
+    client: AsyncClient, db_session: AsyncSession
+):
+    business, _, location, headers = await _tenant(db_session, slug="host-board")
+    _, table = await _area_and_table(client, headers, capacity=4)
+    now = datetime.now(timezone.utc)
+    customer = Customer(
+        business_id=business.id,
+        name="Reserved Guest",
+        phone="+14155550199",
+        email="board-guest@example.com",
+    )
+    service = ServiceType(business_id=business.id, name="Dinner", capacity=8)
+    db_session.add_all([customer, service])
+    await db_session.flush()
+    reservation = Reservation(
+        business_id=business.id,
+        location_id=location.id,
+        customer_id=customer.id,
+        service_type_id=service.id,
+        time=now - timedelta(minutes=15),
+        ends_at=now + timedelta(minutes=45),
+        phone=customer.phone,
+        email=customer.email,
+        status="confirmed",
+        guests=3,
+    )
+    queue_entry = QueueEntry(
+        business_id=business.id,
+        location_id=location.id,
+        session_token="board-entry-token",
+        name="Walk In",
+        party_size=2,
+        status="waiting",
+    )
+    db_session.add_all([reservation, queue_entry])
+    await db_session.commit()
+
+    assigned = await client.put(
+        f"/api/floor-plan/reservations/{reservation.id}/tables",
+        headers=headers,
+        json={"table_ids": [table["id"]]},
+    )
+    assert assigned.status_code == 200, assigned.text
+
+    board = await client.get("/api/floor-plan/board", headers=headers)
+    assert board.status_code == 200, board.text
+    body = board.json()
+    projected_table = body["areas"][0]["tables"][0]
+    assert projected_table["display_state"] == "reserved"
+    assert projected_table["active_assignment"]["name"] == "Reserved Guest"
+    assert body["unassigned_reservations"] == []
+    assert body["queue_entries"][0]["name"] == "Walk In"
+    assert body["queue_entries"][0]["assigned_table_ids"] == []
+
+    opened = await client.post(
+        "/api/floor-plan/seatings",
+        headers=headers,
+        json={
+            "source_type": "reservation",
+            "source_id": str(reservation.id),
+            "table_ids": [table["id"]],
+        },
+    )
+    assert opened.status_code == 201, opened.text
+    occupied = await client.get("/api/floor-plan/board", headers=headers)
+    projected_table = occupied.json()["areas"][0]["tables"][0]
+    assert projected_table["display_state"] == "occupied"
+    assert projected_table["active_seating"]["source"]["source_id"] == str(
+        reservation.id
+    )
+
+
+@pytest.mark.asyncio
+async def test_secondary_location_board_does_not_claim_legacy_unscoped_parties(
+    client: AsyncClient, db_session: AsyncSession
+):
+    business, _, _, headers = await _tenant(db_session, slug="location-board")
+    secondary = Location(
+        business_id=business.id,
+        name="Second",
+        is_primary=False,
+    )
+    db_session.add(secondary)
+    await db_session.flush()
+    legacy_entry = QueueEntry(
+        business_id=business.id,
+        location_id=None,
+        session_token="legacy-location-token",
+        name="Legacy Party",
+        party_size=2,
+        status="waiting",
+    )
+    db_session.add(legacy_entry)
+    await db_session.commit()
+
+    primary_board = await client.get("/api/floor-plan/board", headers=headers)
+    secondary_board = await client.get(
+        "/api/floor-plan/board",
+        headers=headers,
+        params={"location_id": str(secondary.id)},
+    )
+
+    assert [item["name"] for item in primary_board.json()["queue_entries"]] == [
+        "Legacy Party"
+    ]
+    assert secondary_board.json()["queue_entries"] == []

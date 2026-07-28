@@ -1,8 +1,11 @@
 """Unit tests for auth service – pure logic, no database required."""
 
+from datetime import datetime, timezone
+
 from app.config import settings
 from app.services.auth_service import (
     create_access_token,
+    create_websocket_token,
     hash_password,
     verify_password,
 )
@@ -68,3 +71,17 @@ class TestAccessToken:
         assert isinstance(token, str)
         # Should have 3 parts separated by dots (JWT format)
         assert len(token.split(".")) == 3
+
+
+class TestWebSocketToken:
+    def test_token_is_short_lived_and_business_bound(self):
+        token = create_websocket_token("user-1", "business-1")
+        payload = jwt.decode(
+            token, settings.secret_key, algorithms=[settings.algorithm]
+        )
+
+        assert payload["sub"] == "user-1"
+        assert payload["business_id"] == "business-1"
+        assert payload["token_use"] == "websocket"
+        remaining = payload["exp"] - int(datetime.now(timezone.utc).timestamp())
+        assert 0 < remaining <= 120

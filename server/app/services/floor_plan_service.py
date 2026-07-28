@@ -1,11 +1,13 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.errors import ErrorCode
+from app.models.business import Business
 from app.models.location import Location
 from app.models.queue_entry import QueueEntry
 from app.models.reservation import Reservation
@@ -14,6 +16,14 @@ from app.models.table_area import TableArea
 from app.models.table_assignment import QueueTableAssignment, ReservationTableAssignment
 from app.models.table_combination import TableCombination, TableCombinationMember
 from app.models.table_seating import TableSeating, TableSeatingTable
+from app.schemas.floor_plan import (
+    BoardAreaResponse,
+    BoardPartyResponse,
+    BoardSeatingResponse,
+    BoardTableResponse,
+    FloorPlanBoardResponse,
+)
+from app.services.location_service import get_primary_location as find_primary_location
 
 
 class FloorPlanError(Exception):
@@ -33,16 +43,31 @@ def _conflict(message: str) -> FloorPlanError:
 
 
 async def get_primary_location(db: AsyncSession, business_id: UUID) -> Location:
-    result = await db.execute(
-        select(Location).where(
-            Location.business_id == business_id,
-            Location.is_primary.is_(True),
-        )
-    )
-    location = result.scalar_one_or_none()
+    location = await find_primary_location(db, business_id)
     if location is None:
         raise _conflict("Business has no primary location")
     return location
+
+
+def resolve_service_window(
+    business: Business,
+    *,
+    service_date: date | None = None,
+    now: datetime | None = None,
+) -> tuple[date, datetime, datetime]:
+    """Resolve one business-local service day to an absolute UTC interval."""
+    zone = ZoneInfo(business.timezone)
+    current = (now or datetime.now(timezone.utc)).astimezone(zone)
+    cutoff = business.service_day_cutoff or time(5, 0)
+    resolved_date = service_date or (
+        current.date() if current.timetz().replace(tzinfo=None) >= cutoff
+        else current.date() - timedelta(days=1)
+    )
+    local_start = datetime.combine(resolved_date, cutoff, tzinfo=zone)
+    local_end = datetime.combine(
+        resolved_date + timedelta(days=1), cutoff, tzinfo=zone
+    )
+    return resolved_date, local_start.astimezone(timezone.utc), local_end.astimezone(timezone.utc)
 
 
 async def _get_location(
@@ -649,3 +674,446 @@ async def close_seating(db, business_id: UUID, seating_id: UUID, actor_id: UUID)
         entry.completed_at = now
     await db.flush()
     return seating
+
+
+async def get_assignment(
+    db: AsyncSession,
+    business_id: UUID,
+    *,
+    source_type: str,
+    source_id: UUID,
+):
+    if source_type == "reservation":
+        source = await db.scalar(
+            select(Reservation).where(
+                Reservation.id == source_id,
+                Reservation.business_id == business_id,
+            )
+        )
+        assignment_model = ReservationTableAssignment
+        source_column = ReservationTableAssignment.reservation_id
+    else:
+        source = await db.scalar(
+            select(QueueEntry).where(
+                QueueEntry.id == source_id,
+                QueueEntry.business_id == business_id,
+            )
+        )
+        assignment_model = QueueTableAssignment
+        source_column = QueueTableAssignment.queue_entry_id
+    if source is None:
+        raise _not_found("Reservation" if source_type == "reservation" else "Queue entry")
+
+    rows = list(
+        (
+            await db.execute(
+                select(assignment_model)
+                .where(
+                    assignment_model.business_id == business_id,
+                    source_column == source_id,
+                )
+                .order_by(assignment_model.table_id)
+            )
+        ).scalars().all()
+    )
+    if not rows:
+        raise _not_found("Table assignment")
+    table_ids = [row.table_id for row in rows]
+    tables = list(
+        (
+            await db.execute(
+                select(Table).where(
+                    Table.business_id == business_id,
+                    Table.id.in_(table_ids),
+                )
+            )
+        ).scalars().all()
+    )
+    combination = (
+        await _matching_combination(db, business_id, set(table_ids))
+        if len(table_ids) > 1
+        else None
+    )
+    capacity = (
+        combination.capacity_override
+        if combination and combination.capacity_override
+        else sum(table.capacity for table in tables)
+    )
+    return source, rows, capacity
+
+
+async def remove_assignment(
+    db: AsyncSession,
+    business_id: UUID,
+    *,
+    source_type: str,
+    source_id: UUID,
+) -> None:
+    source, _, _ = await get_assignment(
+        db,
+        business_id,
+        source_type=source_type,
+        source_id=source_id,
+    )
+    open_seating = await db.scalar(
+        select(TableSeating.id).where(
+            TableSeating.business_id == business_id,
+            TableSeating.status == "open",
+            (
+                TableSeating.reservation_id == source.id
+                if source_type == "reservation"
+                else TableSeating.queue_entry_id == source.id
+            ),
+        )
+    )
+    if open_seating:
+        raise _conflict("Close the active seating before removing its table assignment")
+    assignment_model = (
+        ReservationTableAssignment
+        if source_type == "reservation"
+        else QueueTableAssignment
+    )
+    source_column = (
+        ReservationTableAssignment.reservation_id
+        if source_type == "reservation"
+        else QueueTableAssignment.queue_entry_id
+    )
+    await db.execute(
+        delete(assignment_model).where(
+            assignment_model.business_id == business_id,
+            source_column == source_id,
+        )
+    )
+    await db.flush()
+
+
+def _reservation_party(
+    reservation: Reservation, assigned_table_ids: list[UUID]
+) -> BoardPartyResponse:
+    name = (
+        reservation.customer.name
+        if reservation.customer is not None and reservation.customer.name
+        else reservation.phone
+    )
+    return BoardPartyResponse(
+        source_type="reservation",
+        source_id=reservation.id,
+        name=name,
+        party_size=reservation.guests,
+        status=reservation.status,
+        starts_at=reservation.time,
+        ends_at=reservation.ends_at,
+        assigned_table_ids=assigned_table_ids,
+    )
+
+
+def _queue_party(
+    entry: QueueEntry, assigned_table_ids: list[UUID]
+) -> BoardPartyResponse:
+    return BoardPartyResponse(
+        source_type="queue",
+        source_id=entry.id,
+        name=entry.name,
+        party_size=entry.party_size,
+        status=entry.status,
+        assigned_table_ids=assigned_table_ids,
+    )
+
+
+async def get_board(
+    db: AsyncSession,
+    business: Business,
+    *,
+    location_id: UUID | None = None,
+    service_date: date | None = None,
+    now: datetime | None = None,
+) -> FloorPlanBoardResponse:
+    generated_at = now or datetime.now(timezone.utc)
+    resolved_date, starts_at, ends_at = resolve_service_window(
+        business, service_date=service_date, now=generated_at
+    )
+    location = await _get_location(db, business.id, location_id)
+    reservation_location_filter = Reservation.location_id == location.id
+    queue_location_filter = QueueEntry.location_id == location.id
+    if location.is_primary:
+        reservation_location_filter = or_(
+            reservation_location_filter,
+            Reservation.location_id.is_(None),
+        )
+        queue_location_filter = or_(
+            queue_location_filter,
+            QueueEntry.location_id.is_(None),
+        )
+
+    areas = list(
+        (
+            await db.execute(
+                select(TableArea)
+                .where(
+                    TableArea.business_id == business.id,
+                    TableArea.location_id == location.id,
+                    TableArea.deleted_at.is_(None),
+                    TableArea.is_active.is_(True),
+                )
+                .order_by(TableArea.sort_order, TableArea.name)
+            )
+        ).scalars().all()
+    )
+    tables = list(
+        (
+            await db.execute(
+                select(Table)
+                .where(
+                    Table.business_id == business.id,
+                    Table.location_id == location.id,
+                    Table.deleted_at.is_(None),
+                    Table.is_active.is_(True),
+                )
+                .order_by(Table.area_id, Table.sort_order, Table.label)
+            )
+        ).scalars().all()
+    )
+
+    reservations = list(
+        (
+            await db.execute(
+                select(Reservation)
+                .where(
+                    Reservation.business_id == business.id,
+                    Reservation.status.in_(("pending", "confirmed")),
+                    Reservation.time < ends_at,
+                    Reservation.ends_at > starts_at,
+                    reservation_location_filter,
+                )
+                .options(selectinload(Reservation.customer))
+                .order_by(Reservation.time)
+            )
+        ).scalars().all()
+    )
+    queue_entries = list(
+        (
+            await db.execute(
+                select(QueueEntry)
+                .where(
+                    QueueEntry.business_id == business.id,
+                    QueueEntry.status.in_(("waiting", "called")),
+                    queue_location_filter,
+                )
+                .order_by(QueueEntry.joined_at)
+            )
+        ).scalars().all()
+    )
+
+    reservation_ids = [item.id for item in reservations]
+    queue_ids = [item.id for item in queue_entries]
+    reservation_assignments = list(
+        (
+            await db.execute(
+                select(ReservationTableAssignment).where(
+                    ReservationTableAssignment.business_id == business.id,
+                    ReservationTableAssignment.location_id == location.id,
+                    ReservationTableAssignment.reservation_id.in_(reservation_ids),
+                )
+            )
+        ).scalars().all()
+    ) if reservation_ids else []
+    queue_assignments = list(
+        (
+            await db.execute(
+                select(QueueTableAssignment).where(
+                    QueueTableAssignment.business_id == business.id,
+                    QueueTableAssignment.location_id == location.id,
+                    QueueTableAssignment.queue_entry_id.in_(queue_ids),
+                )
+            )
+        ).scalars().all()
+    ) if queue_ids else []
+
+    reservation_tables: dict[UUID, list[UUID]] = {}
+    reservations_by_table: dict[UUID, list[Reservation]] = {}
+    for assignment in reservation_assignments:
+        reservation_tables.setdefault(assignment.reservation_id, []).append(
+            assignment.table_id
+        )
+    reservations_by_id = {item.id: item for item in reservations}
+    for assignment in reservation_assignments:
+        reservation = reservations_by_id[assignment.reservation_id]
+        reservations_by_table.setdefault(assignment.table_id, []).append(reservation)
+
+    queue_tables: dict[UUID, list[UUID]] = {}
+    queues_by_table: dict[UUID, QueueEntry] = {}
+    queue_by_id = {item.id: item for item in queue_entries}
+    for assignment in queue_assignments:
+        queue_tables.setdefault(assignment.queue_entry_id, []).append(assignment.table_id)
+        queues_by_table[assignment.table_id] = queue_by_id[assignment.queue_entry_id]
+
+    seatings = list(
+        (
+            await db.execute(
+                select(TableSeating)
+                .where(
+                    TableSeating.business_id == business.id,
+                    TableSeating.location_id == location.id,
+                    TableSeating.status == "open",
+                )
+                .options(selectinload(TableSeating.tables))
+                .order_by(TableSeating.opened_at)
+            )
+        ).scalars().unique().all()
+    )
+    seating_reservation_ids = [
+        item.reservation_id
+        for item in seatings
+        if item.reservation_id and item.reservation_id not in reservations_by_id
+    ]
+    if seating_reservation_ids:
+        extra = list(
+            (
+                await db.execute(
+                    select(Reservation)
+                    .where(
+                        Reservation.business_id == business.id,
+                        Reservation.id.in_(seating_reservation_ids),
+                    )
+                    .options(selectinload(Reservation.customer))
+                )
+            ).scalars().all()
+        )
+        reservations_by_id.update({item.id: item for item in extra})
+    seating_queue_ids = [
+        item.queue_entry_id
+        for item in seatings
+        if item.queue_entry_id and item.queue_entry_id not in queue_by_id
+    ]
+    if seating_queue_ids:
+        extra_queue = list(
+            (
+                await db.execute(
+                    select(QueueEntry).where(
+                        QueueEntry.business_id == business.id,
+                        QueueEntry.id.in_(seating_queue_ids),
+                    )
+                )
+            ).scalars().all()
+        )
+        queue_by_id.update({item.id: item for item in extra_queue})
+
+    seatings_by_table: dict[UUID, BoardSeatingResponse] = {}
+    for seating in seatings:
+        seating_table_ids = [item.table_id for item in seating.tables]
+        if seating.reservation_id:
+            source = _reservation_party(
+                reservations_by_id[seating.reservation_id], seating_table_ids
+            )
+        else:
+            source = _queue_party(queue_by_id[seating.queue_entry_id], seating_table_ids)
+        response = BoardSeatingResponse(
+            seating_id=seating.id,
+            source=source,
+            table_ids=seating_table_ids,
+            opened_at=seating.opened_at,
+        )
+        for table_id in seating_table_ids:
+            seatings_by_table[table_id] = response
+
+    board_areas: list[BoardAreaResponse] = []
+    for area in areas:
+        board_tables: list[BoardTableResponse] = []
+        for table in (item for item in tables if item.area_id == area.id):
+            active_seating = seatings_by_table.get(table.id)
+            queue_assignment = queues_by_table.get(table.id)
+            assigned_reservations = sorted(
+                reservations_by_table.get(table.id, []), key=lambda item: item.time
+            )
+            current_reservation = next(
+                (
+                    item
+                    for item in assigned_reservations
+                    if item.time <= generated_at < item.ends_at
+                ),
+                None,
+            )
+            next_reservation = next(
+                (item for item in assigned_reservations if item.time > generated_at),
+                None,
+            )
+            active_assignment = (
+                _queue_party(queue_assignment, queue_tables[queue_assignment.id])
+                if queue_assignment
+                else (
+                    _reservation_party(
+                        current_reservation,
+                        reservation_tables[current_reservation.id],
+                    )
+                    if current_reservation
+                    else None
+                )
+            )
+            state_expired = (
+                table.operational_state == "out_of_service"
+                and table.operational_state_until is not None
+                and table.operational_state_until <= generated_at
+            )
+            if active_seating:
+                display_state = "occupied"
+            elif table.operational_state == "out_of_service" and not state_expired:
+                display_state = "out_of_service"
+            elif table.operational_state == "cleaning":
+                display_state = "cleaning"
+            elif active_assignment:
+                display_state = "reserved"
+            else:
+                display_state = "available"
+            board_tables.append(
+                BoardTableResponse(
+                    id=table.id,
+                    area_id=table.area_id,
+                    label=table.label,
+                    capacity=table.capacity,
+                    shape=table.shape,
+                    sort_order=table.sort_order,
+                    display_state=display_state,
+                    operational_state=table.operational_state,
+                    operational_state_reason=table.operational_state_reason,
+                    operational_state_until=table.operational_state_until,
+                    operational_state_expired=state_expired,
+                    active_seating=active_seating,
+                    active_assignment=active_assignment,
+                    next_reservation=(
+                        _reservation_party(
+                            next_reservation,
+                            reservation_tables[next_reservation.id],
+                        )
+                        if next_reservation
+                        else None
+                    ),
+                )
+            )
+        board_areas.append(
+            BoardAreaResponse(
+                id=area.id,
+                name=area.name,
+                sort_order=area.sort_order,
+                tables=board_tables,
+            )
+        )
+
+    return FloorPlanBoardResponse(
+        business_id=business.id,
+        location_id=location.id,
+        timezone=business.timezone,
+        service_date=resolved_date,
+        starts_at=starts_at,
+        ends_at=ends_at,
+        generated_at=generated_at,
+        areas=board_areas,
+        unassigned_reservations=[
+            _reservation_party(item, [])
+            for item in reservations
+            if item.id not in reservation_tables
+        ],
+        queue_entries=[
+            _queue_party(item, queue_tables.get(item.id, []))
+            for item in queue_entries
+        ],
+    )

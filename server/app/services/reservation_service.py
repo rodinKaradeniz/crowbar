@@ -21,6 +21,7 @@ from app.services.availability_service import (
 )
 from app.core.errors import ErrorCode
 from app.services.customer_identity_service import upsert_customer
+from app.services.location_service import get_primary_location
 
 
 async def get_reservations_by_business(
@@ -102,9 +103,11 @@ async def create_reservation(
         name=data.name,
     )
     assert customer is not None
+    location = await get_primary_location(db, business_id)
 
     reservation = Reservation(
         business_id=business_id,
+        location_id=location.id if location else None,
         customer_id=customer.id,
         service_type_id=data.service_type_id,
         time=validated_slot.starts_at,
@@ -287,9 +290,11 @@ async def create_public_reservation(
         email=data.email,
         name=data.name,
     )
+    location = await get_primary_location(db, data.business_id)
 
     reservation = Reservation(
         business_id=data.business_id,
+        location_id=location.id if location else None,
         customer_id=customer.id,
         service_type_id=data.service_type_id,
         time=validated_slot.starts_at,

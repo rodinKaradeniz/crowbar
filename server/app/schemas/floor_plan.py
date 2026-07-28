@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime, time
 from typing import Literal
 from uuid import UUID
 
@@ -218,3 +218,76 @@ class SeatingResponse(AppBaseModel):
     opened_at: datetime
     closed_by: UUID | None = None
     closed_at: datetime | None = None
+
+
+class FloorPlanSettingsUpdate(AppBaseModel):
+    service_day_cutoff: time
+
+    @field_validator("service_day_cutoff")
+    @classmethod
+    def require_wall_clock_time(cls, value: time) -> time:
+        if value.tzinfo is not None:
+            raise ValueError("Service-day cutoff must be a local wall-clock time")
+        return value
+
+
+class FloorPlanSettingsResponse(AppBaseModel):
+    service_day_cutoff: time
+    timezone: str
+
+
+class BoardPartyResponse(AppBaseModel):
+    source_type: SeatingSource
+    source_id: UUID
+    name: str
+    party_size: int
+    status: str
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    assigned_table_ids: list[UUID]
+
+
+class BoardSeatingResponse(AppBaseModel):
+    seating_id: UUID
+    source: BoardPartyResponse
+    table_ids: list[UUID]
+    opened_at: datetime
+
+
+class BoardTableResponse(AppBaseModel):
+    id: UUID
+    area_id: UUID
+    label: str
+    capacity: int
+    shape: str
+    sort_order: int
+    display_state: Literal[
+        "available", "reserved", "occupied", "cleaning", "out_of_service"
+    ]
+    operational_state: str
+    operational_state_reason: str | None = None
+    operational_state_until: datetime | None = None
+    operational_state_expired: bool = False
+    active_seating: BoardSeatingResponse | None = None
+    active_assignment: BoardPartyResponse | None = None
+    next_reservation: BoardPartyResponse | None = None
+
+
+class BoardAreaResponse(AppBaseModel):
+    id: UUID
+    name: str
+    sort_order: int
+    tables: list[BoardTableResponse]
+
+
+class FloorPlanBoardResponse(AppBaseModel):
+    business_id: UUID
+    location_id: UUID
+    timezone: str
+    service_date: date
+    starts_at: datetime
+    ends_at: datetime
+    generated_at: datetime
+    areas: list[BoardAreaResponse]
+    unassigned_reservations: list[BoardPartyResponse]
+    queue_entries: list[BoardPartyResponse]

@@ -177,6 +177,36 @@ class TestGetMe:
         assert "business_id" in data
         assert data["role"] == "owner"
 
+    @pytest.mark.asyncio
+    async def test_websocket_token_cannot_authenticate_http_routes(
+        self, client: AsyncClient
+    ):
+        reg = await client.post(
+            "/api/auth/register-business",
+            json={
+                "email": "ws-token@example.com",
+                "password": "pass123",
+                "name": "Socket Owner",
+                "phone": "+31600000001",
+                "business_name": "Socket Biz",
+                "business_slug": "socket-biz",
+            },
+        )
+        access_token = reg.json()["access_token"]
+
+        issued = await client.post(
+            "/api/auth/ws-token",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert issued.status_code == 200
+        assert issued.json()["expires_in"] == 120
+
+        rejected = await client.get(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {issued.json()['token']}"},
+        )
+        assert rejected.status_code == 401
+
 
 # --------------------------------------------------------------------------- #
 # Profile updates

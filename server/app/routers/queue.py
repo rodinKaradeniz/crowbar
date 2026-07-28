@@ -2,11 +2,9 @@ import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect, status
-from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.core.events import DomainEvent, publish
 from app.core.rate_limit import (
     PUBLIC_IDENTITY_WRITE_LIMIT,
@@ -19,11 +17,11 @@ from app.core.rate_limit import (
 from app.database import get_db
 from app.dependencies import get_current_user, get_current_business, require_module
 from app.models.business import Business
-from app.models.staff import Staff
 from app.models.user import User
 from app.schemas.queue_entry import QueueEntryResponse, QueueJoinRequest, QueueStatusResponse
 from app.services import notification_service, queue_service
 from app.services.queue_ws_manager import manager
+from app.services.websocket_auth import authorize_staff_websocket
 
 logger = logging.getLogger(__name__)
 
@@ -361,27 +359,14 @@ async def queue_websocket(
     token: str = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
-    """Staff WebSocket for live queue updates. Auth via ?token= query param."""
-    # Validate JWT
-    try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-        user_id: str | None = payload.get("sub")
-        if user_id is None:
-            await ws.close(code=1008)
-            return
-    except JWTError:
-        await ws.close(code=1008)
-        return
-
-    # Verify user has a staff assignment for this business
-    result = await db.execute(
-        select(Staff).where(
-            Staff.user_id == user_id,
-            Staff.business_id == business_id,
-        )
-    )
-    if result.scalar_one_or_none() is None:
-        await ws.close(code=1008)
+    """Staff WebSocket authenticated by a short-lived, scoped credential."""
+    if not await authorize_staff_websocket(
+        db,
+        ws,
+        token=token,
+        business_id=business_id,
+        required_modules=("queue",),
+    ):
         return
 
     bid = str(business_id)

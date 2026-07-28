@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.business import Business
 from app.models.queue_entry import QueueEntry
 from app.services import notification_service
+from app.services.location_service import get_primary_location
 
 
 async def _get_business(db: AsyncSession, business_id: UUID) -> Business | None:
@@ -47,8 +48,10 @@ async def join_queue(
 ) -> dict:
     """Insert a new queue entry and return QueueStatusResponse-shaped dict."""
     token = secrets.token_urlsafe(32)
+    location = await get_primary_location(db, business_id)
     entry = QueueEntry(
         business_id=business_id,
+        location_id=location.id if location else None,
         session_token=token,
         name=name,
         party_size=party_size,

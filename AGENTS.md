@@ -81,7 +81,7 @@ Start with discovery and product-rule confirmation for the current stage; do
 not silently pull a later stage forward. `docs/TODO.md` owns the detailed
 acceptance boundary and the remaining planned improvements after this arc.
 
-Availability stage checkpoint as of 2026-07-28:
+Operational-loop checkpoint as of 2026-07-28:
 
 - Local migration 023 and matching ORM/Pydantic contracts establish business
   default and service-override booking schedules, weekly/date windows,
@@ -109,10 +109,16 @@ Availability stage checkpoint as of 2026-07-28:
   Ordinary staff use normal server slots; owners/managers can deliberately
   choose server-generated override times with a required reason. The server
   derives the tenant, enforces hard service/party/time constraints, records the
-  actor/reason/timestamp, and surfaces the audit marker to staff. Floor-plan
-  and table management is the next product stage.
-- Migration 023 is local only. Railway remains at migrations 001–022 because
-  deployment is shelved.
+  actor/reason/timestamp, and surfaces the audit marker to staff.
+- Local migrations 024–025 and the floor-plan service establish areas,
+  registered tables, configured combinations, planning assignments, actual
+  seatings, table operational state, and a configurable business-local service
+  day. The authoritative host-board HTTP projection is tenant/location scoped;
+  its dedicated staff WebSocket sends invalidations only. Assignment read and
+  remove commands are available. The next slice is the responsive management
+  and host-board UI plus replacement of legacy table-less queue actions.
+- Migrations 023–025 are local only. Railway remains at migrations 001–022
+  because deployment is shelved.
 
 Railway rollout is intentionally shelved as of 2026-07-25:
 
@@ -182,6 +188,8 @@ it.
   is best-effort and drives WebSocket projections through Redis Streams.
 - Keep the JWT in the `rk-token` httpOnly cookie. Browser-side authenticated
   calls go through the Next.js proxy; do not expose the token to client code.
+  WebSockets use only FastAPI-issued, 120-second, business-bound credentials;
+  never return or accept the primary access token in browser socket code.
 - Keep ML private. Browser and frontend code call the authenticated FastAPI
   insights gateway; FastAPI derives the business ID and ML loaders enforce it
   at the SQL source.
@@ -201,6 +209,9 @@ it.
   plan tables, while an open seating owns actual occupancy. Multi-table sets
   must match an active configured combination, and capacity overrides require
   an owner/manager with an audit reason.
+- Resolve host-board shifts with the business IANA timezone and
+  `service_day_cutoff`. HTTP is the authoritative board snapshot; WebSocket
+  messages are invalidations that trigger a refetch, not a second state model.
 
 ## Definition of Done
 

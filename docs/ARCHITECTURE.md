@@ -165,23 +165,25 @@ address. A blocked request uses the standard `RATE_LIMITED` error body and
 incident does not take reservations or ordering offline. The Next.js docs
 assistant has no equivalent control yet.
 
-### Real-time queue and orders
+### Real-time operational projections
 
 1. Authenticated browser code requests a short-lived WebSocket token from
-   `/api/ws-token` because the primary JWT is httpOnly.
-2. FastAPI validates that token at the WebSocket endpoint.
+   Next.js `/api/ws-token` because the primary JWT is httpOnly. That server
+   route exchanges the cookie-backed access token with FastAPI and returns only
+   a 120-second, business-bound WebSocket credential.
+2. FastAPI requires `token_use=websocket`, the exact business, current staff
+   membership, and a relevant enabled module. The scoped credential is
+   rejected by normal HTTP authentication.
 3. A queue or order HTTP mutation commits PostgreSQL state.
 4. The router publishes a `DomainEvent` to Redis Stream `crowbar:events`.
 5. FastAPI's lifespan consumer group `ws_push` reads the event, re-queries
    current database state, and broadcasts a projection through an in-memory
-   queue or order WebSocket manager.
+   queue or order WebSocket manager. Reservation, queue, and `floor_plan.*`
+   events also invalidate connected host boards; each board then re-fetches
+   its authoritative location/service-day HTTP projection.
 
 Publishing is best-effort: Redis failure does not fail the committed HTTP
-mutation. `inventory.*` and `reservation.*` events are recorded but currently
-have no WebSocket projection. Reservation creation commits the reservation and
-notification rows before publishing. Reservation update and delete still rely
-on request-end commit and need the same correction before those event types
-gain a consumer.
+mutation. `inventory.*` events currently have no WebSocket projection.
 
 In-memory WebSocket managers imply that horizontal API scaling requires a
 shared fan-out design before multiple FastAPI replicas can reliably serve the
@@ -306,6 +308,21 @@ also enforcing their owning module. The initial product remains area-based and
 single-location in its UI; visual coordinates and multi-location management are
 not part of this foundation.
 
+Migration 025 adds `businesses.service_day_cutoff`, a business-local wall-clock
+boundary that defaults to 05:00. The host board resolves an explicit date or,
+by default, the current service date in the venue IANA timezone; before cutoff,
+the previous calendar date still owns the shift. It converts each local
+boundary independently, so DST transitions produce correct absolute windows.
+Legacy reservation/queue rows without a location appear only on the primary
+location board; new records receive that primary location explicitly.
+
+`GET /api/floor-plan/board` is the authoritative snapshot. It combines active
+areas/tables, reservation and queue assignments, open seatings, operational
+conditions, current/next reservations, and unassigned parties. A dedicated
+staff WebSocket broadcasts only `floor_plan_updated`; clients re-fetch the
+snapshot and retain normal HTTP retry/fallback behavior instead of treating
+socket messages as state.
+
 ### Inventory and order fulfillment
 
 - Countable inventory uses `unit_type=each`.
@@ -338,9 +355,9 @@ Backend integration tests do not run migrations. Their autouse fixture creates
 and drops ORM metadata in a dedicated `crowbar_test` PostgreSQL database. This
 means both migrations and ORM metadata require deliberate validation.
 
-Migration 023 is implemented and validated locally against a disposable fresh
-database plus the canonical seed. Railway remains at migrations 001–022 while
-deployment is shelved.
+Migrations 023–025 are implemented and validated locally against disposable
+fresh databases (023 also with the canonical seed). Railway remains at
+migrations 001–022 while deployment is shelved.
 
 Migrations 005 and 006 were renamed early in the project. A database restored
 from an old backup may still contain their former names in `_migrations`; use

@@ -28,6 +28,15 @@ async def get_current_user(
         payload = jwt.decode(
             token, settings.secret_key, algorithms=[settings.algorithm]
         )
+        if payload.get("token_use") == "websocket":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={
+                    "code": ErrorCode.INVALID_TOKEN,
+                    "message": "Invalid token",
+                    "details": None,
+                },
+            )
         user_id: str | None = payload.get("sub")
         if user_id is None:
             raise HTTPException(

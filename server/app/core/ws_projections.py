@@ -15,10 +15,19 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services import order_service, queue_service
+from app.services.floor_plan_ws_manager import manager as floor_plan_manager
 from app.services.order_ws_manager import manager as order_manager
 from app.services.queue_ws_manager import manager as queue_manager
 
 logger = logging.getLogger(__name__)
+
+
+async def broadcast_floor_plan_invalidation(business_id: str) -> None:
+    """Tell host boards to re-fetch their authoritative HTTP projection."""
+    await floor_plan_manager.broadcast(
+        business_id,
+        {"type": "floor_plan_updated"},
+    )
 
 
 async def broadcast_queue_state(db: AsyncSession, business_id: str) -> None:

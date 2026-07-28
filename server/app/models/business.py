@@ -1,4 +1,6 @@
-from sqlalchemy import Boolean, Integer, String, Text
+from datetime import time
+
+from sqlalchemy import Boolean, Integer, String, Text, Time
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -13,6 +15,9 @@ class Business(Base, UUIDMixin, TimestampMixin):
     # IANA timezone name (e.g. 'Europe/Istanbul'). Interprets wall-clock times
     # such as operating hours and happy-hour windows. Defaults to 'UTC'.
     timezone: Mapped[str] = mapped_column(String(64), default="UTC", nullable=False)
+    service_day_cutoff: Mapped[time] = mapped_column(
+        Time, default=lambda: time(5, 0), nullable=False
+    )
     # Age asserted at alcohol checkout. Configurable per business (differs by
     # country: 18 across most of the EU/Turkey, 21 in the US). Never hardcoded.
     legal_drinking_age: Mapped[int] = mapped_column(Integer, default=18, nullable=False)

@@ -38,3 +38,8 @@ class LoginResponse(AppBaseModel):
 class TokenData(AppBaseModel):
     sub: str
     user_type: str
+
+
+class WebSocketTokenResponse(AppBaseModel):
+    token: str
+    expires_in: int

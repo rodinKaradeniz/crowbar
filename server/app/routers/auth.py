@@ -13,19 +13,38 @@ from app.database import get_db
 from app.dependencies import get_current_business, get_current_user
 from app.models.business import Business
 from app.models.user import User
-from app.schemas.auth import BusinessRegisterRequest, LoginRequest, LoginResponse, RegisterRequest
+from app.schemas.auth import (
+    BusinessRegisterRequest,
+    LoginRequest,
+    LoginResponse,
+    RegisterRequest,
+    WebSocketTokenResponse,
+)
 from app.schemas.user import ChangeEmailRequest, ChangePasswordRequest, UserResponse, UserUpdate
 from app.services.auth_service import (
     authenticate_user,
     create_access_token,
+    create_websocket_token,
     hash_password,
     register_business_owner,
     register_user,
     verify_password,
+    WEBSOCKET_TOKEN_TTL_SECONDS,
 )
 from app.services import staff_service
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+
+@router.post("/ws-token", response_model=WebSocketTokenResponse)
+async def issue_websocket_token(
+    current_user: User = Depends(get_current_user),
+    business: Business = Depends(get_current_business),
+):
+    return WebSocketTokenResponse(
+        token=create_websocket_token(str(current_user.id), str(business.id)),
+        expires_in=WEBSOCKET_TOKEN_TTL_SECONDS,
+    )
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -272,4 +291,3 @@ async def disable_account(
     current_user.user_type = f"disabled_{current_user.user_type}"
     await db.flush()
     return {"message": "Account disabled successfully"}
-

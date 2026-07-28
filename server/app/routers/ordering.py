@@ -2,11 +2,9 @@ import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect, status
-from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.core.events import DomainEvent, publish
 from app.core.rate_limit import (
     PUBLIC_ORDER_IP_LIMIT,
@@ -18,7 +16,6 @@ from app.core.rate_limit import (
 from app.database import get_db
 from app.dependencies import get_current_business, get_current_user, require_module
 from app.models.business import Business
-from app.models.staff import Staff
 from app.models.user import User
 from app.schemas.menu import (
     LibraryItemCreate,
@@ -51,6 +48,7 @@ from app.schemas.recipe import (
 )
 from app.services import happy_hour_service, menu_service, order_service, recipe_service
 from app.services.order_ws_manager import manager
+from app.services.websocket_auth import authorize_staff_websocket
 
 logger = logging.getLogger(__name__)
 
@@ -606,25 +604,14 @@ async def orders_websocket(
     token: str = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
-    """Staff WebSocket for live order updates. Auth via ?token= query param."""
-    try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-        user_id: str | None = payload.get("sub")
-        if user_id is None:
-            await ws.close(code=1008)
-            return
-    except JWTError:
-        await ws.close(code=1008)
-        return
-
-    result = await db.execute(
-        select(Staff).where(
-            Staff.user_id == user_id,
-            Staff.business_id == business_id,
-        )
-    )
-    if result.scalar_one_or_none() is None:
-        await ws.close(code=1008)
+    """Staff WebSocket authenticated by a short-lived, scoped credential."""
+    if not await authorize_staff_websocket(
+        db,
+        ws,
+        token=token,
+        business_id=business_id,
+        required_modules=("ordering",),
+    ):
         return
 
     bid = str(business_id)
