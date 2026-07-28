@@ -10,7 +10,9 @@ insights independently. Public guests use slug-based reservation, queue, menu,
 and ordering routes; staff use an authenticated business dashboard.
 
 The current tenancy model assumes one active business association per staff
-login. Database tables include nullable `location_id` foundations, but the
+login. Every newly created business receives a primary location, and migration
+024 backfills one for existing businesses. Several older module records retain
+nullable `location_id` foundations during their gradual cutover, while the
 product UI remains effectively single-location.
 
 ## Runtime Topology
@@ -94,11 +96,11 @@ components and FastAPI dependencies perform the authoritative auth checks.
 - `tests/`: pytest unit and PostgreSQL-backed integration tests.
 
 The async session dependency commits at the end of a successful request and
-rolls back on failure. Queue, ordering, tab-order, and inventory event paths
-explicitly commit first so the stream consumer cannot project uncommitted
-state. Reservation routes currently publish after `flush()` but before the
-dependency's request-end commit; this is a known ordering gap, even though
-reservation events do not yet have a WebSocket projection.
+rolls back on failure. Queue, ordering, tab-order, inventory, reservation
+creation, and reservation rescheduling event paths explicitly commit first so
+consumers cannot observe uncommitted state. Reservation patch and delete still
+rely on request-end commit and need the same correction before those event
+types gain a consumer.
 
 ### `ml/`
 
@@ -272,6 +274,34 @@ reservation stores and returns the actor, actor name, reason, and timestamp;
 ordinary staff receive `403` if they attempt the command. A later normal move
 clears the current override marker because its replacement interval satisfies
 normal availability.
+
+### Operational tables and seatings
+
+Migration 024 evolves the original QR-oriented `tables` record into the shared
+physical-resource foundation for reservations, queue, tabs, and ordering:
+
+- `table_areas` groups registered tables within one business location. A table
+  has a positive capacity, display shape and order, administrative lifecycle,
+  and a current `ready`, `cleaning`, or `out_of_service` condition.
+- `table_combinations` defines the exact multi-table sets staff may allocate.
+  Overlapping definitions are allowed, but an assignment with multiple tables
+  must match one active definition. Its effective capacity is either an
+  explicit positive override or the sum of member capacities.
+- Reservation and queue assignment tables record advance planning, actor,
+  timestamp, and any privileged capacity-override reason. They do not represent
+  occupancy.
+- `table_seatings` represents actual occupancy and links exactly one active
+  reservation or queue party to one or more tables. Opening a seating uses the
+  same assignment and capacity rules. Closing it completes the source visit and
+  puts its tables into cleaning; a later explicit staff action marks them ready.
+
+All floor-plan queries derive the business from authenticated staff context.
+Configuration mutations require owner or manager; operational state,
+assignment, and seating actions are available to staff. The cross-module API is
+available when reservations, queue, or ordering is enabled, with source actions
+also enforcing their owning module. The initial product remains area-based and
+single-location in its UI; visual coordinates and multi-location management are
+not part of this foundation.
 
 ### Inventory and order fulfillment
 

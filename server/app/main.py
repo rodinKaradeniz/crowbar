@@ -18,6 +18,7 @@ from app.core.events import STREAM_KEY
 from app.core.redis_client import close_redis, get_redis
 from app.core.stream_consumer import GROUP_NAME, ws_push_consumer
 from app.database import get_db
+from app.services.floor_plan_service import FloorPlanError
 from app.routers import (
     analytics,
     availability,
@@ -25,6 +26,7 @@ from app.routers import (
     booking_schedules,
     businesses,
     customers,
+    floor_plan,
     happy_hour,
     insights,
     inventory,
@@ -36,6 +38,7 @@ from app.routers import (
     staff,
     tabs,
 )
+from app.routers.floor_plan import floor_plan_error_handler
 
 logging.basicConfig(
     level=logging.INFO,
@@ -82,6 +85,7 @@ app = FastAPI(
 
 app.add_exception_handler(HTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(FloorPlanError, floor_plan_error_handler)
 
 # ─── Structured request logging middleware ────────────────────────────────────
 
@@ -131,6 +135,7 @@ app.include_router(service_types.router)
 app.include_router(reservations.router)
 app.include_router(notifications.router)
 app.include_router(customers.router)
+app.include_router(floor_plan.router)
 app.include_router(staff.router)
 app.include_router(analytics.router)
 app.include_router(queue.router)

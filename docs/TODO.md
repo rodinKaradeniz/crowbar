@@ -86,24 +86,32 @@ below; it did not promote them ahead of the current availability stage.
   future bot bookings and later resource/table assignment rather than creating
   channel-specific slot logic.
 
-### 2. Floor plan and table management — next
+### 2. Floor plan and table management — in progress
 
-- **Needs decision:** Design floor-plan editing, table shapes/capacities,
-  combinable tables, areas, turn times, temporary closures, and the operational
-  states required during service.
-- **Ready after decision:** Assign reservations and queue parties to tables;
-  unify upcoming reservations, walk-ins, occupied tables, cleaning, and
-  availability in one service view.
-- **Needs decision:** Define host-managed table and meal/service stages without
-  making the floor plan depend on a future POS. Start with states Crowbar can
-  know directly, then allow orders or POS integrations to enrich stages such as
-  ordered, mains, dessert, check requested, and paid.
-- **Ready after decision:** Preserve one business-scoped guest journey from
-  queue or reservation through seating, table, tab, orders, and departure so
-  staff do not re-enter the same party at each module boundary.
-- **Ready after decision:** Replace free-form table identifiers with registered
-  business-scoped tables and safe QR revisions. Keep the model location-ready
-  without expanding the product to multi-location management in this stage.
+- **Complete — operational domain contract and backend foundation:** Every
+  business has a primary-location lifecycle. Areas own registered tables with
+  capacity, shape, ordering, and `ready` / `cleaning` / `out_of_service`
+  conditions. Multi-table allocations must match an active configured
+  combination. Reservation and queue assignments are separate from actual
+  seatings; closing a seating completes the visit and moves its tables to
+  cleaning. Capacity is enforced unless an owner/manager records an override
+  reason. Configuration is owner/manager-only while all staff can operate
+  table state, assignments, and seatings.
+- **Next — host service board and management UI:** Add responsive area/table
+  configuration and one operational board for upcoming assigned and unassigned
+  reservations, queue parties, occupied tables, cleaning, temporary closure,
+  and availability. Replace the queue's legacy table-less accept/seat actions
+  with the seating command, and expose assignment from reservation surfaces.
+- **Ready — ordering and tab continuity:** Replace new free-form dine-in table
+  identifiers with registered business-scoped tables and opaque, revisioned QR
+  tokens. Validate tab tables within the tenant and carry the same table and
+  guest journey through seating, tab, orders, and departure. Historical order
+  labels remain read-only compatibility data.
+- **Deferred within this stage — visual editor and richer service stages:** Add
+  drag-and-drop geometry, turn-time assistance, and richer meal stages only
+  after the area-based service loop is proven. Crowbar-owned stages must not
+  depend on a future POS; orders or integrations may later enrich stages such
+  as ordered, mains, dessert, check requested, and paid.
 
 ### 3. Rich guest CRM
 

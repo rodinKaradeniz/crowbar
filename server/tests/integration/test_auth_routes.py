@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.booking_schedule import BookingSchedule
 from app.models.business import Business
+from app.models.location import Location
 
 
 # --------------------------------------------------------------------------- #
@@ -65,6 +66,14 @@ class TestRegister:
         )
         assert schedule is not None
         assert schedule.windows == []
+        location = await db_session.scalar(
+            select(Location).where(
+                Location.business_id == business.id,
+                Location.is_primary.is_(True),
+            )
+        )
+        assert location is not None
+        assert location.name == "My Business"
 
 
 # --------------------------------------------------------------------------- #

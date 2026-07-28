@@ -447,6 +447,35 @@ than repeated one-off overrides.
 `server/app/services/availability_service.py`,
 `client/components/staff-reservation-dialog.tsx`, `docs/TODO.md`
 
+## 2026-07-28 — Operational tables separate planning from occupancy
+
+**Context:** Crowbar had a QR-oriented table record, but reservations and queue
+parties could not use it, order entry still trusted free-form table labels, and
+business creation did not guarantee the primary location expected by the
+multi-location foundation. Storing a single editable table status would also
+conflate planned reservations, real occupancy, and temporary service
+conditions.
+
+**Decision:** Guarantee and backfill one primary location per business. Extend
+registered tables with areas, shapes, positive capacity, and explicit
+ready/cleaning/out-of-service conditions. Permit multi-table allocations only
+through active configured combinations. Store reservation and queue assignments
+separately from actual seatings; closing a seating completes the visit and
+moves its tables to cleaning. Enforce capacity by default and allow only
+owners/managers to override it with a recorded reason. Keep configuration
+owner/manager-only while allowing all staff to run the service loop.
+
+**Consequences:** Public booking capacity remains authoritative and does not
+require a table assignment at creation time. The first host board can derive
+planned, occupied, cleaning, and unavailable views without depending on a POS.
+The next slice must replace legacy queue seat actions in the UI, then connect
+registered tables to tabs and revisioned QR ordering before removing new
+free-form table writes.
+
+**References:** `server/db/migrations/024_operational_tables.sql`,
+`server/app/services/floor_plan_service.py`,
+`server/app/routers/floor_plan.py`, `docs/TODO.md`
+
 ## Entry Template
 
 ```markdown

@@ -149,3 +149,25 @@ def require_module(module_name: str):
             )
 
     return dependency
+
+
+def require_any_module(*module_names: str):
+    """Require at least one of several cross-cutting product modules."""
+
+    required = tuple(dict.fromkeys(module_names))
+    if not required:
+        raise ValueError("require_any_module needs at least one module")
+
+    async def dependency(business: Business = Depends(get_current_business)) -> None:
+        enabled = set(business.enabled_modules or [])
+        if not enabled.intersection(required):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": ErrorCode.MODULE_DISABLED,
+                    "message": "At least one operational module must be enabled",
+                    "details": {"modules": list(required)},
+                },
+            )
+
+    return dependency

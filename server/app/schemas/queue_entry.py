@@ -24,6 +24,7 @@ class QueueEntryResponse(AppBaseModel):
     joined_at: datetime
     called_at: datetime | None = None
     seated_at: datetime | None = None
+    completed_at: datetime | None = None
 
 
 

@@ -46,6 +46,11 @@ class Reservation(Base, UUIDMixin, TimestampMixin):
         ForeignKey("businesses.id", ondelete="CASCADE"),
         nullable=False,
     )
+    location_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("locations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     customer_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("customers.id", ondelete="CASCADE"),

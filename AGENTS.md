@@ -194,6 +194,10 @@ it.
 - Inventory deductions and reversals happen at the `served` boundary and use
   recorded stock movements. Do not recompute a reversal from the current
   recipe.
+- Keep table planning separate from occupancy: reservation/queue assignments
+  plan tables, while an open seating owns actual occupancy. Multi-table sets
+  must match an active configured combination, and capacity overrides require
+  an owner/manager with an audit reason.
 
 ## Definition of Done
 

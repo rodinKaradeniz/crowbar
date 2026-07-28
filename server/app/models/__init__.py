@@ -19,6 +19,10 @@ from app.models.service_type import ServiceType
 from app.models.staff import Staff
 from app.models.tab import Tab
 from app.models.table import Table
+from app.models.table_area import TableArea
+from app.models.table_assignment import QueueTableAssignment, ReservationTableAssignment
+from app.models.table_combination import TableCombination, TableCombinationMember
+from app.models.table_seating import TableSeating, TableSeatingTable
 from app.models.user import User
 
 __all__ = [
@@ -43,6 +47,13 @@ __all__ = [
     "StockMovement",
     "MenuItemIngredient",
     "Table",
+    "TableArea",
+    "TableCombination",
+    "TableCombinationMember",
+    "ReservationTableAssignment",
+    "QueueTableAssignment",
+    "TableSeating",
+    "TableSeatingTable",
     "BotConfig",
     "BookingSchedule",
     "BookingScheduleWindow",

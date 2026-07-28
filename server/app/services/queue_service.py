@@ -235,6 +235,7 @@ def entry_to_dict(entry: QueueEntry, position: int | None = None) -> dict:
         "joined_at": entry.joined_at.isoformat() if entry.joined_at else None,
         "called_at": entry.called_at.isoformat() if entry.called_at else None,
         "seated_at": entry.seated_at.isoformat() if entry.seated_at else None,
+        "completed_at": entry.completed_at.isoformat() if entry.completed_at else None,
     }
 
 

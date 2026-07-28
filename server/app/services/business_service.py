@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.business import Business
+from app.models.location import Location
 from app.schemas.business import BusinessCreate, BusinessUpdate
 from app.services.booking_schedule_service import create_default_booking_schedule
 
@@ -44,6 +45,16 @@ async def create_business(db: AsyncSession, data: BusinessCreate) -> Business:
     db.add(business)
     await db.flush()
     await create_default_booking_schedule(db, business)
+    db.add(
+        Location(
+            business_id=business.id,
+            name=business.name,
+            address=business.address,
+            phone=business.phone,
+            is_primary=True,
+        )
+    )
+    await db.flush()
     return business
 
 
