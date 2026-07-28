@@ -39,8 +39,11 @@ FastAPI :8000 --------------------------------------+--> PostgreSQL :5432
 Railway hourly cron --------------------------------+
 ```
 
-Local Docker Compose starts PostgreSQL, Redis, and ML. `scripts/dev.sh` starts
-FastAPI and Next.js as host processes after running migrations and demo seeds.
+Local Docker Compose uses the explicit project name `crowbar` and starts
+PostgreSQL, Redis, and ML. The explicit name prevents Docker from grouping the
+stack with unrelated repositories whose Compose directory is also named
+`server`. `scripts/dev.sh` starts FastAPI and Next.js as host processes after
+running migrations and demo seeds.
 The reservation-reminder job is a separate one-shot command in every
 environment and is scheduled hourly by Railway in production.
 

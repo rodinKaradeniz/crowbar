@@ -476,6 +476,25 @@ free-form table writes.
 `server/app/services/floor_plan_service.py`,
 `server/app/routers/floor_plan.py`, `docs/TODO.md`
 
+## 2026-07-28 — Local Compose uses a repository-specific project name
+
+**Context:** Docker Compose inferred the project name `server` from the backend
+directory. Another local repository used the same inferred name, causing Docker
+to group an unrelated stopped database with Crowbar and making broad Compose
+commands affect both projects.
+
+**Decision:** Declare `name: crowbar` in Crowbar's Compose file. Recreate the
+Crowbar PostgreSQL, Redis, and ML containers under that project and copy the
+database and Redis volumes to the corresponding `crowbar_*` names before
+startup verification.
+
+**Consequences:** Normal Compose commands from this repository now target the
+Crowbar stack without relying on the generic directory name. Existing local
+installations changing from the older project name must preserve or migrate
+their named volumes rather than allowing Compose to initialize empty ones.
+
+**References:** `server/docker-compose.yml`, `docs/ARCHITECTURE.md`
+
 ## Entry Template
 
 ```markdown

@@ -59,6 +59,9 @@ Crowbar is a multi-tenant operations platform for bars and restaurants:
   Alembic.
 - `scripts/dev.sh`: starts PostgreSQL, Redis, and ML in Docker, then starts the
   backend and frontend natively. It does not run scheduled jobs.
+- `server/docker-compose.yml` declares the Compose project as `crowbar`; do not
+  remove that name or local containers can collide with unrelated repositories
+  whose Compose directory is also named `server`.
 
 Default local ports are frontend `3000`, backend `8000`, ML `8001`,
 PostgreSQL `5432`, and Redis `6379`.
