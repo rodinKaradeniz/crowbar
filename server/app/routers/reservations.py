@@ -13,7 +13,12 @@ from app.core.rate_limit import (
     get_client_ip,
 )
 from app.database import get_db
-from app.dependencies import get_current_business, get_current_user, require_module
+from app.dependencies import (
+    get_current_business,
+    get_current_user,
+    require_module,
+    require_roles,
+)
 from app.models.business import Business
 from app.models.user import User
 from app.schemas.reservation import (
@@ -26,7 +31,11 @@ from app.schemas.reservation import (
 from app.schemas.booking_schedule import AvailabilityResponse
 from app.services import email_service
 from app.services import reservation_service
-from app.services.availability_service import AvailabilityError
+from app.services.availability_service import (
+    AvailabilityError,
+    get_availability,
+    get_override_times,
+)
 from app.services.reservation_notifications import (
     ReservationSnapshot,
     notify_after_reservation_create,
@@ -87,6 +96,14 @@ def _reservation_duration_minutes(reservation) -> int:
     )
 
 
+def _can_override_availability(user: User, business_id: UUID) -> bool:
+    return any(
+        assignment.business_id == business_id
+        and assignment.role in {"owner", "manager"}
+        for assignment in user.staff_assignments
+    )
+
+
 @router.get("/business/{business_id}", response_model=list[ReservationResponse])
 async def list_business_reservations(
     business_id: UUID,
@@ -101,6 +118,51 @@ async def list_business_reservations(
     return await reservation_service.get_reservations_by_business(
         db, business_id, status=status_filter
     )
+
+
+@router.get("/availability", response_model=AvailabilityResponse)
+async def get_staff_reservation_availability(
+    service_type_id: UUID = Query(...),
+    start_date: date = Query(...),
+    days: int = Query(default=1, ge=1, le=31),
+    guests: int = Query(default=1, ge=1),
+    db: AsyncSession = Depends(get_db),
+    business: Business = Depends(get_current_business),
+    _: None = Depends(require_module("reservations")),
+):
+    try:
+        return await get_availability(
+            db,
+            business_id=business.id,
+            service_type_id=service_type_id,
+            start_date=start_date,
+            days=days,
+            guests=guests,
+        )
+    except AvailabilityError as exc:
+        raise _availability_http_error(exc) from exc
+
+
+@router.get("/override-times", response_model=AvailabilityResponse)
+async def get_staff_override_times(
+    service_type_id: UUID = Query(...),
+    local_date: date = Query(...),
+    guests: int = Query(default=1, ge=1),
+    db: AsyncSession = Depends(get_db),
+    business: Business = Depends(get_current_business),
+    _: None = Depends(require_module("reservations")),
+    __: User = Depends(require_roles("owner", "manager")),
+):
+    try:
+        return await get_override_times(
+            db,
+            business_id=business.id,
+            service_type_id=service_type_id,
+            local_date=local_date,
+            guests=guests,
+        )
+    except AvailabilityError as exc:
+        raise _availability_http_error(exc) from exc
 
 
 @router.get("/{reservation_id}", response_model=ReservationResponse)
@@ -185,15 +247,29 @@ async def create_reservation(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    business: Business = Depends(get_current_business),
+    _: None = Depends(require_module("reservations")),
 ):
     try:
-        reservation = await reservation_service.create_reservation(db, data)
+        reservation = await reservation_service.create_reservation(
+            db,
+            business_id=business.id,
+            data=data,
+            override_actor=(
+                current_user
+                if _can_override_availability(current_user, business.id)
+                else None
+            ),
+        )
     except AvailabilityError as exc:
         raise _availability_http_error(exc) from exc
     await db.refresh(reservation, ["business", "service_type", "customer"])
     display_name = (reservation.customer.name if reservation.customer else None) or reservation.phone
     await notify_after_reservation_create(
-        db, reservation, customer_display_name=display_name
+        db,
+        reservation,
+        customer_display_name=display_name,
+        actor=current_user,
     )
     await db.commit()
     background_tasks.add_task(
@@ -221,6 +297,10 @@ async def create_reservation(
             "time": reservation.time.isoformat(),
             "ends_at": reservation.ends_at.isoformat(),
             "source": "authenticated",
+            "availability_overridden": bool(
+                reservation.availability_override_reason
+            ),
+            "actor_user_id": str(current_user.id),
         },
     ))
     return reservation
@@ -289,6 +369,11 @@ async def reschedule_reservation(
             db,
             reservation=reservation,
             data=data,
+            override_actor=(
+                current_user
+                if _can_override_availability(current_user, business.id)
+                else None
+            ),
         )
     except AvailabilityError as exc:
         raise _availability_http_error(exc) from exc
@@ -351,6 +436,9 @@ async def reschedule_reservation(
                 "old_guests": old_snapshot.guests,
                 "new_guests": reservation.guests,
                 "actor_user_id": str(current_user.id),
+                "availability_overridden": bool(
+                    reservation.availability_override_reason
+                ),
             },
         )
     )

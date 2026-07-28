@@ -38,6 +38,7 @@ async def _create_context(
     enabled_modules: list[str] | None = None,
     status: str = "confirmed",
     starts_at: datetime | None = None,
+    role: str = "staff",
 ) -> tuple[Business, ServiceType, Reservation, str]:
     business = Business(
         name=f"{slug} Bar",
@@ -58,7 +59,7 @@ async def _create_context(
     )
     db.add_all([business, user])
     await db.flush()
-    db.add(Staff(user_id=user.id, business_id=business.id, role="staff"))
+    db.add(Staff(user_id=user.id, business_id=business.id, role=role))
 
     service_type = ServiceType(
         business_id=business.id,
@@ -389,3 +390,198 @@ async def test_generic_patch_cannot_reactivate_a_terminal_reservation(
 
     assert response.status_code == 409
     assert response.json()["code"] == "RESERVATION_NOT_RESCHEDULABLE"
+
+
+@pytest.mark.asyncio
+async def test_owner_can_reschedule_outside_normal_availability_with_audit(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    business, service_type, reservation, token = await _create_context(
+        db_session,
+        slug="owner-override-move",
+        role="owner",
+    )
+    target = _tomorrow(22)
+    other_customer = Customer(
+        business_id=business.id,
+        name="Other Guest",
+        phone="+14155551888",
+        email="other-override@example.com",
+    )
+    db_session.add(other_customer)
+    await db_session.flush()
+    db_session.add(
+        Reservation(
+            business_id=business.id,
+            customer_id=other_customer.id,
+            service_type_id=service_type.id,
+            time=target,
+            ends_at=target + timedelta(hours=1),
+            phone=other_customer.phone,
+            email=other_customer.email,
+            status="confirmed",
+            guests=2,
+        )
+    )
+    await db_session.commit()
+
+    response = await client.post(
+        f"/api/reservations/{reservation.id}/reschedule",
+        headers=_headers(token),
+        json={
+            "service_type_id": str(service_type.id),
+            "time": target.isoformat(),
+            "guests": 2,
+            "availability_override_reason": "Private event approved by owner",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["time"] == target.isoformat().replace("+00:00", "Z")
+    assert body["availability_override_reason"] == (
+        "Private event approved by owner"
+    )
+    assert body["availability_override_actor_name"] == "Staff Member"
+    assert body["availability_override_by"] is not None
+    assert body["availability_overridden_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_ordinary_staff_cannot_override_availability(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    _, service_type, reservation, token = await _create_context(
+        db_session,
+        slug="staff-override-forbidden",
+    )
+    original_time = reservation.time
+
+    response = await client.post(
+        f"/api/reservations/{reservation.id}/reschedule",
+        headers=_headers(token),
+        json={
+            "service_type_id": str(service_type.id),
+            "time": _tomorrow(22).isoformat(),
+            "guests": 2,
+            "availability_override_reason": "Guest requested a private exception",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "AVAILABILITY_OVERRIDE_FORBIDDEN"
+    await db_session.refresh(reservation)
+    assert reservation.time == original_time
+    assert reservation.availability_override_reason is None
+
+
+@pytest.mark.asyncio
+async def test_override_times_are_privileged_and_server_generated(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    _, staff_service, staff_reservation, staff_token = await _create_context(
+        db_session,
+        slug="staff-override-times",
+    )
+    _, owner_service, owner_reservation, owner_token = await _create_context(
+        db_session,
+        slug="owner-override-times",
+        role="manager",
+    )
+    staff_service_id = str(staff_service.id)
+    staff_local_date = staff_reservation.time.date().isoformat()
+    owner_service_id = str(owner_service.id)
+    owner_local_date = owner_reservation.time.date().isoformat()
+
+    staff_response = await client.get(
+        "/api/reservations/override-times",
+        headers=_headers(staff_token),
+        params={
+            "service_type_id": staff_service_id,
+            "local_date": staff_local_date,
+            "guests": 2,
+        },
+    )
+    owner_response = await client.get(
+        "/api/reservations/override-times",
+        headers=_headers(owner_token),
+        params={
+            "service_type_id": owner_service_id,
+            "local_date": owner_local_date,
+            "guests": 2,
+        },
+    )
+
+    assert staff_response.status_code == 403
+    assert owner_response.status_code == 200
+    starts = {
+        slot["starts_at"]
+        for slot in owner_response.json()["dates"][0]["slots"]
+    }
+    assert _tomorrow(22).isoformat().replace("+00:00", "Z") in starts
+
+
+@pytest.mark.asyncio
+async def test_owner_can_create_staff_reservation_with_override(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    _, service_type, _, token = await _create_context(
+        db_session,
+        slug="owner-override-create",
+        role="owner",
+    )
+    target = _tomorrow(22)
+
+    response = await client.post(
+        "/api/reservations",
+        headers=_headers(token),
+        json={
+            "service_type_id": str(service_type.id),
+            "time": target.isoformat(),
+            "name": "Phone Guest",
+            "phone": "+14155551999",
+            "email": "phone-guest@example.com",
+            "guests": 3,
+            "availability_override_reason": "Owner accepted private event request",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["business_id"] == str(service_type.business_id)
+    assert response.json()["availability_override_reason"] == (
+        "Owner accepted private event request"
+    )
+    assert response.json()["availability_override_actor_name"] == "Staff Member"
+
+
+@pytest.mark.asyncio
+async def test_staff_create_rejects_browser_supplied_business_id(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    _, service_type, _, token = await _create_context(
+        db_session,
+        slug="staff-create-authoritative-tenant",
+        role="owner",
+    )
+
+    response = await client.post(
+        "/api/reservations",
+        headers=_headers(token),
+        json={
+            "business_id": "00000000-0000-0000-0000-000000000000",
+            "service_type_id": str(service_type.id),
+            "time": _tomorrow(14).isoformat(),
+            "name": "Phone Guest",
+            "phone": "+14155551777",
+            "email": "authoritative@example.com",
+            "guests": 2,
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "VALIDATION_ERROR"

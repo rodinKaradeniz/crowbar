@@ -175,6 +175,11 @@ function toReservation(r: ReservationResponse): Reservation {
     note: r.note || undefined,
     status: r.status as Reservation["status"],
     guests: r.guests,
+    availabilityOverrideBy: r.availability_override_by || undefined,
+    availabilityOverrideActorName:
+      r.availability_override_actor_name || undefined,
+    availabilityOverrideReason: r.availability_override_reason || undefined,
+    availabilityOverriddenAt: r.availability_overridden_at || undefined,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };

@@ -18,6 +18,16 @@ export function formatSlotTime(value: string, timezone: string): string {
   }).format(new Date(value));
 }
 
+export function formatSlotTimeWithZone(value: string, timezone: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    timeZone: timezone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZoneName: "short",
+  }).format(new Date(value));
+}
+
 export function formatSlotDate(value: string, timezone: string): string {
   return new Intl.DateTimeFormat(undefined, {
     timeZone: timezone,

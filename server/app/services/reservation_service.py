@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.reservation import Reservation
+from app.models.user import User
 from app.schemas.reservation import (
     PublicReservationCreate,
     ReservationCreate,
@@ -16,6 +17,7 @@ from app.services.availability_service import (
     AvailabilityError,
     get_availability,
     validate_booking_slot,
+    validate_override_slot,
 )
 from app.core.errors import ErrorCode
 from app.services.customer_identity_service import upsert_customer
@@ -27,6 +29,7 @@ async def get_reservations_by_business(
     status: str | None = None,
 ) -> list[Reservation]:
     query = select(Reservation).where(Reservation.business_id == business_id)
+    query = query.options(selectinload(Reservation.availability_override_user))
     if status:
         query = query.where(Reservation.status == status)
     query = query.order_by(Reservation.time.desc())
@@ -52,6 +55,7 @@ async def get_reservation_by_id(
             selectinload(Reservation.service_type),
             selectinload(Reservation.customer),
         )
+    query = query.options(selectinload(Reservation.availability_override_user))
     if for_update:
         query = query.with_for_update()
     result = await db.execute(query)
@@ -59,24 +63,48 @@ async def get_reservation_by_id(
 
 
 async def create_reservation(
-    db: AsyncSession, data: ReservationCreate
+    db: AsyncSession,
+    *,
+    business_id: UUID,
+    data: ReservationCreate,
+    override_actor: User | None = None,
 ) -> Reservation:
-    validated_slot = await validate_booking_slot(
-        db,
-        business_id=data.business_id,
-        service_type_id=data.service_type_id,
-        starts_at=data.time,
-        guests=data.guests,
-    )
+    if data.availability_override_reason is not None:
+        if override_actor is None:
+            raise AvailabilityError(
+                status_code=403,
+                code=ErrorCode.AVAILABILITY_OVERRIDE_FORBIDDEN,
+                message="Only owners and managers can override availability",
+            )
+        validated_slot = await validate_override_slot(
+            db,
+            business_id=business_id,
+            service_type_id=data.service_type_id,
+            starts_at=data.time,
+            guests=data.guests,
+        )
+    else:
+        validated_slot = await validate_booking_slot(
+            db,
+            business_id=business_id,
+            service_type_id=data.service_type_id,
+            starts_at=data.time,
+            guests=data.guests,
+        )
     service_type = validated_slot.service_type
     status = "pending" if service_type.is_pending_enabled else "confirmed"
 
     customer = await upsert_customer(
-        db, business_id=data.business_id, phone=data.phone, email=data.email
+        db,
+        business_id=business_id,
+        phone=data.phone,
+        email=data.email,
+        name=data.name,
     )
+    assert customer is not None
 
     reservation = Reservation(
-        business_id=data.business_id,
+        business_id=business_id,
         customer_id=customer.id,
         service_type_id=data.service_type_id,
         time=validated_slot.starts_at,
@@ -86,8 +114,19 @@ async def create_reservation(
         note=data.note,
         status=status,
         guests=data.guests,
-        channel="web",
+        channel="staff",
+        availability_override_by=(
+            override_actor.id if data.availability_override_reason else None
+        ),
+        availability_override_reason=data.availability_override_reason,
+        availability_overridden_at=(
+            datetime.now(timezone.utc)
+            if data.availability_override_reason
+            else None
+        ),
     )
+    if data.availability_override_reason:
+        reservation.availability_override_user = override_actor
     db.add(reservation)
     await db.flush()
     return reservation
@@ -174,26 +213,50 @@ async def reschedule_reservation(
     *,
     reservation: Reservation,
     data: ReservationReschedule,
+    override_actor: User | None = None,
     now: datetime | None = None,
 ) -> Reservation:
     ensure_reschedulable(reservation, now=now)
-    validated_slot = await validate_booking_slot(
-        db,
-        business_id=reservation.business_id,
-        service_type_id=data.service_type_id,
-        starts_at=data.time,
-        guests=data.guests,
-        now=now,
-        exclude_reservation_id=reservation.id,
-    )
+    if data.availability_override_reason is not None:
+        if override_actor is None:
+            raise AvailabilityError(
+                status_code=403,
+                code=ErrorCode.AVAILABILITY_OVERRIDE_FORBIDDEN,
+                message="Only owners and managers can override availability",
+            )
+        validated_slot = await validate_override_slot(
+            db,
+            business_id=reservation.business_id,
+            service_type_id=data.service_type_id,
+            starts_at=data.time,
+            guests=data.guests,
+            now=now,
+        )
+    else:
+        validated_slot = await validate_booking_slot(
+            db,
+            business_id=reservation.business_id,
+            service_type_id=data.service_type_id,
+            starts_at=data.time,
+            guests=data.guests,
+            now=now,
+            exclude_reservation_id=reservation.id,
+        )
     reservation.service_type_id = data.service_type_id
     reservation.time = validated_slot.starts_at
     reservation.ends_at = validated_slot.ends_at
     reservation.guests = data.guests
     reservation.sms_reminder_sent = False
-    reservation.availability_override_by = None
-    reservation.availability_override_reason = None
-    reservation.availability_overridden_at = None
+    reservation.availability_override_by = (
+        override_actor.id if data.availability_override_reason else None
+    )
+    reservation.availability_override_reason = data.availability_override_reason
+    reservation.availability_overridden_at = (
+        datetime.now(timezone.utc) if data.availability_override_reason else None
+    )
+    reservation.availability_override_user = (
+        override_actor if data.availability_override_reason else None
+    )
     await db.flush()
     await db.refresh(reservation)
     return reservation

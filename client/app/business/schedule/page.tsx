@@ -45,6 +45,7 @@ export default async function BusinessSchedule() {
       serviceTypes={serviceTypes}
       customers={customers}
       currentTime={new Date().toISOString()}
+      canOverride={user.role === "owner" || user.role === "manager"}
     />
   );
 }

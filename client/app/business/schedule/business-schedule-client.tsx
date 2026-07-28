@@ -2,14 +2,15 @@
 
 import { useState, useMemo } from "react";
 import { addDays, addMinutes, format, isSameDay, isToday, parseISO } from "date-fns";
-import { Clock, Users } from "lucide-react";
+import { Clock, Plus, Users } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Business, Reservation, ServiceType } from "@/types";
 import { CustomerResponse } from "@/lib/api-client";
 import { ReservationDetailsDialog } from "@/components/reservation-details-dialog";
-import { RescheduleReservationDialog } from "@/components/reschedule-reservation-dialog";
+import { StaffReservationDialog } from "@/components/staff-reservation-dialog";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 
 interface BusinessScheduleClientProps {
   business: Business;
@@ -17,6 +18,7 @@ interface BusinessScheduleClientProps {
   serviceTypes: ServiceType[];
   customers: CustomerResponse[];
   currentTime: string;
+  canOverride: boolean;
 }
 
 /** How many consecutive days the ledger shows, starting at the selected date. */
@@ -28,6 +30,7 @@ export default function BusinessScheduleClient({
   serviceTypes,
   customers,
   currentTime,
+  canOverride,
 }: BusinessScheduleClientProps) {
   const router = useRouter();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -35,6 +38,7 @@ export default function BusinessScheduleClient({
     useState<Reservation | null>(null);
   const [reschedulingReservation, setReschedulingReservation] =
     useState<Reservation | null>(null);
+  const [creatingReservation, setCreatingReservation] = useState(false);
 
   const customerMap = useMemo(() => {
     const map = new Map<string, CustomerResponse>();
@@ -81,11 +85,16 @@ export default function BusinessScheduleClient({
 
   return (
     <div className="page-pad">
-      <div className="mb-8">
-        <h1 className="page-title">Schedule</h1>
-        <p className="page-description">
-          View your daily schedule and reservations
-        </p>
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="page-title">Schedule</h1>
+          <p className="page-description">
+            View your daily schedule and reservations
+          </p>
+        </div>
+        <Button type="button" onClick={() => setCreatingReservation(true)}>
+          <Plus /> New reservation
+        </Button>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-10">
@@ -231,15 +240,32 @@ export default function BusinessScheduleClient({
           setReschedulingReservation(reservation);
         }}
       />
-      <RescheduleReservationDialog
+      <StaffReservationDialog
         reservation={reschedulingReservation}
         open={!!reschedulingReservation}
         onOpenChange={(open) => !open && setReschedulingReservation(null)}
         serviceTypes={serviceTypes}
         businessTimezone={business.timezone ?? "UTC"}
         businessMaxGuests={business.maxGuests}
-        onRescheduled={() => {
+        canOverride={canOverride}
+        mode="reschedule"
+        onCompleted={() => {
           setReschedulingReservation(null);
+          router.refresh();
+        }}
+      />
+      <StaffReservationDialog
+        reservation={null}
+        open={creatingReservation}
+        onOpenChange={setCreatingReservation}
+        serviceTypes={serviceTypes}
+        businessTimezone={business.timezone ?? "UTC"}
+        businessMaxGuests={business.maxGuests}
+        canOverride={canOverride}
+        mode="create"
+        initialDate={selectedDate}
+        onCompleted={() => {
+          setCreatingReservation(false);
           router.refresh();
         }}
       />

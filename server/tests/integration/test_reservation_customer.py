@@ -104,26 +104,27 @@ async def test_create_authenticated_reservation_creates_customer(
     db_session: AsyncSession, biz: Business, service_type: ServiceType
 ):
     data = ReservationCreate(
-        business_id=biz.id,
         service_type_id=service_type.id,
         time=_future_time(2),
+        name="Grace",
         phone="+14155556666",
         email="grace@example.com",
         guests=1,
     )
 
-    r = await reservation_service.create_reservation(db_session, data)
+    r = await reservation_service.create_reservation(
+        db_session, business_id=biz.id, data=data
+    )
 
     assert r.customer_id is not None
-    assert r.channel == "web"
+    assert r.channel == "staff"
 
     customer = (
         await db_session.execute(select(Customer).where(Customer.id == r.customer_id))
     ).scalar_one()
     assert customer.phone == "+14155556666"
     assert customer.email == "grace@example.com"
-    # Auth path doesn't carry a name.
-    assert customer.name is None
+    assert customer.name == "Grace"
 
 
 @pytest.mark.asyncio
@@ -156,17 +157,18 @@ async def test_two_reservations_same_phone_share_customer(
 async def test_subsequent_public_reservation_fills_in_name_and_email(
     db_session: AsyncSession, biz: Business, service_type: ServiceType
 ):
-    """Authenticated path creates a nameless customer; later public booking
-    by the same phone should fill in the name + email."""
+    """Staff and public bookings converge on one phone-keyed customer."""
     auth_data = ReservationCreate(
-        business_id=biz.id,
         service_type_id=service_type.id,
         time=_future_time(5),
+        name="Iris Staff Entry",
         phone="+14155553333",
         email=None or "iris-tmp@example.com",  # email is required on the schema
         guests=1,
     )
-    r1 = await reservation_service.create_reservation(db_session, auth_data)
+    r1 = await reservation_service.create_reservation(
+        db_session, business_id=biz.id, data=auth_data
+    )
 
     public_data = PublicReservationCreate(
         business_id=biz.id,

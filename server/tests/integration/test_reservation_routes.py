@@ -88,19 +88,6 @@ async def _create_service_type(
     return resp.json()["id"]
 
 
-async def _register_customer(client: AsyncClient) -> str:
-    """Register a customer and return their token."""
-    resp = await client.post(
-        "/api/auth/register",
-        json={
-            "email": "customer@test.com",
-            "password": "pass123",
-            "name": "Test Customer",
-        },
-    )
-    return resp.json()["access_token"]
-
-
 # --------------------------------------------------------------------------- #
 # Reservation CRUD
 # --------------------------------------------------------------------------- #
@@ -114,15 +101,14 @@ class TestReservationLifecycle:
         owner_token, business_id = await _create_business_owner(client)
         await _open_default_schedule(db_session, business_id)
         service_type_id = await _create_service_type(client, owner_token, business_id)
-        customer_token = await _register_customer(client)
 
         resp = await client.post(
             "/api/reservations",
-            headers={"Authorization": f"Bearer {customer_token}"},
+            headers={"Authorization": f"Bearer {owner_token}"},
             json={
-                "business_id": business_id,
                 "service_type_id": service_type_id,
                 "time": _future_time(1),
+                "name": "Phone Guest",
                 "phone": "+31612345678",
                 "email": "customer@test.com",
                 "guests": 4,
@@ -141,17 +127,14 @@ class TestReservationLifecycle:
         owner_token, business_id = await _create_business_owner(client)
         await _open_default_schedule(db_session, business_id)
         service_type_id = await _create_service_type(client, owner_token, business_id)
-        customer_token = await _register_customer(client)
-        cust_headers = {"Authorization": f"Bearer {customer_token}"}
-
-        # Create reservation as customer
+        # Create through the public guest contract, then list as staff.
         await client.post(
-            "/api/reservations",
-            headers=cust_headers,
+            "/api/reservations/public",
             json={
                 "business_id": business_id,
                 "service_type_id": service_type_id,
                 "time": _future_time(2),
+                "name": "Test Customer",
                 "phone": "+31612345678",
                 "email": "customer@test.com",
                 "guests": 3,
@@ -211,9 +194,9 @@ class TestReservationEdgeCases:
         resp = await client.post(
             "/api/reservations",
             json={
-                "business_id": "00000000-0000-0000-0000-000000000000",
                 "service_type_id": "00000000-0000-0000-0000-000000000000",
                 "time": "2026-03-15T19:00:00",
+                "name": "Guest",
                 "phone": "+31600000000",
                 "email": "test@test.com",
                 "guests": 1,

@@ -23,7 +23,7 @@ operator-oriented product research reinforced this order and added the
 dependency-aware workflow, adoption, workforce, offline, and integration items
 below; it did not promote them ahead of the current availability stage.
 
-### 1. Authoritative availability and capacity — current
+### 1. Authoritative availability and capacity — complete
 
 - **Complete — local data foundation:** Migration 023 adds one
   business booking schedule plus optional complete service-type overrides,
@@ -67,10 +67,16 @@ below; it did not promote them ahead of the current availability stage.
   size, start, end, reminder state, notifications, updated email/ICS, SMS, and
   the post-commit event move together. Generic PATCH rejects allocation fields,
   and cancelled, completed, or past reservations cannot be moved.
-- **Needs decision — staff override contract:** Confirm role and UX details for
-  owner/manager reason-recorded overrides. Ordinary staff must follow normal
-  availability; overrides must populate the existing actor, reason, and
-  timestamp audit fields.
+- **Complete — staff booking and availability overrides:** Reservations and
+  Schedule expose one shared New Reservation flow, while creation and moves
+  use tenant-derived authenticated availability. Ordinary staff select normal
+  server slots only. Owners/managers can enter an explicit override mode with
+  server-generated venue-timezone times and a required reason; it may bypass
+  hours, exceptions, notice/horizon, and concurrency, but not tenant/module,
+  future-time, service, interval, or party-size constraints. Actor, reason, and
+  timestamp are visible on the reservation, and staff notifications identify
+  the exception. The authenticated create contract no longer accepts a
+  browser-supplied business ID.
 - **Complete — clarified field ownership:** `businesses.max_guests`,
   `service_types.capacity`, and `max_concurrent_bookings` cap bookings;
   service duration overrides the schedule default; schedule interval, notice,
@@ -80,7 +86,7 @@ below; it did not promote them ahead of the current availability stage.
   future bot bookings and later resource/table assignment rather than creating
   channel-specific slot logic.
 
-### 2. Floor plan and table management
+### 2. Floor plan and table management — next
 
 - **Needs decision:** Design floor-plan editing, table shapes/capacities,
   combinable tables, areas, turn times, temporary closures, and the operational

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ReservationAccordion } from "@/components/reservation-accordion";
 import { ReservationSearchFilter } from "@/components/reservation-search-filter";
 import { Button } from "@/components/ui/button";
-import { RescheduleReservationDialog } from "@/components/reschedule-reservation-dialog";
+import { StaffReservationDialog } from "@/components/staff-reservation-dialog";
 import { Reservation, ServiceType } from "@/types";
 import { CustomerResponse } from "@/lib/api-client";
 import { clientUpdateReservation } from "@/lib/client-api";
@@ -21,6 +21,7 @@ interface RequestsClientProps {
   businessTimezone: string;
   businessMaxGuests: number;
   currentTime: string;
+  canOverride: boolean;
 }
 
 const SEGMENT_HINT: Record<string, { icon: string; color: string }> = {
@@ -39,6 +40,7 @@ export default function RequestsClient({
   businessTimezone,
   businessMaxGuests,
   currentTime,
+  canOverride,
 }: RequestsClientProps) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
@@ -182,14 +184,16 @@ export default function RequestsClient({
         }}
       />
 
-      <RescheduleReservationDialog
+      <StaffReservationDialog
         reservation={reschedulingReservation}
         open={!!reschedulingReservation}
         onOpenChange={(open) => !open && setReschedulingReservation(null)}
         serviceTypes={serviceTypes}
         businessTimezone={businessTimezone}
         businessMaxGuests={businessMaxGuests}
-        onRescheduled={() => {
+        canOverride={canOverride}
+        mode="reschedule"
+        onCompleted={() => {
           setReschedulingReservation(null);
           router.refresh();
         }}

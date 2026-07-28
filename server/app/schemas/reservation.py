@@ -19,18 +19,28 @@ def _normalize_phone(v: str | None) -> str | None:
 
 
 class ReservationCreate(AppBaseModel):
-    business_id: UUID
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
+
     service_type_id: UUID
     time: datetime
+    name: str = Field(min_length=1, max_length=255)
     phone: str
     email: EmailStr
     note: str | None = None
-    guests: int = 1
+    guests: int = Field(default=1, ge=1)
+    availability_override_reason: str | None = Field(
+        default=None, min_length=10, max_length=500
+    )
 
     @field_validator("phone", mode="before")
     @classmethod
     def normalize_phone(cls, v: str) -> str:
         return _normalize_phone(v) or v
+
+    @field_validator("name", "availability_override_reason", mode="before")
+    @classmethod
+    def strip_staff_text(cls, v: str | None) -> str | None:
+        return v.strip() if v is not None else None
 
 
 class PublicReservationCreate(AppBaseModel):
@@ -66,9 +76,19 @@ class ReservationUpdate(AppBaseModel):
 
 
 class ReservationReschedule(AppBaseModel):
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
+
     service_type_id: UUID
     time: datetime
     guests: int = Field(ge=1)
+    availability_override_reason: str | None = Field(
+        default=None, min_length=10, max_length=500
+    )
+
+    @field_validator("availability_override_reason", mode="before")
+    @classmethod
+    def strip_override_reason(cls, v: str | None) -> str | None:
+        return v.strip() if v is not None else None
 
 
 class ReservationResponse(AppBaseModel):
@@ -83,5 +103,9 @@ class ReservationResponse(AppBaseModel):
     note: str | None = None
     status: str
     guests: int
+    availability_override_by: UUID | None = None
+    availability_override_actor_name: str | None = None
+    availability_override_reason: str | None = None
+    availability_overridden_at: datetime | None = None
     created_at: datetime
     updated_at: datetime

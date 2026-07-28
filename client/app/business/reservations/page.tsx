@@ -42,6 +42,7 @@ export default async function ReservationsPage() {
       businessTimezone={business.timezone ?? "UTC"}
       businessMaxGuests={business.maxGuests}
       currentTime={new Date().toISOString()}
+      canOverride={user.role === "owner" || user.role === "manager"}
     />
   );
 }

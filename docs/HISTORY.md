@@ -418,6 +418,35 @@ reason-recorded overrides and guest-token self-service remain separate work.
 `server/app/routers/reservations.py`,
 `client/components/reschedule-reservation-dialog.tsx`, `docs/TODO.md`
 
+## 2026-07-28 — Staff bookings use one audited allocation path
+
+**Context:** Crowbar could move existing reservations through authoritative
+availability, but the dashboard had no host-desk creation flow. Its unused
+authenticated create client sent a browser-selected business ID, and managers
+could not record exceptional bookings outside normal availability even though
+migration 023 contained override audit fields.
+
+**Decision:** Use one shared staff booking dialog for creation and
+rescheduling. Authenticated creation and availability derive the tenant from
+the current staff assignment. Ordinary staff use normal server slots only.
+Owners/managers may explicitly request server-generated, venue-timezone
+override times and must provide a reason. The override path bypasses schedule
+policy and concurrent occupancy only; service ownership, module entitlement,
+future time, slot alignment, duration, and party limits remain hard rules.
+Store and return the actor, reason, and timestamp and identify overrides in
+staff notifications and reservation details.
+
+**Consequences:** Phone and host-desk bookings now receive the same capacity,
+customer identity, confirmation, and event behavior as other staff mutations.
+Public guests cannot override availability, and ordinary staff cannot reveal
+or submit override times. A normal later reschedule clears the current override
+marker. Planned operating changes still belong in schedule exceptions rather
+than repeated one-off overrides.
+
+**References:** `server/app/routers/reservations.py`,
+`server/app/services/availability_service.py`,
+`client/components/staff-reservation-dialog.tsx`, `docs/TODO.md`
+
 ## Entry Template
 
 ```markdown

@@ -21,7 +21,7 @@ import {
 import { Reservation, ServiceType } from "@/types";
 import { CustomerResponse } from "@/lib/api-client";
 import { ReactNode } from "react";
-import { cn } from "@/lib/utils";
+import { ReservationOverrideNotice } from "@/components/reservation-override-notice";
 
 interface ReservationAccordionProps {
   reservations: Reservation[];
@@ -89,6 +89,7 @@ export function ReservationAccordion({
                     </span>
                   </div>
                 )}
+                <ReservationOverrideNotice reservation={reservation} compact />
                 <div className="flex items-center gap-1 text-muted-foreground">
                   <Calendar className="h-4 w-4" />
                   <span>{format(reservationDate, "MMM d, yyyy")}</span>
@@ -201,6 +202,8 @@ export function ReservationAccordion({
                     <p className="section-subtitle">{reservation.note}</p>
                   </div>
                 )}
+
+                <ReservationOverrideNotice reservation={reservation} />
 
                 {/* Timestamps */}
                 <div className="space-y-2 pt-4 border-t">

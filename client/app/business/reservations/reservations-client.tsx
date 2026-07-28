@@ -9,9 +9,9 @@ import {
   ReservationEditDialog,
   type ReservationEditValues,
 } from "@/components/reservation-edit-dialog";
-import { RescheduleReservationDialog } from "@/components/reschedule-reservation-dialog";
+import { StaffReservationDialog } from "@/components/staff-reservation-dialog";
 import { Button } from "@/components/ui/button";
-import { CalendarClock, Pencil, X } from "lucide-react";
+import { CalendarClock, Pencil, Plus, X } from "lucide-react";
 import { Reservation, ServiceType } from "@/types";
 import { CustomerResponse } from "@/lib/api-client";
 import { clientUpdateReservation } from "@/lib/client-api";
@@ -25,6 +25,7 @@ interface ReservationsClientProps {
   businessTimezone: string;
   businessMaxGuests: number;
   currentTime: string;
+  canOverride: boolean;
 }
 
 export default function ReservationsClient({
@@ -34,12 +35,14 @@ export default function ReservationsClient({
   businessTimezone,
   businessMaxGuests,
   currentTime,
+  canOverride,
 }: ReservationsClientProps) {
   const router = useRouter();
   const [editingReservation, setEditingReservation] =
     useState<Reservation | null>(null);
   const [reschedulingReservation, setReschedulingReservation] =
     useState<Reservation | null>(null);
+  const [creatingReservation, setCreatingReservation] = useState(false);
   const [cancellingReservation, setCancellingReservation] =
     useState<Reservation | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -120,11 +123,16 @@ export default function ReservationsClient({
 
   return (
     <div className="page-container">
-      <div>
-        <h1 className="page-title">Reservations</h1>
-        <p className="page-description">
-          View confirmed reservations for your business
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="page-title">Reservations</h1>
+          <p className="page-description">
+            View confirmed reservations for your business
+          </p>
+        </div>
+        <Button type="button" onClick={() => setCreatingReservation(true)}>
+          <Plus /> New reservation
+        </Button>
       </div>
 
       <ReservationSearchFilter
@@ -194,15 +202,32 @@ export default function ReservationsClient({
         />
       )}
 
-      <RescheduleReservationDialog
+      <StaffReservationDialog
         reservation={reschedulingReservation}
         open={!!reschedulingReservation}
         onOpenChange={(open) => !open && setReschedulingReservation(null)}
         serviceTypes={serviceTypes}
         businessTimezone={businessTimezone}
         businessMaxGuests={businessMaxGuests}
-        onRescheduled={() => {
+        canOverride={canOverride}
+        mode="reschedule"
+        onCompleted={() => {
           setReschedulingReservation(null);
+          router.refresh();
+        }}
+      />
+
+      <StaffReservationDialog
+        reservation={null}
+        open={creatingReservation}
+        onOpenChange={setCreatingReservation}
+        serviceTypes={serviceTypes}
+        businessTimezone={businessTimezone}
+        businessMaxGuests={businessMaxGuests}
+        canOverride={canOverride}
+        mode="create"
+        onCompleted={() => {
+          setCreatingReservation(false);
           router.refresh();
         }}
       />

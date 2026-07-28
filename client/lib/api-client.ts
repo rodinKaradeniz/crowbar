@@ -212,6 +212,10 @@ export interface ReservationResponse {
   note: string | null;
   status: string;
   guests: number;
+  availability_override_by: string | null;
+  availability_override_actor_name: string | null;
+  availability_override_reason: string | null;
+  availability_overridden_at: string | null;
   created_at: string;
   updated_at: string;
 }

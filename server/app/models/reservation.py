@@ -87,6 +87,16 @@ class Reservation(Base, UUIDMixin, TimestampMixin):
         foreign_keys=[availability_override_by]
     )
 
+    @property
+    def availability_override_actor_name(self) -> str | None:
+        if self.availability_override_by is None:
+            return None
+        return (
+            self.availability_override_user.name
+            if self.availability_override_user is not None
+            else None
+        )
+
 
 from app.models.business import Business  # noqa: E402
 from app.models.customer import Customer  # noqa: E402

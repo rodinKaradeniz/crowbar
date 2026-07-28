@@ -10,6 +10,9 @@ import {
   clientGetBookingSchedules,
   clientReplaceServiceBookingSchedule,
   clientGetReservationRescheduleAvailability,
+  clientGetStaffReservationAvailability,
+  clientGetStaffOverrideTimes,
+  clientCreateStaffReservation,
   clientRescheduleReservation,
 } from "@/lib/client-api";
 
@@ -220,6 +223,106 @@ describe("booking schedule management", () => {
 });
 
 describe("staff rescheduling", () => {
+  it("loads tenant-derived staff creation availability", async () => {
+    let requestUrl = "";
+    server.use(
+      http.get("/api/proxy/reservations/availability", ({ request }) => {
+        requestUrl = request.url;
+        return HttpResponse.json({
+          business_id: "biz-1",
+          service_type_id: "st-1",
+          timezone: "UTC",
+          duration_minutes: 60,
+          slot_interval_minutes: 30,
+          max_party_size: 8,
+          dates: [{ date: "2026-01-02", slots: [] }],
+        });
+      }),
+    );
+
+    await clientGetStaffReservationAvailability({
+      serviceTypeId: "st-1",
+      startDate: "2026-01-02",
+      guests: 2,
+    });
+
+    expect(requestUrl).toContain("service_type_id=st-1");
+    expect(requestUrl).not.toContain("business_id");
+  });
+
+  it("loads privileged server-generated override times", async () => {
+    let query = "";
+    server.use(
+      http.get("/api/proxy/reservations/override-times", ({ request }) => {
+        query = new URL(request.url).search;
+        return HttpResponse.json({
+          business_id: "biz-1",
+          service_type_id: "st-1",
+          timezone: "UTC",
+          duration_minutes: 60,
+          slot_interval_minutes: 30,
+          max_party_size: 8,
+          dates: [{ date: "2026-01-02", slots: [] }],
+        });
+      }),
+    );
+
+    await clientGetStaffOverrideTimes({
+      serviceTypeId: "st-1",
+      localDate: "2026-01-02",
+      guests: 2,
+    });
+
+    expect(query).toContain("local_date=2026-01-02");
+    expect(query).toContain("guests=2");
+  });
+
+  it("creates staff reservations without a browser-supplied business id", async () => {
+    let requestBody: Record<string, unknown> = {};
+    server.use(
+      http.post("/api/proxy/reservations", async ({ request }) => {
+        requestBody = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          id: "res-1",
+          business_id: "biz-1",
+          customer_id: "customer-1",
+          service_type_id: "st-1",
+          time: "2026-01-02T22:00:00Z",
+          ends_at: "2026-01-02T23:00:00Z",
+          phone: "+31612345678",
+          email: "guest@example.com",
+          note: null,
+          status: "confirmed",
+          guests: 2,
+          availability_override_by: "user-1",
+          availability_override_actor_name: "Owner",
+          availability_override_reason: "Private event approved by owner",
+          availability_overridden_at: "2026-01-01T00:00:00Z",
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-01-01T00:00:00Z",
+        });
+      }),
+    );
+
+    const reservation = await clientCreateStaffReservation({
+      serviceTypeId: "st-1",
+      time: "2026-01-02T22:00:00Z",
+      name: "Guest",
+      phone: "+31612345678",
+      email: "guest@example.com",
+      guests: 2,
+      availabilityOverrideReason: "Private event approved by owner",
+    });
+
+    expect(requestBody).not.toHaveProperty("business_id");
+    expect(requestBody).toMatchObject({
+      service_type_id: "st-1",
+      name: "Guest",
+      availability_override_reason: "Private event approved by owner",
+    });
+    expect(reservation.availabilityOverrideActorName).toBe("Owner");
+  });
+
   it("loads authenticated availability that excludes the current reservation", async () => {
     let query = "";
     server.use(

@@ -102,8 +102,12 @@ Availability stage checkpoint as of 2026-07-28:
   terminal/past moves, preserves the old booking on conflict, and commits
   before updated email/ICS, SMS, and event side effects. Generic PATCH no longer
   accepts allocation fields.
-- Reason-recorded owner/manager availability overrides are the next decision in
-  this stage; ordinary staff continue to follow normal availability.
+- Reservations and Schedule now provide a shared staff New Reservation flow.
+  Ordinary staff use normal server slots; owners/managers can deliberately
+  choose server-generated override times with a required reason. The server
+  derives the tenant, enforces hard service/party/time constraints, records the
+  actor/reason/timestamp, and surfaces the audit marker to staff. Floor-plan
+  and table management is the next product stage.
 - Migration 023 is local only. Railway remains at migrations 001–022 because
   deployment is shelved.
 

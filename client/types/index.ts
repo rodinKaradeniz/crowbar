@@ -410,6 +410,10 @@ export interface Reservation {
   note?: string;
   status: "confirmed" | "pending" | "cancelled" | "completed";
   guests: number;
+  availabilityOverrideBy?: string;
+  availabilityOverrideActorName?: string;
+  availabilityOverrideReason?: string;
+  availabilityOverriddenAt?: string;
   createdAt: string;
   updatedAt: string;
 }

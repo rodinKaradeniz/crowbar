@@ -13,6 +13,7 @@ import { Reservation, ServiceType } from "@/types";
 import { CustomerResponse } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { isReservationReschedulable } from "@/lib/availability";
+import { ReservationOverrideNotice } from "@/components/reservation-override-notice";
 
 interface ReservationDetailsDialogProps {
   reservation: Reservation | null;
@@ -106,6 +107,7 @@ export function ReservationDetailsDialog({
                 <p className="section-subtitle">{reservation.note}</p>
               </div>
             )}
+            <ReservationOverrideNotice reservation={reservation} />
           </div>
           {canReschedule && (
             <Button

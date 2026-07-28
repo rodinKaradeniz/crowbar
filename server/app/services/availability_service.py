@@ -281,6 +281,40 @@ def _candidate_slots(
     return [unique_slots[key] for key in sorted(unique_slots)]
 
 
+def _override_slots_for_date(
+    context: AvailabilityContext,
+    *,
+    local_date: date,
+    now: datetime,
+) -> list[AvailabilitySlotResponse]:
+    """Return every future interval-aligned wall time for an override date.
+
+    These candidates deliberately ignore schedule windows, exceptions, notice,
+    horizon, and occupancy. Generating them server-side keeps DST handling and
+    venue-timezone interpretation authoritative.
+    """
+    local_start = datetime.combine(local_date, time.min, context.timezone)
+    local_end = datetime.combine(
+        local_date + timedelta(days=1), time.min, context.timezone
+    )
+    cursor = local_start.astimezone(timezone.utc)
+    boundary = local_end.astimezone(timezone.utc)
+    slots: list[AvailabilitySlotResponse] = []
+    while cursor < boundary:
+        if cursor > now.astimezone(timezone.utc):
+            local_cursor = cursor.astimezone(context.timezone)
+            slots.append(
+                AvailabilitySlotResponse(
+                    starts_at=local_cursor,
+                    ends_at=(
+                        cursor + timedelta(minutes=context.duration_minutes)
+                    ).astimezone(context.timezone),
+                )
+            )
+        cursor += timedelta(minutes=context.schedule.slot_interval_minutes)
+    return slots
+
+
 async def _remove_occupied_slots(
     db: AsyncSession,
     *,
@@ -388,6 +422,91 @@ async def get_availability(
         guests=guests,
         now=now or datetime.now(timezone.utc),
         exclude_reservation_id=exclude_reservation_id,
+    )
+
+
+async def get_override_times(
+    db: AsyncSession,
+    *,
+    business_id: UUID,
+    service_type_id: UUID,
+    local_date: date,
+    guests: int,
+    now: datetime | None = None,
+) -> AvailabilityResponse:
+    context = await _load_context(
+        db,
+        business_id=business_id,
+        service_type_id=service_type_id,
+        lock_schedule=False,
+    )
+    _validate_party_size(context, guests)
+    slots = _override_slots_for_date(
+        context,
+        local_date=local_date,
+        now=now or datetime.now(timezone.utc),
+    )
+    return AvailabilityResponse(
+        business_id=context.business.id,
+        service_type_id=context.service_type.id,
+        timezone=context.business.timezone,
+        duration_minutes=context.duration_minutes,
+        slot_interval_minutes=context.schedule.slot_interval_minutes,
+        max_party_size=context.max_party_size,
+        dates=[AvailabilityDateResponse(date=local_date, slots=slots)],
+    )
+
+
+async def validate_override_slot(
+    db: AsyncSession,
+    *,
+    business_id: UUID,
+    service_type_id: UUID,
+    starts_at: datetime,
+    guests: int,
+    now: datetime | None = None,
+) -> ValidatedBookingSlot:
+    context = await _load_context(
+        db,
+        business_id=business_id,
+        service_type_id=service_type_id,
+        lock_schedule=True,
+    )
+    _validate_party_size(context, guests)
+    current_time = now or datetime.now(timezone.utc)
+    local_start = (
+        starts_at.replace(tzinfo=context.timezone)
+        if starts_at.tzinfo is None
+        else starts_at.astimezone(context.timezone)
+    )
+    candidates = _override_slots_for_date(
+        context,
+        local_date=local_start.date(),
+        now=current_time,
+    )
+    requested_utc = local_start.astimezone(timezone.utc)
+    selected = next(
+        (
+            slot
+            for slot in candidates
+            if slot.starts_at.astimezone(timezone.utc) == requested_utc
+        ),
+        None,
+    )
+    if selected is None:
+        raise AvailabilityError(
+            status_code=422,
+            code=ErrorCode.AVAILABILITY_OVERRIDE_INVALID,
+            message=(
+                "Override time must be in the future and aligned to the "
+                "booking interval"
+            ),
+        )
+    return ValidatedBookingSlot(
+        starts_at=selected.starts_at,
+        ends_at=selected.ends_at,
+        business=context.business,
+        service_type=context.service_type,
     )
 
 

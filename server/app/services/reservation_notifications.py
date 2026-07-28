@@ -5,6 +5,7 @@ from datetime import datetime
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import notifications as nconst
@@ -12,7 +13,6 @@ from app.models.reservation import Reservation
 from app.models.user import User
 from app.schemas.reservation import ReservationUpdate
 from app.services import notification_service
-from sqlalchemy import select
 
 
 @dataclass(frozen=True)
@@ -59,6 +59,7 @@ async def notify_staff_new_reservation(
     *,
     customer_display_name: str,
     is_first_booking_at_business: bool,
+    actor: User | None = None,
 ) -> None:
     business_name = reservation.business.name if reservation.business else "Business"
     service_name = reservation.service_type.name if reservation.service_type else "Service"
@@ -68,10 +69,17 @@ async def notify_staff_new_reservation(
         if is_first_booking_at_business
         else ""
     )
-    title = f"New {status_label.lower()}: {service_name}"
+    is_override = reservation.availability_override_reason is not None
+    title = (
+        f"Availability override: {service_name}"
+        if is_override
+        else f"New {status_label.lower()}: {service_name}"
+    )
     body = (
         f"{customer_display_name} — {_fmt_time(reservation.time)} at {business_name}.{first}"
     )
+    if is_override:
+        body = f"{body} Reason: {reservation.availability_override_reason}"
     await notification_service.notify_business_staff(
         db,
         business_id=reservation.business_id,
@@ -82,7 +90,14 @@ async def notify_staff_new_reservation(
             "reservation_id": str(reservation.id),
             "status": reservation.status,
             "is_first_booking_at_business": is_first_booking_at_business,
+            "availability_overridden": is_override,
+            "availability_override_by": (
+                str(reservation.availability_override_by)
+                if reservation.availability_override_by
+                else None
+            ),
         },
+        exclude_user_id=actor.id if actor is not None else None,
     )
 
 
@@ -91,6 +106,7 @@ async def notify_after_reservation_create(
     reservation: Reservation,
     *,
     customer_display_name: str,
+    actor: User | None = None,
 ) -> None:
     count = await notification_service.count_reservations_for_customer_at_business(
         db, reservation.business_id, reservation.customer_id
@@ -101,6 +117,7 @@ async def notify_after_reservation_create(
         reservation,
         customer_display_name=customer_display_name,
         is_first_booking_at_business=is_first,
+        actor=actor,
     )
 
 
@@ -168,12 +185,22 @@ async def notify_after_reservation_reschedule(
     timezone_name = new.business.timezone if new.business else "UTC"
     old_local_time = old.time.astimezone(ZoneInfo(timezone_name))
     local_time = new.time.astimezone(ZoneInfo(timezone_name))
+    is_override = new.availability_override_reason is not None
+    body = (
+        f"Reservation moved from {_fmt_time(old_local_time)} to {_fmt_time(local_time)}."
+    )
+    if is_override:
+        body = f"{body} Availability overridden: {new.availability_override_reason}"
     await notification_service.notify_business_staff(
         db,
         business_id=new.business_id,
         kind=nconst.RESERVATION_UPDATED,
-        title="Reservation rescheduled",
-        body=f"Reservation moved from {_fmt_time(old_local_time)} to {_fmt_time(local_time)}.",
+        title=(
+            "Reservation rescheduled with availability override"
+            if is_override
+            else "Reservation rescheduled"
+        ),
+        body=body,
         payload={
             "reservation_id": str(new.id),
             "old_time": old.time.isoformat(),
@@ -182,6 +209,12 @@ async def notify_after_reservation_reschedule(
             "new_service_type_id": str(new.service_type_id),
             "old_guests": old.guests,
             "new_guests": new.guests,
+            "availability_overridden": is_override,
+            "availability_override_by": (
+                str(new.availability_override_by)
+                if new.availability_override_by
+                else None
+            ),
         },
         exclude_user_id=actor.id,
     )

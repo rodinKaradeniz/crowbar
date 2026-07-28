@@ -43,6 +43,14 @@ When your environment is configured for outbound email, customers receive a **co
 
 Navigate to **Reservations** in the sidebar to see a complete list of all bookings.
 
+### Creating a Staff Reservation
+
+Use **New reservation** from Reservations or Schedule when taking a booking by
+phone or at the host desk. Enter the guest's contact details, choose a booking
+type and party size, then select one of Crowbar's live venue-timezone slots.
+The guest receives the same confirmation and calendar details as a public
+booking.
+
 ### Filtering and Searching
 
 - **Filter by status** — View only confirmed, pending, completed, or cancelled reservations
@@ -79,6 +87,20 @@ Crowbar keeps the original booking if another user claims the selected slot
 first and offers nearby alternatives. Cancelled, completed, and past
 reservations cannot be rescheduled. Successful moves send the customer updated
 email/calendar details and SMS when those channels are configured.
+
+### Overriding Availability
+
+Owners and managers can use **Override availability** in the staff booking
+dialog for a genuine operational exception. Crowbar shows interval-aligned
+times in the venue timezone and requires a reason before the reservation can be
+created or moved. An override may bypass normal hours, closures, booking notice,
+advance horizon, or simultaneous-booking limits; party-size and booking-type
+limits still apply.
+
+Every overridden reservation is visibly marked with the responsible staff
+member, reason, and timestamp. Ordinary staff cannot create an override. Use a
+schedule exception instead when a planned hours change should apply to every
+customer rather than one reservation.
 
 ### Cancelling a Reservation
 

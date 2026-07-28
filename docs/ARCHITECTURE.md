@@ -251,14 +251,27 @@ Cancelled, completed, and past reservations are not reschedulable.
 
 Generic reservation PATCH is now limited to contact details, notes, and status;
 allocation fields are rejected rather than silently bypassing availability.
-The shared staff dialog exposes rescheduling from Reservations, Requests, and
-Schedule, renders venue-timezone server slots, and handles stale-slot
+The shared staff booking dialog creates reservations from Reservations and
+Schedule and exposes rescheduling from Reservations, Requests, and Schedule.
+Normal creation uses authenticated `GET /api/reservations/availability`; the
+server derives the business for reads and writes, and the create body has no
+business ID. The dialog renders venue-timezone server slots and handles stale
 alternatives. A successful move resets the reminder flag, commits its staff
 notification, then schedules customer email with a stable-UID ICS update and
 configured SMS before publishing `reservation.rescheduled` best-effort.
 
-Owner/manager reason-recorded availability overrides remain deferred to the
-next availability slice.
+Owners/managers alone can call authenticated
+`GET /api/reservations/override-times` and submit a required
+`availability_override_reason` during staff creation or rescheduling. The
+server generates every future time aligned to the resolved schedule interval,
+so DST and venue timezone remain authoritative. The override validator still
+locks that schedule and enforces tenant, module, service ownership, future
+time, interval alignment, and party size, while deliberately bypassing weekly
+windows, date exceptions, notice, horizon, and concurrent occupancy. The
+reservation stores and returns the actor, actor name, reason, and timestamp;
+ordinary staff receive `403` if they attempt the command. A later normal move
+clears the current override marker because its replacement interval satisfies
+normal availability.
 
 ### Inventory and order fulfillment
 

@@ -58,6 +58,7 @@ export default async function Requests() {
       businessTimezone={business.timezone ?? "UTC"}
       businessMaxGuests={business.maxGuests}
       currentTime={new Date().toISOString()}
+      canOverride={user.role === "owner" || user.role === "manager"}
     />
   );
 }

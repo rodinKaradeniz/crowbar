@@ -196,6 +196,14 @@ function toReservation(r: Record<string, unknown>): Reservation {
     note: (r.note as string) || undefined,
     status: r.status as Reservation["status"],
     guests: r.guests as number,
+    availabilityOverrideBy:
+      (r.availability_override_by as string) || undefined,
+    availabilityOverrideActorName:
+      (r.availability_override_actor_name as string) || undefined,
+    availabilityOverrideReason:
+      (r.availability_override_reason as string) || undefined,
+    availabilityOverriddenAt:
+      (r.availability_overridden_at as string) || undefined,
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
   };
@@ -596,23 +604,25 @@ export async function clientCreatePublicReservation(data: {
 
 // ─── Authenticated: Reservation mutations ────────────────────────────────────
 
-export async function clientCreateReservation(data: {
-  businessId: string;
+export async function clientCreateStaffReservation(data: {
   serviceTypeId: string;
   time: string;
+  name: string;
   phone: string;
   email: string;
   note?: string;
   guests: number;
+  availabilityOverrideReason?: string;
 }): Promise<Reservation> {
   const apiData = {
-    business_id: data.businessId,
     service_type_id: data.serviceTypeId,
     time: data.time,
+    name: data.name,
     phone: data.phone,
     email: data.email,
     note: data.note,
     guests: data.guests,
+    availability_override_reason: data.availabilityOverrideReason,
   };
 
   const result = await authFetch<Record<string, unknown>>("/reservations", {
@@ -620,6 +630,44 @@ export async function clientCreateReservation(data: {
     body: JSON.stringify(apiData),
   });
   return toReservation(result);
+}
+
+export async function clientGetStaffReservationAvailability(data: {
+  serviceTypeId: string;
+  startDate: string;
+  days?: number;
+  guests: number;
+  signal?: AbortSignal;
+}): Promise<Availability> {
+  const params = new URLSearchParams({
+    service_type_id: data.serviceTypeId,
+    start_date: data.startDate,
+    days: String(data.days ?? 1),
+    guests: String(data.guests),
+  });
+  const result = await authFetch<Record<string, unknown>>(
+    `/reservations/availability?${params.toString()}`,
+    { signal: data.signal },
+  );
+  return toAvailability(result);
+}
+
+export async function clientGetStaffOverrideTimes(data: {
+  serviceTypeId: string;
+  localDate: string;
+  guests: number;
+  signal?: AbortSignal;
+}): Promise<Availability> {
+  const params = new URLSearchParams({
+    service_type_id: data.serviceTypeId,
+    local_date: data.localDate,
+    guests: String(data.guests),
+  });
+  const result = await authFetch<Record<string, unknown>>(
+    `/reservations/override-times?${params.toString()}`,
+    { signal: data.signal },
+  );
+  return toAvailability(result);
 }
 
 export async function clientUpdateReservation(
@@ -674,6 +722,7 @@ export async function clientRescheduleReservation(
     serviceTypeId: string;
     time: string;
     guests: number;
+    availabilityOverrideReason?: string;
   },
 ): Promise<Reservation> {
   const result = await authFetch<Record<string, unknown>>(
@@ -684,6 +733,7 @@ export async function clientRescheduleReservation(
         service_type_id: data.serviceTypeId,
         time: data.time,
         guests: data.guests,
+        availability_override_reason: data.availabilityOverrideReason,
       }),
     },
   );
