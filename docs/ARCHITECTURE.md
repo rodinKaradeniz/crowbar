@@ -1,6 +1,6 @@
 # Crowbar Architecture
 
-Last verified against the repository on 2026-07-26.
+Last verified against the repository on 2026-07-28.
 
 ## Product Boundary
 
@@ -173,8 +173,10 @@ assistant has no equivalent control yet.
 
 Publishing is best-effort: Redis failure does not fail the committed HTTP
 mutation. `inventory.*` and `reservation.*` events are recorded but currently
-have no WebSocket projection. Reservation routes need commit-order correction
-before those events gain a consumer.
+have no WebSocket projection. Reservation creation commits the reservation and
+notification rows before publishing. Reservation update and delete still rely
+on request-end commit and need the same correction before those event types
+gain a consumer.
 
 In-memory WebSocket managers imply that horizontal API scaling requires a
 shared fan-out design before multiple FastAPI replicas can reliably serve the
@@ -188,7 +190,7 @@ hours ahead with `sms_reminder_sent=false`, checks the business SMS channel,
 sends through Twilio, marks successful deliveries, closes its database engine,
 and exits. There is no Celery worker or in-process scheduler.
 
-### Reservation availability foundation
+### Reservation availability
 
 Migration 023 and the matching ORM models establish a separate booking domain:
 
@@ -207,13 +209,56 @@ Migration 023 and the matching ORM models establish a separate booking domain:
 - `service_types.max_concurrent_bookings` is now positive and non-null. Legacy
   NULL values migrate to `1`, not unlimited capacity.
 
-The current reservation service derives `ends_at` from service duration, then
-the business reservation duration fallback, so the new database invariant does
-not break existing writes. The shared slot computation, transactional conflict
-protection, availability/read endpoints, override authorization, and booking UI
-are the next slice. Until those land, existing reservation endpoints still
-accept caller-selected timestamps and must not be described as enforcing the
-new schedule.
+`GET /api/availability/business/{business_id}` resolves a service-specific
+schedule or its business default, interprets it in the business IANA timezone,
+and returns only absolute start/end slots grouped by local calendar date. It
+enforces weekly and exception windows, overnight spillover anchored to the
+service date, minimum notice, advance horizon, party limits, duration,
+concurrency, and active pending/confirmed overlaps. Window ends are exclusive
+start-time boundaries; the accepted reservation interval may end later.
+
+Public and authenticated reservation creation call the same availability
+service. Creation locks the resolved schedule row with `SELECT ... FOR UPDATE`,
+rechecks capacity, persists the server-selected interval, commits it before
+publishing, and returns `SLOT_UNAVAILABLE` with up to five alternatives when a
+slot is stale. New businesses receive a closed default schedule. The public
+form fetches live slots and submits the returned absolute timestamp rather than
+constructing a browser-local time.
+
+Authenticated `GET /api/booking-schedules` returns the default plus actual
+service overrides for the caller's business. Owners/managers can replace a
+complete default or service schedule; deleting a service override restores
+inheritance. Ordinary staff can inspect schedules but cannot mutate schedules,
+booking types, or business-wide booking limits. All mutation scope comes from
+`get_current_business`; a body or path business ID is never trusted as the
+tenant boundary.
+
+The Profile → Booking editor separates policy, recurring weekly hours, and
+date exceptions, and makes inherited versus custom service behavior explicit.
+Its operating-hours action first previews a one-time copy, then replaces only
+the default schedule's weekly windows. Policy and exceptions remain intact,
+and later public operating-hour changes never synchronize silently. Global
+party size remains on the business; service capacity, duration, pending mode,
+and positive concurrency remain on Booking Types.
+
+Authenticated `GET /api/reservations/{id}/availability` derives the tenant and
+excludes only that future active reservation when showing replacement slots.
+`POST /api/reservations/{id}/reschedule` locks the reservation, then uses the
+same schedule-locking slot validator as creation. Booking type, party size,
+start, and persisted end change only after the target capacity is claimed; a
+conflict rolls the transaction back without releasing the old interval.
+Cancelled, completed, and past reservations are not reschedulable.
+
+Generic reservation PATCH is now limited to contact details, notes, and status;
+allocation fields are rejected rather than silently bypassing availability.
+The shared staff dialog exposes rescheduling from Reservations, Requests, and
+Schedule, renders venue-timezone server slots, and handles stale-slot
+alternatives. A successful move resets the reminder flag, commits its staff
+notification, then schedules customer email with a stable-UID ICS update and
+configured SMS before publishing `reservation.rescheduled` best-effort.
+
+Owner/manager reason-recorded availability overrides remain deferred to the
+next availability slice.
 
 ### Inventory and order fulfillment
 

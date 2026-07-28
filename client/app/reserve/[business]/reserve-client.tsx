@@ -66,6 +66,8 @@ export default function ReserveClient({ business, serviceTypes }: ReserveClientP
         <NightTheme />
         <ReservationForm
           businessId={business.id}
+          businessTimezone={business.timezone ?? "UTC"}
+          businessMaxGuests={business.maxGuests}
           serviceTypes={serviceTypes}
           preselectedServiceTypeId={selectedServiceId}
         />
@@ -256,6 +258,8 @@ export default function ReserveClient({ business, serviceTypes }: ReserveClientP
           <div className="mt-4">
             <ReservationForm
               businessId={business.id}
+              businessTimezone={business.timezone ?? "UTC"}
+              businessMaxGuests={business.maxGuests}
               serviceTypes={serviceTypes}
               preselectedServiceTypeId={selectedServiceId}
               onSuccess={() => setBookingOpen(false)}

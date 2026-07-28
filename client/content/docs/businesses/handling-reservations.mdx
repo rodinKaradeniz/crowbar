@@ -12,7 +12,8 @@ Managing reservations efficiently is key to running a successful business on Cro
 When a customer books, the reservation may start as **pending** or **confirmed**:
 
 - **Per service type** — On **Profile** → **Types**, each service can enable **Pending requests**. If enabled, new bookings for that service appear under **Requests** until you accept them.
-- **Global booking settings** — **Profile** → **Booking** controls defaults such as how far ahead customers can book and cancellation expectations.
+- **Global booking settings** — **Profile** → **Booking** controls availability,
+  minimum notice, how far ahead customers can book, slot spacing, and duration.
 
 ### Reviewing Requests
 
@@ -58,11 +59,26 @@ Click on any reservation to see:
 
 ### Updating a Reservation
 
-You can modify an existing reservation:
+Use **Edit** for contact information, notes, or status:
+
 1. Click on the reservation to open its details.
 2. Click **Edit**.
-3. Update the date, time, or other details.
+3. Update the relevant non-scheduling details.
 4. Save your changes.
+
+### Rescheduling a Reservation
+
+Future pending and confirmed reservations have a separate **Reschedule** action
+on **Reservations**, **Requests**, and **Schedule**:
+
+1. Choose the booking type and party size.
+2. Select a date and one of the available venue-local times Crowbar returns.
+3. Review the new booking and confirm the move.
+
+Crowbar keeps the original booking if another user claims the selected slot
+first and offers nearby alternatives. Cancelled, completed, and past
+reservations cannot be rescheduled. Successful moves send the customer updated
+email/calendar details and SMS when those channels are configured.
 
 ### Cancelling a Reservation
 

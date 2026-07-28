@@ -64,6 +64,7 @@ async def update_business(
     data: BusinessUpdate,
     db: AsyncSession = Depends(get_db),
     current_business: Business = Depends(get_current_business),
+    _: User = Depends(require_roles("owner", "manager")),
 ):
     """Update own business. Requires owner or manager role."""
     if current_business.id != business_id:
@@ -102,4 +103,3 @@ async def complete_onboarding(
     current_business.onboarding_complete = True
     await db.flush()
     return current_business
-

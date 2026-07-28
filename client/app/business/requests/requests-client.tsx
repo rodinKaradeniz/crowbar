@@ -5,17 +5,22 @@ import { useRouter } from "next/navigation";
 import { ReservationAccordion } from "@/components/reservation-accordion";
 import { ReservationSearchFilter } from "@/components/reservation-search-filter";
 import { Button } from "@/components/ui/button";
+import { RescheduleReservationDialog } from "@/components/reschedule-reservation-dialog";
 import { Reservation, ServiceType } from "@/types";
 import { CustomerResponse } from "@/lib/api-client";
 import { clientUpdateReservation } from "@/lib/client-api";
 import { toast } from "sonner";
+import { CalendarClock } from "lucide-react";
+import { isReservationReschedulable } from "@/lib/availability";
 
 interface RequestsClientProps {
-  businessId: string;
   initialReservations: Reservation[];
   serviceTypes: ServiceType[];
   customers: CustomerResponse[];
   customerSegments?: Record<string, string>;
+  businessTimezone: string;
+  businessMaxGuests: number;
+  currentTime: string;
 }
 
 const SEGMENT_HINT: Record<string, { icon: string; color: string }> = {
@@ -27,16 +32,20 @@ const SEGMENT_HINT: Record<string, { icon: string; color: string }> = {
 };
 
 export default function RequestsClient({
-  businessId,
   initialReservations,
   serviceTypes,
   customers,
   customerSegments,
+  businessTimezone,
+  businessMaxGuests,
+  currentTime,
 }: RequestsClientProps) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [serviceTypeFilter, setServiceTypeFilter] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [reschedulingReservation, setReschedulingReservation] =
+    useState<Reservation | null>(null);
 
   const customerMap = useMemo(() => {
     const map = new Map<string, CustomerResponse>();
@@ -132,6 +141,20 @@ export default function RequestsClient({
                   {hint.icon} {segment}
                 </span>
               )}
+              {isReservationReschedulable(reservation, currentTime) && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={actionLoading === reservation.id}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setReschedulingReservation(reservation);
+                  }}
+                >
+                  <CalendarClock className="h-4 w-4 mr-1" />
+                  Reschedule
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="default"
@@ -156,6 +179,19 @@ export default function RequestsClient({
               </Button>
             </>
           );
+        }}
+      />
+
+      <RescheduleReservationDialog
+        reservation={reschedulingReservation}
+        open={!!reschedulingReservation}
+        onOpenChange={(open) => !open && setReschedulingReservation(null)}
+        serviceTypes={serviceTypes}
+        businessTimezone={businessTimezone}
+        businessMaxGuests={businessMaxGuests}
+        onRescheduled={() => {
+          setReschedulingReservation(null);
+          router.refresh();
         }}
       />
     </div>

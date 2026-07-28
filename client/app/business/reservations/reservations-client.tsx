@@ -5,35 +5,46 @@ import { useRouter } from "next/navigation";
 import { ReservationAccordion } from "@/components/reservation-accordion";
 import { ReservationSearchFilter } from "@/components/reservation-search-filter";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
-import { ReservationDialog } from "@/components/reservation-dialog";
+import {
+  ReservationEditDialog,
+  type ReservationEditValues,
+} from "@/components/reservation-edit-dialog";
+import { RescheduleReservationDialog } from "@/components/reschedule-reservation-dialog";
 import { Button } from "@/components/ui/button";
-import { Pencil, X } from "lucide-react";
+import { CalendarClock, Pencil, X } from "lucide-react";
 import { Reservation, ServiceType } from "@/types";
 import { CustomerResponse } from "@/lib/api-client";
 import { clientUpdateReservation } from "@/lib/client-api";
 import { toast } from "sonner";
+import { isReservationReschedulable } from "@/lib/availability";
 
 interface ReservationsClientProps {
-  businessId: string;
   initialReservations: Reservation[];
   serviceTypes: ServiceType[];
   customers: CustomerResponse[];
+  businessTimezone: string;
+  businessMaxGuests: number;
+  currentTime: string;
 }
 
 export default function ReservationsClient({
-  businessId,
   initialReservations,
   serviceTypes,
   customers,
+  businessTimezone,
+  businessMaxGuests,
+  currentTime,
 }: ReservationsClientProps) {
   const router = useRouter();
   const [editingReservation, setEditingReservation] =
+    useState<Reservation | null>(null);
+  const [reschedulingReservation, setReschedulingReservation] =
     useState<Reservation | null>(null);
   const [cancellingReservation, setCancellingReservation] =
     useState<Reservation | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [serviceTypeFilter, setServiceTypeFilter] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   // Build a lookup map for customers
   const customerMap = useMemo(() => {
@@ -41,13 +52,6 @@ export default function ReservationsClient({
     customers.forEach((c) => map.set(c.id, c));
     return map;
   }, [customers]);
-
-  // Build a lookup map for service types
-  const serviceTypeMap = useMemo(() => {
-    const map = new Map<string, ServiceType>();
-    serviceTypes.forEach((st) => map.set(st.id, st));
-    return map;
-  }, [serviceTypes]);
 
   // Filter reservations based on search and service type filter
   const reservations = useMemo(() => {
@@ -83,33 +87,22 @@ export default function ReservationsClient({
     setCancellingReservation(reservation);
   };
 
-  const handleSave = async (
-    reservation: Omit<Reservation, "createdAt" | "updatedAt">
-  ) => {
-    setIsSaving(true);
+  const handleSave = async (values: ReservationEditValues) => {
+    if (!editingReservation) return;
+    setActionLoading(editingReservation.id);
     try {
-      await clientUpdateReservation(reservation.id, {
-        serviceTypeId: reservation.serviceTypeId,
-        time: reservation.time,
-        phone: reservation.phone,
-        email: reservation.email,
-        note: reservation.note,
-        status: reservation.status,
-        guests: reservation.guests,
-      });
+      await clientUpdateReservation(editingReservation.id, values);
       toast.success("Reservation updated");
       setEditingReservation(null);
       router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to save reservation");
     } finally {
-      setIsSaving(false);
+      setActionLoading(null);
     }
   };
 
   const handleCancelConfirm = async () => {
     if (cancellingReservation) {
-      setIsSaving(true);
+      setActionLoading(cancellingReservation.id);
       try {
         await clientUpdateReservation(cancellingReservation.id, {
           status: "cancelled",
@@ -120,7 +113,7 @@ export default function ReservationsClient({
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Failed to cancel reservation");
       } finally {
-        setIsSaving(false);
+        setActionLoading(null);
       }
     }
   };
@@ -152,6 +145,7 @@ export default function ReservationsClient({
             <Button
               size="sm"
               variant="outline"
+              disabled={actionLoading === reservation.id}
               onClick={(e) => {
                 e.stopPropagation();
                 handleEdit(reservation);
@@ -160,9 +154,24 @@ export default function ReservationsClient({
               <Pencil className="h-4 w-4 mr-1" />
               Edit
             </Button>
+            {isReservationReschedulable(reservation, currentTime) && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={actionLoading === reservation.id}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setReschedulingReservation(reservation);
+                }}
+              >
+                <CalendarClock className="h-4 w-4 mr-1" />
+                Reschedule
+              </Button>
+            )}
             <Button
               size="sm"
               variant="destructive"
+              disabled={actionLoading === reservation.id}
               onClick={(e) => {
                 e.stopPropagation();
                 handleCancel(reservation);
@@ -177,15 +186,26 @@ export default function ReservationsClient({
 
       {/* Edit Reservation Dialog */}
       {editingReservation && (
-        <ReservationDialog
+        <ReservationEditDialog
           reservation={editingReservation}
           open={!!editingReservation}
           onOpenChange={(open) => !open && setEditingReservation(null)}
           onSave={handleSave}
-          serviceTypes={serviceTypes}
-          isNew={false}
         />
       )}
+
+      <RescheduleReservationDialog
+        reservation={reschedulingReservation}
+        open={!!reschedulingReservation}
+        onOpenChange={(open) => !open && setReschedulingReservation(null)}
+        serviceTypes={serviceTypes}
+        businessTimezone={businessTimezone}
+        businessMaxGuests={businessMaxGuests}
+        onRescheduled={() => {
+          setReschedulingReservation(null);
+          router.refresh();
+        }}
+      />
 
       {/* Cancel Confirmation Dialog */}
       <ConfirmationDialog

@@ -1,8 +1,9 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 import phonenumbers
-from pydantic import EmailStr, field_validator
+from pydantic import ConfigDict, EmailStr, Field, field_validator
 
 from app.schemas.base import AppBaseModel
 
@@ -50,13 +51,24 @@ class PublicReservationCreate(AppBaseModel):
 
 
 class ReservationUpdate(AppBaseModel):
-    service_type_id: UUID | None = None
-    time: datetime | None = None
+    """Non-allocation reservation edits.
+
+    Booking type, party size, and time move together through the dedicated
+    reschedule command so capacity validation cannot be bypassed.
+    """
+
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
+
     phone: str | None = None
     email: str | None = None
     note: str | None = None
-    status: str | None = None
-    guests: int | None = None
+    status: Literal["pending", "confirmed", "cancelled", "completed"] | None = None
+
+
+class ReservationReschedule(AppBaseModel):
+    service_type_id: UUID
+    time: datetime
+    guests: int = Field(ge=1)
 
 
 class ReservationResponse(AppBaseModel):
@@ -65,6 +77,7 @@ class ReservationResponse(AppBaseModel):
     customer_id: UUID
     service_type_id: UUID
     time: datetime
+    ends_at: datetime
     phone: str
     email: str
     note: str | None = None
@@ -72,4 +85,3 @@ class ReservationResponse(AppBaseModel):
     guests: int
     created_at: datetime
     updated_at: datetime
-

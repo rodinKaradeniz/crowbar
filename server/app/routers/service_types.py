@@ -4,8 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.core.errors import forbidden, not_found
+from app.dependencies import get_current_business, require_module, require_roles
 from app.core.rate_limit import enforce_public_read_limit
+from app.models.business import Business
 from app.models.user import User
 from app.schemas.service_type import (
     ServiceTypeCreate,
@@ -46,9 +48,17 @@ async def get_service_type(
 async def create_service_type(
     data: ServiceTypeCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    business: Business = Depends(get_current_business),
+    _: User = Depends(require_roles("owner", "manager")),
+    __: None = Depends(require_module("reservations")),
 ):
-    return await service_type_service.create_service_type(db, data)
+    if data.business_id != business.id:
+        raise forbidden("Not authorized for this business")
+    return await service_type_service.create_service_type(
+        db,
+        business_id=business.id,
+        data=data,
+    )
 
 
 @router.patch("/{service_type_id}", response_model=ServiceTypeResponse)
@@ -56,13 +66,18 @@ async def update_service_type(
     service_type_id: UUID,
     data: ServiceTypeUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    business: Business = Depends(get_current_business),
+    _: User = Depends(require_roles("owner", "manager")),
+    __: None = Depends(require_module("reservations")),
 ):
     service_type = await service_type_service.update_service_type(
-        db, service_type_id, data
+        db,
+        business_id=business.id,
+        service_type_id=service_type_id,
+        data=data,
     )
     if service_type is None:
-        raise HTTPException(status_code=404, detail="Service type not found")
+        raise not_found("Service type")
     return service_type
 
 
@@ -70,8 +85,14 @@ async def update_service_type(
 async def delete_service_type(
     service_type_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    business: Business = Depends(get_current_business),
+    _: User = Depends(require_roles("owner", "manager")),
+    __: None = Depends(require_module("reservations")),
 ):
-    deleted = await service_type_service.delete_service_type(db, service_type_id)
+    deleted = await service_type_service.delete_service_type(
+        db,
+        business_id=business.id,
+        service_type_id=service_type_id,
+    )
     if not deleted:
-        raise HTTPException(status_code=404, detail="Service type not found")
+        raise not_found("Service type")

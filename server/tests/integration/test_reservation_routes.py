@@ -1,7 +1,13 @@
 """Integration tests for reservation routes – full CRUD lifecycle."""
 
+from datetime import datetime, time, timedelta, timezone
+
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.booking_schedule import BookingSchedule, BookingScheduleWindow
 
 
 # --------------------------------------------------------------------------- #
@@ -30,6 +36,38 @@ async def _create_business_owner(client: AsyncClient) -> tuple[str, str]:
     )
     business_id = me.json()["business_id"]
     return token, business_id
+
+
+async def _open_default_schedule(
+    db: AsyncSession,
+    business_id: str,
+) -> None:
+    schedule = await db.scalar(
+        select(BookingSchedule).where(
+            BookingSchedule.business_id == business_id,
+            BookingSchedule.service_type_id.is_(None),
+        )
+    )
+    assert schedule is not None
+    schedule.windows = [
+        BookingScheduleWindow(
+            weekday=weekday,
+            start_time=time(0, 0),
+            end_time=time(23, 59),
+        )
+        for weekday in range(7)
+    ]
+    await db.commit()
+
+
+def _future_time(days: int) -> str:
+    value = (
+        datetime.now(timezone.utc).replace(
+            hour=12, minute=0, second=0, microsecond=0
+        )
+        + timedelta(days=days)
+    )
+    return value.isoformat()
 
 
 async def _create_service_type(
@@ -70,8 +108,11 @@ async def _register_customer(client: AsyncClient) -> str:
 
 class TestReservationLifecycle:
     @pytest.mark.asyncio
-    async def test_create_reservation(self, client: AsyncClient):
+    async def test_create_reservation(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
         owner_token, business_id = await _create_business_owner(client)
+        await _open_default_schedule(db_session, business_id)
         service_type_id = await _create_service_type(client, owner_token, business_id)
         customer_token = await _register_customer(client)
 
@@ -81,7 +122,7 @@ class TestReservationLifecycle:
             json={
                 "business_id": business_id,
                 "service_type_id": service_type_id,
-                "time": "2026-03-15T19:00:00",
+                "time": _future_time(1),
                 "phone": "+31612345678",
                 "email": "customer@test.com",
                 "guests": 4,
@@ -94,8 +135,11 @@ class TestReservationLifecycle:
         assert data["business_id"] == business_id
 
     @pytest.mark.asyncio
-    async def test_list_business_reservations(self, client: AsyncClient):
+    async def test_list_business_reservations(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
         owner_token, business_id = await _create_business_owner(client)
+        await _open_default_schedule(db_session, business_id)
         service_type_id = await _create_service_type(client, owner_token, business_id)
         customer_token = await _register_customer(client)
         cust_headers = {"Authorization": f"Bearer {customer_token}"}
@@ -107,7 +151,7 @@ class TestReservationLifecycle:
             json={
                 "business_id": business_id,
                 "service_type_id": service_type_id,
-                "time": "2026-03-15T20:00:00",
+                "time": _future_time(2),
                 "phone": "+31612345678",
                 "email": "customer@test.com",
                 "guests": 3,
@@ -131,8 +175,11 @@ class TestReservationLifecycle:
 
 class TestPublicReservation:
     @pytest.mark.asyncio
-    async def test_create_public_reservation(self, client: AsyncClient):
+    async def test_create_public_reservation(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
         owner_token, business_id = await _create_business_owner(client)
+        await _open_default_schedule(db_session, business_id)
         service_type_id = await _create_service_type(client, owner_token, business_id)
 
         resp = await client.post(
@@ -140,7 +187,7 @@ class TestPublicReservation:
             json={
                 "business_id": business_id,
                 "service_type_id": service_type_id,
-                "time": "2026-04-01T18:00:00",
+                "time": _future_time(3),
                 "phone": "+31600000000",
                 "email": "guest@example.com",
                 "name": "Walk-in Guest",
@@ -182,7 +229,7 @@ class TestReservationEdgeCases:
             "/api/reservations/00000000-0000-0000-0000-000000000000",
             headers=auth_headers,
         )
-        assert resp.status_code == 404
+        assert resp.status_code == 403
 
     @pytest.mark.asyncio
     async def test_delete_nonexistent_reservation(
@@ -192,4 +239,4 @@ class TestReservationEdgeCases:
             "/api/reservations/00000000-0000-0000-0000-000000000000",
             headers=auth_headers,
         )
-        assert resp.status_code == 404
+        assert resp.status_code == 403

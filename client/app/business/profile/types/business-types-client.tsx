@@ -33,11 +33,13 @@ import { toast } from "sonner";
 interface BusinessTypesClientProps {
   businessId: string;
   initialServiceTypes: ServiceType[];
+  canEdit: boolean;
 }
 
 export default function BusinessTypesClient({
   businessId,
   initialServiceTypes,
+  canEdit,
 }: BusinessTypesClientProps) {
   const router = useRouter();
   const [serviceTypes, setServiceTypes] = useState<ServiceType[]>(
@@ -52,6 +54,7 @@ export default function BusinessTypesClient({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [capacity, setCapacity] = useState("");
+  const [maxConcurrentBookings, setMaxConcurrentBookings] = useState("1");
   const [isPendingEnabled, setIsPendingEnabled] = useState(true);
   const [duration, setDuration] = useState("");
   const [color, setColor] = useState("#3b82f6");
@@ -60,6 +63,7 @@ export default function BusinessTypesClient({
     setName("");
     setDescription("");
     setCapacity("");
+    setMaxConcurrentBookings("1");
     setIsPendingEnabled(true);
     setDuration("");
     setColor("#3b82f6");
@@ -76,6 +80,7 @@ export default function BusinessTypesClient({
     setName(type.name);
     setDescription(type.description || "");
     setCapacity(type.capacity.toString());
+    setMaxConcurrentBookings(type.maxConcurrentBookings.toString());
     setIsPendingEnabled(type.isPendingEnabled ?? true);
     setDuration(type.duration?.toString() || "");
     setColor(type.color);
@@ -110,6 +115,7 @@ export default function BusinessTypesClient({
           name,
           description: description || undefined,
           capacity: parseInt(capacity, 10),
+          maxConcurrentBookings: parseInt(maxConcurrentBookings, 10),
           isPendingEnabled,
           duration: duration ? parseInt(duration, 10) : undefined,
           color,
@@ -123,6 +129,7 @@ export default function BusinessTypesClient({
           name,
           description: description || undefined,
           capacity: parseInt(capacity, 10),
+          maxConcurrentBookings: parseInt(maxConcurrentBookings, 10),
           isPendingEnabled,
           duration: duration ? parseInt(duration, 10) : undefined,
           color,
@@ -150,11 +157,19 @@ export default function BusinessTypesClient({
             Configure the types of reservations your business accepts
           </p>
         </div>
-        <Button onClick={handleCreate}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Booking Type
-        </Button>
+        {canEdit && (
+          <Button onClick={handleCreate}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Booking Type
+          </Button>
+        )}
       </div>
+
+      {!canEdit && (
+        <div className="mb-6 rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground">
+          You have read-only access. An owner or manager can change booking types.
+        </div>
+      )}
 
       {serviceTypes.length === 0 ? (
         <div className="text-center py-12 border rounded-lg bg-card">
@@ -162,10 +177,12 @@ export default function BusinessTypesClient({
           <p className="text-muted-foreground mb-4">
             No booking types configured yet
           </p>
-          <Button onClick={handleCreate} variant="outline">
-            <Plus className="h-4 w-4 mr-2" />
-            Create Your First Booking Type
-          </Button>
+          {canEdit && (
+            <Button onClick={handleCreate} variant="outline">
+              <Plus className="h-4 w-4 mr-2" />
+              Create Your First Booking Type
+            </Button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -182,7 +199,7 @@ export default function BusinessTypesClient({
                   />
                   <h3 className="font-medium">{type.name}</h3>
                 </div>
-                <div className="flex gap-1">
+                {canEdit && <div className="flex gap-1">
                   <Button
                     size="sm"
                     variant="outline"
@@ -197,7 +214,7 @@ export default function BusinessTypesClient({
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>
-                </div>
+                </div>}
               </div>
 
               {type.description && (
@@ -208,6 +225,7 @@ export default function BusinessTypesClient({
 
               <div className="space-y-1 text-xs text-muted-foreground">
                 <div>Capacity: {type.capacity}</div>
+                <div>Concurrent bookings: {type.maxConcurrentBookings}</div>
                 {type.duration && <div>Duration: {type.duration} min</div>}
                 {type.isPendingEnabled && (
                   <div>Requires confirmation</div>
@@ -266,6 +284,21 @@ export default function BusinessTypesClient({
                   placeholder="Describe this booking type"
                   rows={2}
                 />
+              </Field>
+
+              <Field>
+                <FieldLabel>Concurrent bookings *</FieldLabel>
+                <Input
+                  type="number"
+                  min="1"
+                  value={maxConcurrentBookings}
+                  onChange={(e) => setMaxConcurrentBookings(e.target.value)}
+                  placeholder="e.g., 1"
+                  required
+                />
+                <FieldDescription>
+                  Maximum overlapping reservations for this booking type
+                </FieldDescription>
               </Field>
 
               <Field>

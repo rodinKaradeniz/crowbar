@@ -36,10 +36,12 @@ export default async function ReservationsPage() {
 
   return (
     <ReservationsClient
-      businessId={businessId}
       initialReservations={reservations}
       serviceTypes={serviceTypes}
       customers={customers}
+      businessTimezone={business.timezone ?? "UTC"}
+      businessMaxGuests={business.maxGuests}
+      currentTime={new Date().toISOString()}
     />
   );
 }

@@ -8,6 +8,8 @@ import {
   fetchBusinessCustomers,
 } from "@/lib/api";
 import { fetchMLSegmentation } from "@/lib/ml-api";
+import { ModuleDisabled } from "@/components/module-disabled";
+import { hasModule, MODULE_KEYS } from "@/lib/modules";
 
 export default async function Requests() {
   const user = await getCurrentUser();
@@ -31,6 +33,10 @@ export default async function Requests() {
     redirect("/auth/login");
   }
 
+  if (!hasModule(business.enabledModules ?? [], MODULE_KEYS.RESERVATIONS)) {
+    return <ModuleDisabled moduleName="Reservations" />;
+  }
+
   if (!business.onboardingComplete) {
     redirect("/business/onboarding");
   }
@@ -45,11 +51,13 @@ export default async function Requests() {
 
   return (
     <RequestsClient
-      businessId={businessId}
       initialReservations={reservations}
       serviceTypes={serviceTypes}
       customers={customers}
       customerSegments={customerSegments}
+      businessTimezone={business.timezone ?? "UTC"}
+      businessMaxGuests={business.maxGuests}
+      currentTime={new Date().toISOString()}
     />
   );
 }

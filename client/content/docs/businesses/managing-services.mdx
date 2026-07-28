@@ -15,16 +15,17 @@ Navigate to **Profile** → **Types** to see all your current service types.
 
 1. Go to **Profile** → **Types**.
 2. Click **Add Service Type**.
-3. Fill in the **Details** tab:
+3. Fill in the booking type details:
    - **Name** — The name of the service (e.g., "Haircut", "Consultation")
    - **Description** — A brief description of what the service includes
    - **Duration** — How long the service typically takes (used for scheduling)
-   - **Price** — The cost of the service (if applicable)
-   - **Capacity** — How many customers can book this service at the same time
+   - **Capacity** — Maximum party size for one reservation of this type
+   - **Concurrent bookings** — Maximum overlapping pending or confirmed
+     reservations of this type
    - **Color** — Display color for schedules and lists
 4. Optional **Booking behavior**:
    - **Pending requests** — When enabled, new bookings for this service start as **pending** until you accept them in **Requests**. When disabled, eligible bookings are **confirmed** immediately (still subject to your global booking rules).
-5. Click **Save** to create the service type.
+5. Click **Create** to create the booking type.
 
 ## Editing a Service Type
 
@@ -46,13 +47,21 @@ Deleting a service type will not cancel existing reservations of that type, but 
 
 ## Guests and public booking
 
-Customers booking from your public page can specify **guest count** where the flow supports it. Capacity on the service type helps control how many spots each slot represents.
+Customers booking from your public page specify a **guest count**. Their party
+must fit both the business-wide maximum and this type's capacity. Concurrent
+bookings controls how many qualifying reservations may overlap; it does not
+multiply the party-size limit.
+
+To customize when this type can be booked, go to **Profile** → **Booking**,
+select it in **Configuration scope**, and enable its custom schedule. Otherwise
+it inherits the complete business default.
 
 ## Best Practices
 
 - **Be descriptive** — Clear names and descriptions help customers choose the right service.
 - **Set accurate durations** — Prevents scheduling conflicts and reserves the right length for each booking.
-- **Keep prices updated** — Ensure your listed prices match your current rates.
+- **Set concurrency deliberately** — Use the number of resources you can truly
+  serve at the same time, not an aspirational peak.
 - **Review regularly** — Update your service types as your offerings change.
 
 ## Next Steps

@@ -11,7 +11,7 @@ Verifies the post-cutover invariants:
   - The Customer row picks up name/email if the public-form path supplies them.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 
 import pytest
 import pytest_asyncio
@@ -19,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.business import Business
+from app.models.booking_schedule import BookingSchedule, BookingScheduleWindow
 from app.models.customer import Customer
 from app.models.service_type import ServiceType
 from app.schemas.reservation import PublicReservationCreate, ReservationCreate
@@ -35,7 +36,30 @@ async def biz(db_session: AsyncSession) -> Business:
     )
     db_session.add(b)
     await db_session.flush()
+    db_session.add(
+        BookingSchedule(
+            business_id=b.id,
+            windows=[
+                BookingScheduleWindow(
+                    weekday=weekday,
+                    start_time=time(0, 0),
+                    end_time=time(23, 59),
+                )
+                for weekday in range(7)
+            ],
+        )
+    )
+    await db_session.flush()
     return b
+
+
+def _future_time(days: int) -> datetime:
+    return (
+        datetime.now(timezone.utc).replace(
+            hour=12, minute=0, second=0, microsecond=0
+        )
+        + timedelta(days=days)
+    )
 
 
 @pytest_asyncio.fixture
@@ -53,7 +77,7 @@ async def test_create_public_reservation_creates_customer(
     data = PublicReservationCreate(
         business_id=biz.id,
         service_type_id=service_type.id,
-        time=datetime(2026, 7, 1, 20, 0, tzinfo=timezone.utc),
+        time=_future_time(1),
         phone="+14155557777",
         email="frank@example.com",
         name="Frank",
@@ -82,7 +106,7 @@ async def test_create_authenticated_reservation_creates_customer(
     data = ReservationCreate(
         business_id=biz.id,
         service_type_id=service_type.id,
-        time=datetime(2026, 7, 2, 20, 0, tzinfo=timezone.utc),
+        time=_future_time(2),
         phone="+14155556666",
         email="grace@example.com",
         guests=1,
@@ -116,11 +140,11 @@ async def test_two_reservations_same_phone_share_customer(
     )
     r1 = await reservation_service.create_public_reservation(
         db_session,
-        PublicReservationCreate(time=datetime(2026, 7, 3, 20, 0, tzinfo=timezone.utc), **common),
+        PublicReservationCreate(time=_future_time(3), **common),
     )
     r2 = await reservation_service.create_public_reservation(
         db_session,
-        PublicReservationCreate(time=datetime(2026, 7, 4, 20, 0, tzinfo=timezone.utc), **common),
+        PublicReservationCreate(time=_future_time(4), **common),
     )
 
     assert r1.customer_id == r2.customer_id
@@ -137,7 +161,7 @@ async def test_subsequent_public_reservation_fills_in_name_and_email(
     auth_data = ReservationCreate(
         business_id=biz.id,
         service_type_id=service_type.id,
-        time=datetime(2026, 7, 5, 20, 0, tzinfo=timezone.utc),
+        time=_future_time(5),
         phone="+14155553333",
         email=None or "iris-tmp@example.com",  # email is required on the schema
         guests=1,
@@ -147,7 +171,7 @@ async def test_subsequent_public_reservation_fills_in_name_and_email(
     public_data = PublicReservationCreate(
         business_id=biz.id,
         service_type_id=service_type.id,
-        time=datetime(2026, 7, 6, 20, 0, tzinfo=timezone.utc),
+        time=_future_time(6),
         phone="+14155553333",
         email="iris@example.com",
         name="Iris",

@@ -1,11 +1,19 @@
 import { cookies } from "next/headers";
-import { Business, ServiceType, Reservation, VisitorResponse } from "@/types";
+import {
+  BookingSchedule,
+  BookingScheduleCollection,
+  Business,
+  ServiceType,
+  Reservation,
+  VisitorResponse,
+} from "@/types";
 import {
   apiGetBusinesses,
   apiGetBusiness,
   apiGetBusinessBySlug,
   apiGetServiceTypesByBusiness,
   apiGetServiceType,
+  apiGetBookingSchedules,
   apiGetBusinessReservations,
   apiGetBusinessStats,
   apiGetBusinessKpis,
@@ -17,10 +25,9 @@ import {
   apiLogin,
   type BusinessResponse,
   type ServiceTypeResponse,
+  type BookingScheduleResponse,
   type ReservationResponse,
-  type UserResponse,
   type VisitorResponseRaw,
-  type StaffResponse,
   type BusinessDashboardStats,
   type LoginResponse,
 } from "./api-client";
@@ -116,6 +123,45 @@ function toServiceType(st: ServiceTypeResponse): ServiceType {
   };
 }
 
+function toBookingSchedule(schedule: BookingScheduleResponse): BookingSchedule {
+  const wallTime = (value: string) => value.slice(0, 5);
+  return {
+    id: schedule.id,
+    businessId: schedule.business_id,
+    serviceTypeId: schedule.service_type_id || undefined,
+    minimumNoticeMinutes: schedule.minimum_notice_minutes,
+    advanceBookingDays: schedule.advance_booking_days,
+    slotIntervalMinutes: schedule.slot_interval_minutes,
+    defaultDurationMinutes: schedule.default_duration_minutes,
+    windows: schedule.windows.map((window) => ({
+      id: window.id,
+      weekday: window.weekday,
+      startTime: wallTime(window.start_time),
+      endTime: wallTime(window.end_time),
+      endsNextDay: window.ends_next_day,
+      createdAt: window.created_at,
+      updatedAt: window.updated_at,
+    })),
+    exceptions: schedule.exceptions.map((exception) => ({
+      id: exception.id,
+      localDate: exception.local_date,
+      isClosed: exception.is_closed,
+      windows: exception.windows.map((window) => ({
+        id: window.id,
+        startTime: wallTime(window.start_time),
+        endTime: wallTime(window.end_time),
+        endsNextDay: window.ends_next_day,
+        createdAt: window.created_at,
+        updatedAt: window.updated_at,
+      })),
+      createdAt: exception.created_at,
+      updatedAt: exception.updated_at,
+    })),
+    createdAt: schedule.created_at,
+    updatedAt: schedule.updated_at,
+  };
+}
+
 function toReservation(r: ReservationResponse): Reservation {
   return {
     id: r.id,
@@ -123,6 +169,7 @@ function toReservation(r: ReservationResponse): Reservation {
     customerId: r.customer_id,
     serviceTypeId: r.service_type_id,
     time: r.time,
+    endsAt: r.ends_at,
     phone: r.phone,
     email: r.email,
     note: r.note || undefined,
@@ -243,6 +290,21 @@ export async function fetchServiceType(id: string): Promise<ServiceType | null> 
     const token = await getToken();
     const data = await apiGetServiceType(id, token || undefined);
     return toServiceType(data);
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchBookingSchedules(): Promise<BookingScheduleCollection | null> {
+  if (USE_MOCK) return null;
+  const token = await getToken();
+  if (!token) return null;
+  try {
+    const data = await apiGetBookingSchedules(token);
+    return {
+      defaultSchedule: toBookingSchedule(data.default_schedule),
+      serviceOverrides: data.service_overrides.map(toBookingSchedule),
+    };
   } catch {
     return null;
   }

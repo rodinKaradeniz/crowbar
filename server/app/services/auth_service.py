@@ -9,6 +9,7 @@ from app.config import settings
 from app.models.business import Business
 from app.models.staff import Staff
 from app.models.user import User
+from app.services.booking_schedule_service import create_default_booking_schedule
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -101,6 +102,7 @@ async def register_business_owner(
     )
     db.add(business)
     await db.flush()
+    await create_default_booking_schedule(db, business)
 
     # 3. Assign the user as owner of the business
     staff = Staff(

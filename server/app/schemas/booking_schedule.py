@@ -41,6 +41,12 @@ class BookingScheduleExceptionInput(AppBaseModel):
             raise ValueError("a closed exception cannot contain windows")
         if not self.is_closed and not self.windows:
             raise ValueError("a custom-hours exception requires at least one window")
+        window_keys = [
+            (window.start_time, window.end_time, window.ends_next_day)
+            for window in self.windows
+        ]
+        if len(window_keys) != len(set(window_keys)):
+            raise ValueError("exception windows must be unique")
         return self
 
 
@@ -112,3 +118,33 @@ class BookingScheduleResponse(AppBaseModel):
     exceptions: list[BookingScheduleExceptionResponse]
     created_at: datetime
     updated_at: datetime
+
+
+class BookingScheduleCollectionResponse(AppBaseModel):
+    default_schedule: BookingScheduleResponse
+    service_overrides: list[BookingScheduleResponse]
+
+
+class BookingScheduleOperatingHoursPreview(AppBaseModel):
+    current_windows: list[BookingScheduleWindowInput]
+    proposed_windows: list[BookingScheduleWindowInput]
+
+
+class AvailabilitySlotResponse(AppBaseModel):
+    starts_at: datetime
+    ends_at: datetime
+
+
+class AvailabilityDateResponse(AppBaseModel):
+    date: date
+    slots: list[AvailabilitySlotResponse]
+
+
+class AvailabilityResponse(AppBaseModel):
+    business_id: UUID
+    service_type_id: UUID
+    timezone: str
+    duration_minutes: int
+    slot_interval_minutes: int
+    max_party_size: int
+    dates: list[AvailabilityDateResponse]

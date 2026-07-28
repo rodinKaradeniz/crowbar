@@ -78,16 +78,32 @@ Start with discovery and product-rule confirmation for the current stage; do
 not silently pull a later stage forward. `docs/TODO.md` owns the detailed
 acceptance boundary and the remaining planned improvements after this arc.
 
-Availability stage checkpoint as of 2026-07-26:
+Availability stage checkpoint as of 2026-07-28:
 
 - Local migration 023 and matching ORM/Pydantic contracts establish business
   default and service-override booking schedules, weekly/date windows,
   persisted reservation intervals, positive concurrency, and override audit
-  fields. The fresh migration-plus-seed chain and all backend tests pass.
-- Reservation creation currently derives and stores `ends_at`, but the shared
-  availability computation, concurrency lock, API endpoints, override
-  authorization, and booking UI are not implemented. Existing routes still
-  accept arbitrary timestamps, so do not treat availability as enforced.
+  fields. The fresh migration-plus-seed chain is locally validated.
+- The shared availability service and public read endpoint enforce timezone,
+  weekly/date windows, notice/horizon, party limits, duration, active-overlap
+  concurrency, and service overrides. Public and authenticated creation lock
+  the resolved schedule, recheck capacity, persist the selected interval, and
+  return structured alternatives on a stale slot.
+- The public reservation form now uses only server-returned slots and displays
+  them in the venue timezone. New businesses receive a closed default schedule.
+- Authenticated schedule APIs and Profile → Booking now manage the default and
+  explicit service overrides, including policy, split/overnight weekly hours,
+  date exceptions, and a previewed one-time operating-hours copy. Owners and
+  managers edit; ordinary staff view read-only. Booking Types also exposes
+  positive concurrency and its mutations are tenant/role scoped.
+- Staff rescheduling now uses authenticated reservation-specific availability
+  and a dedicated atomic command across Reservations, Requests, and Schedule.
+  It locks the reservation and schedule, excludes the old interval, rejects
+  terminal/past moves, preserves the old booking on conflict, and commits
+  before updated email/ICS, SMS, and event side effects. Generic PATCH no longer
+  accepts allocation fields.
+- Reason-recorded owner/manager availability overrides are the next decision in
+  this stage; ordinary staff continue to follow normal availability.
 - Migration 023 is local only. Railway remains at migrations 001–022 because
   deployment is shelved.
 

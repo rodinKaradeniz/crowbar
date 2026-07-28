@@ -1,7 +1,7 @@
 "use client";
 
 import { format, parseISO } from "date-fns";
-import { Clock, Users, Tag } from "lucide-react";
+import { CalendarClock, Clock, Users, Tag } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/dialog";
 import { Reservation, ServiceType } from "@/types";
 import { CustomerResponse } from "@/lib/api-client";
+import { Button } from "@/components/ui/button";
+import { isReservationReschedulable } from "@/lib/availability";
 
 interface ReservationDetailsDialogProps {
   reservation: Reservation | null;
@@ -20,6 +22,8 @@ interface ReservationDetailsDialogProps {
   description?: string;
   serviceTypes?: ServiceType[];
   customers?: CustomerResponse[];
+  onReschedule?: (reservation: Reservation) => void;
+  currentTime?: string;
 }
 
 export function ReservationDetailsDialog({
@@ -30,11 +34,18 @@ export function ReservationDetailsDialog({
   description = "View complete information about this reservation",
   serviceTypes = [],
   customers = [],
+  onReschedule,
+  currentTime,
 }: ReservationDetailsDialogProps) {
   if (!reservation) return null;
 
   const customer = customers.find((c) => c.id === reservation.customerId);
   const serviceType = serviceTypes.find((st) => st.id === reservation.serviceTypeId);
+  const canReschedule = Boolean(
+    onReschedule &&
+      currentTime &&
+      isReservationReschedulable(reservation, currentTime),
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -96,6 +107,16 @@ export function ReservationDetailsDialog({
               </div>
             )}
           </div>
+          {canReschedule && (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => onReschedule?.(reservation)}
+            >
+              <CalendarClock /> Reschedule
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>

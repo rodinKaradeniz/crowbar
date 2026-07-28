@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.business import Business
 from app.schemas.business import BusinessCreate, BusinessUpdate
+from app.services.booking_schedule_service import create_default_booking_schedule
 
 
 async def get_businesses(db: AsyncSession) -> list[Business]:
@@ -42,6 +43,7 @@ async def create_business(db: AsyncSession, data: BusinessCreate) -> Business:
     )
     db.add(business)
     await db.flush()
+    await create_default_booking_schedule(db, business)
     return business
 
 

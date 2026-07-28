@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,9 +37,6 @@ class ReservationSnapshot:
 _MATERIAL_PATCH_KEYS = frozenset(
     {
         "status",
-        "time",
-        "service_type_id",
-        "guests",
         "note",
         "phone",
         "email",
@@ -158,6 +156,51 @@ async def notify_after_reservation_patch(
             new.phone,
             f"Crowbar: {sms_body}",
         )
+
+
+async def notify_after_reservation_reschedule(
+    db: AsyncSession,
+    *,
+    old: ReservationSnapshot,
+    new: Reservation,
+    actor: User,
+) -> None:
+    timezone_name = new.business.timezone if new.business else "UTC"
+    old_local_time = old.time.astimezone(ZoneInfo(timezone_name))
+    local_time = new.time.astimezone(ZoneInfo(timezone_name))
+    await notification_service.notify_business_staff(
+        db,
+        business_id=new.business_id,
+        kind=nconst.RESERVATION_UPDATED,
+        title="Reservation rescheduled",
+        body=f"Reservation moved from {_fmt_time(old_local_time)} to {_fmt_time(local_time)}.",
+        payload={
+            "reservation_id": str(new.id),
+            "old_time": old.time.isoformat(),
+            "new_time": new.time.isoformat(),
+            "old_service_type_id": str(old.service_type_id),
+            "new_service_type_id": str(new.service_type_id),
+            "old_guests": old.guests,
+            "new_guests": new.guests,
+        },
+        exclude_user_id=actor.id,
+    )
+
+
+def send_reschedule_sms(
+    *,
+    notification_channels: list,
+    phone: str,
+    business_name: str,
+    reservation_time: datetime,
+    timezone_name: str,
+) -> None:
+    local_time = reservation_time.astimezone(ZoneInfo(timezone_name))
+    notification_service.send_sms_if_enabled(
+        notification_channels,
+        phone,
+        f"Crowbar: Your reservation at {business_name} was rescheduled to {_fmt_time(local_time)}.",
+    )
 
 
 async def notify_after_reservation_delete(

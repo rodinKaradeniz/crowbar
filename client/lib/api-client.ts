@@ -149,6 +149,55 @@ export async function apiGetServiceType(
   return apiFetch(`/api/service-types/${id}`, { token });
 }
 
+// ─── Authenticated booking schedules ────────────────────────────────────────
+
+export interface BookingTimeWindowResponse {
+  id?: string;
+  start_time: string;
+  end_time: string;
+  ends_next_day: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface BookingScheduleWindowResponse extends BookingTimeWindowResponse {
+  weekday: number;
+}
+
+export interface BookingScheduleExceptionResponse {
+  id?: string;
+  local_date: string;
+  is_closed: boolean;
+  windows: BookingTimeWindowResponse[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface BookingScheduleResponse {
+  id: string;
+  business_id: string;
+  service_type_id: string | null;
+  minimum_notice_minutes: number;
+  advance_booking_days: number;
+  slot_interval_minutes: number;
+  default_duration_minutes: number;
+  windows: BookingScheduleWindowResponse[];
+  exceptions: BookingScheduleExceptionResponse[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BookingScheduleCollectionResponse {
+  default_schedule: BookingScheduleResponse;
+  service_overrides: BookingScheduleResponse[];
+}
+
+export async function apiGetBookingSchedules(
+  token: string,
+): Promise<BookingScheduleCollectionResponse> {
+  return apiFetch("/api/booking-schedules", { token, cache: "no-store" });
+}
+
 // ─── Reservations ────────────────────────────────────────────────────────────
 
 export interface ReservationResponse {
@@ -157,6 +206,7 @@ export interface ReservationResponse {
   customer_id: string;
   service_type_id: string;
   time: string;
+  ends_at: string;
   phone: string;
   email: string;
   note: string | null;
@@ -173,52 +223,6 @@ export async function apiGetBusinessReservations(
 ): Promise<ReservationResponse[]> {
   const query = status ? `?status=${status}` : "";
   return apiFetch(`/api/reservations/business/${businessId}${query}`, { token });
-}
-
-export async function apiCreateReservation(
-  data: {
-    business_id: string;
-    service_type_id: string;
-    time: string;
-    phone: string;
-    email: string;
-    note?: string;
-    guests: number;
-  },
-  token: string
-): Promise<ReservationResponse> {
-  return apiFetch("/api/reservations", {
-    method: "POST",
-    body: JSON.stringify(data),
-    token,
-  });
-}
-
-export async function apiUpdateReservation(
-  id: string,
-  data: Partial<{
-    service_type_id: string;
-    time: string;
-    phone: string;
-    email: string;
-    note: string;
-    status: string;
-    guests: number;
-  }>,
-  token: string
-): Promise<ReservationResponse> {
-  return apiFetch(`/api/reservations/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify(data),
-    token,
-  });
-}
-
-export async function apiDeleteReservation(id: string, token: string): Promise<void> {
-  return apiFetch(`/api/reservations/${id}`, {
-    method: "DELETE",
-    token,
-  });
 }
 
 // ─── Customers ───────────────────────────────────────────────────────────────

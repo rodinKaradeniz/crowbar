@@ -28,10 +28,13 @@ async def get_service_type_by_id(
 
 
 async def create_service_type(
-    db: AsyncSession, data: ServiceTypeCreate
+    db: AsyncSession,
+    *,
+    business_id: UUID,
+    data: ServiceTypeCreate,
 ) -> ServiceType:
     service_type = ServiceType(
-        business_id=data.business_id,
+        business_id=business_id,
         name=data.name,
         description=data.description,
         capacity=data.capacity,
@@ -48,9 +51,18 @@ async def create_service_type(
 
 
 async def update_service_type(
-    db: AsyncSession, service_type_id: UUID, data: ServiceTypeUpdate
+    db: AsyncSession,
+    *,
+    business_id: UUID,
+    service_type_id: UUID,
+    data: ServiceTypeUpdate,
 ) -> ServiceType | None:
-    service_type = await get_service_type_by_id(db, service_type_id)
+    service_type = await db.scalar(
+        select(ServiceType).where(
+            ServiceType.id == service_type_id,
+            ServiceType.business_id == business_id,
+        )
+    )
     if service_type is None:
         return None
 
@@ -63,8 +75,18 @@ async def update_service_type(
     return service_type
 
 
-async def delete_service_type(db: AsyncSession, service_type_id: UUID) -> bool:
-    service_type = await get_service_type_by_id(db, service_type_id)
+async def delete_service_type(
+    db: AsyncSession,
+    *,
+    business_id: UUID,
+    service_type_id: UUID,
+) -> bool:
+    service_type = await db.scalar(
+        select(ServiceType).where(
+            ServiceType.id == service_type_id,
+            ServiceType.business_id == business_id,
+        )
+    )
     if service_type is None:
         return False
     await db.delete(service_type)

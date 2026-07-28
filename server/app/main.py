@@ -20,7 +20,9 @@ from app.core.stream_consumer import GROUP_NAME, ws_push_consumer
 from app.database import get_db
 from app.routers import (
     analytics,
+    availability,
     auth,
+    booking_schedules,
     businesses,
     customers,
     happy_hour,
@@ -122,6 +124,8 @@ app.add_middleware(
 # ─── Routers ──────────────────────────────────────────────────────────────────
 
 app.include_router(auth.router)
+app.include_router(availability.router)
+app.include_router(booking_schedules.router)
 app.include_router(businesses.router)
 app.include_router(service_types.router)
 app.include_router(reservations.router)

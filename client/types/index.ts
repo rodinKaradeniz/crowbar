@@ -101,6 +101,61 @@ export interface ServiceType {
   updatedAt: string;
 }
 
+export interface BookingTimeWindow {
+  id?: string;
+  startTime: string;
+  endTime: string;
+  endsNextDay: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BookingScheduleWindow extends BookingTimeWindow {
+  weekday: number;
+}
+
+export interface BookingScheduleException {
+  id?: string;
+  localDate: string;
+  isClosed: boolean;
+  windows: BookingTimeWindow[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BookingSchedule {
+  id: string;
+  businessId: string;
+  serviceTypeId?: string;
+  minimumNoticeMinutes: number;
+  advanceBookingDays: number;
+  slotIntervalMinutes: number;
+  defaultDurationMinutes: number;
+  windows: BookingScheduleWindow[];
+  exceptions: BookingScheduleException[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BookingScheduleDraft {
+  minimumNoticeMinutes: number;
+  advanceBookingDays: number;
+  slotIntervalMinutes: number;
+  defaultDurationMinutes: number;
+  windows: BookingScheduleWindow[];
+  exceptions: BookingScheduleException[];
+}
+
+export interface BookingScheduleCollection {
+  defaultSchedule: BookingSchedule;
+  serviceOverrides: BookingSchedule[];
+}
+
+export interface BookingOperatingHoursPreview {
+  currentWindows: BookingScheduleWindow[];
+  proposedWindows: BookingScheduleWindow[];
+}
+
 export interface Notification {
   id: string;
   userId: string;
@@ -348,6 +403,8 @@ export interface Reservation {
   customerId: string;
   serviceTypeId: string;
   time: string;
+  /** Persisted occupied-interval end. Optional only for legacy mock fixtures. */
+  endsAt?: string;
   phone: string;
   email: string;
   note?: string;
@@ -355,6 +412,26 @@ export interface Reservation {
   guests: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AvailabilitySlot {
+  startsAt: string;
+  endsAt: string;
+}
+
+export interface AvailabilityDate {
+  date: string;
+  slots: AvailabilitySlot[];
+}
+
+export interface Availability {
+  businessId: string;
+  serviceTypeId: string;
+  timezone: string;
+  durationMinutes: number;
+  slotIntervalMinutes: number;
+  maxPartySize: number;
+  dates: AvailabilityDate[];
 }
 
 // ── Insights / KPIs ──────────────────────────────────────────────────────────

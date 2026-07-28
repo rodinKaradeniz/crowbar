@@ -1,18 +1,23 @@
-from datetime import timedelta
+from datetime import date, datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.business import Business
 from app.models.reservation import Reservation
-from app.models.service_type import ServiceType
 from app.schemas.reservation import (
     PublicReservationCreate,
     ReservationCreate,
+    ReservationReschedule,
     ReservationUpdate,
 )
+from app.services.availability_service import (
+    AvailabilityError,
+    get_availability,
+    validate_booking_slot,
+)
+from app.core.errors import ErrorCode
 from app.services.customer_identity_service import upsert_customer
 
 
@@ -33,15 +38,22 @@ async def get_reservation_by_id(
     db: AsyncSession,
     reservation_id: UUID,
     *,
+    business_id: UUID,
     load_relations: bool = False,
+    for_update: bool = False,
 ) -> Reservation | None:
-    query = select(Reservation).where(Reservation.id == reservation_id)
+    query = select(Reservation).where(
+        Reservation.id == reservation_id,
+        Reservation.business_id == business_id,
+    )
     if load_relations:
         query = query.options(
             selectinload(Reservation.business),
             selectinload(Reservation.service_type),
             selectinload(Reservation.customer),
         )
+    if for_update:
+        query = query.with_for_update()
     result = await db.execute(query)
     return result.scalar_one_or_none()
 
@@ -49,11 +61,15 @@ async def get_reservation_by_id(
 async def create_reservation(
     db: AsyncSession, data: ReservationCreate
 ) -> Reservation:
-    service_type = await _get_service_type(db, data.service_type_id)
-    status = "pending" if service_type and service_type.is_pending_enabled else "confirmed"
-    duration_minutes = await _get_reservation_duration_minutes(
-        db, data.business_id, service_type
+    validated_slot = await validate_booking_slot(
+        db,
+        business_id=data.business_id,
+        service_type_id=data.service_type_id,
+        starts_at=data.time,
+        guests=data.guests,
     )
+    service_type = validated_slot.service_type
+    status = "pending" if service_type.is_pending_enabled else "confirmed"
 
     customer = await upsert_customer(
         db, business_id=data.business_id, phone=data.phone, email=data.email
@@ -63,8 +79,8 @@ async def create_reservation(
         business_id=data.business_id,
         customer_id=customer.id,
         service_type_id=data.service_type_id,
-        time=data.time,
-        ends_at=data.time + timedelta(minutes=duration_minutes),
+        time=validated_slot.starts_at,
+        ends_at=validated_slot.ends_at,
         phone=data.phone,
         email=data.email,
         note=data.note,
@@ -78,65 +94,109 @@ async def create_reservation(
 
 
 async def update_reservation(
-    db: AsyncSession, reservation_id: UUID, data: ReservationUpdate
-) -> Reservation | None:
-    reservation = await get_reservation_by_id(db, reservation_id)
-    if reservation is None:
-        return None
-
+    db: AsyncSession,
+    *,
+    reservation: Reservation,
+    data: ReservationUpdate,
+) -> Reservation:
     update_data = data.model_dump(exclude_unset=True)
+    if (
+        reservation.status in {"cancelled", "completed"}
+        and update_data.get("status") in {"pending", "confirmed"}
+    ):
+        raise AvailabilityError(
+            status_code=409,
+            code=ErrorCode.RESERVATION_NOT_RESCHEDULABLE,
+            message="Cancelled or completed reservations cannot be reactivated",
+        )
     for key, value in update_data.items():
         setattr(reservation, key, value)
-
-    if "time" in update_data or "service_type_id" in update_data:
-        service_type = await _get_service_type(db, reservation.service_type_id)
-        duration_minutes = await _get_reservation_duration_minutes(
-            db, reservation.business_id, service_type
-        )
-        reservation.ends_at = reservation.time + timedelta(
-            minutes=duration_minutes
-        )
 
     await db.flush()
     await db.refresh(reservation)
     return reservation
 
 
-async def delete_reservation(db: AsyncSession, reservation_id: UUID) -> bool:
-    reservation = await get_reservation_by_id(db, reservation_id)
-    if reservation is None:
-        return False
+async def delete_reservation(
+    db: AsyncSession,
+    *,
+    reservation: Reservation,
+) -> None:
     await db.delete(reservation)
     await db.flush()
-    return True
 
 
-async def _get_service_type(
-    db: AsyncSession, service_type_id: UUID
-) -> ServiceType | None:
-    result = await db.execute(
-        select(ServiceType).where(ServiceType.id == service_type_id)
-    )
-    return result.scalar_one_or_none()
+def ensure_reschedulable(
+    reservation: Reservation,
+    *,
+    now: datetime | None = None,
+) -> None:
+    current_time = now or datetime.now(timezone.utc)
+    if reservation.status not in {"pending", "confirmed"}:
+        raise AvailabilityError(
+            status_code=409,
+            code=ErrorCode.RESERVATION_NOT_RESCHEDULABLE,
+            message="Only pending or confirmed reservations can be rescheduled",
+        )
+    if reservation.time <= current_time:
+        raise AvailabilityError(
+            status_code=409,
+            code=ErrorCode.RESERVATION_NOT_RESCHEDULABLE,
+            message="Past reservations cannot be rescheduled",
+        )
 
 
-async def _get_reservation_duration_minutes(
+async def get_reschedule_availability(
     db: AsyncSession,
-    business_id: UUID,
-    service_type: ServiceType | None,
-) -> int:
-    """Resolve today's legacy duration while the availability service is built.
-
-    Persisting the result on each reservation prevents future configuration
-    changes from rewriting the historical occupied interval.
-    """
-    if service_type is not None and service_type.duration is not None:
-        return max(service_type.duration, 1)
-
-    result = await db.execute(
-        select(Business.reservation_time).where(Business.id == business_id)
+    *,
+    reservation: Reservation,
+    service_type_id: UUID,
+    start_date: date,
+    days: int,
+    guests: int,
+    now: datetime | None = None,
+):
+    ensure_reschedulable(reservation, now=now)
+    return await get_availability(
+        db,
+        business_id=reservation.business_id,
+        service_type_id=service_type_id,
+        start_date=start_date,
+        days=days,
+        guests=guests,
+        now=now,
+        exclude_reservation_id=reservation.id,
     )
-    return max(result.scalar_one_or_none() or 60, 1)
+
+
+async def reschedule_reservation(
+    db: AsyncSession,
+    *,
+    reservation: Reservation,
+    data: ReservationReschedule,
+    now: datetime | None = None,
+) -> Reservation:
+    ensure_reschedulable(reservation, now=now)
+    validated_slot = await validate_booking_slot(
+        db,
+        business_id=reservation.business_id,
+        service_type_id=data.service_type_id,
+        starts_at=data.time,
+        guests=data.guests,
+        now=now,
+        exclude_reservation_id=reservation.id,
+    )
+    reservation.service_type_id = data.service_type_id
+    reservation.time = validated_slot.starts_at
+    reservation.ends_at = validated_slot.ends_at
+    reservation.guests = data.guests
+    reservation.sms_reminder_sent = False
+    reservation.availability_override_by = None
+    reservation.availability_override_reason = None
+    reservation.availability_overridden_at = None
+    await db.flush()
+    await db.refresh(reservation)
+    return reservation
 
 
 async def create_public_reservation(
@@ -147,11 +207,15 @@ async def create_public_reservation(
     Upserts a Customer (business-scoped, keyed by phone) and links the
     reservation to it.
     """
-    service_type = await _get_service_type(db, data.service_type_id)
-    status = "pending" if service_type and service_type.is_pending_enabled else "confirmed"
-    duration_minutes = await _get_reservation_duration_minutes(
-        db, data.business_id, service_type
+    validated_slot = await validate_booking_slot(
+        db,
+        business_id=data.business_id,
+        service_type_id=data.service_type_id,
+        starts_at=data.time,
+        guests=data.guests,
     )
+    service_type = validated_slot.service_type
+    status = "pending" if service_type.is_pending_enabled else "confirmed"
 
     customer = await upsert_customer(
         db,
@@ -165,8 +229,8 @@ async def create_public_reservation(
         business_id=data.business_id,
         customer_id=customer.id,
         service_type_id=data.service_type_id,
-        time=data.time,
-        ends_at=data.time + timedelta(minutes=duration_minutes),
+        time=validated_slot.starts_at,
+        ends_at=validated_slot.ends_at,
         phone=data.phone,
         email=data.email,
         note=data.note,

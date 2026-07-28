@@ -6,6 +6,7 @@ them.
 
 Status labels:
 
+- **Complete:** implemented and verified locally.
 - **Ready:** sufficiently understood to plan.
 - **In progress:** an approved stage has landed partially and names its next
   boundary explicitly.
@@ -24,7 +25,7 @@ below; it did not promote them ahead of the current availability stage.
 
 ### 1. Authoritative availability and capacity — current
 
-- **In progress — local data foundation complete:** Migration 023 adds one
+- **Complete — local data foundation:** Migration 023 adds one
   business booking schedule plus optional complete service-type overrides,
   multiple/overnight weekly windows, date closures/custom hours, policy
   settings, non-null positive concurrency, persisted reservation end times,
@@ -32,33 +33,52 @@ below; it did not promote them ahead of the current availability stage.
   missing hours produce a closed schedule. ORM, Pydantic, seed, and focused
   PostgreSQL tests are aligned. This migration is not deployed while the
   Railway arc is shelved.
-- **Ready:** Build one server-authoritative availability contract for public
-  booking, staff booking, future bots, and later table assignment. Operating
-  hours remain public venue information; reservation availability uses a
-  separate schedule with business defaults and optional service-type overrides,
-  initialized from existing operating hours.
-- **Ready:** Enforce business timezone, multiple/overnight booking windows,
-  date exceptions, minimum notice, advance-booking window, slot interval,
-  maximum party size, service duration, and service concurrency on the backend.
-  Pending and confirmed reservations consume capacity; cancellation releases
-  it; rescheduling atomically moves it. Return only bookable slots and reject
-  stale or conflicting submissions safely.
-- **Ready:** Prevent race-condition overbooking with a
-  transaction/concurrency design that remains valid when floor-plan resources
-  are introduced. Reuse the same availability service for creation and
-  rescheduling rather than duplicating rules in routes or clients.
-- **Ready:** Guests use returned slots only. Owners and managers may make an
-  explicit, reason-recorded availability override; ordinary staff follow the
-  same rules as guests.
-- **Ready:** Reconcile the existing meanings of `businesses.max_guests`,
-  `reservation_time`, `time_slot_interval`, `advance_booking_days`,
-  `operating_hours`, `service_types.capacity`, `duration`, and
-  `max_concurrent_bookings`; several are stored or displayed but not currently
-  enforced.
-- **Needs decision:** Before the next implementation slice, confirm the
-  transaction/locking strategy and availability API wire contract. Storage,
-  migration behavior, and override-audit persistence are now concrete; the
-  endpoints, computation service, authorization, and UI do not exist yet.
+- **Complete — availability creation slice:** One server-authoritative
+  availability service now powers the public read contract plus public and
+  authenticated reservation creation. It resolves business-default or complete
+  service overrides and is the extension point for future bots and table
+  assignment.
+- **Complete — enforced booking rules:** The backend enforces business
+  timezone, multiple/overnight windows, service-date-anchored exceptions,
+  minimum notice, advance horizon, slot interval, party size, duration, and
+  concurrency. Pending and confirmed reservations consume capacity;
+  cancellation releases it. The read API returns only bookable absolute
+  start/end slots without occupancy counts.
+- **Complete — race-safe creation:** Creation locks the resolved schedule row,
+  rechecks the requested server-produced slot in the transaction, persists its
+  occupied interval, commits before event publication, and returns a structured
+  409 with up to five alternatives when stale. New businesses start closed.
+- **Complete — public booking UI:** Guests choose live server-returned slots,
+  see venue-local times, submit the exact absolute timestamp, and can recover
+  from a slot conflict by choosing a returned alternative. Party choices are
+  capped by both business and service settings.
+- **Complete — schedule management:** Authenticated staff can view the business
+  default and complete service-type overrides. Owners/managers can edit policy,
+  split/overnight weekly windows, and closed/custom date exceptions; create an
+  override from the current default; or delete it to resume inheritance after
+  confirmation. A previewed one-time operating-hours copy replaces only the
+  default weekly windows and preserves policy/exceptions. The Booking Types UI
+  now exposes positive concurrency, and ordinary staff remain read-only.
+- **Complete — atomic staff rescheduling:** Future pending and confirmed
+  reservations move through a dedicated authenticated command. Staff select
+  only server-returned venue-timezone slots; the transaction locks the
+  reservation and resolved schedule, excludes the reservation being moved,
+  and preserves its old interval if the new claim fails. Booking type, party
+  size, start, end, reminder state, notifications, updated email/ICS, SMS, and
+  the post-commit event move together. Generic PATCH rejects allocation fields,
+  and cancelled, completed, or past reservations cannot be moved.
+- **Needs decision — staff override contract:** Confirm role and UX details for
+  owner/manager reason-recorded overrides. Ordinary staff must follow normal
+  availability; overrides must populate the existing actor, reason, and
+  timestamp audit fields.
+- **Complete — clarified field ownership:** `businesses.max_guests`,
+  `service_types.capacity`, and `max_concurrent_bookings` cap bookings;
+  service duration overrides the schedule default; schedule interval, notice,
+  and horizon own slot generation; operating hours remain public venue
+  information.
+- **Ready — consumer reuse:** Keep the availability contract reusable for
+  future bot bookings and later resource/table assignment rather than creating
+  channel-specific slot logic.
 
 ### 2. Floor plan and table management
 
@@ -285,10 +305,10 @@ changes a stage's design.
 - **Ready:** Decide whether Redis event delivery needs a transactional outbox,
   dead-letter handling, replay tools, and metrics. Publishing is currently
   best-effort.
-- **Ready:** Correct reservation event ordering. Reservation routes currently
-  publish after a flush but before the request dependency commits, unlike
-  queue/order/inventory paths; either commit first or solve this as part of an
-  outbox design before adding reservation event consumers.
+- **In progress:** Reservation creation now commits the reservation and
+  notification rows before event publication. Apply the same ordering to
+  reservation update/delete, or solve it with an outbox, before adding
+  consumers for those event types.
 - **Ready:** Add scheduled-job failure alerting and delivery reconciliation for
   the hourly reservation-reminder cron.
 - **Ready:** Add structured tracing, metrics, SLOs, alerting, and request/event

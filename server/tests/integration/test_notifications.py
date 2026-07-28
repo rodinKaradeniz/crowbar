@@ -1,7 +1,13 @@
 """Integration tests for in-app notifications."""
 
+from datetime import datetime, time, timedelta, timezone
+
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.booking_schedule import BookingSchedule, BookingScheduleWindow
 
 
 async def _create_business_owner(client: AsyncClient) -> tuple[str, str]:
@@ -43,10 +49,43 @@ async def _create_service_type(
     return resp.json()["id"]
 
 
+async def _open_default_schedule(db: AsyncSession, business_id: str) -> None:
+    schedule = await db.scalar(
+        select(BookingSchedule).where(
+            BookingSchedule.business_id == business_id,
+            BookingSchedule.service_type_id.is_(None),
+        )
+    )
+    assert schedule is not None
+    schedule.windows = [
+        BookingScheduleWindow(
+            weekday=weekday,
+            start_time=time(0, 0),
+            end_time=time(23, 59),
+        )
+        for weekday in range(7)
+    ]
+    await db.commit()
+
+
+def _future_time(days: int) -> str:
+    return (
+        datetime.now(timezone.utc).replace(
+            hour=12, minute=0, second=0, microsecond=0
+        )
+        + timedelta(days=days)
+    ).isoformat()
+
+
 class TestNotificationsPublicReservation:
     @pytest.mark.asyncio
-    async def test_public_reservation_creates_staff_notification(self, client: AsyncClient):
+    async def test_public_reservation_creates_staff_notification(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ):
         owner_token, business_id = await _create_business_owner(client)
+        await _open_default_schedule(db_session, business_id)
         service_type_id = await _create_service_type(client, owner_token, business_id)
 
         resp = await client.post(
@@ -54,7 +93,7 @@ class TestNotificationsPublicReservation:
             json={
                 "business_id": business_id,
                 "service_type_id": service_type_id,
-                "time": "2026-05-01T18:00:00",
+                "time": _future_time(1),
                 "phone": "+31600000000",
                 "email": "walkin@example.com",
                 "name": "Walk-in",
@@ -82,8 +121,13 @@ class TestNotificationsPublicReservation:
 
 class TestNotificationsMarkRead:
     @pytest.mark.asyncio
-    async def test_mark_read_and_unread_count(self, client: AsyncClient):
+    async def test_mark_read_and_unread_count(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ):
         owner_token, business_id = await _create_business_owner(client)
+        await _open_default_schedule(db_session, business_id)
         service_type_id = await _create_service_type(client, owner_token, business_id)
 
         await client.post(
@@ -91,7 +135,7 @@ class TestNotificationsMarkRead:
             json={
                 "business_id": business_id,
                 "service_type_id": service_type_id,
-                "time": "2026-05-03T12:00:00",
+                "time": _future_time(2),
                 "phone": "+31622222222",
                 "email": "guest2@example.com",
                 "name": "Guest",

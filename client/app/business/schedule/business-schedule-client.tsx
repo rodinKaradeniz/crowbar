@@ -7,13 +7,16 @@ import { Calendar } from "@/components/ui/calendar";
 import { Business, Reservation, ServiceType } from "@/types";
 import { CustomerResponse } from "@/lib/api-client";
 import { ReservationDetailsDialog } from "@/components/reservation-details-dialog";
+import { RescheduleReservationDialog } from "@/components/reschedule-reservation-dialog";
 import { cn } from "@/lib/utils";
+import { useRouter } from "next/navigation";
 
 interface BusinessScheduleClientProps {
   business: Business;
   initialReservations: Reservation[];
   serviceTypes: ServiceType[];
   customers: CustomerResponse[];
+  currentTime: string;
 }
 
 /** How many consecutive days the ledger shows, starting at the selected date. */
@@ -24,9 +27,13 @@ export default function BusinessScheduleClient({
   initialReservations,
   serviceTypes,
   customers,
+  currentTime,
 }: BusinessScheduleClientProps) {
+  const router = useRouter();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedReservation, setSelectedReservation] =
+    useState<Reservation | null>(null);
+  const [reschedulingReservation, setReschedulingReservation] =
     useState<Reservation | null>(null);
 
   const customerMap = useMemo(() => {
@@ -63,6 +70,7 @@ export default function BusinessScheduleClient({
   // End time = start + booked slot length (service-type duration, falling
   // back to the business default booking slot).
   const endTimeOf = (reservation: Reservation) => {
+    if (reservation.endsAt) return parseISO(reservation.endsAt);
     const start = parseISO(reservation.time);
     const duration =
       serviceTypeMap.get(reservation.serviceTypeId)?.duration ??
@@ -217,6 +225,23 @@ export default function BusinessScheduleClient({
         onOpenChange={(open) => !open && setSelectedReservation(null)}
         serviceTypes={serviceTypes}
         customers={customers}
+        currentTime={currentTime}
+        onReschedule={(reservation) => {
+          setSelectedReservation(null);
+          setReschedulingReservation(reservation);
+        }}
+      />
+      <RescheduleReservationDialog
+        reservation={reschedulingReservation}
+        open={!!reschedulingReservation}
+        onOpenChange={(open) => !open && setReschedulingReservation(null)}
+        serviceTypes={serviceTypes}
+        businessTimezone={business.timezone ?? "UTC"}
+        businessMaxGuests={business.maxGuests}
+        onRescheduled={() => {
+          setReschedulingReservation(null);
+          router.refresh();
+        }}
       />
     </div>
   );

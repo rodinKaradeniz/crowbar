@@ -100,6 +100,30 @@ export const handlers = [
       },
     ]);
   }),
+
+  http.get("/api/backend/availability/business/:businessId", ({ request, params }) => {
+    const url = new URL(request.url);
+    const requestedDate = url.searchParams.get("start_date") ?? "2026-01-02";
+    return HttpResponse.json({
+      business_id: params.businessId,
+      service_type_id: url.searchParams.get("service_type_id"),
+      timezone: "Europe/Amsterdam",
+      duration_minutes: 120,
+      slot_interval_minutes: 30,
+      max_party_size: 8,
+      dates: [
+        {
+          date: requestedDate,
+          slots: [
+            {
+              starts_at: `${requestedDate}T18:00:00+01:00`,
+              ends_at: `${requestedDate}T20:00:00+01:00`,
+            },
+          ],
+        },
+      ],
+    });
+  }),
 ];
 
 export const server = setupServer(...handlers);

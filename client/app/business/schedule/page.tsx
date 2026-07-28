@@ -7,6 +7,8 @@ import {
   fetchServiceTypesByBusiness,
   fetchBusinessCustomers,
 } from "@/lib/api";
+import { ModuleDisabled } from "@/components/module-disabled";
+import { hasModule, MODULE_KEYS } from "@/lib/modules";
 
 export default async function BusinessSchedule() {
   const user = await getCurrentUser();
@@ -28,6 +30,10 @@ export default async function BusinessSchedule() {
     redirect("/auth/login");
   }
 
+  if (!hasModule(business.enabledModules ?? [], MODULE_KEYS.RESERVATIONS)) {
+    return <ModuleDisabled moduleName="Reservations" />;
+  }
+
   if (!business.onboardingComplete) {
     redirect("/business/onboarding");
   }
@@ -38,6 +44,7 @@ export default async function BusinessSchedule() {
       initialReservations={reservations}
       serviceTypes={serviceTypes}
       customers={customers}
+      currentTime={new Date().toISOString()}
     />
   );
 }

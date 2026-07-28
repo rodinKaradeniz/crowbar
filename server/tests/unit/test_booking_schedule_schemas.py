@@ -84,6 +84,17 @@ def test_custom_hours_exception_requires_a_window():
         )
 
 
+def test_exception_rejects_duplicate_windows():
+    duplicate = BookingTimeWindowInput(
+        start_time=time(18, 0), end_time=time(22, 0)
+    )
+    with pytest.raises(ValidationError, match="exception windows must be unique"):
+        BookingScheduleExceptionInput(
+            local_date=date(2026, 12, 25),
+            windows=[duplicate, duplicate],
+        )
+
+
 def test_schedule_rejects_duplicate_windows_and_exception_dates():
     duplicate = BookingScheduleWindowInput(
         weekday=0, start_time=time(18, 0), end_time=time(22, 0)
@@ -107,4 +118,3 @@ def test_service_concurrency_defaults_to_one_and_cannot_be_null():
 
     with pytest.raises(ValidationError, match="cannot be null"):
         ServiceTypeUpdate(max_concurrent_bookings=None)
-

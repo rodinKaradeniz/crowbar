@@ -335,6 +335,89 @@ conflict responses, override authorization, and UI integration.
 `server/app/models/booking_schedule.py`, `server/app/models/reservation.py`,
 `docs/TODO.md`
 
+## 2026-07-26 — Reservation creation claims server-authoritative slots
+
+**Context:** Persisted schedules and reservation intervals did not prevent a
+browser, bot, or competing request from submitting an invalid or stale time.
+The public form also fabricated nine browser-local time choices without
+checking venue policy or occupancy.
+
+**Decision:** A shared availability service resolves a service override or the
+business default and returns only absolute bookable intervals grouped by
+business-local date. Weekly and exception windows are allowed start-time
+ranges with an exclusive end; overnight spill remains owned by its service
+date. Public and authenticated creation lock the resolved schedule row with
+`SELECT ... FOR UPDATE`, recompute availability, and persist the accepted
+start/end interval. A stale request returns `SLOT_UNAVAILABLE` with at most five
+alternatives. The public form consumes this API and never constructs its own
+booking timestamp.
+
+**Consequences:** Concurrent creates for one schedule serialize and the second
+request observes the first committed booking. Pending and confirmed rows
+consume service concurrency; cancelled rows do not. New businesses are closed
+until their booking schedule has windows. Staff rescheduling, explicit
+owner/manager overrides, and schedule-management APIs/UI remain separate next
+slices. Migration 023 and this code remain local while Railway deployment is
+shelved.
+
+**References:** `server/app/services/availability_service.py`,
+`server/app/routers/availability.py`, `server/app/services/reservation_service.py`,
+`client/components/reservation-form.tsx`, `docs/TODO.md`
+
+## 2026-07-26 — Booking schedules are managed explicitly and inherit by deletion
+
+**Context:** The authoritative availability engine had no authenticated
+management surface. Legacy business timing fields did not own slot generation,
+service concurrency was not editable, and service-type mutations could resolve
+records outside the authenticated tenant.
+
+**Decision:** Add tenant-scoped schedule read/replace/delete APIs and a Profile
+→ Booking editor with Policy, Weekly Hours, and Date Exceptions tabs. A service
+override is a complete schedule initialized from the current business default;
+reverting deletes it after confirmation. Copying operating hours requires a
+preview and replaces only the default weekly windows once. Owners/managers may
+mutate schedules, booking types, and the business party limit; ordinary staff
+can inspect them read-only. Service-type mutations now derive tenant scope from
+authentication, and Booking Types exposes positive concurrency.
+
+**Consequences:** Published operating hours and booking availability remain
+independent after an explicit copy. A service without an override always sees
+future default changes, while an override does not partially inherit. API and
+UI consumers must preserve these semantics. Atomic rescheduling is now the next
+availability slice; reason-recorded privileged overrides remain separate.
+
+**References:** `server/app/routers/booking_schedules.py`,
+`server/app/services/booking_schedule_service.py`,
+`client/app/business/profile/booking/business-booking-client.tsx`,
+`docs/TODO.md`
+
+## 2026-07-28 — Staff rescheduling claims replacement capacity atomically
+
+**Context:** The staff Edit dialog accepted arbitrary browser-local date/time,
+and generic reservation PATCH recalculated an end time without checking the
+authoritative schedule or concurrency. A failed or concurrent move could not
+provide the same guarantees as reservation creation.
+
+**Decision:** Introduce authenticated reservation-specific availability and a
+dedicated reschedule command for future pending/confirmed reservations. Lock
+the tenant-scoped reservation, validate the requested slot under the resolved
+schedule lock while excluding that reservation, then update booking type,
+party size, start, and end in one transaction. Keep general PATCH limited to
+contact, note, and status fields. Replace the free-form date/time editor with a
+shared server-slot dialog on Reservations, Requests, and Schedule. Commit the
+move and staff notification before updated email/ICS, configured SMS, and the
+best-effort domain event.
+
+**Consequences:** A rejected or stale move leaves the original capacity claim
+unchanged. Cancelled, completed, and past reservations are terminal for this
+flow, and terminal records cannot be reactivated through generic PATCH.
+Ordinary staff remain constrained by normal availability. Privileged,
+reason-recorded overrides and guest-token self-service remain separate work.
+
+**References:** `server/app/services/reservation_service.py`,
+`server/app/routers/reservations.py`,
+`client/components/reschedule-reservation-dialog.tsx`, `docs/TODO.md`
+
 ## Entry Template
 
 ```markdown

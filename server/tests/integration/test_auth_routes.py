@@ -2,6 +2,11 @@
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.booking_schedule import BookingSchedule
+from app.models.business import Business
 
 
 # --------------------------------------------------------------------------- #
@@ -27,7 +32,11 @@ class TestRegister:
         assert data["user_id"]
 
     @pytest.mark.asyncio
-    async def test_register_business_owner(self, client: AsyncClient):
+    async def test_register_business_owner(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ):
         resp = await client.post(
             "/api/auth/register-business",
             json={
@@ -43,6 +52,19 @@ class TestRegister:
         data = resp.json()
         assert data["user_type"] == "staff"
         assert "access_token" in data
+
+        business = await db_session.scalar(
+            select(Business).where(Business.slug == "my-business")
+        )
+        assert business is not None
+        schedule = await db_session.scalar(
+            select(BookingSchedule).where(
+                BookingSchedule.business_id == business.id,
+                BookingSchedule.service_type_id.is_(None),
+            )
+        )
+        assert schedule is not None
+        assert schedule.windows == []
 
 
 # --------------------------------------------------------------------------- #

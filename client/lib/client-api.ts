@@ -1,4 +1,9 @@
 import {
+  Availability,
+  BookingOperatingHoursPreview,
+  BookingSchedule,
+  BookingScheduleCollection,
+  BookingScheduleDraft,
   Business,
   HappyHourWindow,
   HighRiskReservation,
@@ -41,6 +46,45 @@ const AUTH_PREFIX = "/api/proxy";
 
 // ─── Fetch helpers ────────────────────────────────────────────────────────────
 
+interface ErrorPayload {
+  code?: unknown;
+  message?: unknown;
+  details?: unknown;
+  detail?: unknown;
+}
+
+export class ClientApiError extends Error {
+  constructor(
+    public status: number,
+    public code: string,
+    message: string,
+    public details: unknown = null,
+  ) {
+    super(message);
+    this.name = "ClientApiError";
+  }
+}
+
+function toClientApiError(status: number, statusText: string, body: ErrorPayload) {
+  const nested =
+    body.detail && typeof body.detail === "object"
+      ? (body.detail as ErrorPayload)
+      : null;
+  const payload = nested ?? body;
+  const message =
+    typeof payload.message === "string"
+      ? payload.message
+      : typeof body.detail === "string"
+        ? body.detail
+        : statusText || "Request failed";
+  return new ClientApiError(
+    status,
+    typeof payload.code === "string" ? payload.code : "ERROR",
+    message,
+    payload.details ?? null,
+  );
+}
+
 async function clientFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${BACKEND_PREFIX}${path}`, {
     headers: {
@@ -51,8 +95,8 @@ async function clientFetch<T>(path: string, options?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({}));
-    throw new Error(errorBody.detail || response.statusText);
+    const errorBody = (await response.json().catch(() => ({}))) as ErrorPayload;
+    throw toClientApiError(response.status, response.statusText, errorBody);
   }
 
   if (response.status === 204) return undefined as T;
@@ -69,18 +113,8 @@ async function authFetch<T>(path: string, options?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    const errorBody = (await response.json().catch(() => ({}))) as Record<
-      string,
-      unknown
-    >;
-    const d = errorBody.detail;
-    const msg =
-      typeof d === "string"
-        ? d
-        : d != null
-          ? JSON.stringify(d)
-          : response.statusText;
-    throw new Error(msg);
+    const errorBody = (await response.json().catch(() => ({}))) as ErrorPayload;
+    throw toClientApiError(response.status, response.statusText, errorBody);
   }
 
   if (response.status === 204) return undefined as T;
@@ -156,6 +190,7 @@ function toReservation(r: Record<string, unknown>): Reservation {
     customerId: r.customer_id as string,
     serviceTypeId: r.service_type_id as string,
     time: r.time as string,
+    endsAt: r.ends_at as string,
     phone: r.phone as string,
     email: r.email as string,
     note: (r.note as string) || undefined,
@@ -163,6 +198,92 @@ function toReservation(r: Record<string, unknown>): Reservation {
     guests: r.guests as number,
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
+  };
+}
+
+function toAvailability(data: Record<string, unknown>): Availability {
+  const dates = data.dates as Array<Record<string, unknown>>;
+  return {
+    businessId: data.business_id as string,
+    serviceTypeId: data.service_type_id as string,
+    timezone: data.timezone as string,
+    durationMinutes: data.duration_minutes as number,
+    slotIntervalMinutes: data.slot_interval_minutes as number,
+    maxPartySize: data.max_party_size as number,
+    dates: dates.map((item) => ({
+      date: item.date as string,
+      slots: (item.slots as Array<Record<string, unknown>>).map((slot) => ({
+        startsAt: slot.starts_at as string,
+        endsAt: slot.ends_at as string,
+      })),
+    })),
+  };
+}
+
+function toBookingSchedule(data: Record<string, unknown>): BookingSchedule {
+  const wallTime = (value: unknown) => String(value).slice(0, 5);
+  const windows = data.windows as Array<Record<string, unknown>>;
+  const exceptions = data.exceptions as Array<Record<string, unknown>>;
+  return {
+    id: data.id as string,
+    businessId: data.business_id as string,
+    serviceTypeId: (data.service_type_id as string) || undefined,
+    minimumNoticeMinutes: data.minimum_notice_minutes as number,
+    advanceBookingDays: data.advance_booking_days as number,
+    slotIntervalMinutes: data.slot_interval_minutes as number,
+    defaultDurationMinutes: data.default_duration_minutes as number,
+    windows: windows.map((window) => ({
+      id: window.id as string | undefined,
+      weekday: window.weekday as number,
+      startTime: wallTime(window.start_time),
+      endTime: wallTime(window.end_time),
+      endsNextDay: window.ends_next_day as boolean,
+      createdAt: window.created_at as string | undefined,
+      updatedAt: window.updated_at as string | undefined,
+    })),
+    exceptions: exceptions.map((exception) => ({
+      id: exception.id as string | undefined,
+      localDate: exception.local_date as string,
+      isClosed: exception.is_closed as boolean,
+      windows: (exception.windows as Array<Record<string, unknown>>).map(
+        (window) => ({
+          id: window.id as string | undefined,
+          startTime: wallTime(window.start_time),
+          endTime: wallTime(window.end_time),
+          endsNextDay: window.ends_next_day as boolean,
+          createdAt: window.created_at as string | undefined,
+          updatedAt: window.updated_at as string | undefined,
+        }),
+      ),
+      createdAt: exception.created_at as string | undefined,
+      updatedAt: exception.updated_at as string | undefined,
+    })),
+    createdAt: data.created_at as string,
+    updatedAt: data.updated_at as string,
+  };
+}
+
+function bookingSchedulePayload(data: BookingScheduleDraft) {
+  return {
+    minimum_notice_minutes: data.minimumNoticeMinutes,
+    advance_booking_days: data.advanceBookingDays,
+    slot_interval_minutes: data.slotIntervalMinutes,
+    default_duration_minutes: data.defaultDurationMinutes,
+    windows: data.windows.map((window) => ({
+      weekday: window.weekday,
+      start_time: window.startTime,
+      end_time: window.endTime,
+      ends_next_day: window.endsNextDay,
+    })),
+    exceptions: data.exceptions.map((exception) => ({
+      local_date: exception.localDate,
+      is_closed: exception.isClosed,
+      windows: exception.windows.map((window) => ({
+        start_time: window.startTime,
+        end_time: window.endTime,
+        ends_next_day: window.endsNextDay,
+      })),
+    })),
   };
 }
 
@@ -217,6 +338,98 @@ export async function clientGetServiceType(
   } catch {
     return null;
   }
+}
+
+export async function clientGetAvailability(data: {
+  businessId: string;
+  serviceTypeId: string;
+  startDate: string;
+  days?: number;
+  guests: number;
+  signal?: AbortSignal;
+}): Promise<Availability> {
+  const params = new URLSearchParams({
+    service_type_id: data.serviceTypeId,
+    start_date: data.startDate,
+    days: String(data.days ?? 1),
+    guests: String(data.guests),
+  });
+  const result = await clientFetch<Record<string, unknown>>(
+    `/availability/business/${data.businessId}?${params.toString()}`,
+    { signal: data.signal },
+  );
+  return toAvailability(result);
+}
+
+// ─── Authenticated: Booking schedule management ─────────────────────────────
+
+export async function clientGetBookingSchedules(): Promise<BookingScheduleCollection> {
+  const data = await authFetch<Record<string, unknown>>("/booking-schedules");
+  return {
+    defaultSchedule: toBookingSchedule(
+      data.default_schedule as Record<string, unknown>,
+    ),
+    serviceOverrides: (
+      data.service_overrides as Array<Record<string, unknown>>
+    ).map(toBookingSchedule),
+  };
+}
+
+export async function clientReplaceDefaultBookingSchedule(
+  data: BookingScheduleDraft,
+): Promise<BookingSchedule> {
+  const result = await authFetch<Record<string, unknown>>(
+    "/booking-schedules/default",
+    { method: "PUT", body: JSON.stringify(bookingSchedulePayload(data)) },
+  );
+  return toBookingSchedule(result);
+}
+
+export async function clientReplaceServiceBookingSchedule(
+  serviceTypeId: string,
+  data: BookingScheduleDraft,
+): Promise<BookingSchedule> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/booking-schedules/service-types/${serviceTypeId}`,
+    { method: "PUT", body: JSON.stringify(bookingSchedulePayload(data)) },
+  );
+  return toBookingSchedule(result);
+}
+
+export async function clientDeleteServiceBookingSchedule(
+  serviceTypeId: string,
+): Promise<void> {
+  await authFetch(`/booking-schedules/service-types/${serviceTypeId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function clientGetOperatingHoursPreview(): Promise<BookingOperatingHoursPreview> {
+  const result = await authFetch<Record<string, unknown>>(
+    "/booking-schedules/default/operating-hours-preview",
+  );
+  const mapWindow = (window: Record<string, unknown>) => ({
+    weekday: window.weekday as number,
+    startTime: String(window.start_time).slice(0, 5),
+    endTime: String(window.end_time).slice(0, 5),
+    endsNextDay: window.ends_next_day as boolean,
+  });
+  return {
+    currentWindows: (
+      result.current_windows as Array<Record<string, unknown>>
+    ).map(mapWindow),
+    proposedWindows: (
+      result.proposed_windows as Array<Record<string, unknown>>
+    ).map(mapWindow),
+  };
+}
+
+export async function clientCopyOperatingHoursToDefault(): Promise<BookingSchedule> {
+  const result = await authFetch<Record<string, unknown>>(
+    "/booking-schedules/default/copy-operating-hours",
+    { method: "POST" },
+  );
+  return toBookingSchedule(result);
 }
 
 // ─── Authenticated: Notifications ────────────────────────────────────────────
@@ -412,30 +625,66 @@ export async function clientCreateReservation(data: {
 export async function clientUpdateReservation(
   id: string,
   data: Partial<{
-    serviceTypeId: string;
-    time: string;
     phone: string;
     email: string;
     note: string;
     status: string;
-    guests: number;
   }>,
 ): Promise<Reservation> {
   const apiData: Record<string, unknown> = {};
-  if (data.serviceTypeId !== undefined)
-    apiData.service_type_id = data.serviceTypeId;
-  if (data.time !== undefined) apiData.time = data.time;
   if (data.phone !== undefined) apiData.phone = data.phone;
   if (data.email !== undefined) apiData.email = data.email;
   if (data.note !== undefined) apiData.note = data.note;
   if (data.status !== undefined) apiData.status = data.status;
-  if (data.guests !== undefined) apiData.guests = data.guests;
 
   const result = await authFetch<Record<string, unknown>>(
     `/reservations/${id}`,
     {
       method: "PATCH",
       body: JSON.stringify(apiData),
+    },
+  );
+  return toReservation(result);
+}
+
+export async function clientGetReservationRescheduleAvailability(data: {
+  reservationId: string;
+  serviceTypeId: string;
+  startDate: string;
+  days?: number;
+  guests: number;
+  signal?: AbortSignal;
+}): Promise<Availability> {
+  const params = new URLSearchParams({
+    service_type_id: data.serviceTypeId,
+    start_date: data.startDate,
+    days: String(data.days ?? 1),
+    guests: String(data.guests),
+  });
+  const result = await authFetch<Record<string, unknown>>(
+    `/reservations/${data.reservationId}/availability?${params.toString()}`,
+    { signal: data.signal },
+  );
+  return toAvailability(result);
+}
+
+export async function clientRescheduleReservation(
+  id: string,
+  data: {
+    serviceTypeId: string;
+    time: string;
+    guests: number;
+  },
+): Promise<Reservation> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/reservations/${id}/reschedule`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        service_type_id: data.serviceTypeId,
+        time: data.time,
+        guests: data.guests,
+      }),
     },
   );
   return toReservation(result);
