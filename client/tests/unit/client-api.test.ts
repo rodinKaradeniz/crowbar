@@ -14,6 +14,7 @@ import {
   clientGetStaffOverrideTimes,
   clientCreateStaffReservation,
   clientRescheduleReservation,
+  clientUpdateBusiness,
 } from "@/lib/client-api";
 
 // Start MSW server for network-level mocking
@@ -32,6 +33,7 @@ describe("clientGetBusinesses", () => {
     expect(businesses[0].timeSlotInterval).toBe(30);
     expect(businesses[0].advanceBookingDays).toBe(14);
     expect(businesses[0].reservationTime).toBe(60);
+    expect(businesses[0].publicReservationsEnabled).toBe(false);
     expect(businesses[0].createdAt).toBe("2026-01-01T00:00:00Z");
   });
 
@@ -58,6 +60,36 @@ describe("clientGetBusinessBySlug", () => {
   it("returns null for a non-existent slug", async () => {
     const business = await clientGetBusinessBySlug("non-existent");
     expect(business).toBeNull();
+  });
+});
+
+describe("clientUpdateBusiness", () => {
+  it("sends the public booking setting in snake case", async () => {
+    let requestBody: unknown;
+    server.use(
+      http.patch("/api/proxy/businesses/biz-1", async ({ request }) => {
+        requestBody = await request.json();
+        return HttpResponse.json({
+          id: "biz-1",
+          name: "Cool Bar",
+          slug: "cool-bar",
+          email: "bar@test.com",
+          phone: "+31612345678",
+          max_guests: 50,
+          reservation_time: 60,
+          time_slot_interval: 30,
+          advance_booking_days: 14,
+          operating_hours: {},
+          public_reservations_enabled: false,
+          created_at: "2026-01-01T00:00:00Z",
+        });
+      }),
+    );
+
+    const business = await clientUpdateBusiness("biz-1", { publicReservationsEnabled: false });
+
+    expect(requestBody).toEqual({ public_reservations_enabled: false });
+    expect(business.publicReservationsEnabled).toBe(false);
   });
 });
 

@@ -312,8 +312,8 @@ npm run test:coverage
 | GET | `/api/queue/{id}/status` | No | Queue position + wait estimate |
 | GET | `/api/queue/{id}/entries` | Yes | List active queue entries (staff) |
 | POST | `/api/queue/{id}/entries/{eid}/notify` | Yes | Call a party (SMS + status → called) |
-| POST | `/api/queue/{id}/entries/{eid}/accept` | Yes | Seat a party directly |
-| POST | `/api/queue/{id}/entries/{eid}/seat` | Yes | Confirm seating after call |
+| POST | `/api/floor-plan/seatings` | Yes | Seat a reservation or queue party at registered tables |
+| POST | `/api/floor-plan/seatings/{id}/close` | Yes | Complete a seating and move tables to cleaning |
 | DELETE | `/api/queue/{id}/entries/{eid}` | Yes | Remove queue entry |
 | WS | `/ws/queue/{id}` | Token | Live queue board (staff) |
 | GET | `/api/ordering/{id}/menu` | No | Public menu |

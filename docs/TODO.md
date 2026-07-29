@@ -87,6 +87,11 @@ below; it did not promote them ahead of the current availability stage.
   service duration overrides the schedule default; schedule interval, notice,
   and horizon own slot generation; operating hours remain public venue
   information.
+- **Complete — public booking access control:** Owners/managers can make a
+  business public-booking or staff-only without disabling staff reservations,
+  table planning, or seatings. Public availability and creation enforce the
+  business-level setting; public guests see a contact-the-venue state when it
+  is off. Existing businesses remain enabled through the migration backfill.
 - **Ready — consumer reuse:** Keep the availability contract reusable for
   future bot bookings and later resource/table assignment rather than creating
   channel-specific slot logic.
@@ -111,13 +116,16 @@ below; it did not promote them ahead of the current availability stage.
   location, and all floor-plan mutations commit before publishing invalidation
   events. Staff WebSockets use short-lived business-bound credentials and only
   invalidate the board; HTTP remains the authoritative fallback.
-- **Next — host service board and management UI:** Add responsive area/table
-  configuration and consume the authoritative board for upcoming assigned and
-  unassigned reservations, queue parties, occupied tables, cleaning, temporary
-  closure, and availability. Replace the queue's legacy table-less accept/seat
-  actions with the seating command, remove their now-unused client/backend
-  path once callers have moved, and expose assignment from reservation
-  surfaces.
+- **In progress — host service board and management UI:** The authenticated
+  Floor workspace now consumes the authoritative board with responsive
+  area/table cards, unassigned reservations, queue parties, occupied,
+  cleaning, temporary-closure, and availability actions. Its shared table
+  selector creates real seatings, and the Queue page now uses it instead of the
+  removed table-less accept/seat commands. Owners/managers configure areas,
+  tables, combinations, and service-day cutoff. Reservations and Schedule
+  details now expose planned assignment, reassignment, and removal through the
+  same table selector. Validate the completed service loop with realistic host
+  workflows before calling this stage complete.
 - **Ready — ordering and tab continuity:** Replace new free-form dine-in table
   identifiers with registered business-scoped tables and opaque, revisioned QR
   tokens. Validate tab tables within the tenant and carry the same table and

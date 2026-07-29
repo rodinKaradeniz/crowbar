@@ -45,6 +45,9 @@ class Business(Base, UUIDMixin, TimestampMixin):
     is_accepting_orders: Mapped[bool] = mapped_column(
         Boolean, default=True, nullable=False
     )
+    public_reservations_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
     ordering_config: Mapped[dict] = mapped_column(
         JSONB,
         default=lambda: {"allowed_fulfillment_types": ["dine_in"]},

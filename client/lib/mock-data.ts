@@ -53,6 +53,7 @@ export const mockBusinesses: Business[] = [
     onboardingComplete: true,
     notificationChannels: ["email"],
     isAcceptingOrders: true,
+    publicReservationsEnabled: true,
     createdAt: "2024-01-15T10:00:00Z",
   },
   {
@@ -83,6 +84,7 @@ export const mockBusinesses: Business[] = [
     onboardingComplete: true,
     notificationChannels: ["email"],
     isAcceptingOrders: true,
+    publicReservationsEnabled: true,
     createdAt: "2024-01-20T10:00:00Z",
   },
   {
@@ -113,6 +115,7 @@ export const mockBusinesses: Business[] = [
     onboardingComplete: true,
     notificationChannels: ["email"],
     isAcceptingOrders: true,
+    publicReservationsEnabled: true,
     createdAt: "2024-01-25T10:00:00Z",
   },
   {
@@ -143,6 +146,7 @@ export const mockBusinesses: Business[] = [
     onboardingComplete: true,
     notificationChannels: ["email"],
     isAcceptingOrders: true,
+    publicReservationsEnabled: true,
     createdAt: "2024-01-30T10:00:00Z",
   },
 ];

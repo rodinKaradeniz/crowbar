@@ -73,6 +73,12 @@ The staff overview is a figure-led operational mosaic. The schedule is a
 three-day ledger with an inline calendar and booking-type legend, rather than
 an hour-grid timeline.
 
+The Floor workspace is an area-based host board: compact table cards are the
+primary scan surface on desktop, with unassigned arrivals and walk-ins beside
+them. On small screens the grids stack and operational actions open a sheet.
+It deliberately does not simulate floor geometry or introduce drag-and-drop
+until that later product decision is confirmed.
+
 These shapes are not immutable, but replacing them is a product-design decision
 that should preserve the token system, accessibility contract, responsive
 behavior, and functional data/actions.

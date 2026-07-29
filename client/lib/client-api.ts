@@ -6,6 +6,13 @@ import {
   BookingScheduleDraft,
   Business,
   HappyHourWindow,
+  FloorPlanArea,
+  FloorPlanAssignment,
+  FloorPlanBoard,
+  FloorPlanCombination,
+  FloorPlanSettings,
+  FloorPlanSeating,
+  FloorPlanTable,
   HighRiskReservation,
   InventoryItem,
   LibraryItem,
@@ -147,6 +154,7 @@ function toBusiness(b: Record<string, unknown>): Business {
     onboardingComplete: (b.onboarding_complete as boolean) ?? false,
     notificationChannels: (b.notification_channels as string[]) ?? ["email"],
     isAcceptingOrders: (b.is_accepting_orders as boolean) ?? true,
+    publicReservationsEnabled: (b.public_reservations_enabled as boolean) ?? true,
   };
 }
 
@@ -538,6 +546,7 @@ export async function clientUpdateBusiness(
     timeSlotInterval: number;
     advanceBookingDays: number;
     operatingHours: Record<string, unknown>;
+    publicReservationsEnabled: boolean;
   }>,
 ): Promise<Business> {
   const apiData: Record<string, unknown> = {};
@@ -561,6 +570,8 @@ export async function clientUpdateBusiness(
     apiData.advance_booking_days = data.advanceBookingDays;
   if (data.operatingHours !== undefined)
     apiData.operating_hours = data.operatingHours;
+  if (data.publicReservationsEnabled !== undefined)
+    apiData.public_reservations_enabled = data.publicReservationsEnabled;
 
   const result = await authFetch<Record<string, unknown>>(`/businesses/${id}`, {
     method: "PATCH",
@@ -1022,33 +1033,355 @@ export async function clientNotifyQueueEntry(
   return toQueueEntry(result);
 }
 
-export async function clientAcceptQueueEntry(
-  businessId: string,
-  entryId: string,
-): Promise<QueueEntry> {
-  const result = await authFetch<Record<string, unknown>>(
-    `/queue/${businessId}/entries/${entryId}/accept`,
-    { method: "POST" },
-  );
-  return toQueueEntry(result);
-}
-
-export async function clientSeatQueueEntry(
-  businessId: string,
-  entryId: string,
-): Promise<QueueEntry> {
-  const result = await authFetch<Record<string, unknown>>(
-    `/queue/${businessId}/entries/${entryId}/seat`,
-    { method: "POST" },
-  );
-  return toQueueEntry(result);
-}
-
 export async function clientRemoveQueueEntry(
   businessId: string,
   entryId: string,
 ): Promise<void> {
   await authFetch(`/queue/${businessId}/entries/${entryId}`, { method: "DELETE" });
+}
+
+// ─── Floor plan ──────────────────────────────────────────────────────────────
+
+function toFloorPlanArea(value: Record<string, unknown>): FloorPlanArea {
+  return {
+    id: value.id as string,
+    businessId: value.business_id as string,
+    locationId: value.location_id as string,
+    name: value.name as string,
+    sortOrder: value.sort_order as number,
+    isActive: value.is_active as boolean,
+  };
+}
+
+function toFloorPlanTable(value: Record<string, unknown>): FloorPlanTable {
+  return {
+    id: value.id as string,
+    businessId: value.business_id as string,
+    locationId: value.location_id as string,
+    areaId: value.area_id as string,
+    label: value.label as string,
+    capacity: value.capacity as number,
+    shape: value.shape as FloorPlanTable["shape"],
+    sortOrder: value.sort_order as number,
+    operationalState: value.operational_state as FloorPlanTable["operationalState"],
+    operationalStateReason: (value.operational_state_reason as string) || undefined,
+    operationalStateUntil: (value.operational_state_until as string) || undefined,
+    isActive: value.is_active as boolean,
+  };
+}
+
+function toFloorPlanCombination(value: Record<string, unknown>): FloorPlanCombination {
+  return {
+    id: value.id as string,
+    businessId: value.business_id as string,
+    locationId: value.location_id as string,
+    areaId: value.area_id as string,
+    name: value.name as string,
+    tableIds: value.table_ids as string[],
+    capacityOverride: (value.capacity_override as number) ?? undefined,
+    effectiveCapacity: value.effective_capacity as number,
+    isActive: value.is_active as boolean,
+  };
+}
+
+function toFloorPlanParty(value: Record<string, unknown>) {
+  return {
+    sourceType: value.source_type as "reservation" | "queue",
+    sourceId: value.source_id as string,
+    name: value.name as string,
+    partySize: value.party_size as number,
+    status: value.status as string,
+    startsAt: (value.starts_at as string) || undefined,
+    endsAt: (value.ends_at as string) || undefined,
+    assignedTableIds: (value.assigned_table_ids as string[]) ?? [],
+  };
+}
+
+function toFloorPlanAssignment(value: Record<string, unknown>): FloorPlanAssignment {
+  return {
+    sourceType: value.source_type as FloorPlanAssignment["sourceType"],
+    sourceId: value.source_id as string,
+    tableIds: value.table_ids as string[],
+    assignedBy: (value.assigned_by as string) || undefined,
+    assignedAt: value.assigned_at as string,
+    capacity: value.capacity as number,
+    capacityOverrideReason: (value.capacity_override_reason as string) || undefined,
+  };
+}
+
+function toFloorPlanSeating(value: Record<string, unknown>): FloorPlanSeating {
+  return {
+    seatingId: value.seating_id as string,
+    source: toFloorPlanParty(value.source as Record<string, unknown>),
+    tableIds: value.table_ids as string[],
+    openedAt: value.opened_at as string,
+  };
+}
+
+function toFloorPlanBoardTable(value: Record<string, unknown>) {
+  return {
+    id: value.id as string,
+    areaId: value.area_id as string,
+    label: value.label as string,
+    capacity: value.capacity as number,
+    shape: value.shape as string,
+    sortOrder: value.sort_order as number,
+    displayState: value.display_state as FloorPlanBoard["areas"][number]["tables"][number]["displayState"],
+    operationalState: value.operational_state as FloorPlanTable["operationalState"],
+    operationalStateReason: (value.operational_state_reason as string) || undefined,
+    operationalStateUntil: (value.operational_state_until as string) || undefined,
+    operationalStateExpired: (value.operational_state_expired as boolean) ?? false,
+    activeSeating: value.active_seating
+      ? toFloorPlanSeating(value.active_seating as Record<string, unknown>)
+      : undefined,
+    activeAssignment: value.active_assignment
+      ? toFloorPlanParty(value.active_assignment as Record<string, unknown>)
+      : undefined,
+    nextReservation: value.next_reservation
+      ? toFloorPlanParty(value.next_reservation as Record<string, unknown>)
+      : undefined,
+  };
+}
+
+function toFloorPlanBoard(value: Record<string, unknown>): FloorPlanBoard {
+  return {
+    businessId: value.business_id as string,
+    locationId: value.location_id as string,
+    timezone: value.timezone as string,
+    serviceDate: value.service_date as string,
+    startsAt: value.starts_at as string,
+    endsAt: value.ends_at as string,
+    generatedAt: value.generated_at as string,
+    areas: ((value.areas as Record<string, unknown>[]) ?? []).map((area) => ({
+      id: area.id as string,
+      name: area.name as string,
+      sortOrder: area.sort_order as number,
+      tables: ((area.tables as Record<string, unknown>[]) ?? []).map(toFloorPlanBoardTable),
+    })),
+    unassignedReservations: (
+      (value.unassigned_reservations as Record<string, unknown>[]) ?? []
+    ).map(toFloorPlanParty),
+    queueEntries: ((value.queue_entries as Record<string, unknown>[]) ?? []).map(
+      toFloorPlanParty,
+    ),
+  };
+}
+
+export async function clientGetFloorPlanBoard(): Promise<FloorPlanBoard> {
+  const result = await authFetch<Record<string, unknown>>("/floor-plan/board");
+  return toFloorPlanBoard(result);
+}
+
+export async function clientGetFloorPlanAreas(): Promise<FloorPlanArea[]> {
+  const result = await authFetch<Record<string, unknown>[]>("/floor-plan/areas");
+  return result.map(toFloorPlanArea);
+}
+
+export async function clientGetFloorPlanTables(): Promise<FloorPlanTable[]> {
+  const result = await authFetch<Record<string, unknown>[]>("/floor-plan/tables");
+  return result.map(toFloorPlanTable);
+}
+
+export async function clientGetFloorPlanCombinations(): Promise<FloorPlanCombination[]> {
+  const result = await authFetch<Record<string, unknown>[]>("/floor-plan/combinations");
+  return result.map(toFloorPlanCombination);
+}
+
+export async function clientGetFloorPlanSettings(): Promise<FloorPlanSettings> {
+  const result = await authFetch<Record<string, unknown>>("/floor-plan/settings");
+  return {
+    serviceDayCutoff: result.service_day_cutoff as string,
+    timezone: result.timezone as string,
+  };
+}
+
+export async function clientCreateFloorPlanArea(data: {
+  name: string;
+  sortOrder?: number;
+}): Promise<FloorPlanArea> {
+  const result = await authFetch<Record<string, unknown>>("/floor-plan/areas", {
+    method: "POST",
+    body: JSON.stringify({ name: data.name, sort_order: data.sortOrder ?? 0 }),
+  });
+  return toFloorPlanArea(result);
+}
+
+export async function clientUpdateFloorPlanArea(
+  areaId: string,
+  data: Partial<{ name: string; sortOrder: number; isActive: boolean }>,
+): Promise<FloorPlanArea> {
+  const result = await authFetch<Record<string, unknown>>(`/floor-plan/areas/${areaId}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      name: data.name,
+      sort_order: data.sortOrder,
+      is_active: data.isActive,
+    }),
+  });
+  return toFloorPlanArea(result);
+}
+
+export async function clientCreateFloorPlanTable(data: {
+  areaId: string;
+  label: string;
+  capacity: number;
+  shape: FloorPlanTable["shape"];
+  sortOrder?: number;
+}): Promise<FloorPlanTable> {
+  const result = await authFetch<Record<string, unknown>>("/floor-plan/tables", {
+    method: "POST",
+    body: JSON.stringify({
+      area_id: data.areaId,
+      label: data.label,
+      capacity: data.capacity,
+      shape: data.shape,
+      sort_order: data.sortOrder ?? 0,
+    }),
+  });
+  return toFloorPlanTable(result);
+}
+
+export async function clientUpdateFloorPlanTable(
+  tableId: string,
+  data: Partial<{
+    areaId: string;
+    label: string;
+    capacity: number;
+    shape: FloorPlanTable["shape"];
+    sortOrder: number;
+  }>,
+): Promise<FloorPlanTable> {
+  const result = await authFetch<Record<string, unknown>>(`/floor-plan/tables/${tableId}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      area_id: data.areaId,
+      label: data.label,
+      capacity: data.capacity,
+      shape: data.shape,
+      sort_order: data.sortOrder,
+    }),
+  });
+  return toFloorPlanTable(result);
+}
+
+export async function clientUpdateFloorPlanTableState(
+  tableId: string,
+  data: { state: FloorPlanTable["operationalState"]; reason?: string },
+): Promise<FloorPlanTable> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/floor-plan/tables/${tableId}/state`,
+    { method: "PUT", body: JSON.stringify(data) },
+  );
+  return toFloorPlanTable(result);
+}
+
+export async function clientArchiveFloorPlanTable(tableId: string): Promise<void> {
+  await authFetch(`/floor-plan/tables/${tableId}`, { method: "DELETE" });
+}
+
+export async function clientArchiveFloorPlanArea(areaId: string): Promise<void> {
+  await authFetch(`/floor-plan/areas/${areaId}`, { method: "DELETE" });
+}
+
+export async function clientCreateFloorPlanCombination(data: {
+  name: string;
+  tableIds: string[];
+  capacityOverride?: number;
+}): Promise<FloorPlanCombination> {
+  const result = await authFetch<Record<string, unknown>>("/floor-plan/combinations", {
+    method: "POST",
+    body: JSON.stringify({
+      name: data.name,
+      table_ids: data.tableIds,
+      capacity_override: data.capacityOverride,
+    }),
+  });
+  return toFloorPlanCombination(result);
+}
+
+export async function clientUpdateFloorPlanCombination(
+  combinationId: string,
+  data: Partial<{ name: string; tableIds: string[]; capacityOverride: number; isActive: boolean }>,
+): Promise<FloorPlanCombination> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/floor-plan/combinations/${combinationId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        name: data.name,
+        table_ids: data.tableIds,
+        capacity_override: data.capacityOverride,
+        is_active: data.isActive,
+      }),
+    },
+  );
+  return toFloorPlanCombination(result);
+}
+
+export async function clientUpdateFloorPlanSettings(
+  serviceDayCutoff: string,
+): Promise<FloorPlanSettings> {
+  const result = await authFetch<Record<string, unknown>>("/floor-plan/settings", {
+    method: "PUT",
+    body: JSON.stringify({ service_day_cutoff: serviceDayCutoff }),
+  });
+  return {
+    serviceDayCutoff: result.service_day_cutoff as string,
+    timezone: result.timezone as string,
+  };
+}
+
+export async function clientOpenFloorPlanSeating(data: {
+  sourceType: "reservation" | "queue";
+  sourceId: string;
+  tableIds: string[];
+  capacityOverrideReason?: string;
+}): Promise<void> {
+  await authFetch("/floor-plan/seatings", {
+    method: "POST",
+    body: JSON.stringify({
+      source_type: data.sourceType,
+      source_id: data.sourceId,
+      table_ids: data.tableIds,
+      capacity_override_reason: data.capacityOverrideReason,
+    }),
+  });
+}
+
+export async function clientCloseFloorPlanSeating(seatingId: string): Promise<void> {
+  await authFetch(`/floor-plan/seatings/${seatingId}/close`, { method: "POST" });
+}
+
+export async function clientReplaceFloorPlanAssignment(data: {
+  sourceType: "reservation" | "queue";
+  sourceId: string;
+  tableIds: string[];
+  capacityOverrideReason?: string;
+}): Promise<void> {
+  await authFetch(`/floor-plan/${data.sourceType === "queue" ? "queue" : "reservations"}/${data.sourceId}/tables`, {
+    method: "PUT",
+    body: JSON.stringify({
+      table_ids: data.tableIds,
+      capacity_override_reason: data.capacityOverrideReason,
+    }),
+  });
+}
+
+export async function clientGetReservationFloorPlanAssignment(
+  reservationId: string,
+): Promise<FloorPlanAssignment> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/floor-plan/reservations/${reservationId}/tables`,
+  );
+  return toFloorPlanAssignment(result);
+}
+
+export async function clientRemoveReservationFloorPlanAssignment(
+  reservationId: string,
+): Promise<void> {
+  await authFetch(`/floor-plan/reservations/${reservationId}/tables`, {
+    method: "DELETE",
+  });
 }
 
 // ─── Ordering: transform helpers ─────────────────────────────────────────────

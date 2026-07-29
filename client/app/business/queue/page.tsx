@@ -21,5 +21,11 @@ export default async function QueuePage() {
     return <ModuleDisabled moduleName="Queue" />;
   }
 
-  return <QueueBoardClient businessId={business.id} businessSlug={business.slug} />;
+  return (
+    <QueueBoardClient
+      businessId={business.id}
+      businessSlug={business.slug}
+      canOverride={user.role === "owner" || user.role === "manager"}
+    />
+  );
 }

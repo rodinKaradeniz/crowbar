@@ -28,6 +28,7 @@ interface ReservationAccordionProps {
   serviceTypes?: ServiceType[];
   customers?: CustomerResponse[];
   actionButtons?: (reservation: Reservation) => ReactNode;
+  detailActions?: (reservation: Reservation) => ReactNode;
   emptyMessage?: string;
 }
 
@@ -36,6 +37,7 @@ export function ReservationAccordion({
   serviceTypes = [],
   customers = [],
   actionButtons,
+  detailActions,
   emptyMessage = "No reservations found.",
 }: ReservationAccordionProps) {
   const customerMap = useMemo(() => {
@@ -204,6 +206,12 @@ export function ReservationAccordion({
                 )}
 
                 <ReservationOverrideNotice reservation={reservation} />
+
+                {detailActions && (
+                  <div className="border-t pt-4">
+                    {detailActions(reservation)}
+                  </div>
+                )}
 
                 {/* Timestamps */}
                 <div className="space-y-2 pt-4 border-t">

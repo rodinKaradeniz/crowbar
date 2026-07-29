@@ -74,6 +74,12 @@ overrides are complete configurations: deleting one returns a service type to
 the business default rather than partially inheriting it. New businesses start
 with a closed booking schedule until windows are configured.
 
+Owners and managers can make public online reservations available or
+staff-only for the whole business. Staff booking, rescheduling, table planning,
+and seating remain available either way; a staff-only venue shows public guests
+a contact-the-venue state and rejects public availability and creation requests
+at the server boundary.
+
 Tables are registered physical resources. Multi-table allocations must match an
 active configured combination; capacity overrides require an owner/manager and
 an audit reason. The host board's HTTP snapshot is authoritative; real-time

@@ -1,6 +1,6 @@
 ---
 title: Walk-in Queue
-description: Manage walk-in customers with a live digital queue, SMS notifications, and real-time seating updates.
+description: Manage walk-in customers with a live digital queue, SMS notifications, and table-backed seating.
 ---
 
 # Walk-in Queue
@@ -13,7 +13,8 @@ Go to **Settings → Modules** and enable **Queue**. The Queue link will appear 
 
 ## The Live Queue Board
 
-Navigate to **Queue** in the sidebar. The board shows all active queue entries in real time, updated via WebSocket — no page refresh needed.
+Navigate to **Queue** in the sidebar. The board shows all active queue entries
+in real time. Use **Floor** for the live table and arrival view.
 
 Each entry shows:
 - **Name** and **party size**
@@ -27,10 +28,12 @@ The sidebar badge next to Queue reflects the current number of waiting parties, 
 | Action | What it does |
 |--------|-------------|
 | **Call** | Marks the party as called and sends them an SMS: "Your table is ready!" |
-| **Seat** | Moves the party to Seated and removes them from the active list |
+| **Seat at table** | Opens the table selector and creates the actual seating; a party is not seated until registered tables are chosen |
 | **Remove** | Removes the party from the queue (e.g. they left without being seated) |
 
-> **Staff tip:** Only Call and Seat trigger SMS notifications. The acting staff member does not receive their own notification.
+> **Staff tip:** Calling a party sends the configured SMS notification. Seating
+> them changes real table occupancy; closing that seating later marks its tables
+> as cleaning until staff return them to ready.
 
 ## Customer Flow
 

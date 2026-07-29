@@ -29,6 +29,9 @@ async def get_business_availability(
     db: AsyncSession = Depends(get_db),
 ):
     try:
+        await availability_service.ensure_public_booking_access(
+            db, business_id=business_id
+        )
         return await availability_service.get_availability(
             db,
             business_id=business_id,

@@ -15,6 +15,7 @@ from app.schemas.reservation import (
 )
 from app.services.availability_service import (
     AvailabilityError,
+    ensure_public_booking_access,
     get_availability,
     validate_booking_slot,
     validate_override_slot,
@@ -273,6 +274,7 @@ async def create_public_reservation(
     Upserts a Customer (business-scoped, keyed by phone) and links the
     reservation to it.
     """
+    await ensure_public_booking_access(db, business_id=data.business_id)
     validated_slot = await validate_booking_slot(
         db,
         business_id=data.business_id,

@@ -425,6 +425,32 @@ async def get_availability(
     )
 
 
+async def ensure_public_booking_access(
+    db: AsyncSession, *, business_id: UUID
+) -> None:
+    """Reject public booking requests without affecting staff booking tools."""
+    business = await db.scalar(select(Business).where(Business.id == business_id))
+    if business is None:
+        raise AvailabilityError(
+            status_code=404,
+            code=ErrorCode.NOT_FOUND,
+            message="Business not found",
+        )
+    if "reservations" not in (business.enabled_modules or []):
+        raise AvailabilityError(
+            status_code=403,
+            code=ErrorCode.MODULE_DISABLED,
+            message="The reservations module is not enabled for this business",
+            details={"module": "reservations"},
+        )
+    if not business.public_reservations_enabled:
+        raise AvailabilityError(
+            status_code=403,
+            code=ErrorCode.PUBLIC_RESERVATIONS_DISABLED,
+            message="Online reservations are not available for this venue",
+        )
+
+
 async def get_override_times(
     db: AsyncSession,
     *,

@@ -7,6 +7,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Business, Reservation, ServiceType } from "@/types";
 import { CustomerResponse } from "@/lib/api-client";
 import { ReservationDetailsDialog } from "@/components/reservation-details-dialog";
+import { ReservationTablePlan } from "@/components/reservation-table-plan";
 import { StaffReservationDialog } from "@/components/staff-reservation-dialog";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
@@ -239,6 +240,13 @@ export default function BusinessScheduleClient({
           setSelectedReservation(null);
           setReschedulingReservation(reservation);
         }}
+        tablePlan={selectedReservation ? (
+          <ReservationTablePlan
+            reservation={selectedReservation}
+            guestName={customerMap.get(selectedReservation.customerId)?.name}
+            canOverride={canOverride}
+          />
+        ) : undefined}
       />
       <StaffReservationDialog
         reservation={reschedulingReservation}

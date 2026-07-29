@@ -142,49 +142,6 @@ async def call_entry(
     return entry
 
 
-async def seat_entry(
-    db: AsyncSession, business_id: UUID, entry_id: UUID
-) -> QueueEntry | None:
-    result = await db.execute(
-        select(QueueEntry).where(
-            QueueEntry.id == entry_id,
-            QueueEntry.business_id == business_id,
-            QueueEntry.status == "called",
-        )
-    )
-    entry = result.scalar_one_or_none()
-    if entry is None:
-        return None
-
-    entry.status = "seated"
-    entry.seated_at = datetime.now(timezone.utc)
-    await db.flush()
-    await db.refresh(entry)
-    return entry
-
-
-async def accept_entry(
-    db: AsyncSession, business_id: UUID, entry_id: UUID
-) -> QueueEntry | None:
-    """Accept a waiting party directly — mark as seated without calling or sending SMS."""
-    result = await db.execute(
-        select(QueueEntry).where(
-            QueueEntry.id == entry_id,
-            QueueEntry.business_id == business_id,
-            QueueEntry.status == "waiting",
-        )
-    )
-    entry = result.scalar_one_or_none()
-    if entry is None:
-        return None
-
-    entry.status = "seated"
-    entry.seated_at = datetime.now(timezone.utc)
-    await db.flush()
-    await db.refresh(entry)
-    return entry
-
-
 async def remove_by_token(
     db: AsyncSession, business_id: UUID, session_token: str
 ) -> QueueEntry | None:

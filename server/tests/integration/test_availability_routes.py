@@ -156,6 +156,29 @@ async def test_public_availability_requires_reservations_module(
 
 
 @pytest.mark.asyncio
+async def test_public_availability_is_blocked_when_online_bookings_are_disabled(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    business, service_type = await _create_booking_context(db_session)
+    business.public_reservations_enabled = False
+    await db_session.commit()
+
+    response = await client.get(
+        f"/api/availability/business/{business.id}",
+        params={
+            "service_type_id": str(service_type.id),
+            "start_date": _tomorrow().date().isoformat(),
+            "days": 1,
+            "guests": 1,
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "PUBLIC_RESERVATIONS_DISABLED"
+
+
+@pytest.mark.asyncio
 async def test_closed_schedule_returns_an_empty_day(
     client: AsyncClient,
     db_session: AsyncSession,

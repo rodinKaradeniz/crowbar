@@ -14,6 +14,7 @@ import { CustomerResponse } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { isReservationReschedulable } from "@/lib/availability";
 import { ReservationOverrideNotice } from "@/components/reservation-override-notice";
+import type { ReactNode } from "react";
 
 interface ReservationDetailsDialogProps {
   reservation: Reservation | null;
@@ -25,6 +26,7 @@ interface ReservationDetailsDialogProps {
   customers?: CustomerResponse[];
   onReschedule?: (reservation: Reservation) => void;
   currentTime?: string;
+  tablePlan?: ReactNode;
 }
 
 export function ReservationDetailsDialog({
@@ -37,6 +39,7 @@ export function ReservationDetailsDialog({
   customers = [],
   onReschedule,
   currentTime,
+  tablePlan,
 }: ReservationDetailsDialogProps) {
   if (!reservation) return null;
 
@@ -108,6 +111,7 @@ export function ReservationDetailsDialog({
               </div>
             )}
             <ReservationOverrideNotice reservation={reservation} />
+            {tablePlan && <div className="pt-2 border-t">{tablePlan}</div>}
           </div>
           {canReschedule && (
             <Button

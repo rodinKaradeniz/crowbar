@@ -50,6 +50,7 @@ export const handlers = [
         time_slot_interval: 30,
         advance_booking_days: 14,
         operating_hours: {},
+        public_reservations_enabled: false,
         created_at: "2026-01-01T00:00:00Z",
       },
     ]);
@@ -74,6 +75,7 @@ export const handlers = [
         time_slot_interval: 30,
         advance_booking_days: 14,
         operating_hours: {},
+        public_reservations_enabled: false,
         created_at: "2026-01-01T00:00:00Z",
       });
     }

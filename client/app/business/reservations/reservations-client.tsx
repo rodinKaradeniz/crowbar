@@ -10,9 +10,10 @@ import {
   type ReservationEditValues,
 } from "@/components/reservation-edit-dialog";
 import { StaffReservationDialog } from "@/components/staff-reservation-dialog";
+import { ReservationTablePlan } from "@/components/reservation-table-plan";
 import { Button } from "@/components/ui/button";
 import { CalendarClock, Pencil, Plus, X } from "lucide-react";
-import { Reservation, ServiceType } from "@/types";
+import type { Reservation, ServiceType } from "@/types";
 import { CustomerResponse } from "@/lib/api-client";
 import { clientUpdateReservation } from "@/lib/client-api";
 import { toast } from "sonner";
@@ -190,6 +191,13 @@ export default function ReservationsClient({
             </Button>
           </>
         )}
+        detailActions={(reservation) => (
+          <ReservationTablePlan
+            reservation={reservation}
+            guestName={customerMap.get(reservation.customerId)?.name}
+            canOverride={canOverride}
+          />
+        )}
       />
 
       {/* Edit Reservation Dialog */}
@@ -243,6 +251,7 @@ export default function ReservationsClient({
         onConfirm={handleCancelConfirm}
         variant="destructive"
       />
+
     </div>
   );
 }

@@ -102,6 +102,7 @@ export interface BusinessResponse {
   onboarding_complete?: boolean;
   notification_channels?: string[];
   is_accepting_orders?: boolean;
+  public_reservations_enabled?: boolean;
   created_at: string;
 }
 

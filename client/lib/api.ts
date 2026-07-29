@@ -102,6 +102,7 @@ function toBusiness(b: BusinessResponse): Business {
     onboardingComplete: raw.onboarding_complete ?? false,
     notificationChannels: raw.notification_channels ?? ["email"],
     isAcceptingOrders: raw.is_accepting_orders ?? true,
+    publicReservationsEnabled: raw.public_reservations_enabled ?? true,
   };
 }
 

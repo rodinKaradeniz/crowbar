@@ -550,6 +550,53 @@ files are not added merely to mirror another repository.
 `docs/PRODUCT.md`, `docs/README.md`, `docs/SKILLS.md`,
 `docs/TODO.md`
 
+## 2026-07-29 — Queue seating always creates actual table occupancy
+
+**Context:** The queue board could previously mark a party accepted or seated
+without selecting a registered table. That contradicted the operational-table
+model: a queue assignment is only a plan, while an open seating owns actual
+occupancy and later moves its tables to cleaning.
+
+**Decision:** Add the shared Floor workspace and table-selection sheet. It
+uses the authoritative host-board snapshot and opens a floor-plan seating for
+either a reservation or queue party. The Queue page retains notification and
+no-show actions but routes both waiting and notified parties through that same
+seating command. The legacy table-less queue accept/seat HTTP and client paths
+are removed.
+
+**Consequences:** A party cannot become seated without a real table allocation.
+The host board remains the operational source of truth, with socket messages
+only invalidating its HTTP projection. Table configuration remains
+owner/manager-only, while all staff can carry out seatings and table-state work.
+
+**References:** `client/app/business/floor/`,
+`client/components/floor-plan-seating-sheet.tsx`,
+`client/app/business/queue/queue-board-client.tsx`,
+`server/app/routers/floor_plan.py`, `server/app/routers/queue.py`
+
+## 2026-07-29 — Public booking access is distinct from staff reservation work
+
+**Context:** Venues need to choose whether their public reservation URL accepts
+guests or whether the host team keeps the reservation book staff-only. Closing
+booking hours was an inadequate substitute because it obscured the venue's
+intent and did not reliably protect the public mutation path.
+
+**Decision:** Store `public_reservations_enabled` on the business, expose it to
+owners/managers in Profile → Booking, and enforce it on public availability and
+public reservation creation. Keep authenticated staff availability, creation,
+table planning, and seating independent. The public page shows a
+contact-the-venue state when disabled. Existing businesses backfill enabled.
+
+**Consequences:** A venue can pause online booking without interrupting host
+operations, and a caller cannot bypass the choice by posting directly to the
+public API. The setting is business-wide rather than a per-service or
+per-table policy; revisit that granularity only with a confirmed product need.
+
+**References:** `server/db/migrations/026_public_reservation_access.sql`,
+`server/app/services/availability_service.py`,
+`client/app/business/profile/booking/`,
+`client/app/reserve/[business]/`
+
 ## Entry Template
 
 ```markdown

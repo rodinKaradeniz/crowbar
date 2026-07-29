@@ -54,6 +54,7 @@ export interface Business {
   onboardingComplete: boolean;
   notificationChannels: string[];
   isAcceptingOrders: boolean;
+  publicReservationsEnabled: boolean;
 }
 
 export interface VisitorResponse {
@@ -188,6 +189,123 @@ export interface QueueStatus {
   entry: QueueEntry;
   totalWaiting: number;
   estimatedWaitMinutes?: number;
+}
+
+// ─── Floor plan ──────────────────────────────────────────────────────────────
+
+export type TableOperationalState = "ready" | "cleaning" | "out_of_service";
+export type FloorPlanDisplayState =
+  | "available"
+  | "reserved"
+  | "occupied"
+  | "cleaning"
+  | "out_of_service";
+export type FloorPlanSourceType = "reservation" | "queue";
+
+export interface FloorPlanArea {
+  id: string;
+  businessId: string;
+  locationId: string;
+  name: string;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface FloorPlanTable {
+  id: string;
+  businessId: string;
+  locationId: string;
+  areaId: string;
+  label: string;
+  capacity: number;
+  shape: "round" | "square" | "rectangle" | "bar" | "booth";
+  sortOrder: number;
+  operationalState: TableOperationalState;
+  operationalStateReason?: string;
+  operationalStateUntil?: string;
+  isActive: boolean;
+}
+
+export interface FloorPlanCombination {
+  id: string;
+  businessId: string;
+  locationId: string;
+  areaId: string;
+  name: string;
+  tableIds: string[];
+  capacityOverride?: number;
+  effectiveCapacity: number;
+  isActive: boolean;
+}
+
+export interface FloorPlanSettings {
+  serviceDayCutoff: string;
+  timezone: string;
+}
+
+export interface FloorPlanParty {
+  sourceType: FloorPlanSourceType;
+  sourceId: string;
+  name: string;
+  partySize: number;
+  status: string;
+  startsAt?: string;
+  endsAt?: string;
+  assignedTableIds: string[];
+}
+
+export interface FloorPlanAssignment {
+  sourceType: FloorPlanSourceType;
+  sourceId: string;
+  tableIds: string[];
+  assignedBy?: string;
+  assignedAt: string;
+  capacity: number;
+  capacityOverrideReason?: string;
+}
+
+export interface FloorPlanSeating {
+  seatingId: string;
+  source: FloorPlanParty;
+  tableIds: string[];
+  openedAt: string;
+}
+
+export interface FloorPlanBoardTable {
+  id: string;
+  areaId: string;
+  label: string;
+  capacity: number;
+  shape: string;
+  sortOrder: number;
+  displayState: FloorPlanDisplayState;
+  operationalState: TableOperationalState;
+  operationalStateReason?: string;
+  operationalStateUntil?: string;
+  operationalStateExpired: boolean;
+  activeSeating?: FloorPlanSeating;
+  activeAssignment?: FloorPlanParty;
+  nextReservation?: FloorPlanParty;
+}
+
+export interface FloorPlanBoardArea {
+  id: string;
+  name: string;
+  sortOrder: number;
+  tables: FloorPlanBoardTable[];
+}
+
+export interface FloorPlanBoard {
+  businessId: string;
+  locationId: string;
+  timezone: string;
+  serviceDate: string;
+  startsAt: string;
+  endsAt: string;
+  generatedAt: string;
+  areas: FloorPlanBoardArea[];
+  unassignedReservations: FloorPlanParty[];
+  queueEntries: FloorPlanParty[];
 }
 
 // ─── Ordering ─────────────────────────────────────────────────────────────────

@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.booking_schedule import BookingSchedule, BookingScheduleWindow
+from app.models.business import Business
 
 
 # --------------------------------------------------------------------------- #
@@ -181,6 +182,47 @@ class TestPublicReservation:
         data = resp.json()
         assert data["email"] == "guest@example.com"
         assert data["status"] == "pending"
+
+    @pytest.mark.asyncio
+    async def test_staff_can_create_when_public_reservations_are_disabled(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        owner_token, business_id = await _create_business_owner(client)
+        await _open_default_schedule(db_session, business_id)
+        service_type_id = await _create_service_type(client, owner_token, business_id)
+        business = await db_session.get(Business, business_id)
+        assert business is not None
+        business.public_reservations_enabled = False
+        await db_session.commit()
+
+        public = await client.post(
+            "/api/reservations/public",
+            json={
+                "business_id": business_id,
+                "service_type_id": service_type_id,
+                "time": _future_time(3),
+                "phone": "+31600000000",
+                "email": "guest@example.com",
+                "name": "Walk-in Guest",
+                "guests": 2,
+            },
+        )
+        assert public.status_code == 403
+        assert public.json()["code"] == "PUBLIC_RESERVATIONS_DISABLED"
+
+        staff = await client.post(
+            "/api/reservations",
+            headers={"Authorization": f"Bearer {owner_token}"},
+            json={
+                "service_type_id": service_type_id,
+                "time": _future_time(4),
+                "phone": "+31600000001",
+                "email": "staff-booked@example.com",
+                "name": "Phone Guest",
+                "guests": 2,
+            },
+        )
+        assert staff.status_code == 201
 
 
 # --------------------------------------------------------------------------- #

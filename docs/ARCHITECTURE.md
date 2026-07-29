@@ -153,7 +153,10 @@ Public pages resolve the business slug to a UUID on the server. Browser calls
 then use `/api/backend/*`, which Next.js rewrites to FastAPI without auth.
 Public write endpoints therefore rely on server-side validation, explicit
 business scoping, idempotency/session tokens where implemented, and business
-configuration such as ordering availability.
+configuration such as ordering availability. Public reservation availability
+and creation additionally require the business-level
+`public_reservations_enabled` flag; staff reservation workflows do not use that
+gate.
 
 FastAPI applies Redis-backed rolling-window limits to authentication, public
 reservation, queue, ordering, and related public-read routes when
@@ -322,6 +325,15 @@ conditions, current/next reservations, and unassigned parties. A dedicated
 staff WebSocket broadcasts only `floor_plan_updated`; clients re-fetch the
 snapshot and retain normal HTTP retry/fallback behavior instead of treating
 socket messages as state.
+
+The authenticated dashboard exposes this projection at `/business/floor`.
+Every staff member with an enabled operational module can run the host board;
+owners and managers also see the Floor setup view for areas, tables,
+combinations, and service-day cutoff. The area-based board stays responsive
+without a geometry editor. Its shared table-selection sheet is the only staff
+path that seats a queue party, so it opens a real `table_seating` instead of
+only changing queue status. The Queue page keeps notification and no-show work,
+but its former table-less accept/seat commands are removed.
 
 ### Inventory and order fulfillment
 

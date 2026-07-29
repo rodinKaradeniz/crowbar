@@ -194,6 +194,11 @@ export default function BusinessBookingClient({
   const [maxGuests, setMaxGuests] = useState(String(initialBusiness.maxGuests));
   const [saving, setSaving] = useState(false);
   const [savingPartySize, setSavingPartySize] = useState(false);
+  const [publicReservationsEnabled, setPublicReservationsEnabled] = useState(
+    initialBusiness.publicReservationsEnabled,
+  );
+  const [savingPublicReservations, setSavingPublicReservations] = useState(false);
+  const [confirmDisablePublicReservations, setConfirmDisablePublicReservations] = useState(false);
   const [confirmRevert, setConfirmRevert] = useState(false);
   const [preview, setPreview] = useState<BookingOperatingHoursPreview | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -292,6 +297,20 @@ export default function BusinessBookingClient({
       toast.error(error instanceof Error ? error.message : "Failed to save maximum party size");
     } finally {
       setSavingPartySize(false);
+    }
+  };
+
+  const savePublicReservations = async (enabled: boolean) => {
+    setSavingPublicReservations(true);
+    try {
+      await clientUpdateBusiness(businessId, { publicReservationsEnabled: enabled });
+      setPublicReservationsEnabled(enabled);
+      toast.success(enabled ? "Online reservations enabled" : "Online reservations disabled");
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update public reservation access");
+    } finally {
+      setSavingPublicReservations(false);
     }
   };
 
@@ -399,30 +418,63 @@ export default function BusinessBookingClient({
 
         <TabsContent value="policy" className="space-y-4 pt-4">
           {scope === "default" && (
-            <section className="rounded-lg border bg-card p-4">
-              <h2 className="font-semibold">Business-wide party limit</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                This caps every reservation; a booking type&apos;s capacity can lower it further.
-              </p>
-              <div className="mt-4 flex max-w-sm items-end gap-2">
-                <label className="flex-1 text-sm font-medium">
-                  Maximum party size
-                  <Input
-                    type="number"
-                    min="1"
-                    value={maxGuests}
-                    onChange={(event) => setMaxGuests(event.target.value)}
-                    disabled={!canEdit}
-                    className="mt-2"
-                  />
-                </label>
-                {canEdit && (
-                  <Button type="button" variant="outline" onClick={savePartySize} disabled={savingPartySize}>
-                    {savingPartySize ? "Saving…" : "Save limit"}
-                  </Button>
-                )}
-              </div>
-            </section>
+            <>
+              <section className="rounded-lg border bg-card p-4">
+                <h2 className="font-semibold">Public online bookings</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {publicReservationsEnabled
+                    ? "Guests can use your public reservation page. Staff can always create and manage reservations."
+                    : "Only staff can create reservations; guests see a contact-the-venue message instead of booking slots."}
+                </p>
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 p-3">
+                  <p className="text-sm font-medium">
+                    {publicReservationsEnabled ? "Accepting online reservations" : "Staff-only reservation book"}
+                  </p>
+                  {canEdit && (
+                    <Button
+                      type="button"
+                      variant={publicReservationsEnabled ? "outline" : "default"}
+                      disabled={savingPublicReservations}
+                      onClick={() => {
+                        if (publicReservationsEnabled) setConfirmDisablePublicReservations(true);
+                        else void savePublicReservations(true);
+                      }}
+                    >
+                      {savingPublicReservations
+                        ? "Saving…"
+                        : publicReservationsEnabled
+                          ? "Make staff-only"
+                          : "Enable online bookings"}
+                    </Button>
+                  )}
+                </div>
+              </section>
+
+              <section className="rounded-lg border bg-card p-4">
+                <h2 className="font-semibold">Business-wide party limit</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  This caps every reservation; a booking type&apos;s capacity can lower it further.
+                </p>
+                <div className="mt-4 flex max-w-sm items-end gap-2">
+                  <label className="flex-1 text-sm font-medium">
+                    Maximum party size
+                    <Input
+                      type="number"
+                      min="1"
+                      value={maxGuests}
+                      onChange={(event) => setMaxGuests(event.target.value)}
+                      disabled={!canEdit}
+                      className="mt-2"
+                    />
+                  </label>
+                  {canEdit && (
+                    <Button type="button" variant="outline" onClick={savePartySize} disabled={savingPartySize}>
+                      {savingPartySize ? "Saving…" : "Save limit"}
+                    </Button>
+                  )}
+                </div>
+              </section>
+            </>
           )}
 
           <section className="rounded-lg border bg-card p-4">
@@ -632,6 +684,16 @@ export default function BusinessBookingClient({
           </Button>
         </div>
       )}
+
+      <ConfirmationDialog
+        open={confirmDisablePublicReservations}
+        onOpenChange={setConfirmDisablePublicReservations}
+        title="Make reservations staff-only?"
+        description="Guests will no longer see booking slots or be able to submit reservations from your public page. Staff booking and table planning stay available."
+        confirmLabel="Make staff-only"
+        variant="destructive"
+        onConfirm={() => void savePublicReservations(false)}
+      />
 
       <ConfirmationDialog
         open={confirmRevert}

@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Users,
   Clock,
   CheckCircle2,
   XCircle,
   Bell,
-  UserCheck,
   Copy,
   Check,
   Wifi,
@@ -16,16 +15,17 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   clientGetQueueEntries,
+  clientGetFloorPlanBoard,
   clientNotifyQueueEntry,
-  clientAcceptQueueEntry,
-  clientSeatQueueEntry,
+  clientOpenFloorPlanSeating,
   clientRemoveQueueEntry,
 } from "@/lib/client-api";
 import { useQueueSocket } from "@/hooks/use-queue-socket";
-import type { QueueEntry } from "@/types";
+import type { FloorPlanBoardTable, FloorPlanParty, QueueEntry } from "@/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { FloorPlanSeatingSheet } from "@/components/floor-plan-seating-sheet";
 
 function timeAgo(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -43,11 +43,11 @@ function timeAgo(iso: string): string {
 function WaitingEntryCard({
   entry,
   onNotify,
-  onAccept,
+  onSeat,
 }: {
   entry: QueueEntry;
   onNotify: () => void;
-  onAccept: () => void;
+  onSeat: () => void;
 }) {
   return (
     <div className="rounded-xl border bg-card p-4 shadow-sm space-y-3">
@@ -77,10 +77,10 @@ function WaitingEntryCard({
         <Button
           size="sm"
           className="flex-1 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
-          onClick={onAccept}
+          onClick={onSeat}
         >
-          <UserCheck className="h-3.5 w-3.5" />
-          Accept
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          Seat at table
         </Button>
       </div>
     </div>
@@ -181,14 +181,19 @@ function QueueColumn({
 export function QueueBoardClient({
   businessId,
   businessSlug,
+  canOverride,
 }: {
   businessId: string;
   businessSlug: string;
+  canOverride: boolean;
 }) {
   const [entries, setEntries] = useState<QueueEntry[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [noShowTarget, setNoShowTarget] = useState<QueueEntry | null>(null);
+  const [seatingTarget, setSeatingTarget] = useState<QueueEntry | null>(null);
+  const [floorTables, setFloorTables] = useState<FloorPlanBoardTable[]>([]);
+  const [seatingLoading, setSeatingLoading] = useState(false);
 
   const { connected } = useQueueSocket(businessId, (updated) => {
     setEntries(updated);
@@ -219,26 +224,46 @@ export function QueueBoardClient({
     }
   };
 
-  const handleAccept = async (entry: QueueEntry) => {
-    setEntries((prev) => prev.filter((e) => e.id !== entry.id));
+  const openSeating = async (entry: QueueEntry) => {
+    setSeatingTarget(entry);
     try {
-      await clientAcceptQueueEntry(businessId, entry.id);
-      toast.success(`${entry.name} (party of ${entry.partySize}) has been admitted.`);
+      const board = await clientGetFloorPlanBoard();
+      setFloorTables(board.areas.flatMap((area) => area.tables));
     } catch {
-      setEntries((prev) => [...prev, entry]);
-      toast.error("Could not accept this party.");
+      toast.error("Could not load available tables.");
     }
   };
 
-  const handleSeat = async (entry: QueueEntry) => {
-    setEntries((prev) => prev.filter((e) => e.id !== entry.id));
+  const confirmSeating = async (tableIds: string[], capacityOverrideReason?: string) => {
+    if (!seatingTarget) return;
+    setSeatingLoading(true);
     try {
-      await clientSeatQueueEntry(businessId, entry.id);
-    } catch {
-      setEntries((prev) => [...prev, entry]);
-      toast.error("Could not mark as seated.");
+      await clientOpenFloorPlanSeating({
+        sourceType: "queue",
+        sourceId: seatingTarget.id,
+        tableIds,
+        capacityOverrideReason,
+      });
+      setSeatingTarget(null);
+      setEntries(await clientGetQueueEntries(businessId));
+      toast.success(`${seatingTarget.name} is seated.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not seat this party.");
+    } finally {
+      setSeatingLoading(false);
     }
   };
+
+  const seatingParty: FloorPlanParty | null = seatingTarget
+    ? {
+        sourceType: "queue",
+        sourceId: seatingTarget.id,
+        name: seatingTarget.name,
+        partySize: seatingTarget.partySize,
+        status: seatingTarget.status,
+        assignedTableIds: [],
+      }
+    : null;
 
   const handleRemove = (entry: QueueEntry) => {
     setNoShowTarget(entry);
@@ -347,7 +372,7 @@ export function QueueBoardClient({
               <WaitingEntryCard
                 entry={entry}
                 onNotify={() => void handleNotify(entry)}
-                onAccept={() => void handleAccept(entry)}
+                onSeat={() => void openSeating(entry)}
               />
             )}
           </QueueColumn>
@@ -356,7 +381,7 @@ export function QueueBoardClient({
             {(entry) => (
               <CalledEntryCard
                 entry={entry}
-                onSeat={() => void handleSeat(entry)}
+                onSeat={() => void openSeating(entry)}
                 onRemove={() => handleRemove(entry)}
               />
             )}
@@ -375,6 +400,16 @@ export function QueueBoardClient({
           if (noShowTarget) void confirmRemove(noShowTarget);
           setNoShowTarget(null);
         }}
+      />
+      <FloorPlanSeatingSheet
+        key={seatingTarget?.id ?? "no-queue-party"}
+        open={seatingTarget !== null}
+        onOpenChange={(open) => !open && setSeatingTarget(null)}
+        party={seatingParty}
+        tables={floorTables}
+        canOverride={canOverride}
+        submitting={seatingLoading}
+        onConfirm={(tableIds, reason) => void confirmSeating(tableIds, reason)}
       />
     </div>
   );

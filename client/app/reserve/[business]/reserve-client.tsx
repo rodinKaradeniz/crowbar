@@ -59,6 +59,27 @@ export default function ReserveClient({ business, serviceTypes }: ReserveClientP
     setBookingOpen(true);
   }
 
+  if (!business.publicReservationsEnabled) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-6 text-center">
+        <NightTheme />
+        <div className="max-w-md">
+          <CalendarDays className="mx-auto size-10 text-brass" />
+          <p className="eyebrow mt-5 text-brass">Reservations</p>
+          <h1 className="mt-2 font-display text-3xl">Online bookings are unavailable</h1>
+          <p className="mt-3 text-sm text-muted-foreground">
+            {business.name} is currently taking reservations directly through the venue.
+          </p>
+          {business.phone && (
+            <Button asChild className="mt-6">
+              <a href={`tel:${business.phone}`}><Phone /> Contact {business.name}</a>
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // Widget mode: render booking form only
   if (isWidget) {
     return (

@@ -47,6 +47,7 @@ class BusinessUpdate(AppBaseModel):
     enabled_modules: list[str] | None = None
     notification_channels: list[str] | None = None
     legal_drinking_age: int | None = None
+    public_reservations_enabled: bool | None = None
 
 
 class BusinessResponse(AppBaseModel):
@@ -71,4 +72,5 @@ class BusinessResponse(AppBaseModel):
     onboarding_complete: bool = False
     notification_channels: list[str] = ["email"]
     is_accepting_orders: bool = True
+    public_reservations_enabled: bool = True
     created_at: datetime

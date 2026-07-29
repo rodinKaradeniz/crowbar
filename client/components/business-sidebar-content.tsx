@@ -29,6 +29,7 @@ import {
   Receipt,
   Users,
   Wine,
+  Armchair,
 } from "lucide-react";
 import {
   SidebarContent,
@@ -199,6 +200,29 @@ function BusinessSidebarContentInner() {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {/* Floor — shared operational board for reservation, queue, and ordering work */}
+        {(hasModule("reservations") || hasModule("queue") || hasModule("ordering")) && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Service</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === "/business/floor"}
+                    tooltip="Floor"
+                  >
+                    <Link href="/business/floor">
+                      <Armchair />
+                      <span>Floor</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
