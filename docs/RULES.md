@@ -1,8 +1,24 @@
-# Development Rules
+# Crowbar Working Rules
 
-These rules apply on every agent pass. More specific `AGENTS.md` files may add
-local constraints in the future but must not weaken repository-wide safety,
-tenancy, or data-integrity rules.
+These rules apply on every task. They are the procedural authority: a local
+workflow module may add process but cannot weaken them.
+
+## Reading order and document authority
+
+1. Read [`../AGENTS.md`](../AGENTS.md) and this file on every task.
+2. Read [`PRODUCT.md`](PRODUCT.md) before user-facing work, domain fields,
+   copy, or product changes.
+3. Read [`ARCHITECTURE.md`](ARCHITECTURE.md) before code, data, API, security,
+   or infrastructure changes.
+4. Read [`HISTORY.md`](HISTORY.md) before changing established or
+   arbitrary-looking behavior.
+5. Read [`TODO.md`](TODO.md) before planning or touching related deferred work.
+
+`PRODUCT.md` owns product behavior and wins on product conflicts.
+`ARCHITECTURE.md` owns present system shape; `HISTORY.md` owns rationale;
+`TODO.md` owns deliberate future work. This file owns day-to-day process and
+verification. Read [`../AGENTS.md`](../AGENTS.md) for the right-sized version
+of this order and specialized references.
 
 ## Confirmation Gate
 
@@ -38,6 +54,7 @@ tenancy, or data-integrity rules.
   applicable.
 - Prefer the smallest coherent change that solves the requested problem.
 - Follow existing abstractions before adding a parallel one.
+- Fix a shared primitive rather than accumulating equivalent call-site patches.
 - Put domain rules in services and keep routers/pages focused on orchestration.
 - Derive tenant scope from authenticated context and verify requested resource
   ownership inside that scope.
@@ -56,10 +73,14 @@ tenancy, or data-integrity rules.
 - Report commands that were run and checks that were not possible.
 - Record durable decisions in `docs/HISTORY.md` and future work in
   `docs/TODO.md`.
+- Wrap a genuinely swappable external provider behind the existing local
+  service boundary; do not leak provider contracts into product callers.
 
 ## Do Not
 
 - Do not discard, rewrite, or reformat unrelated worktree changes.
+- Do not run Git mutations without explicit authorization; read-only status and
+  inspection are allowed.
 - Do not present inferred requirements as confirmed requirements.
 - Do not implement a proposed UI or architecture pattern before considering
   relevant alternatives and receiving confirmation when the choice is open.
@@ -146,11 +167,24 @@ tenancy, or data-integrity rules.
 ## Documentation Rules
 
 - Use present tense in `ARCHITECTURE.md`.
-- Append dated entries to `HISTORY.md` for decisions; include context,
-  decision, consequences, and references.
-- Keep only active or intentionally deferred work in `TODO.md`; link the source
-  of a task and mark completed items promptly.
+- Keep product positioning, vocabulary, user-visible behavior, and deliberate
+  exclusions in `PRODUCT.md`, not in technical implementation documents.
+- Append dated entries to `HISTORY.md` for durable decisions or reusable
+  pitfalls; include context, decision, consequences, and references.
+- Keep only active or intentionally deferred work in `TODO.md`; explain the
+  dependency or trigger for non-trivial work and mark completed items promptly.
 - Avoid volatile counts, “all tests pass” claims, and dependency versions in
   prose when a manifest is the better source.
 - Correct stale documentation in the same change when it would mislead the next
   agent.
+
+## Communication and verification
+
+- Lead with the outcome, then the evidence.
+- State an assumption when it materially changes scope or design; ask only when
+  two credible readings would produce different work.
+- Name exact commands, checks, routes, or flows that ran, what passed, and what
+  was only inspected. Never imply verification that did not occur.
+- Report in-scope work that was blocked, intentionally deferred, or not done.
+- For substantial work, end with a short “Deviations, all deliberate” section
+  for any non-trivial departure from the requested or established approach.

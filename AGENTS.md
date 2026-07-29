@@ -1,21 +1,28 @@
-# Crowbar Agent Guide
+# Crowbar — Current State
 
-This is the repository-wide entry point for coding agents. It is intentionally
-short: use it to find the authoritative context, then read only the documents
-needed for the task.
+This is the repository-wide entry point for contributors and coding agents. It
+describes what exists today, where it lives, and how to work safely; detailed
+product rules, technical rationale, future work, and day-to-day rules belong to
+the documents named below.
 
-## Start Here
+## Reading order at the start of every task
 
-Before changing code:
+1. Read this file for current state, layout, commands, and conventions.
+2. Read [docs/RULES.md](docs/RULES.md) for always-on working and verification
+   rules.
+3. Read [docs/PRODUCT.md](docs/PRODUCT.md) before user-facing work, domain
+   fields, copy, or product-rule changes.
+4. Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before code, data, API,
+   security, or infrastructure changes.
+5. Read [docs/HISTORY.md](docs/HISTORY.md) before changing established,
+   structural, or arbitrary-looking behavior.
+6. Read [docs/TODO.md](docs/TODO.md) before planning, sequencing work, or
+   touching an adjacent deferred concern.
+7. Inspect `git status --short` before editing and preserve unrelated work.
 
-1. Read [docs/RULES.md](docs/RULES.md) on every pass.
-2. Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for any code, data, or
-   infrastructure change.
-3. Check [docs/TODO.md](docs/TODO.md) when planning or choosing scope.
-4. Check [docs/HISTORY.md](docs/HISTORY.md) before changing an established
-   behavior or revisiting an earlier decision.
-5. Inspect `git status --short` and preserve unrelated work already in the
-   worktree.
+Right-size the reading: a local mechanical change normally needs steps 1–2;
+product work needs 1–3; cross-layer or persistence work needs 1–5; planning
+needs all six.
 
 For focused work, also read:
 
@@ -26,8 +33,9 @@ For focused work, also read:
 - Product UI or visual language: `docs/DESIGN.md`
 - Project-specific agent skills: `docs/SKILLS.md`
 
-`README.md` is the human quick start. When documentation disagrees with
-executable source, inspect the source and update the stale document.
+`README.md` is the human quick start. [docs/README.md](docs/README.md) is the
+documentation map. When documentation disagrees with executable source,
+inspect the source and update the owning document.
 
 ## Confirmation Before Development
 
@@ -66,76 +74,43 @@ Crowbar is a multi-tenant operations platform for bars and restaurants:
 Default local ports are frontend `3000`, backend `8000`, ML `8001`,
 PostgreSQL `5432`, and Redis `6379`.
 
-## Current Checkpoint
+## Repository layout and documentation ownership
 
-The current product priority is the operational loop, in this confirmed order:
+```text
+client/              Next.js staff and public-guest application
+server/              FastAPI API, SQL migrations, seeds, and pytest suites
+ml/                  private FastAPI insight service and ML pipelines
+scripts/             local development automation
+docs/                durable project knowledge, by owner
+```
 
-1. Authoritative reservation availability and capacity.
-2. Floor plan and table management.
-3. Rich guest CRM.
-4. No-show and reservation protection.
-5. Purchasing and cost control.
-6. POS and payment integrations.
+| Document | Owns |
+| --- | --- |
+| [`docs/RULES.md`](docs/RULES.md) | Always-on editing, safety, communication, and verification rules |
+| [`docs/PRODUCT.md`](docs/PRODUCT.md) | Product vocabulary, behavior, invariants, scope, and exclusions |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Present technical system shape and request/data flows |
+| [`docs/HISTORY.md`](docs/HISTORY.md) | Durable decisions, rationale, and meaningful discovered pitfalls |
+| [`docs/TODO.md`](docs/TODO.md) | Deliberately deferred work, known gaps, and delivery order |
+| [`docs/DESIGN.md`](docs/DESIGN.md) | Current visual and interaction system |
+| [`docs/SKILLS.md`](docs/SKILLS.md) | Project-local workflow-module strategy |
 
-Start with discovery and product-rule confirmation for the current stage; do
-not silently pull a later stage forward. `docs/TODO.md` owns the detailed
-acceptance boundary and the remaining planned improvements after this arc.
+Product rules win when they conflict with convenience refactors. `RULES.md`
+wins on working process. `HISTORY.md` explains why an existing behavior exists;
+`TODO.md` does not authorize work outside the user’s request.
 
-Operational-loop checkpoint as of 2026-07-28:
+## Feature snapshot
 
-- Local migration 023 and matching ORM/Pydantic contracts establish business
-  default and service-override booking schedules, weekly/date windows,
-  persisted reservation intervals, positive concurrency, and override audit
-  fields. The fresh migration-plus-seed chain is locally validated.
-- The shared availability service and public read endpoint enforce timezone,
-  weekly/date windows, notice/horizon, party limits, duration, active-overlap
-  concurrency, and service overrides. Public and authenticated creation lock
-  the resolved schedule, recheck capacity, persist the selected interval, and
-  return structured alternatives on a stale slot.
-- The public reservation form now uses only server-returned slots and displays
-  them in the venue timezone. New businesses receive a closed default schedule.
-- Authenticated schedule APIs and Profile → Booking now manage the default and
-  explicit service overrides, including policy, split/overnight weekly hours,
-  date exceptions, and a previewed one-time operating-hours copy. Owners and
-  managers edit; ordinary staff view read-only. Booking Types also exposes
-  positive concurrency and its mutations are tenant/role scoped.
-- Staff rescheduling now uses authenticated reservation-specific availability
-  and a dedicated atomic command across Reservations, Requests, and Schedule.
-  It locks the reservation and schedule, excludes the old interval, rejects
-  terminal/past moves, preserves the old booking on conflict, and commits
-  before updated email/ICS, SMS, and event side effects. Generic PATCH no longer
-  accepts allocation fields.
-- Reservations and Schedule now provide a shared staff New Reservation flow.
-  Ordinary staff use normal server slots; owners/managers can deliberately
-  choose server-generated override times with a required reason. The server
-  derives the tenant, enforces hard service/party/time constraints, records the
-  actor/reason/timestamp, and surfaces the audit marker to staff.
-- Local migrations 024–025 and the floor-plan service establish areas,
-  registered tables, configured combinations, planning assignments, actual
-  seatings, table operational state, and a configurable business-local service
-  day. The authoritative host-board HTTP projection is tenant/location scoped;
-  its dedicated staff WebSocket sends invalidations only. Assignment read and
-  remove commands are available. The next slice is the responsive management
-  and host-board UI plus replacement of legacy table-less queue actions.
-- Migrations 023–025 are local only. Railway remains at migrations 001–022
-  because deployment is shelved.
+The operational loop is the confirmed delivery order: authoritative reservation
+availability and capacity; floor plan and tables; guest CRM; no-show
+protection; purchasing and cost control; then POS and payment integrations.
+Availability is complete locally; floor plan/table management has its backend
+foundation and is currently moving into the responsive management and host-board
+UI. [docs/TODO.md](docs/TODO.md) owns every stage boundary and deferred item.
 
-Railway rollout is intentionally shelved as of 2026-07-25:
-
-- Project `crowbar` is in workspace `Rodin Karadeniz's Projects`.
-- Three services are online in EU West: private `Postgres`, private `Redis`,
-  and public `api`.
-- The API domain is
-  `https://api-production-e3f8a.up.railway.app`; health, database connectivity,
-  migrations 001–022, and the Redis stream consumer were verified.
-- `web`, `ml`, reminders, and durable object storage are not deployed. A web
-  service was not partially created when the trial provisioning limit was hit.
-- Redis-backed FastAPI rate limiting is implemented and verified locally, but
-  that local change is not deployed or enabled on Railway.
-
-Do not resume Railway provisioning, configuration, or deployment until the
-user explicitly reopens that arc. See `docs/deployment.md` for the exact
-handoff state.
+Migrations 023–025 are local only. Railway remains at migrations 001–022; its
+partially provisioned rollout is intentionally shelved and must not resume
+without explicit user authorization. [docs/deployment.md](docs/deployment.md)
+owns the verified resume point.
 
 ## Commands
 
@@ -173,45 +148,15 @@ Do not run `python -m db.migrate reset`, delete Docker volumes, seed shared
 databases, or use destructive Git commands unless the user explicitly requests
 it.
 
-## Non-Negotiable Architecture Rules
+## Canonical conventions
 
-- Scope every protected backend operation to the business resolved by
-  `get_current_business`. Never trust a request body or path business ID as the
-  authorization boundary.
-- Guard module-owned backend routes with `require_module(...)` and module-owned
-  dashboard pages with the shared frontend module guard.
-- Keep route handlers thin, domain behavior in `server/app/services/`, wire
-  contracts in `schemas/`, and persistence in `models/`.
-- Add schema changes as a new ordered SQL migration. Never edit an applied
-  migration to change production state.
-- Commit database mutations before publishing `DomainEvent`s. Event publishing
-  is best-effort and drives WebSocket projections through Redis Streams.
-- Keep the JWT in the `rk-token` httpOnly cookie. Browser-side authenticated
-  calls go through the Next.js proxy; do not expose the token to client code.
-  WebSockets use only FastAPI-issued, 120-second, business-bound credentials;
-  never return or accept the primary access token in browser socket code.
-- Keep ML private. Browser and frontend code call the authenticated FastAPI
-  insights gateway; FastAPI derives the business ID and ML loaders enforce it
-  at the SQL source.
-- Preserve API snake_case and map to frontend camelCase at the API boundary.
-- Use `AppBaseModel` for Pydantic schemas and `toMoney()` /
-  `toOptionalMoney()` for frontend money mapping.
-- Use the canonical Monday=`0` day helpers in `server/app/constants/days.py`
-  and `client/lib/days.ts`.
-- Write customers through `customer_identity_service.upsert_customer`; customer
-  identity is business-scoped and phone-keyed.
-- Liquids are canonical milliliters in storage and APIs. `bottle` and `keg`
-  select UI presets; they do not use different inventory math.
-- Inventory deductions and reversals happen at the `served` boundary and use
-  recorded stock movements. Do not recompute a reversal from the current
-  recipe.
-- Keep table planning separate from occupancy: reservation/queue assignments
-  plan tables, while an open seating owns actual occupancy. Multi-table sets
-  must match an active configured combination, and capacity overrides require
-  an owner/manager with an audit reason.
-- Resolve host-board shifts with the business IANA timezone and
-  `service_day_cutoff`. HTTP is the authoritative board snapshot; WebSocket
-  messages are invalidations that trigger a refetch, not a second state model.
+The full technical source of truth is
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). In particular, preserve tenant
+derivation, module guards, thin router/service/model boundaries, append-only
+migrations, commit-before-publish events, the httpOnly JWT/BFF flow, private
+ML access, snake_case-to-camelCase mapping, canonical money/day/customer
+helpers, milliliter liquid inventory, ledger-backed served reversals, and the
+planning-versus-occupancy distinction for tables.
 
 ## Definition of Done
 
@@ -226,3 +171,16 @@ A change is complete when:
 6. `docs/HISTORY.md` records durable decisions and `docs/TODO.md` reflects any
    newly deferred work; routine code changes do not need documentation churn.
 7. The handoff reports what changed, what was verified, and any remaining risk.
+
+## Workflow modules
+
+No project-local workflow module is installed yet. Read
+[docs/SKILLS.md](docs/SKILLS.md) before creating one; it requires a repeated,
+project-specific workflow rather than a generic checklist and records the
+accepted location under `.agents/skills/`.
+
+## Verification status of this document
+
+Last reorganized 2026-07-29 against the repository layout, manifests,
+development launcher, architecture, history, and roadmap. This documentation
+change ran no application runtime checks.

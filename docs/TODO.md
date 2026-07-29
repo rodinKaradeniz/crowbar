@@ -1,8 +1,13 @@
-# Current Plans and Reminders
+# Deferred Work and Known Gaps
 
-This is the canonical roadmap for agents. Items are not authorization to expand
-the current task: confirm scope with the user's request before implementing
-them.
+This is Crowbar's canonical roadmap, delivery order, and record of deliberate
+deferrals. An item is not authorization to expand the current request; confirm
+scope with the user before implementing it.
+
+For new non-trivial items, record what is missing, why it is deferred, the
+dependency or trigger for revisiting it, and any tempting partial solution that
+must not be introduced. Preserve completed roadmap records in place; use
+strikethrough plus `DONE` for newly completed discrete items where practical.
 
 Status labels:
 

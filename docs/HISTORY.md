@@ -1,8 +1,10 @@
 # Project History and Decisions
 
 This is the durable, agent-neutral decision log. It is not a changelog of every
-commit. Add an entry when a decision constrains future implementation, when a
-failure teaches a reusable lesson, or when project direction materially
+commit. Add a dated entry when a decision constrains future implementation,
+when a failure teaches a reusable lesson, or when project direction materially
+changes. Keep one decision per entry with context, decision, consequences, and
+references; update the stable summaries only when their underlying decision
 changes.
 
 ## Product and Repository Milestones
@@ -523,6 +525,30 @@ removal of table-less queue actions when their callers migrate.
 `server/app/services/floor_plan_service.py`,
 `server/app/routers/floor_plan.py`, `server/app/services/websocket_auth.py`,
 `client/app/api/ws-token/route.ts`
+
+## 2026-07-29 — Documentation is governed by one owner per concern
+
+**Context:** Crowbar already had detailed current-state, architecture,
+decision, roadmap, design, and skills-strategy documents, but it lacked a
+dedicated product rulebook and a compatible pointer for tools that begin with
+`CLAUDE.md`. Agents could otherwise discover product behavior by piecing it
+together from technical and planning documents.
+
+**Decision:** Keep `AGENTS.md` as the current-state entry point and
+`RULES.md` as procedural authority. Add `PRODUCT.md` for product vocabulary,
+behavior, invariants, scope, and exclusions; make `CLAUDE.md` a pointer only;
+and document the ownership map in `docs/README.md` and
+`docs/PORTABLE_AGENT_SETUP.md`. Existing architecture, history, roadmap,
+design, and skills-strategy documents retain their owners.
+
+**Consequences:** New work reads a consistent, task-sized sequence and updates
+the document that owns the changed fact. Local skills remain deliberately
+absent until a real repeated Crowbar workflow justifies one; generic workflow
+files are not added merely to mirror another repository.
+
+**References:** `AGENTS.md`, `CLAUDE.md`, `docs/RULES.md`,
+`docs/PRODUCT.md`, `docs/README.md`, `docs/SKILLS.md`,
+`docs/TODO.md`
 
 ## Entry Template
 
