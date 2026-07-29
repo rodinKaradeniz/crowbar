@@ -502,7 +502,7 @@ export default function BusinessBookingClient({
             </div>
             {scope !== "default" && selectedService && (
               <div className="mt-5 rounded-md bg-muted/50 p-3 text-sm text-muted-foreground">
-                Capacity: {selectedService.capacity} guests · Concurrent bookings: {selectedService.maxConcurrentBookings} · Duration: {selectedService.duration ?? draft.defaultDurationMinutes} min. Manage these service controls on the{" "}
+                Maximum party: {selectedService.capacity} guests · {selectedService.availabilityResourceMode === "tables" ? "Table-backed availability" : selectedService.availabilityResourceMode === "covers" ? `${selectedService.reservableCoverCapacity} reservable covers` : "Needs resource setup"} · Duration: {selectedService.duration ?? draft.defaultDurationMinutes} min. Manage these service controls on the{" "}
                 <Link href="/business/profile/types" className="font-medium text-foreground underline underline-offset-4">
                   Booking Types page
                 </Link>

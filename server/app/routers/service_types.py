@@ -54,11 +54,14 @@ async def create_service_type(
 ):
     if data.business_id != business.id:
         raise forbidden("Not authorized for this business")
-    return await service_type_service.create_service_type(
-        db,
-        business_id=business.id,
-        data=data,
-    )
+    try:
+        return await service_type_service.create_service_type(
+            db,
+            business_id=business.id,
+            data=data,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.patch("/{service_type_id}", response_model=ServiceTypeResponse)
@@ -70,12 +73,15 @@ async def update_service_type(
     _: User = Depends(require_roles("owner", "manager")),
     __: None = Depends(require_module("reservations")),
 ):
-    service_type = await service_type_service.update_service_type(
-        db,
-        business_id=business.id,
-        service_type_id=service_type_id,
-        data=data,
-    )
+    try:
+        service_type = await service_type_service.update_service_type(
+            db,
+            business_id=business.id,
+            service_type_id=service_type_id,
+            data=data,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if service_type is None:
         raise not_found("Service type")
     return service_type

@@ -76,4 +76,24 @@ describe("FloorPlanSeatingSheet", () => {
     expect(screen.getByRole("button", { name: "Seat party" })).toBeDisabled();
     expect(screen.getByText(/Ask an owner or manager/i)).toBeInTheDocument();
   });
+
+  it("allows future table planning on a table occupied right now", async () => {
+    const user = userEvent.setup();
+    const onConfirm = vi.fn();
+    render(
+      <FloorPlanSeatingSheet
+        open
+        onOpenChange={vi.fn()}
+        party={party}
+        mode="assign"
+        tables={[{ ...table("t1", "T1", 4), displayState: "occupied", activeSeating: { seatingId: "seat-1", source: party, openedAt: "2026-01-01T12:00:00Z" } }]}
+        canOverride={false}
+        onConfirm={onConfirm}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /T1/i }));
+    await user.click(screen.getByRole("button", { name: "Assign tables" }));
+    expect(onConfirm).toHaveBeenCalledWith(["t1"], undefined);
+  });
 });

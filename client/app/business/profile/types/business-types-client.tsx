@@ -54,7 +54,10 @@ export default function BusinessTypesClient({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [capacity, setCapacity] = useState("");
-  const [maxConcurrentBookings, setMaxConcurrentBookings] = useState("1");
+  const [maxConcurrentBookings, setMaxConcurrentBookings] = useState("");
+  const [availabilityResourceMode, setAvailabilityResourceMode] = useState<"legacy" | "tables" | "covers">("covers");
+  const [reservableCoverCapacity, setReservableCoverCapacity] = useState("");
+  const [resourceTurnBufferMinutes, setResourceTurnBufferMinutes] = useState("0");
   const [isPendingEnabled, setIsPendingEnabled] = useState(true);
   const [duration, setDuration] = useState("");
   const [color, setColor] = useState("#3b82f6");
@@ -63,7 +66,10 @@ export default function BusinessTypesClient({
     setName("");
     setDescription("");
     setCapacity("");
-    setMaxConcurrentBookings("1");
+    setMaxConcurrentBookings("");
+    setAvailabilityResourceMode("covers");
+    setReservableCoverCapacity("");
+    setResourceTurnBufferMinutes("0");
     setIsPendingEnabled(true);
     setDuration("");
     setColor("#3b82f6");
@@ -80,7 +86,10 @@ export default function BusinessTypesClient({
     setName(type.name);
     setDescription(type.description || "");
     setCapacity(type.capacity.toString());
-    setMaxConcurrentBookings(type.maxConcurrentBookings.toString());
+    setMaxConcurrentBookings(type.maxConcurrentBookings?.toString() ?? "");
+    setAvailabilityResourceMode(type.availabilityResourceMode ?? "legacy");
+    setReservableCoverCapacity(type.reservableCoverCapacity?.toString() ?? "");
+    setResourceTurnBufferMinutes((type.resourceTurnBufferMinutes ?? 0).toString());
     setIsPendingEnabled(type.isPendingEnabled ?? true);
     setDuration(type.duration?.toString() || "");
     setColor(type.color);
@@ -115,7 +124,10 @@ export default function BusinessTypesClient({
           name,
           description: description || undefined,
           capacity: parseInt(capacity, 10),
-          maxConcurrentBookings: parseInt(maxConcurrentBookings, 10),
+          maxConcurrentBookings: maxConcurrentBookings ? parseInt(maxConcurrentBookings, 10) : null,
+          availabilityResourceMode,
+          reservableCoverCapacity: availabilityResourceMode === "covers" ? parseInt(reservableCoverCapacity, 10) : undefined,
+          resourceTurnBufferMinutes: parseInt(resourceTurnBufferMinutes, 10) || 0,
           isPendingEnabled,
           duration: duration ? parseInt(duration, 10) : undefined,
           color,
@@ -129,7 +141,10 @@ export default function BusinessTypesClient({
           name,
           description: description || undefined,
           capacity: parseInt(capacity, 10),
-          maxConcurrentBookings: parseInt(maxConcurrentBookings, 10),
+          maxConcurrentBookings: maxConcurrentBookings ? parseInt(maxConcurrentBookings, 10) : null,
+          availabilityResourceMode,
+          reservableCoverCapacity: availabilityResourceMode === "covers" ? parseInt(reservableCoverCapacity, 10) : undefined,
+          resourceTurnBufferMinutes: parseInt(resourceTurnBufferMinutes, 10) || 0,
           isPendingEnabled,
           duration: duration ? parseInt(duration, 10) : undefined,
           color,
@@ -224,8 +239,10 @@ export default function BusinessTypesClient({
               )}
 
               <div className="space-y-1 text-xs text-muted-foreground">
-                <div>Capacity: {type.capacity}</div>
-                <div>Concurrent bookings: {type.maxConcurrentBookings}</div>
+                <div>Maximum party: {type.capacity}</div>
+                <div>{type.availabilityResourceMode === "tables" ? "Table-backed availability" : type.availabilityResourceMode === "covers" ? `${type.reservableCoverCapacity} reservable covers` : "Needs resource setup"}</div>
+                {type.maxConcurrentBookings && <div>Operational booking guard: {type.maxConcurrentBookings}</div>}
+                {(type.resourceTurnBufferMinutes ?? 0) > 0 && <div>{type.resourceTurnBufferMinutes}-minute turn buffer</div>}
                 {type.duration && <div>Duration: {type.duration} min</div>}
                 {type.isPendingEnabled && (
                   <div>Requires confirmation</div>
@@ -287,17 +304,60 @@ export default function BusinessTypesClient({
               </Field>
 
               <Field>
-                <FieldLabel>Concurrent bookings *</FieldLabel>
+                <FieldLabel>How is this service reserved? *</FieldLabel>
+                <select
+                  value={availabilityResourceMode}
+                  onChange={(event) => setAvailabilityResourceMode(event.target.value as "legacy" | "tables" | "covers")}
+                  className="mt-2 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                >
+                  <option value="covers">Shared cover capacity</option>
+                  <option value="tables">Physical tables and configured combinations</option>
+                  <option value="legacy">Needs resource setup (compatibility only)</option>
+                </select>
+                <FieldDescription>
+                  Cover-backed services work without a floor plan. Table-backed services automatically hold a suitable table; add tables in Floor setup first.
+                </FieldDescription>
+              </Field>
+
+              {availabilityResourceMode === "covers" && (
+                <Field>
+                  <FieldLabel>Reservable covers *</FieldLabel>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={reservableCoverCapacity}
+                    onChange={(e) => setReservableCoverCapacity(e.target.value)}
+                    placeholder="e.g., 30"
+                    required
+                  />
+                  <FieldDescription>Maximum guests who may hold overlapping reservations for this service.</FieldDescription>
+                </Field>
+              )}
+
+              <Field>
+                <FieldLabel>Operational booking guard (optional)</FieldLabel>
                 <Input
                   type="number"
                   min="1"
                   value={maxConcurrentBookings}
                   onChange={(e) => setMaxConcurrentBookings(e.target.value)}
                   placeholder="e.g., 1"
-                  required
                 />
                 <FieldDescription>
-                  Maximum overlapping reservations for this booking type
+                  Optional maximum number of overlapping reservation groups, in addition to the resource limit.
+                </FieldDescription>
+              </Field>
+
+              <Field>
+                <FieldLabel>Turn buffer (minutes)</FieldLabel>
+                <Input
+                  type="number"
+                  min="0"
+                  value={resourceTurnBufferMinutes}
+                  onChange={(e) => setResourceTurnBufferMinutes(e.target.value)}
+                />
+                <FieldDescription>
+                  Holds the resource after the expected end time. A reservation may begin exactly when this buffer ends.
                 </FieldDescription>
               </Field>
 

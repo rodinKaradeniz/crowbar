@@ -19,6 +19,9 @@ from app.models.booking_schedule import (
 from app.models.business import Business
 from app.models.reservation import Reservation
 from app.models.service_type import ServiceType
+from app.models.table import Table
+from app.models.table_assignment import ReservationTableAssignment
+from app.models.table_combination import TableCombination
 from app.schemas.booking_schedule import (
     AvailabilityDateResponse,
     AvailabilityResponse,
@@ -64,6 +67,7 @@ class ValidatedBookingSlot:
     ends_at: datetime
     business: Business
     service_type: ServiceType
+    table_ids: tuple[UUID, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -315,41 +319,243 @@ def _override_slots_for_date(
     return slots
 
 
+def _resource_intervals_overlap(
+    *,
+    starts_at: datetime,
+    ends_at: datetime,
+    buffer_minutes: int,
+    other_starts_at: datetime,
+    other_ends_at: datetime,
+    other_buffer_minutes: int,
+) -> bool:
+    return (
+        other_starts_at < ends_at + timedelta(minutes=buffer_minutes)
+        and other_ends_at + timedelta(minutes=other_buffer_minutes) > starts_at
+    )
+
+
+async def _active_service_reservations(
+    db: AsyncSession,
+    *,
+    context: AvailabilityContext,
+    exclude_reservation_id: UUID | None,
+) -> list[Reservation]:
+    query = select(Reservation).where(
+        Reservation.business_id == context.business.id,
+        Reservation.service_type_id == context.service_type.id,
+        Reservation.status.in_(ACTIVE_CAPACITY_STATUSES),
+    )
+    if exclude_reservation_id is not None:
+        query = query.where(Reservation.id != exclude_reservation_id)
+    return list((await db.execute(query)).scalars().all())
+
+
+async def _table_candidates(
+    db: AsyncSession, *, business_id: UUID, lock: bool = False
+) -> list[tuple[tuple[Table, ...], int]]:
+    table_query = select(Table).where(
+        Table.business_id == business_id,
+        Table.is_active.is_(True),
+        Table.deleted_at.is_(None),
+    )
+    if lock:
+        table_query = table_query.order_by(Table.id).with_for_update()
+    tables = list((await db.execute(table_query)).scalars().all())
+    by_id = {table.id: table for table in tables}
+    candidates: dict[tuple[UUID, ...], tuple[tuple[Table, ...], int]] = {
+        (table.id,): ((table,), table.capacity) for table in tables
+    }
+    combinations = list(
+        (
+            await db.execute(
+                select(TableCombination).where(
+                    TableCombination.business_id == business_id,
+                    TableCombination.is_active.is_(True),
+                ).options(selectinload(TableCombination.members))
+            )
+        ).scalars().unique()
+    )
+    for combination in combinations:
+        members = tuple(
+            sorted(
+                (by_id[member.table_id] for member in combination.members if member.table_id in by_id),
+                key=lambda table: (table.label, str(table.id)),
+            )
+        )
+        if len(members) != len(combination.members):
+            continue
+        table_ids = tuple(table.id for table in members)
+        candidates[table_ids] = (
+            members,
+            combination.capacity_override or sum(table.capacity for table in members),
+        )
+    return sorted(
+        candidates.values(),
+        key=lambda candidate: (
+            candidate[1],
+            len(candidate[0]),
+            tuple((table.label, str(table.id)) for table in candidate[0]),
+        ),
+    )
+
+
+async def _table_reservation_rows(
+    db: AsyncSession, *, business_id: UUID, exclude_reservation_id: UUID | None
+) -> list[tuple[UUID, UUID, datetime, datetime, int]]:
+    query = (
+        select(
+            ReservationTableAssignment.reservation_id,
+            ReservationTableAssignment.table_id,
+            Reservation.time,
+            Reservation.ends_at,
+            ServiceType.resource_turn_buffer_minutes,
+        )
+        .join(Reservation, Reservation.id == ReservationTableAssignment.reservation_id)
+        .join(ServiceType, ServiceType.id == Reservation.service_type_id)
+        .where(
+            Reservation.business_id == business_id,
+            Reservation.status.in_(ACTIVE_CAPACITY_STATUSES),
+        )
+    )
+    if exclude_reservation_id is not None:
+        query = query.where(Reservation.id != exclude_reservation_id)
+    return list((await db.execute(query)).all())
+
+
+def _select_table_candidate(
+    *,
+    candidates: list[tuple[tuple[Table, ...], int]],
+    assignments: list[tuple[UUID, UUID, datetime, datetime, int]],
+    starts_at: datetime,
+    ends_at: datetime,
+    guests: int,
+    buffer_minutes: int,
+) -> tuple[UUID, ...] | None:
+    for tables, capacity in candidates:
+        if capacity < guests:
+            continue
+        if any(
+            table.operational_state == "out_of_service"
+            and (
+                table.operational_state_until is None
+                or table.operational_state_until > starts_at
+            )
+            for table in tables
+        ):
+            continue
+        table_ids = {table.id for table in tables}
+        if any(
+            table_id in table_ids
+            and _resource_intervals_overlap(
+                starts_at=starts_at,
+                ends_at=ends_at,
+                buffer_minutes=buffer_minutes,
+                other_starts_at=other_starts_at,
+                other_ends_at=other_ends_at,
+                other_buffer_minutes=other_buffer,
+            )
+            for _, table_id, other_starts_at, other_ends_at, other_buffer in assignments
+        ):
+            continue
+        return tuple(table.id for table in tables)
+    return None
+
+
+def _has_concurrency_guard(
+    *,
+    reservations: list[Reservation],
+    slot: AvailabilitySlotResponse,
+    context: AvailabilityContext,
+) -> bool:
+    guard = context.service_type.max_concurrent_bookings
+    if guard is None:
+        return True
+    overlap_count = sum(
+        1
+        for reservation in reservations
+        if _resource_intervals_overlap(
+            starts_at=slot.starts_at,
+            ends_at=slot.ends_at,
+            buffer_minutes=context.service_type.resource_turn_buffer_minutes,
+            other_starts_at=reservation.time,
+            other_ends_at=reservation.ends_at,
+            other_buffer_minutes=context.service_type.resource_turn_buffer_minutes,
+        )
+    )
+    return overlap_count < guard
+
+
 async def _remove_occupied_slots(
     db: AsyncSession,
     *,
     context: AvailabilityContext,
     slots: list[AvailabilitySlotResponse],
+    guests: int,
     exclude_reservation_id: UUID | None,
 ) -> list[AvailabilitySlotResponse]:
     if not slots:
         return []
 
-    first_start = min(slot.starts_at for slot in slots)
-    last_end = max(slot.ends_at for slot in slots)
-    query = select(Reservation.time, Reservation.ends_at).where(
-        Reservation.business_id == context.business.id,
-        Reservation.service_type_id == context.service_type.id,
-        Reservation.status.in_(ACTIVE_CAPACITY_STATUSES),
-        Reservation.time < last_end,
-        Reservation.ends_at > first_start,
+    active_reservations = await _active_service_reservations(
+        db, context=context, exclude_reservation_id=exclude_reservation_id
     )
-    if exclude_reservation_id is not None:
-        query = query.where(Reservation.id != exclude_reservation_id)
-    occupied = list((await db.execute(query)).all())
+    mode = context.service_type.availability_resource_mode
+    if mode == "legacy":
+        return [
+            slot
+            for slot in slots
+            if _has_concurrency_guard(
+                reservations=active_reservations, slot=slot, context=context
+            )
+        ]
 
-    available: list[AvailabilitySlotResponse] = []
-    for slot in slots:
-        overlap_count = sum(
-            1
-            for reservation_start, reservation_end in occupied
-            if reservation_start < slot.ends_at
-            and reservation_end > slot.starts_at
+    if mode == "covers":
+        capacity = context.service_type.reservable_cover_capacity
+        if capacity is None:
+            return []
+        available: list[AvailabilitySlotResponse] = []
+        for slot in slots:
+            occupied_covers = sum(
+                reservation.guests
+                for reservation in active_reservations
+                if _resource_intervals_overlap(
+                    starts_at=slot.starts_at,
+                    ends_at=slot.ends_at,
+                    buffer_minutes=context.service_type.resource_turn_buffer_minutes,
+                    other_starts_at=reservation.time,
+                    other_ends_at=reservation.ends_at,
+                    other_buffer_minutes=context.service_type.resource_turn_buffer_minutes,
+                )
+            )
+            if (
+                occupied_covers + guests <= capacity
+                and _has_concurrency_guard(
+                    reservations=active_reservations, slot=slot, context=context
+                )
+            ):
+                available.append(slot)
+        return available
+
+    candidates = await _table_candidates(db, business_id=context.business.id)
+    assignments = await _table_reservation_rows(
+        db, business_id=context.business.id, exclude_reservation_id=exclude_reservation_id
+    )
+    return [
+        slot
+        for slot in slots
+        if _select_table_candidate(
+            candidates=candidates,
+            assignments=assignments,
+            starts_at=slot.starts_at,
+            ends_at=slot.ends_at,
+            guests=guests,
+            buffer_minutes=context.service_type.resource_turn_buffer_minutes,
         )
-        if overlap_count < context.service_type.max_concurrent_bookings:
-            available.append(slot)
-    return available
-
+        is not None
+        and _has_concurrency_guard(
+            reservations=active_reservations, slot=slot, context=context
+        )
+    ]
 
 async def _availability_for_context(
     db: AsyncSession,
@@ -375,6 +581,7 @@ async def _availability_for_context(
         db,
         context=context,
         slots=candidates,
+        guests=guests,
         exclude_reservation_id=exclude_reservation_id,
     )
     by_date: dict[date, list[AvailabilitySlotResponse]] = {
@@ -599,9 +806,44 @@ async def validate_booking_slot(
             },
         )
 
+    table_ids: tuple[UUID, ...] = ()
+    if context.service_type.availability_resource_mode == "tables":
+        # Lock the physical resources in a stable order, then choose again from
+        # committed state. This turns a previously displayed slot into one
+        # atomic claim instead of trusting the read-time projection.
+        candidates = await _table_candidates(
+            db, business_id=business_id, lock=True
+        )
+        assignments = await _table_reservation_rows(
+            db,
+            business_id=business_id,
+            exclude_reservation_id=exclude_reservation_id,
+        )
+        table_ids = _select_table_candidate(
+            candidates=candidates,
+            assignments=assignments,
+            starts_at=selected.starts_at,
+            ends_at=selected.ends_at,
+            guests=guests,
+            buffer_minutes=context.service_type.resource_turn_buffer_minutes,
+        ) or ()
+        if not table_ids:
+            alternatives = [
+                slot.model_dump(mode="json")
+                for slot in all_slots
+                if slot.starts_at != selected.starts_at
+            ][:ALTERNATIVE_LIMIT]
+            raise AvailabilityError(
+                status_code=409,
+                code=ErrorCode.SLOT_UNAVAILABLE,
+                message="That reservation time is no longer available",
+                details={"alternatives": alternatives},
+            )
+
     return ValidatedBookingSlot(
         starts_at=selected.starts_at,
         ends_at=selected.ends_at,
         business=context.business,
         service_type=context.service_type,
+        table_ids=table_ids,
     )

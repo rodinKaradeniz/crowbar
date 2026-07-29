@@ -126,7 +126,10 @@ export interface ServiceTypeResponse {
   name: string;
   description: string | null;
   capacity: number;
-  max_concurrent_bookings: number;
+  max_concurrent_bookings: number | null;
+  availability_resource_mode: "legacy" | "tables" | "covers";
+  reservable_cover_capacity: number | null;
+  resource_turn_buffer_minutes: number;
   is_pending_enabled: boolean;
   duration: number | null;
   color: string;

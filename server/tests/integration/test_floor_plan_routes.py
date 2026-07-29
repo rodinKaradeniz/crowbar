@@ -218,7 +218,7 @@ async def test_staff_capacity_override_is_forbidden(
 
 
 @pytest.mark.asyncio
-async def test_closing_queue_seating_completes_visit_and_marks_table_cleaning(
+async def test_closing_queue_seating_completes_visit_and_returns_table_to_ready(
     client: AsyncClient, db_session: AsyncSession
 ):
     business, _, location, headers = await _tenant(db_session, slug="seating")
@@ -256,7 +256,7 @@ async def test_closing_queue_seating_completes_visit_and_marks_table_cleaning(
     assert entry.completed_at is not None
 
     tables = await client.get("/api/floor-plan/tables", headers=headers)
-    assert tables.json()[0]["operational_state"] == "cleaning"
+    assert tables.json()[0]["operational_state"] == "ready"
 
 
 @pytest.mark.asyncio

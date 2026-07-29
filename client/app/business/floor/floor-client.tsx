@@ -77,7 +77,7 @@ function stateTone(state: FloorPlanBoardTable["displayState"]) {
 }
 
 function stateLabel(state: FloorPlanBoardTable["displayState"]) {
-  return state.replaceAll("_", " ");
+  return state === "cleaning" ? "needs reset" : state.replaceAll("_", " ");
 }
 
 function PartyCard({
@@ -336,7 +336,7 @@ export default function FloorClient({ businessId, canManage, hasReservations, ha
     }
   };
 
-  const updateTableState = async (table: FloorPlanBoardTable, state: "ready" | "out_of_service") => {
+  const updateTableState = async (table: FloorPlanBoardTable, state: "ready" | "cleaning" | "out_of_service") => {
     const reason = state === "out_of_service" ? outOfServiceReason.trim() : undefined;
     if (state === "out_of_service" && !reason) { toast.error("A reason is required when taking a table out of service."); return; }
     setActionLoading(true);
@@ -359,7 +359,7 @@ export default function FloorClient({ businessId, canManage, hasReservations, ha
       setCloseTarget(null);
       setSelectedTable(null);
       await refresh();
-      toast.success("Seating closed; tables are now cleaning.");
+      toast.success("Seating closed; tables are ready for the next party.");
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Could not close seating.");
     } finally {
@@ -415,15 +415,15 @@ export default function FloorClient({ businessId, canManage, hasReservations, ha
           <div role="dialog" aria-modal="true" aria-label={`Table ${selectedTable.label}`} className="w-full rounded-t-xl border bg-background p-5 shadow-lg sm:max-w-md sm:rounded-xl" onMouseDown={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-3"><div><p className="eyebrow">{stateLabel(selectedTable.displayState)}</p><h2 className="mt-1 text-xl font-semibold">Table {selectedTable.label}</h2><p className="figures text-sm text-muted-foreground">{selectedTable.capacity} seats</p></div><Button variant="ghost" size="sm" onClick={() => setSelectedTable(null)}>Close</Button></div>
             <div className="mt-5 space-y-3">
-              {selectedTable.activeSeating ? <><p className="text-sm"><span className="font-medium">{selectedTable.activeSeating.source.name}</span> is currently seated here.</p><Button className="w-full" onClick={() => setCloseTarget(selectedTable)}><CheckCircle2 /> Close seating</Button></> : selectedTable.activeAssignment ? <><p className="text-sm"><span className="font-medium">{selectedTable.activeAssignment.name}</span> is assigned here.</p><Button className="w-full" onClick={() => startSelection(selectedTable.activeAssignment!, "seat", selectedTable.activeAssignment!.assignedTableIds)}><Users /> Seat party</Button></> : selectedTable.displayState === "cleaning" ? <><p className="text-sm text-muted-foreground">Cleaning must be completed before this table can be seated.</p><Button className="w-full" onClick={() => void updateTableState(selectedTable, "ready")} disabled={actionLoading}><Sparkles /> Mark ready</Button></> : selectedTable.displayState === "out_of_service" ? <><p className="text-sm text-muted-foreground">{selectedTable.operationalStateReason || "Temporarily unavailable"}</p><Button className="w-full" onClick={() => void updateTableState(selectedTable, "ready")} disabled={actionLoading}>Return to service</Button></> : <><p className="text-sm text-muted-foreground">Choose an unassigned arrival or walk-in to seat here.</p>{availableParties.length ? <div className="space-y-2">{availableParties.map((party) => <Button key={party.sourceId} variant="outline" className="w-full justify-between" onClick={() => startSelection(party, "seat", [selectedTable.id])}><span className="truncate">{party.name}</span><ChevronRight /></Button>)}</div> : <p className="rounded-lg bg-muted/40 p-3 text-sm text-muted-foreground">No unassigned parties are waiting.</p>}</>}
-              {selectedTable.operationalState === "ready" && !selectedTable.activeSeating && <details className="rounded-lg border p-3"><summary className="cursor-pointer text-sm font-medium">Take table out of service</summary><Textarea value={outOfServiceReason} onChange={(event) => setOutOfServiceReason(event.target.value)} className="mt-3 min-h-20" placeholder="Reason required" /><Button variant="destructive" size="sm" className="mt-2" onClick={() => void updateTableState(selectedTable, "out_of_service")} disabled={actionLoading || !outOfServiceReason.trim()}><CircleAlert /> Take out of service</Button></details>}
+              {selectedTable.activeSeating ? <><p className="text-sm"><span className="font-medium">{selectedTable.activeSeating.source.name}</span> is currently seated here.</p><Button className="w-full" onClick={() => setCloseTarget(selectedTable)}><CheckCircle2 /> Close seating</Button></> : selectedTable.activeAssignment ? <><p className="text-sm"><span className="font-medium">{selectedTable.activeAssignment.name}</span> is assigned here.</p><Button className="w-full" onClick={() => startSelection(selectedTable.activeAssignment!, "seat", selectedTable.activeAssignment!.assignedTableIds)}><Users /> Seat party</Button></> : selectedTable.displayState === "cleaning" ? <><p className="text-sm text-muted-foreground">This table needs a quick reset before it can be seated.</p><Button className="w-full" onClick={() => void updateTableState(selectedTable, "ready")} disabled={actionLoading}><Sparkles /> Mark ready</Button></> : selectedTable.displayState === "out_of_service" ? <><p className="text-sm text-muted-foreground">{selectedTable.operationalStateReason || "Temporarily unavailable"}</p><Button className="w-full" onClick={() => void updateTableState(selectedTable, "ready")} disabled={actionLoading}>Return to service</Button></> : <><p className="text-sm text-muted-foreground">Choose an unassigned arrival or walk-in to seat here.</p>{availableParties.length ? <div className="space-y-2">{availableParties.map((party) => <Button key={party.sourceId} variant="outline" className="w-full justify-between" onClick={() => startSelection(party, "seat", [selectedTable.id])}><span className="truncate">{party.name}</span><ChevronRight /></Button>)}</div> : <p className="rounded-lg bg-muted/40 p-3 text-sm text-muted-foreground">No unassigned parties are waiting.</p>}</>}
+              {selectedTable.operationalState === "ready" && !selectedTable.activeSeating && <details className="rounded-lg border p-3"><summary className="cursor-pointer text-sm font-medium">More table actions</summary><div className="mt-3 flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => void updateTableState(selectedTable, "cleaning")} disabled={actionLoading}><Sparkles /> Mark needs reset</Button></div><Textarea value={outOfServiceReason} onChange={(event) => setOutOfServiceReason(event.target.value)} className="mt-3 min-h-20" placeholder="Reason for temporary closure" /><Button variant="destructive" size="sm" className="mt-2" onClick={() => void updateTableState(selectedTable, "out_of_service")} disabled={actionLoading || !outOfServiceReason.trim()}><CircleAlert /> Take out of service</Button></details>}
             </div>
           </div>
         </div>
       )}
 
       <FloorPlanSeatingSheet key={`${selectedParty?.sourceId ?? "no-party"}-${selectionMode}-${selectionInitialTableIds.join("-")}`} open={seatingOpen} onOpenChange={setSeatingOpen} party={selectedParty} tables={allTables} initialTableIds={selectionInitialTableIds} canOverride={canManage} mode={selectionMode} submitting={actionLoading} onConfirm={(tableIds, reason) => void submitSelection(tableIds, reason)} />
-      <ConfirmationDialog open={closeTarget !== null} onOpenChange={(open) => !open && setCloseTarget(null)} title="Close seating?" description="This completes the visit and moves each table to cleaning." confirmLabel="Close seating" onConfirm={() => void confirmCloseSeating()} />
+      <ConfirmationDialog open={closeTarget !== null} onOpenChange={(open) => !open && setCloseTarget(null)} title="Close seating?" description="This completes the visit and returns each table to ready." confirmLabel="Close seating" onConfirm={() => void confirmCloseSeating()} />
     </div>
   );
 }

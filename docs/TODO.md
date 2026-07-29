@@ -82,8 +82,10 @@ below; it did not promote them ahead of the current availability stage.
   timestamp are visible on the reservation, and staff notifications identify
   the exception. The authenticated create contract no longer accepts a
   browser-supplied business ID.
-- **Complete — clarified field ownership:** `businesses.max_guests`,
-  `service_types.capacity`, and `max_concurrent_bookings` cap bookings;
+- **Complete — clarified field ownership:** `businesses.max_guests` and
+  `service_types.capacity` cap party size; resource policy owns table or cover
+  availability, while `max_concurrent_bookings` is an optional operational
+  booking-count guard;
   service duration overrides the schedule default; schedule interval, notice,
   and horizon own slot generation; operating hours remain public venue
   information.
@@ -92,9 +94,12 @@ below; it did not promote them ahead of the current availability stage.
   table planning, or seatings. Public availability and creation enforce the
   business-level setting; public guests see a contact-the-venue state when it
   is off. Existing businesses remain enabled through the migration backfill.
-- **Ready — consumer reuse:** Keep the availability contract reusable for
-  future bot bookings and later resource/table assignment rather than creating
-  channel-specific slot logic.
+- **Complete — resource-aware availability:** Migration 027 keeps existing
+  booking types on their legacy count guard until a manager configures a policy.
+  New types may consume shared reservable covers or atomically auto-allocate
+  the smallest eligible table/configured combination. Public/staff creation and
+  rescheduling reuse the same resource checks; exact turn-buffer boundaries are
+  valid. Onboarding asks how the first service holds capacity.
 
 ### 2. Floor plan and table management — in progress
 
@@ -103,8 +108,8 @@ below; it did not promote them ahead of the current availability stage.
   capacity, shape, ordering, and `ready` / `cleaning` / `out_of_service`
   conditions. Multi-table allocations must match an active configured
   combination. Reservation and queue assignments are separate from actual
-  seatings; closing a seating completes the visit and moves its tables to
-  cleaning. Capacity is enforced unless an owner/manager records an override
+  seatings; closing a seating completes the visit and returns tables to ready
+  by default. “Cleaning” is an optional needs-reset state. Capacity is enforced unless an owner/manager records an override
   reason. Configuration is owner/manager-only while all staff can operate
   table state, assignments, and seatings.
 - **Complete — authoritative host-board backend:** Migration 025 adds a

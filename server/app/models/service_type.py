@@ -35,8 +35,15 @@ class ServiceType(Base, UUIDMixin, TimestampMixin):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     capacity: Mapped[int] = mapped_column(Integer, default=1)
-    max_concurrent_bookings: Mapped[int] = mapped_column(
-        Integer, default=1, nullable=False
+    max_concurrent_bookings: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    availability_resource_mode: Mapped[str] = mapped_column(
+        String(16), default="legacy", nullable=False
+    )
+    reservable_cover_capacity: Mapped[int | None] = mapped_column(Integer)
+    resource_turn_buffer_minutes: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
     )
     is_pending_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     duration: Mapped[int | None] = mapped_column(Integer)

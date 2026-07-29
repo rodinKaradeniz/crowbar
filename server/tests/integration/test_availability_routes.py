@@ -2,6 +2,7 @@ from datetime import datetime, time, timedelta, timezone
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.booking_schedule import BookingSchedule, BookingScheduleWindow
@@ -9,6 +10,10 @@ from app.models.business import Business
 from app.models.customer import Customer
 from app.models.reservation import Reservation
 from app.models.service_type import ServiceType
+from app.models.location import Location
+from app.models.table import Table
+from app.models.table_area import TableArea
+from app.models.table_assignment import ReservationTableAssignment
 
 
 async def _create_booking_context(
@@ -275,3 +280,115 @@ async def test_stale_public_slot_returns_nearest_alternatives(
         set(alternative) == {"starts_at", "ends_at"}
         for alternative in body["details"]["alternatives"]
     )
+
+
+@pytest.mark.asyncio
+async def test_cover_capacity_honors_the_exact_turn_buffer_boundary(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    business, service_type = await _create_booking_context(db_session, slug="cover-buffer")
+    service_type.availability_resource_mode = "covers"
+    service_type.reservable_cover_capacity = 4
+    service_type.max_concurrent_bookings = None
+    service_type.resource_turn_buffer_minutes = 30
+    selected_time = _tomorrow().replace(hour=10)
+    customer = Customer(
+        business_id=business.id,
+        name="Existing Guest",
+        phone="+14155551003",
+        email="cover@example.com",
+    )
+    db_session.add(customer)
+    await db_session.flush()
+    db_session.add(
+        Reservation(
+            business_id=business.id,
+            customer_id=customer.id,
+            service_type_id=service_type.id,
+            time=selected_time,
+            ends_at=selected_time + timedelta(minutes=60),
+            phone=customer.phone,
+            email=customer.email,
+            status="confirmed",
+            guests=3,
+        )
+    )
+    await db_session.commit()
+
+    response = await client.get(
+        f"/api/availability/business/{business.id}",
+        params={
+            "service_type_id": str(service_type.id),
+            "start_date": selected_time.date().isoformat(),
+            "days": 1,
+            "guests": 2,
+        },
+    )
+
+    assert response.status_code == 200
+    starts = [slot["starts_at"] for slot in response.json()["dates"][0]["slots"]]
+    assert f"{selected_time.date().isoformat()}T11:00:00Z" not in starts
+    assert f"{selected_time.date().isoformat()}T11:30:00Z" in starts
+
+
+@pytest.mark.asyncio
+async def test_table_backed_public_booking_auto_assigns_and_blocks_the_table(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    business, service_type = await _create_booking_context(db_session, slug="table-allocation")
+    service_type.availability_resource_mode = "tables"
+    service_type.max_concurrent_bookings = None
+    service_type.resource_turn_buffer_minutes = 30
+    location = Location(business_id=business.id, name="Main", is_primary=True)
+    db_session.add(location)
+    await db_session.flush()
+    area = TableArea(business_id=business.id, location_id=location.id, name="Room")
+    db_session.add(area)
+    await db_session.flush()
+    table = Table(
+        business_id=business.id,
+        location_id=location.id,
+        area_id=area.id,
+        label="T1",
+        capacity=4,
+    )
+    db_session.add(table)
+    await db_session.commit()
+    selected_time = _tomorrow().replace(hour=10)
+
+    created = await client.post(
+        "/api/reservations/public",
+        json={
+            "business_id": str(business.id),
+            "service_type_id": str(service_type.id),
+            "time": selected_time.isoformat(),
+            "phone": "+14155551004",
+            "email": "table@example.com",
+            "name": "Table Guest",
+            "guests": 3,
+        },
+    )
+
+    assert created.status_code == 201, created.text
+    assignment = await db_session.scalar(
+        select(ReservationTableAssignment).where(
+            ReservationTableAssignment.reservation_id == created.json()["id"]
+        )
+    )
+    assert assignment is not None
+    assert assignment.table_id == table.id
+
+    availability = await client.get(
+        f"/api/availability/business/{business.id}",
+        params={
+            "service_type_id": str(service_type.id),
+            "start_date": selected_time.date().isoformat(),
+            "days": 1,
+            "guests": 3,
+        },
+    )
+    starts = [slot["starts_at"] for slot in availability.json()["dates"][0]["slots"]]
+    assert f"{selected_time.date().isoformat()}T11:00:00Z" not in starts
+    assert f"{selected_time.date().isoformat()}T11:30:00Z" in starts

@@ -103,13 +103,15 @@ wins on working process. `HISTORY.md` explains why an existing behavior exists;
 The operational loop is the confirmed delivery order: authoritative reservation
 availability and capacity; floor plan and tables; guest CRM; no-show
 protection; purchasing and cost control; then POS and payment integrations.
-Availability is complete locally; floor plan/table management has its backend
-foundation, responsive Floor host board, manager setup UI, and reservation
-table planning. The next boundary is validating the completed service loop,
-then registered-table continuity for tabs and QR ordering.
+Availability is complete locally; booking types can retain legacy count-guard
+compatibility or use shared cover capacity / atomic table allocation with a
+turn buffer. Floor plan/table management has its backend foundation,
+responsive Floor host board, manager setup UI, and reservation table planning.
+The next boundary is validating the completed service loop, then
+registered-table continuity for tabs and QR ordering.
 [docs/TODO.md](docs/TODO.md) owns every stage boundary and deferred item.
 
-Migrations 023–025 are local only. Railway remains at migrations 001–022; its
+Migrations 023–027 are local only. Railway remains at migrations 001–022; its
 partially provisioned rollout is intentionally shelved and must not resume
 without explicit user authorization. [docs/deployment.md](docs/deployment.md)
 owns the verified resume point.

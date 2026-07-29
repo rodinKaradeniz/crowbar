@@ -44,6 +44,7 @@ export function FloorPlanSeatingSheet({
 
   const isSelectable = (table: FloorPlanBoardTable) => {
     if (initialTableIds?.includes(table.id)) return true;
+    if (mode === "assign") return table.operationalState !== "out_of_service";
     if (table.operationalState !== "ready") return false;
     if (table.displayState === "available") return true;
     return table.activeAssignment?.sourceId === party?.sourceId;

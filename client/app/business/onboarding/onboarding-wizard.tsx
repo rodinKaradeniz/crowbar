@@ -95,6 +95,8 @@ export default function OnboardingWizard({
   const [serviceName, setServiceName] = useState("");
   const [serviceDuration, setServiceDuration] = useState("60");
   const [serviceCapacity, setServiceCapacity] = useState("10");
+  const [reservationResourceMode, setReservationResourceMode] = useState<"covers" | "legacy">("covers");
+  const [reservableCovers, setReservableCovers] = useState("30");
   const [skipService, setSkipService] = useState(false);
 
   // Step 4: Modules
@@ -125,6 +127,8 @@ export default function OnboardingWizard({
             name: serviceName,
             capacity: parseInt(serviceCapacity) || 10,
             duration: parseInt(serviceDuration) || 60,
+            availabilityResourceMode: reservationResourceMode,
+            reservableCoverCapacity: reservationResourceMode === "covers" ? parseInt(reservableCovers) || 30 : undefined,
             color: "#6366f1",
           });
         }
@@ -316,7 +320,7 @@ export default function OnboardingWizard({
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="svc-capacity">Capacity (guests)</Label>
+                      <Label htmlFor="svc-capacity">Maximum party size</Label>
                       <Input
                         id="svc-capacity"
                         type="number"
@@ -325,6 +329,23 @@ export default function OnboardingWizard({
                         onChange={(e) => setServiceCapacity(e.target.value)}
                       />
                     </div>
+                  </div>
+                  <div className="space-y-2 rounded-lg border bg-muted/30 p-4">
+                    <Label>How should guests reserve this service?</Label>
+                    <label className="flex cursor-pointer items-start gap-2 text-sm">
+                      <input type="radio" name="reservation-resource" checked={reservationResourceMode === "covers"} onChange={() => setReservationResourceMode("covers")} className="mt-1" />
+                      <span><span className="font-medium">Shared cover capacity</span><span className="mt-0.5 block text-xs text-muted-foreground">For standing bars and venues without table-specific reservations.</span></span>
+                    </label>
+                    <label className="flex cursor-pointer items-start gap-2 text-sm">
+                      <input type="radio" name="reservation-resource" checked={reservationResourceMode === "legacy"} onChange={() => setReservationResourceMode("legacy")} className="mt-1" />
+                      <span><span className="font-medium">I&apos;ll configure tables later</span><span className="mt-0.5 block text-xs text-muted-foreground">Keeps this type in compatibility mode until Floor setup is complete.</span></span>
+                    </label>
+                    {reservationResourceMode === "covers" && (
+                      <div className="pt-1">
+                        <Label htmlFor="svc-covers">Reservable covers</Label>
+                        <Input id="svc-covers" type="number" min={1} value={reservableCovers} onChange={(e) => setReservableCovers(e.target.value)} className="mt-1 max-w-40" />
+                      </div>
+                    )}
                   </div>
                 </>
               )}

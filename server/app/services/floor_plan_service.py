@@ -11,6 +11,7 @@ from app.models.business import Business
 from app.models.location import Location
 from app.models.queue_entry import QueueEntry
 from app.models.reservation import Reservation
+from app.models.service_type import ServiceType
 from app.models.table import Table
 from app.models.table_area import TableArea
 from app.models.table_assignment import QueueTableAssignment, ReservationTableAssignment
@@ -492,6 +493,48 @@ async def _ensure_tables_unoccupied(db, table_ids: list[UUID]):
         raise _conflict("One or more tables are currently occupied")
 
 
+async def _ensure_reservation_tables_available(
+    db: AsyncSession,
+    *,
+    reservation: Reservation,
+    table_ids: list[UUID],
+    starts_at: datetime | None = None,
+    ends_at: datetime | None = None,
+) -> None:
+    own_buffer = await db.scalar(
+        select(ServiceType.resource_turn_buffer_minutes).where(
+            ServiceType.id == reservation.service_type_id
+        )
+    )
+    rows = list(
+        (
+            await db.execute(
+                select(
+                    ReservationTableAssignment.table_id,
+                    Reservation.time,
+                    Reservation.ends_at,
+                    ServiceType.resource_turn_buffer_minutes,
+                )
+                .join(Reservation, Reservation.id == ReservationTableAssignment.reservation_id)
+                .join(ServiceType, ServiceType.id == Reservation.service_type_id)
+                .where(
+                    ReservationTableAssignment.table_id.in_(table_ids),
+                    Reservation.id != reservation.id,
+                    Reservation.status.in_(("pending", "confirmed")),
+                )
+            )
+        ).all()
+    )
+    candidate_start = starts_at or reservation.time
+    candidate_end = ends_at or reservation.ends_at
+    if any(
+        other_start < candidate_end + timedelta(minutes=own_buffer or 0)
+        and other_end + timedelta(minutes=other_buffer or 0) > candidate_start
+        for _, other_start, other_end, other_buffer in rows
+    ):
+        raise _conflict("One or more tables are assigned to an overlapping reservation")
+
+
 async def replace_reservation_assignment(
     db, business_id, reservation_id, table_ids, actor_id, can_override, reason
 ):
@@ -509,21 +552,9 @@ async def replace_reservation_assignment(
     tables, capacity = await _validate_table_set(db, business_id, table_ids)
     _ensure_tables_operational(tables, reservation.time)
     reason = _validate_capacity(reservation.guests, capacity, can_override, reason)
-    conflict = await db.scalar(
-        select(ReservationTableAssignment.table_id)
-        .join(Reservation, Reservation.id == ReservationTableAssignment.reservation_id)
-        .where(
-            ReservationTableAssignment.table_id.in_(table_ids),
-            Reservation.id != reservation.id,
-            Reservation.status.in_(("pending", "confirmed")),
-            Reservation.time < reservation.ends_at,
-            Reservation.ends_at > reservation.time,
-        )
-        .limit(1)
+    await _ensure_reservation_tables_available(
+        db, reservation=reservation, table_ids=table_ids
     )
-    if conflict:
-        raise _conflict("One or more tables are assigned to an overlapping reservation")
-    await _ensure_tables_unoccupied(db, table_ids)
     await db.execute(
         delete(ReservationTableAssignment).where(
             ReservationTableAssignment.reservation_id == reservation.id
@@ -660,7 +691,7 @@ async def close_seating(db, business_id: UUID, seating_id: UUID, actor_id: UUID)
     tables = await _locked_tables(db, business_id, table_ids)
     for table in tables:
         if table.operational_state != "out_of_service":
-            table.operational_state = "cleaning"
+            table.operational_state = "ready"
             table.operational_state_reason = None
             table.operational_state_until = None
             table.operational_state_changed_by = actor_id

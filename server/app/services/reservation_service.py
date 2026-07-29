@@ -1,11 +1,13 @@
 from datetime import date, datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.reservation import Reservation
+from app.models.table import Table
+from app.models.table_assignment import ReservationTableAssignment
 from app.models.user import User
 from app.schemas.reservation import (
     PublicReservationCreate,
@@ -23,6 +25,7 @@ from app.services.availability_service import (
 from app.core.errors import ErrorCode
 from app.services.customer_identity_service import upsert_customer
 from app.services.location_service import get_primary_location
+from app.services.floor_plan_service import _ensure_reservation_tables_available
 
 
 async def get_reservations_by_business(
@@ -70,6 +73,7 @@ async def create_reservation(
     business_id: UUID,
     data: ReservationCreate,
     override_actor: User | None = None,
+    actor: User | None = None,
 ) -> Reservation:
     if data.availability_override_reason is not None:
         if override_actor is None:
@@ -133,7 +137,54 @@ async def create_reservation(
         reservation.availability_override_user = override_actor
     db.add(reservation)
     await db.flush()
+    await _apply_automatic_table_assignment(
+        db,
+        reservation=reservation,
+        table_ids=validated_slot.table_ids,
+        actor_id=actor.id if actor else None,
+    )
     return reservation
+
+
+async def _apply_automatic_table_assignment(
+    db: AsyncSession,
+    *,
+    reservation: Reservation,
+    table_ids: tuple[UUID, ...],
+    actor_id: UUID | None,
+) -> None:
+    if not table_ids:
+        return
+    tables = list(
+        (
+            await db.execute(
+                select(Table).where(
+                    Table.business_id == reservation.business_id,
+                    Table.id.in_(table_ids),
+                )
+            )
+        ).scalars().all()
+    )
+    if len(tables) != len(table_ids) or len({table.location_id for table in tables}) != 1:
+        raise AvailabilityError(
+            status_code=409,
+            code=ErrorCode.SLOT_UNAVAILABLE,
+            message="The selected table allocation is no longer available",
+        )
+    reservation.location_id = tables[0].location_id
+    assigned_at = datetime.now(timezone.utc)
+    for table in tables:
+        db.add(
+            ReservationTableAssignment(
+                reservation_id=reservation.id,
+                table_id=table.id,
+                business_id=reservation.business_id,
+                location_id=table.location_id,
+                assigned_by=actor_id,
+                assigned_at=assigned_at,
+            )
+        )
+    await db.flush()
 
 
 async def update_reservation(
@@ -218,6 +269,7 @@ async def reschedule_reservation(
     reservation: Reservation,
     data: ReservationReschedule,
     override_actor: User | None = None,
+    actor: User | None = None,
     now: datetime | None = None,
 ) -> Reservation:
     ensure_reschedulable(reservation, now=now)
@@ -246,6 +298,23 @@ async def reschedule_reservation(
             now=now,
             exclude_reservation_id=reservation.id,
         )
+    existing_table_ids = list(
+        (
+            await db.execute(
+                select(ReservationTableAssignment.table_id).where(
+                    ReservationTableAssignment.reservation_id == reservation.id
+                )
+            )
+        ).scalars().all()
+    )
+    if existing_table_ids and not validated_slot.table_ids:
+        await _ensure_reservation_tables_available(
+            db,
+            reservation=reservation,
+            table_ids=existing_table_ids,
+            starts_at=validated_slot.starts_at,
+            ends_at=validated_slot.ends_at,
+        )
     reservation.service_type_id = data.service_type_id
     reservation.time = validated_slot.starts_at
     reservation.ends_at = validated_slot.ends_at
@@ -261,6 +330,18 @@ async def reschedule_reservation(
     reservation.availability_override_user = (
         override_actor if data.availability_override_reason else None
     )
+    if validated_slot.table_ids:
+        await db.execute(
+            delete(ReservationTableAssignment).where(
+                ReservationTableAssignment.reservation_id == reservation.id
+            )
+        )
+        await _apply_automatic_table_assignment(
+            db,
+            reservation=reservation,
+            table_ids=validated_slot.table_ids,
+            actor_id=actor.id if actor else None,
+        )
     await db.flush()
     await db.refresh(reservation)
     return reservation
@@ -310,4 +391,10 @@ async def create_public_reservation(
     )
     db.add(reservation)
     await db.flush()
+    await _apply_automatic_table_assignment(
+        db,
+        reservation=reservation,
+        table_ids=validated_slot.table_ids,
+        actor_id=None,
+    )
     return reservation

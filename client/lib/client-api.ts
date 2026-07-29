@@ -165,7 +165,10 @@ function toServiceType(st: Record<string, unknown>): ServiceType {
     name: st.name as string,
     description: (st.description as string) || undefined,
     capacity: st.capacity as number,
-    maxConcurrentBookings: st.max_concurrent_bookings as number,
+    maxConcurrentBookings: (st.max_concurrent_bookings as number | null) ?? undefined,
+    availabilityResourceMode: (st.availability_resource_mode as ServiceType["availabilityResourceMode"]) ?? "legacy",
+    reservableCoverCapacity: (st.reservable_cover_capacity as number | null) ?? undefined,
+    resourceTurnBufferMinutes: (st.resource_turn_buffer_minutes as number) ?? 0,
     isPendingEnabled: (st.is_pending_enabled as boolean) ?? true,
     duration: (st.duration as number) || undefined,
     color: st.color as string,
@@ -762,7 +765,10 @@ export async function clientCreateServiceType(data: {
   name: string;
   description?: string;
   capacity: number;
-  maxConcurrentBookings?: number;
+  maxConcurrentBookings?: number | null;
+  availabilityResourceMode?: "legacy" | "tables" | "covers";
+  reservableCoverCapacity?: number;
+  resourceTurnBufferMinutes?: number;
   isPendingEnabled?: boolean;
   duration?: number;
   color: string;
@@ -775,6 +781,9 @@ export async function clientCreateServiceType(data: {
     description: data.description,
     capacity: data.capacity,
     max_concurrent_bookings: data.maxConcurrentBookings,
+    availability_resource_mode: data.availabilityResourceMode ?? "covers",
+    reservable_cover_capacity: data.reservableCoverCapacity,
+    resource_turn_buffer_minutes: data.resourceTurnBufferMinutes ?? 0,
     is_pending_enabled: data.isPendingEnabled ?? true,
     duration: data.duration,
     color: data.color,
@@ -795,7 +804,10 @@ export async function clientUpdateServiceType(
     name: string;
     description: string;
     capacity: number;
-    maxConcurrentBookings: number;
+    maxConcurrentBookings: number | null;
+    availabilityResourceMode: "legacy" | "tables" | "covers";
+    reservableCoverCapacity: number;
+    resourceTurnBufferMinutes: number;
     isPendingEnabled: boolean;
     duration: number;
     color: string;
@@ -809,6 +821,12 @@ export async function clientUpdateServiceType(
   if (data.capacity !== undefined) apiData.capacity = data.capacity;
   if (data.maxConcurrentBookings !== undefined)
     apiData.max_concurrent_bookings = data.maxConcurrentBookings;
+  if (data.availabilityResourceMode !== undefined)
+    apiData.availability_resource_mode = data.availabilityResourceMode;
+  if (data.reservableCoverCapacity !== undefined)
+    apiData.reservable_cover_capacity = data.reservableCoverCapacity;
+  if (data.resourceTurnBufferMinutes !== undefined)
+    apiData.resource_turn_buffer_minutes = data.resourceTurnBufferMinutes;
   if (data.isPendingEnabled !== undefined)
     apiData.is_pending_enabled = data.isPendingEnabled;
   if (data.duration !== undefined) apiData.duration = data.duration;

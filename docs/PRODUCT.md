@@ -25,19 +25,23 @@ the acceptance boundary and later work.
   business-local configuration. A location belongs to a business.
 - **Customer:** a public human identity, business-scoped and phone-keyed. It is
   not an authenticated `user` account.
-- **Service type:** a business-defined booking category with party, duration,
-  and positive-concurrency constraints.
+- **Service type:** a business-defined booking category with party and duration
+  limits plus one availability resource policy: legacy compatibility,
+  table-backed allocation, or shared cover capacity. An optional concurrent
+  booking guard is separate from capacity.
 - **Operating hours:** public venue information. They do not determine booking
   availability.
 - **Booking schedule:** the authoritative policy for reservable time. One
   business default may have complete service-type overrides; it owns weekly and
   date-specific bookable windows, notice, horizon, interval, and duration.
 - **Reservation interval:** the persisted start/end time accepted by the
-  availability service. Pending and confirmed intervals consume concurrency.
+  availability service. Pending and confirmed intervals consume the selected
+  resource through its optional turn buffer.
 - **Table assignment:** advance planning for a reservation or queue party; it
   does not make a table occupied.
 - **Seating:** actual occupancy. An open seating owns occupied tables; closing
-  it completes the visit and moves its tables to cleaning.
+  it completes the visit and returns tables to ready by default. Staff may mark
+  a table as needing reset when that is genuinely useful.
 - **Service day:** the business-local hospitality shift, resolved with its IANA
   timezone and configurable cutoff rather than a browser calendar day.
 - **Inventory movement:** the authoritative ledger record of a stock change.
@@ -84,6 +88,14 @@ Tables are registered physical resources. Multi-table allocations must match an
 active configured combination; capacity overrides require an owner/manager and
 an audit reason. The host board's HTTP snapshot is authoritative; real-time
 messages only invalidate it for refetching.
+
+Each booking type chooses how availability is backed. Table-backed bookings
+automatically hold the smallest suitable registered table or configured
+combination; guests never choose physical tables. Cover-backed bookings consume
+an owner-set pool of simultaneous reservable covers and support table-free
+venues. A turn buffer holds the chosen resource after a reservation ends, with
+an exact end/start boundary permitted. Existing booking types remain in legacy
+count-guard compatibility mode until an owner configures a resource policy.
 
 ### Ordering and inventory
 

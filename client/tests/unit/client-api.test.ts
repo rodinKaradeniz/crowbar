@@ -102,6 +102,8 @@ describe("clientGetServiceTypesByBusiness", () => {
     expect(serviceTypes[0].businessId).toBe("biz-1");
     expect(serviceTypes[0].color).toBe("#ff0000");
     expect(serviceTypes[0].maxConcurrentBookings).toBe(1);
+    expect(serviceTypes[0].availabilityResourceMode).toBe("legacy");
+    expect(serviceTypes[0].resourceTurnBufferMinutes).toBe(0);
   });
 
   it("does not leak snake_case keys into service type result", async () => {

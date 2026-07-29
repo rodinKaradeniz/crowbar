@@ -260,6 +260,7 @@ async def create_reservation(
                 if _can_override_availability(current_user, business.id)
                 else None
             ),
+            actor=current_user,
         )
     except AvailabilityError as exc:
         raise _availability_http_error(exc) from exc
@@ -374,6 +375,7 @@ async def reschedule_reservation(
                 if _can_override_availability(current_user, business.id)
                 else None
             ),
+            actor=current_user,
         )
     except AvailabilityError as exc:
         raise _availability_http_error(exc) from exc

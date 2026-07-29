@@ -597,6 +597,37 @@ per-table policy; revisit that granularity only with a confirmed product need.
 `client/app/business/profile/booking/`,
 `client/app/reserve/[business]/`
 
+## 2026-07-29 — Availability is backed by real venue resources
+
+**Context:** The prior availability model limited overlapping reservation
+records, not actual cover capacity or physical tables. It could accept a party
+that had no viable table, while forcing all venues—including standing bars—to
+pretend they used a floor plan.
+
+**Decision:** A booking type now chooses legacy compatibility, shared
+cover-backed availability, or table-backed availability. Cover-backed services
+consume an explicit pool of reservable covers. Table-backed services choose and
+persist the smallest viable registered table/configured combination, then use
+stable table locks to recheck the claim at creation or reschedule time. A
+service-level turn buffer extends resource occupation after the planned end;
+the exact release boundary remains bookable. Existing types keep their legacy
+count guard until an owner configures the policy, and onboarding asks how the
+first service holds capacity. Guest-facing booking never exposes table choice.
+
+**Consequences:** Public and staff availability now agree with real capacity
+when configured, while table-free venues remain supported and existing venues
+are not silently assigned guessed capacity. Future table planning no longer
+fails merely because a table is occupied right now. Closing a seating returns
+tables to ready by default; the retained `cleaning` storage state is an
+optional staff-controlled “needs reset” signal rather than a compulsory step.
+
+**References:** `server/db/migrations/027_resource_aware_reservation_availability.sql`,
+`server/app/services/availability_service.py`,
+`server/app/services/reservation_service.py`,
+`server/app/services/floor_plan_service.py`,
+`client/app/business/profile/types/`,
+`client/app/business/onboarding/`
+
 ## Entry Template
 
 ```markdown

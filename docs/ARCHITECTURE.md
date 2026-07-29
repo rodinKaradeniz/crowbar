@@ -224,13 +224,18 @@ schedule or its business default, interprets it in the business IANA timezone,
 and returns only absolute start/end slots grouped by local calendar date. It
 enforces weekly and exception windows, overnight spillover anchored to the
 service date, minimum notice, advance horizon, party limits, duration,
-concurrency, and active pending/confirmed overlaps. Window ends are exclusive
-start-time boundaries; the accepted reservation interval may end later.
+the selected resource policy, and active pending/confirmed overlaps. Legacy
+types retain their count guard. Cover-backed types sum guests against their
+configured cover pool, while table-backed types find the smallest suitable
+registered table or active configured combination and include each service's
+turn buffer in conflict checks. Window ends are exclusive start-time boundaries;
+the accepted reservation interval may end later.
 
 Public and authenticated reservation creation call the same availability
-service. Creation locks the resolved schedule row with `SELECT ... FOR UPDATE`,
-rechecks capacity, persists the server-selected interval, commits it before
-publishing, and returns `SLOT_UNAVAILABLE` with up to five alternatives when a
+service. Creation locks the resolved schedule row and, for table-backed types,
+the active tables in stable order; it then rechecks and persists the exact
+server-selected allocation in the same transaction. Creation commits before
+publishing and returns `SLOT_UNAVAILABLE` with up to five alternatives when a
 slot is stale. New businesses receive a closed default schedule. The public
 form fetches live slots and submits the returned absolute timestamp rather than
 constructing a browser-local time.
@@ -249,7 +254,8 @@ Its operating-hours action first previews a one-time copy, then replaces only
 the default schedule's weekly windows. Policy and exceptions remain intact,
 and later public operating-hour changes never synchronize silently. Global
 party size remains on the business; service capacity, duration, pending mode,
-and positive concurrency remain on Booking Types.
+resource policy, turn buffer, and optional booking-count guard remain on
+Booking Types.
 
 Authenticated `GET /api/reservations/{id}/availability` derives the tenant and
 excludes only that future active reservation when showing replacement slots.
@@ -290,7 +296,8 @@ physical-resource foundation for reservations, queue, tabs, and ordering:
 
 - `table_areas` groups registered tables within one business location. A table
   has a positive capacity, display shape and order, administrative lifecycle,
-  and a current `ready`, `cleaning`, or `out_of_service` condition.
+  and a current `ready`, `cleaning` (presented as “needs reset”), or
+  `out_of_service` condition.
 - `table_combinations` defines the exact multi-table sets staff may allocate.
   Overlapping definitions are allowed, but an assignment with multiple tables
   must match one active definition. Its effective capacity is either an
@@ -300,8 +307,10 @@ physical-resource foundation for reservations, queue, tabs, and ordering:
   occupancy.
 - `table_seatings` represents actual occupancy and links exactly one active
   reservation or queue party to one or more tables. Opening a seating uses the
-  same assignment and capacity rules. Closing it completes the source visit and
-  puts its tables into cleaning; a later explicit staff action marks them ready.
+  same assignment and capacity rules. Future reservation planning uses its
+  planned interval rather than a table's current occupancy. Closing a seating
+  completes the source visit and returns its tables to ready; staff can
+  explicitly mark a table as needing reset when appropriate.
 
 All floor-plan queries derive the business from authenticated staff context.
 Configuration mutations require owner or manager; operational state,

@@ -92,7 +92,10 @@ export interface ServiceType {
   name: string;
   description?: string;
   capacity: number;
-  maxConcurrentBookings: number;
+  maxConcurrentBookings?: number;
+  availabilityResourceMode?: "legacy" | "tables" | "covers";
+  reservableCoverCapacity?: number;
+  resourceTurnBufferMinutes?: number;
   isPendingEnabled: boolean;
   duration?: number;
   color: string;
