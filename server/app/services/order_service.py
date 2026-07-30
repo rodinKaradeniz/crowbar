@@ -68,6 +68,8 @@ def order_to_dict(order: Order) -> dict:
         "id": str(order.id),
         "business_id": str(order.business_id),
         "location_id": str(order.location_id) if order.location_id else None,
+        "table_id": str(order.table_id) if order.table_id else None,
+        "tab_id": str(order.tab_id) if order.tab_id else None,
         "session_token": order.session_token,
         "table_identifier": order.table_identifier,
         "status": order.status,
@@ -111,6 +113,10 @@ async def place_order(
     request: OrderPlaceRequest,
     *,
     require_age_confirmation: bool = True,
+    table_id: UUID | None = None,
+    tab_id: UUID | None = None,
+    channel: str | None = None,
+    allow_legacy_table_identifier: bool = False,
 ) -> Order:
     """Create an order. Idempotent: returns existing order if same idempotency_key.
 
@@ -169,7 +175,10 @@ async def place_order(
     order = Order(
         business_id=business_id,
         session_token=session_token,
-        table_identifier=request.table_identifier,
+        table_id=table_id,
+        tab_id=tab_id,
+        channel=channel,
+        table_identifier=(request.table_identifier if allow_legacy_table_identifier else None),
         status="received",
         idempotency_key=request.idempotency_key,
         notes=request.notes,

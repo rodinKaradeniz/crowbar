@@ -15,8 +15,8 @@ the current product assumes one active business association per staff login.
 The confirmed delivery order is the operational loop: authoritative
 reservation availability and capacity; floor plan and tables; guest CRM;
 no-show protection; purchasing and cost control; then POS and payment
-integrations. The first availability stage is complete locally and the
-floor-plan/table-management stage is in progress. See [TODO.md](TODO.md) for
+integrations. The first availability stage and the floor-plan/table-management
+stage are complete locally. See [TODO.md](TODO.md) for
 the acceptance boundary and later work.
 
 ## Canonical domain vocabulary
@@ -104,6 +104,16 @@ happy-hour eligibility, submitted prices, alcohol rules, or inventory effects.
 Entering `served` records the actual sale movements; reversing service uses
 those recorded movements, not the current recipe. Auto-disabled menu items
 remain disabled after stock recovery until staff re-enable them.
+
+Public dine-in orders start from an opaque QR credential issued for a
+registered table. The credential is signed and bound to the table's current
+revision; an owner or manager can rotate it to invalidate a lost printed code.
+It resolves only while that table belongs to an active seating. Each seating
+has at most one open tab, so staff and guest rounds share one total even when
+the seating spans a configured table combination. Staff start or open that tab
+from the occupied table on Floor, settle it, then close the seating. A seating
+with an open tab cannot be ended. Legacy free-text table labels remain
+historical display data only and are never accepted for new public orders.
 
 ## Security and visibility boundaries
 

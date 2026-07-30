@@ -32,6 +32,7 @@ async def _tab_response(db: AsyncSession, tab: Tab) -> TabResponse:
         id=tab.id,
         business_id=tab.business_id,
         table_id=tab.table_id,
+        seating_id=tab.seating_id,
         customer_id=tab.customer_id,
         status=tab.status,
         channel=tab.channel,
@@ -52,15 +53,74 @@ async def open_tab(
     current_user: User = Depends(get_current_user),
     business: Business = Depends(get_current_business),
 ):
-    tab = await tab_service.open_tab(
-        db,
-        business_id=business.id,
-        opened_by=current_user.id,
-        table_id=body.table_id,
-        customer_id=body.customer_id,
-        channel=body.channel,
-    )
+    try:
+        if body.table_id:
+            seating_id = await tab_service.active_seating_for_table(
+                db, business_id=business.id, table_id=body.table_id
+            )
+            if seating_id is None:
+                raise ValueError("Start a table tab from an active seating")
+            tab = await tab_service.open_seating_tab(
+                db,
+                business_id=business.id,
+                seating_id=seating_id,
+                opened_by=current_user.id,
+                table_id=body.table_id,
+                channel=body.channel,
+            )
+        else:
+            tab = await tab_service.open_tab(
+                db,
+                business_id=business.id,
+                opened_by=current_user.id,
+                customer_id=body.customer_id,
+                channel=body.channel,
+            )
+    except ValueError as exc:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if str(exc) == "Table not found"
+            else status.HTTP_409_CONFLICT
+        )
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
     await db.commit()
+    if tab.seating_id:
+        await publish(DomainEvent(
+            event_type="floor_plan.tab_opened",
+            business_id=str(business.id),
+            payload={"tab_id": str(tab.id), "seating_id": str(tab.seating_id)},
+        ))
+    return await _tab_response(db, tab)
+
+
+@router.post("/seatings/{seating_id}", response_model=TabResponse)
+async def open_seating_tab(
+    seating_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    business: Business = Depends(get_current_business),
+):
+    try:
+        tab = await tab_service.open_seating_tab(
+            db,
+            business_id=business.id,
+            seating_id=seating_id,
+            opened_by=current_user.id,
+            channel="staff",
+        )
+    except ValueError as exc:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if str(exc) == "Seating not found"
+            else status.HTTP_409_CONFLICT
+        )
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    await db.commit()
+    await publish(DomainEvent(
+        event_type="floor_plan.tab_opened",
+        business_id=str(business.id),
+        payload={"tab_id": str(tab.id), "seating_id": str(seating_id)},
+    ))
     return await _tab_response(db, tab)
 
 
@@ -108,7 +168,10 @@ async def add_order_to_tab(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Tab is closed"
         )
-    order = await tab_service.add_order_to_tab(db, business.id, tab_id, body)
+    try:
+        order = await tab_service.add_order_to_tab(db, business.id, tab_id, body)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     await db.commit()
     # Tab orders still flow through the ticket board — emit order.placed so the
     # WS-driven board picks them up exactly like a standalone order.
@@ -117,6 +180,12 @@ async def add_order_to_tab(
         business_id=str(business.id),
         payload={"order_id": str(order.id), "tab_id": str(tab_id)},
     ))
+    if tab.seating_id:
+        await publish(DomainEvent(
+            event_type="floor_plan.tab_updated",
+            business_id=str(business.id),
+            payload={"tab_id": str(tab.id), "seating_id": str(tab.seating_id)},
+        ))
     return order
 
 
@@ -137,4 +206,10 @@ async def close_tab(
         )
     tab = await tab_service.close_tab(db, tab, current_user.id, body.settled_method)
     await db.commit()
+    if tab.seating_id:
+        await publish(DomainEvent(
+            event_type="floor_plan.tab_closed",
+            business_id=str(business.id),
+            payload={"tab_id": str(tab.id), "seating_id": str(tab.seating_id)},
+        ))
     return await _tab_response(db, tab)

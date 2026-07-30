@@ -2,15 +2,19 @@ from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.business import Business
 from app.models.customer import Customer
 from app.models.location import Location
+from app.models.menu import Menu, MenuCategory, MenuItem
+from app.models.order import Order
 from app.models.queue_entry import QueueEntry
 from app.models.reservation import Reservation
 from app.models.service_type import ServiceType
 from app.models.staff import Staff
+from app.models.tab import Tab
 from app.models.user import User
 from app.services.auth_service import create_access_token
 from app.services.floor_plan_service import resolve_service_window
@@ -257,6 +261,197 @@ async def test_closing_queue_seating_completes_visit_and_returns_table_to_ready(
 
     tables = await client.get("/api/floor-plan/tables", headers=headers)
     assert tables.json()[0]["operational_state"] == "ready"
+
+
+@pytest.mark.asyncio
+async def test_host_can_plan_a_later_reservation_while_the_table_is_occupied(
+    client: AsyncClient, db_session: AsyncSession
+):
+    business, _, location, headers = await _tenant(db_session, slug="host-loop")
+    _, table = await _area_and_table(client, headers, capacity=4)
+    service = ServiceType(
+        business_id=business.id,
+        name="Dinner",
+        capacity=4,
+        resource_turn_buffer_minutes=30,
+    )
+    customer = Customer(
+        business_id=business.id,
+        name="Current Guest",
+        phone="+14155550110",
+        email="current@example.com",
+    )
+    later_customer = Customer(
+        business_id=business.id,
+        name="Later Guest",
+        phone="+14155550111",
+        email="later@example.com",
+    )
+    db_session.add_all([service, customer, later_customer])
+    await db_session.flush()
+    now = datetime.now(timezone.utc)
+    current = Reservation(
+        business_id=business.id,
+        location_id=location.id,
+        customer_id=customer.id,
+        service_type_id=service.id,
+        time=now - timedelta(minutes=5),
+        ends_at=now + timedelta(minutes=55),
+        phone=customer.phone,
+        email=customer.email,
+        status="confirmed",
+        guests=2,
+    )
+    later = Reservation(
+        business_id=business.id,
+        location_id=location.id,
+        customer_id=later_customer.id,
+        service_type_id=service.id,
+        time=now + timedelta(hours=2),
+        ends_at=now + timedelta(hours=3),
+        phone=later_customer.phone,
+        email=later_customer.email,
+        status="confirmed",
+        guests=2,
+    )
+    db_session.add_all([current, later])
+    await db_session.commit()
+
+    opened = await client.post(
+        "/api/floor-plan/seatings",
+        headers=headers,
+        json={
+            "source_type": "reservation",
+            "source_id": str(current.id),
+            "table_ids": [table["id"]],
+        },
+    )
+    assert opened.status_code == 201, opened.text
+
+    planned = await client.put(
+        f"/api/floor-plan/reservations/{later.id}/tables",
+        headers=headers,
+        json={"table_ids": [table["id"]]},
+    )
+    assert planned.status_code == 200, planned.text
+
+    closed = await client.post(
+        f"/api/floor-plan/seatings/{opened.json()['id']}/close",
+        headers=headers,
+    )
+    assert closed.status_code == 200, closed.text
+    tables = await client.get("/api/floor-plan/tables", headers=headers)
+    assert tables.json()[0]["operational_state"] == "ready"
+
+
+@pytest.mark.asyncio
+async def test_qr_orders_use_one_active_seating_tab_and_require_settlement_before_departure(
+    client: AsyncClient, db_session: AsyncSession
+):
+    business, _, location, headers = await _tenant(db_session, slug="qr-flow")
+    _, table = await _area_and_table(client, headers, capacity=4)
+    service = ServiceType(business_id=business.id, name="Dinner", capacity=4)
+    customer = Customer(
+        business_id=business.id,
+        name="QR Guest",
+        phone="+14155550112",
+        email="qr@example.com",
+    )
+    menu = Menu(business_id=business.id, name="Drinks", is_active=True)
+    db_session.add_all([service, customer, menu])
+    await db_session.flush()
+    category = MenuCategory(menu_id=menu.id, business_id=business.id, name="Beer")
+    db_session.add(category)
+    await db_session.flush()
+    item = MenuItem(
+        category_id=category.id,
+        business_id=business.id,
+        name="Lager",
+        price=7,
+        routing_tag="bar",
+    )
+    reservation = Reservation(
+        business_id=business.id,
+        location_id=location.id,
+        customer_id=customer.id,
+        service_type_id=service.id,
+        time=datetime.now(timezone.utc) - timedelta(minutes=5),
+        ends_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        phone=customer.phone,
+        email=customer.email,
+        status="confirmed",
+        guests=2,
+    )
+    db_session.add_all([item, reservation])
+    await db_session.commit()
+    business_id = str(business.id)
+    item_id = str(item.id)
+    reservation_id = str(reservation.id)
+
+    opened = await client.post(
+        "/api/floor-plan/seatings",
+        headers=headers,
+        json={
+            "source_type": "reservation",
+            "source_id": reservation_id,
+            "table_ids": [table["id"]],
+        },
+    )
+    assert opened.status_code == 201, opened.text
+    seating_id = opened.json()["id"]
+
+    qr = await client.get(f"/api/floor-plan/tables/{table['id']}/qr", headers=headers)
+    assert qr.status_code == 200, qr.text
+    token = qr.json()["url"].split("table_token=", 1)[1]
+    payload = {
+        "table_token": token,
+        "items": [{"item_id": item_id, "quantity": 1}],
+        "idempotency_key": "qr-order-one",
+    }
+    missing_token = await client.post(
+        f"/api/ordering/{business_id}/orders",
+        json={**payload, "table_token": None, "idempotency_key": "missing-token"},
+    )
+    assert missing_token.status_code == 422
+    first = await client.post(f"/api/ordering/{business_id}/orders", json=payload)
+    second = await client.post(
+        f"/api/ordering/{business_id}/orders",
+        json={**payload, "idempotency_key": "qr-order-two"},
+    )
+    assert first.status_code == 201, first.text
+    assert second.status_code == 201, second.text
+    assert first.json()["table_id"] == table["id"]
+    assert first.json()["tab_id"] == second.json()["tab_id"]
+
+    tab_id = first.json()["tab_id"]
+    tab = await db_session.get(Tab, tab_id)
+    assert tab is not None and str(tab.seating_id) == seating_id and tab.opened_by is None
+    orders = list((await db_session.execute(select(Order).where(Order.tab_id == tab_id))).scalars())
+    assert len(orders) == 2
+    assert all(order.table_identifier is None for order in orders)
+
+    blocked_close = await client.post(
+        f"/api/floor-plan/seatings/{seating_id}/close", headers=headers
+    )
+    assert blocked_close.status_code == 409
+    settled = await client.post(
+        f"/api/tabs/{tab_id}/close", headers=headers, json={"settled_method": "card"}
+    )
+    assert settled.status_code == 200, settled.text
+    closed = await client.post(
+        f"/api/floor-plan/seatings/{seating_id}/close", headers=headers
+    )
+    assert closed.status_code == 200, closed.text
+
+    rotated = await client.post(
+        f"/api/floor-plan/tables/{table['id']}/qr/rotate", headers=headers
+    )
+    assert rotated.status_code == 200
+    stale = await client.post(
+        f"/api/ordering/{business_id}/orders",
+        json={**payload, "idempotency_key": "stale-token"},
+    )
+    assert stale.status_code == 422
 
 
 @pytest.mark.asyncio

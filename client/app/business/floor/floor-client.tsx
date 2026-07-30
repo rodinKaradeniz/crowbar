@@ -6,8 +6,10 @@ import {
   CheckCircle2,
   ChevronRight,
   CircleAlert,
+  Copy,
   Loader2,
   Plus,
+  ReceiptText,
   Sparkles,
   Users,
   Wifi,
@@ -34,8 +36,11 @@ import {
   clientGetFloorPlanCombinations,
   clientGetFloorPlanSettings,
   clientGetFloorPlanTables,
+  clientGetFloorPlanTableQr,
   clientOpenFloorPlanSeating,
+  clientOpenSeatingTab,
   clientReplaceFloorPlanAssignment,
+  clientRotateFloorPlanTableQr,
   clientUpdateFloorPlanSettings,
   clientUpdateFloorPlanTableState,
 } from "@/lib/client-api";
@@ -286,6 +291,8 @@ export default function FloorClient({ businessId, canManage, hasReservations, ha
   const [actionLoading, setActionLoading] = useState(false);
   const [outOfServiceReason, setOutOfServiceReason] = useState("");
   const [closeTarget, setCloseTarget] = useState<FloorPlanBoardTable | null>(null);
+  const [qrUrl, setQrUrl] = useState<string | null>(null);
+  const [qrRotateTarget, setQrRotateTarget] = useState<FloorPlanBoardTable | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -367,6 +374,45 @@ export default function FloorClient({ businessId, canManage, hasReservations, ha
     }
   };
 
+  const openSeatingTab = async (seatingId: string) => {
+    setActionLoading(true);
+    try {
+      const tab = await clientOpenSeatingTab(seatingId);
+      window.location.assign(`/business/tabs?tab=${encodeURIComponent(tab.id)}`);
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not open the tab.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const showTableQr = async (tableId: string) => {
+    setActionLoading(true);
+    try {
+      const qr = await clientGetFloorPlanTableQr(tableId);
+      setQrUrl(new URL(qr.url, window.location.origin).toString());
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not load the table QR link.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const rotateTableQr = async () => {
+    if (!qrRotateTarget) return;
+    setActionLoading(true);
+    try {
+      const qr = await clientRotateFloorPlanTableQr(qrRotateTarget.id);
+      setQrUrl(new URL(qr.url, window.location.origin).toString());
+      toast.success("The previous QR code no longer works.");
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not rotate the table QR code.");
+    } finally {
+      setActionLoading(false);
+      setQrRotateTarget(null);
+    }
+  };
+
   if (loading) return <div className="page-pad flex min-h-80 items-center justify-center text-sm text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading host board…</div>;
 
   return (
@@ -396,7 +442,7 @@ export default function FloorClient({ businessId, canManage, hasReservations, ha
                 ) : board.areas.map((area) => (
                   <section key={area.id}>
                     <div className="mb-3 flex items-baseline justify-between"><h2 className="text-lg font-semibold">{area.name}</h2><span className="figures text-xs text-muted-foreground">{area.tables.length} tables</span></div>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{area.tables.map((table) => <TableCard key={table.id} table={table} onClick={() => setSelectedTable(table)} />)}</div>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{area.tables.map((table) => <TableCard key={table.id} table={table} onClick={() => { setQrUrl(null); setSelectedTable(table); }} />)}</div>
                   </section>
                 ))}
               </div>
@@ -415,7 +461,8 @@ export default function FloorClient({ businessId, canManage, hasReservations, ha
           <div role="dialog" aria-modal="true" aria-label={`Table ${selectedTable.label}`} className="w-full rounded-t-xl border bg-background p-5 shadow-lg sm:max-w-md sm:rounded-xl" onMouseDown={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-3"><div><p className="eyebrow">{stateLabel(selectedTable.displayState)}</p><h2 className="mt-1 text-xl font-semibold">Table {selectedTable.label}</h2><p className="figures text-sm text-muted-foreground">{selectedTable.capacity} seats</p></div><Button variant="ghost" size="sm" onClick={() => setSelectedTable(null)}>Close</Button></div>
             <div className="mt-5 space-y-3">
-              {selectedTable.activeSeating ? <><p className="text-sm"><span className="font-medium">{selectedTable.activeSeating.source.name}</span> is currently seated here.</p><Button className="w-full" onClick={() => setCloseTarget(selectedTable)}><CheckCircle2 /> Close seating</Button></> : selectedTable.activeAssignment ? <><p className="text-sm"><span className="font-medium">{selectedTable.activeAssignment.name}</span> is assigned here.</p><Button className="w-full" onClick={() => startSelection(selectedTable.activeAssignment!, "seat", selectedTable.activeAssignment!.assignedTableIds)}><Users /> Seat party</Button></> : selectedTable.displayState === "cleaning" ? <><p className="text-sm text-muted-foreground">This table needs a quick reset before it can be seated.</p><Button className="w-full" onClick={() => void updateTableState(selectedTable, "ready")} disabled={actionLoading}><Sparkles /> Mark ready</Button></> : selectedTable.displayState === "out_of_service" ? <><p className="text-sm text-muted-foreground">{selectedTable.operationalStateReason || "Temporarily unavailable"}</p><Button className="w-full" onClick={() => void updateTableState(selectedTable, "ready")} disabled={actionLoading}>Return to service</Button></> : <><p className="text-sm text-muted-foreground">Choose an unassigned arrival or walk-in to seat here.</p>{availableParties.length ? <div className="space-y-2">{availableParties.map((party) => <Button key={party.sourceId} variant="outline" className="w-full justify-between" onClick={() => startSelection(party, "seat", [selectedTable.id])}><span className="truncate">{party.name}</span><ChevronRight /></Button>)}</div> : <p className="rounded-lg bg-muted/40 p-3 text-sm text-muted-foreground">No unassigned parties are waiting.</p>}</>}
+              {selectedTable.activeSeating ? <><p className="text-sm"><span className="font-medium">{selectedTable.activeSeating.source.name}</span> is currently seated here.</p><Button className="w-full" variant="outline" onClick={() => void openSeatingTab(selectedTable.activeSeating!.seatingId)} disabled={actionLoading}><ReceiptText /> {selectedTable.activeSeating.openTabId ? "Open tab" : "Start tab"}</Button>{selectedTable.activeSeating.openTabId ? <p className="rounded-lg bg-muted/40 p-3 text-sm text-muted-foreground">Settle the open tab before ending this seating.</p> : <Button className="w-full" onClick={() => setCloseTarget(selectedTable)}><CheckCircle2 /> Close seating</Button>}</> : selectedTable.activeAssignment ? <><p className="text-sm"><span className="font-medium">{selectedTable.activeAssignment.name}</span> is assigned here.</p><Button className="w-full" onClick={() => startSelection(selectedTable.activeAssignment!, "seat", selectedTable.activeAssignment!.assignedTableIds)}><Users /> Seat party</Button></> : selectedTable.displayState === "cleaning" ? <><p className="text-sm text-muted-foreground">This table needs a quick reset before it can be seated.</p><Button className="w-full" onClick={() => void updateTableState(selectedTable, "ready")} disabled={actionLoading}><Sparkles /> Mark ready</Button></> : selectedTable.displayState === "out_of_service" ? <><p className="text-sm text-muted-foreground">{selectedTable.operationalStateReason || "Temporarily unavailable"}</p><Button className="w-full" onClick={() => void updateTableState(selectedTable, "ready")} disabled={actionLoading}>Return to service</Button></> : <><p className="text-sm text-muted-foreground">Choose an unassigned arrival or walk-in to seat here.</p>{availableParties.length ? <div className="space-y-2">{availableParties.map((party) => <Button key={party.sourceId} variant="outline" className="w-full justify-between" onClick={() => startSelection(party, "seat", [selectedTable.id])}><span className="truncate">{party.name}</span><ChevronRight /></Button>)}</div> : <p className="rounded-lg bg-muted/40 p-3 text-sm text-muted-foreground">No unassigned parties are waiting.</p>}</>}
+              {canManage && <details className="rounded-lg border p-3"><summary className="cursor-pointer text-sm font-medium">Guest QR code</summary><p className="mt-2 text-xs text-muted-foreground">Guests can order only while this table has an active seating.</p><div className="mt-3 flex gap-2"><Button variant="outline" size="sm" onClick={() => void showTableQr(selectedTable.id)} disabled={actionLoading}>Show link</Button><Button variant="outline" size="sm" onClick={() => setQrRotateTarget(selectedTable)} disabled={actionLoading}>Rotate</Button></div>{qrUrl && <div className="mt-3 flex gap-2"><Input value={qrUrl} readOnly aria-label="Guest QR link" /><Button size="icon" variant="outline" aria-label="Copy guest QR link" onClick={() => void navigator.clipboard.writeText(qrUrl).then(() => toast.success("QR link copied."))}><Copy /></Button></div>}</details>}
               {selectedTable.operationalState === "ready" && !selectedTable.activeSeating && <details className="rounded-lg border p-3"><summary className="cursor-pointer text-sm font-medium">More table actions</summary><div className="mt-3 flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => void updateTableState(selectedTable, "cleaning")} disabled={actionLoading}><Sparkles /> Mark needs reset</Button></div><Textarea value={outOfServiceReason} onChange={(event) => setOutOfServiceReason(event.target.value)} className="mt-3 min-h-20" placeholder="Reason for temporary closure" /><Button variant="destructive" size="sm" className="mt-2" onClick={() => void updateTableState(selectedTable, "out_of_service")} disabled={actionLoading || !outOfServiceReason.trim()}><CircleAlert /> Take out of service</Button></details>}
             </div>
           </div>
@@ -424,6 +471,7 @@ export default function FloorClient({ businessId, canManage, hasReservations, ha
 
       <FloorPlanSeatingSheet key={`${selectedParty?.sourceId ?? "no-party"}-${selectionMode}-${selectionInitialTableIds.join("-")}`} open={seatingOpen} onOpenChange={setSeatingOpen} party={selectedParty} tables={allTables} initialTableIds={selectionInitialTableIds} canOverride={canManage} mode={selectionMode} submitting={actionLoading} onConfirm={(tableIds, reason) => void submitSelection(tableIds, reason)} />
       <ConfirmationDialog open={closeTarget !== null} onOpenChange={(open) => !open && setCloseTarget(null)} title="Close seating?" description="This completes the visit and returns each table to ready." confirmLabel="Close seating" onConfirm={() => void confirmCloseSeating()} />
+      <ConfirmationDialog open={qrRotateTarget !== null} onOpenChange={(open) => !open && setQrRotateTarget(null)} title="Rotate this table QR code?" description="The previously printed code will stop working immediately." confirmLabel="Rotate QR code" variant="destructive" onConfirm={() => void rotateTableQr()} />
     </div>
   );
 }

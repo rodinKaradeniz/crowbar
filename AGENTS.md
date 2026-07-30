@@ -106,12 +106,12 @@ protection; purchasing and cost control; then POS and payment integrations.
 Availability is complete locally; booking types can retain legacy count-guard
 compatibility or use shared cover capacity / atomic table allocation with a
 turn buffer. Floor plan/table management has its backend foundation,
-responsive Floor host board, manager setup UI, and reservation table planning.
-The next boundary is validating the completed service loop, then
-registered-table continuity for tabs and QR ordering.
+responsive Floor host board, manager setup UI, reservation table planning, and
+registered-table tab/QR ordering continuity. The next product stage is the
+guest CRM decision boundary.
 [docs/TODO.md](docs/TODO.md) owns every stage boundary and deferred item.
 
-Migrations 023–027 are local only. Railway remains at migrations 001–022; its
+Migrations 023–028 are local only. Railway remains at migrations 001–022; its
 partially provisioned rollout is intentionally shelved and must not resume
 without explicit user authorization. [docs/deployment.md](docs/deployment.md)
 owns the verified resume point.

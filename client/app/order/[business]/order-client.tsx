@@ -55,13 +55,12 @@ interface OrderClientProps {
 
 export default function OrderClient({ businessId, businessSlug, legalDrinkingAge }: OrderClientProps) {
   const searchParams = useSearchParams();
-  const table = searchParams.get("table");
+  const tableToken = searchParams.get("table_token");
 
   const [cart, setCart] = useState<CartItem[]>([]);
   // Happy-hour state carried from the menu page (server-decided). Display only —
   // the backend re-decides authoritatively at order placement.
   const [hhActive, setHhActive] = useState(false);
-  const [tableInput, setTableInput] = useState(table ?? "");
   const [notes, setNotes] = useState("");
   const [placing, setPlacing] = useState(false);
   // Age self-attestation (only surfaced when the cart contains an alcoholic item).
@@ -127,10 +126,14 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
   async function placeOrder() {
     if (cart.length === 0) return;
     if (cartHasAlcohol && !ageConfirmed) return;
+    if (!tableToken) {
+      alert("Scan the QR code on your table to place an order.");
+      return;
+    }
     setPlacing(true);
     try {
       const order = await clientPlaceOrder(businessId, {
-        tableIdentifier: tableInput.trim() || undefined,
+        tableToken,
         items: cart.map((ci) => ({
           itemId: ci.item.id,
           quantity: ci.quantity,
@@ -178,7 +181,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
             <div key={order.id} className="rounded-lg border bg-card p-5 space-y-4 fade-rise" style={{ animationDelay: "120ms" }}>
               <div className="flex items-center justify-between gap-3">
                 <p className="eyebrow">
-                  Order{order.tableIdentifier ? ` · Table ${order.tableIdentifier}` : ""}
+                  Order
                 </p>
                 <span
                   className={cn(
@@ -220,7 +223,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
         )}
 
         <div className="mt-8">
-          <Link href={`/menu/${businessSlug}${table ? `?table=${encodeURIComponent(table)}` : ""}`}>
+          <Link href={`/menu/${businessSlug}${tableToken ? `?table_token=${encodeURIComponent(tableToken)}` : ""}`}>
             <Button variant="outline" className="w-full">
               Order more
             </Button>
@@ -236,7 +239,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
     <div className="min-h-screen bg-background pb-32">
       <NightTheme />
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b px-6 py-3 flex items-center gap-2">
-        <Link href={`/menu/${businessSlug}${table ? `?table=${encodeURIComponent(table)}` : ""}`}
+        <Link href={`/menu/${businessSlug}${tableToken ? `?table_token=${encodeURIComponent(tableToken)}` : ""}`}
           className="eyebrow text-muted-foreground hover:text-primary transition-colors"
         >
           ← Back to menu
@@ -252,7 +255,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
         {cart.length === 0 ? (
           <div className="text-center py-10">
             <p className="text-muted-foreground text-sm">Your cart is empty.</p>
-            <Link href={`/menu/${businessSlug}${table ? `?table=${encodeURIComponent(table)}` : ""}`}>
+            <Link href={`/menu/${businessSlug}${tableToken ? `?table_token=${encodeURIComponent(tableToken)}` : ""}`}>
               <Button variant="outline" className="mt-4">Browse menu</Button>
             </Link>
           </div>
@@ -294,14 +297,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
             </div>
 
             <div className="space-y-4 fade-rise" style={{ animationDelay: "160ms" }}>
-              <div className="space-y-1.5">
-                <Label className="eyebrow">Table number (optional)</Label>
-                <Input
-                  value={tableInput}
-                  onChange={(e) => setTableInput(e.target.value)}
-                  placeholder="e.g. 4"
-                />
-              </div>
+              {!tableToken && <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">Scan the QR code on your table to place this order.</p>}
               <div className="space-y-1.5">
                 <Label className="eyebrow">Order notes (optional)</Label>
                 <Input
@@ -340,6 +336,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
                   disabled={
                     placing ||
                     cart.length === 0 ||
+                    !tableToken ||
                     (cartHasAlcohol && !ageConfirmed)
                   }
                 >

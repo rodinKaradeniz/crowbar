@@ -229,6 +229,13 @@ export interface FloorPlanTable {
   isActive: boolean;
 }
 
+export interface FloorPlanTableQr {
+  tableId: string;
+  label: string;
+  revision: number;
+  url: string;
+}
+
 export interface FloorPlanCombination {
   id: string;
   businessId: string;
@@ -272,6 +279,7 @@ export interface FloorPlanSeating {
   source: FloorPlanParty;
   tableIds: string[];
   openedAt: string;
+  openTabId?: string;
 }
 
 export interface FloorPlanBoardTable {
@@ -412,6 +420,8 @@ export interface Order {
   id: string;
   businessId: string;
   locationId?: string;
+  tableId?: string;
+  tabId?: string;
   sessionToken: string;
   tableIdentifier?: string;
   status: "received" | "preparing" | "ready" | "served" | "cancelled";
@@ -441,6 +451,7 @@ export interface Tab {
   id: string;
   businessId: string;
   tableId?: string;
+  seatingId?: string;
   customerId?: string;
   status: "open" | "closed";
   channel: string;

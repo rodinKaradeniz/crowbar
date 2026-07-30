@@ -23,10 +23,11 @@ class TabResponse(AppBaseModel):
     id: UUID
     business_id: UUID
     table_id: UUID | None = None
+    seating_id: UUID | None = None
     customer_id: UUID | None = None
     status: str
     channel: str
-    opened_by: UUID
+    opened_by: UUID | None = None
     opened_at: datetime
     closed_by: UUID | None = None
     closed_at: datetime | None = None
@@ -34,4 +35,3 @@ class TabResponse(AppBaseModel):
     # Computed live over associated orders — not stored on the tab row.
     total: Decimal
     orders: list[OrderResponse] = []
-

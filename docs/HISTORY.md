@@ -628,6 +628,32 @@ optional staff-controlled “needs reset” signal rather than a compulsory step
 `client/app/business/profile/types/`,
 `client/app/business/onboarding/`
 
+## 2026-07-29 — Registered tables own the dine-in tab and QR journey
+
+**Context:** The original ordering flow accepted a guest-typed table label,
+while the tab model's table reference was not validated or linked to a real
+visit. That permitted orders that could not be tied to an occupied table and
+made departure independent of an unpaid tab.
+
+**Decision:** Keep legacy labels for historical display, but require new public
+dine-in orders to carry a server-signed, revision-bound registered-table QR
+credential. It resolves only for an active seating. Add a nullable seating
+link to tabs and enforce one open tab per seating; QR and staff rounds reuse
+it. Owners/managers can rotate a table QR revision. A seating cannot close
+while its tab remains open, so staff settle before recording departure.
+
+**Consequences:** Multi-table seatings share one tab through the seating rather
+than selecting an arbitrary primary table. The Floor board is the staff entry
+point for starting/opening tabs, while the Tabs surface handles orders and
+settlement. QR credentials become invalid after rotation, table archival, or
+the end of the seating. No public client can create a new free-text table
+assignment by posting directly to the API.
+
+**References:** `server/db/migrations/028_seating_tab_qr_continuity.sql`,
+`server/app/services/table_qr_service.py`, `server/app/services/tab_service.py`,
+`server/app/services/floor_plan_service.py`, `client/app/business/floor/`,
+`client/app/order/[business]/`
+
 ## Entry Template
 
 ```markdown

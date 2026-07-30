@@ -1133,6 +1133,7 @@ function toFloorPlanSeating(value: Record<string, unknown>): FloorPlanSeating {
     source: toFloorPlanParty(value.source as Record<string, unknown>),
     tableIds: value.table_ids as string[],
     openedAt: value.opened_at as string,
+    openTabId: (value.open_tab_id as string) || undefined,
   };
 }
 
@@ -1291,6 +1292,28 @@ export async function clientUpdateFloorPlanTableState(
     { method: "PUT", body: JSON.stringify(data) },
   );
   return toFloorPlanTable(result);
+}
+
+function toFloorPlanTableQr(value: Record<string, unknown>) {
+  return {
+    tableId: value.table_id as string,
+    label: value.label as string,
+    revision: value.revision as number,
+    url: value.url as string,
+  };
+}
+
+export async function clientGetFloorPlanTableQr(tableId: string) {
+  const result = await authFetch<Record<string, unknown>>(`/floor-plan/tables/${tableId}/qr`);
+  return toFloorPlanTableQr(result);
+}
+
+export async function clientRotateFloorPlanTableQr(tableId: string) {
+  const result = await authFetch<Record<string, unknown>>(
+    `/floor-plan/tables/${tableId}/qr/rotate`,
+    { method: "POST" },
+  );
+  return toFloorPlanTableQr(result);
 }
 
 export async function clientArchiveFloorPlanTable(tableId: string): Promise<void> {
@@ -1479,6 +1502,8 @@ function toOrder(o: Record<string, unknown>): Order {
     id: o.id as string,
     businessId: o.business_id as string,
     locationId: (o.location_id as string) || undefined,
+    tableId: (o.table_id as string) || undefined,
+    tabId: (o.tab_id as string) || undefined,
     sessionToken: o.session_token as string,
     tableIdentifier: (o.table_identifier as string) || undefined,
     status: o.status as Order["status"],
@@ -1530,7 +1555,7 @@ export async function clientGetMenu(businessId: string): Promise<Menu | null> {
 export async function clientPlaceOrder(
   businessId: string,
   data: {
-    tableIdentifier?: string;
+    tableToken: string;
     items: Array<{
       itemId: string;
       quantity: number;
@@ -1543,7 +1568,7 @@ export async function clientPlaceOrder(
   },
 ): Promise<Order> {
   const body = {
-    table_identifier: data.tableIdentifier,
+    table_token: data.tableToken,
     items: data.items.map((i) => ({
       item_id: i.itemId,
       quantity: i.quantity,
@@ -1611,6 +1636,7 @@ function toTab(t: Record<string, unknown>): Tab {
     id: t.id as string,
     businessId: t.business_id as string,
     tableId: (t.table_id as string) || undefined,
+    seatingId: (t.seating_id as string) || undefined,
     customerId: (t.customer_id as string) || undefined,
     status: t.status as Tab["status"],
     channel: t.channel as string,
@@ -1636,6 +1662,13 @@ export async function clientOpenTab(): Promise<Tab> {
   const result = await authFetch<Record<string, unknown>>(`/tabs`, {
     method: "POST",
     body: JSON.stringify({}),
+  });
+  return toTab(result);
+}
+
+export async function clientOpenSeatingTab(seatingId: string): Promise<Tab> {
+  const result = await authFetch<Record<string, unknown>>(`/tabs/seatings/${seatingId}`, {
+    method: "POST",
   });
   return toTab(result);
 }

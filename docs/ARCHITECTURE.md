@@ -344,6 +344,19 @@ path that seats a queue party, so it opens a real `table_seating` instead of
 only changing queue status. The Queue page keeps notification and no-show work,
 but its former table-less accept/seat commands are removed.
 
+Migration 028 completes registered-table order continuity without rewriting
+historical order labels. A table's existing `qr_token_revision` is signed with
+the server secret into an opaque credential; the public order route verifies
+the signature, business, active table, revision, and an open seating before it
+creates an order. `tabs.seating_id` establishes one open tab per seating via a
+partial unique index. QR rounds create or reuse that tab under a seating row
+lock; staff can do the same through the authenticated Floor → Tabs handoff.
+Orders persist the authoritative registered `table_id` and `tab_id`; their
+legacy `table_identifier` stays nullable read-only compatibility data. Closing
+a seating locks and rejects an open seating tab, so settlement precedes the
+source visit's completion. QR rotation increments the table revision and
+invalidates earlier credentials without storing a reusable public secret.
+
 ### Inventory and order fulfillment
 
 - Countable inventory uses `unit_type=each`.
@@ -376,7 +389,7 @@ Backend integration tests do not run migrations. Their autouse fixture creates
 and drops ORM metadata in a dedicated `crowbar_test` PostgreSQL database. This
 means both migrations and ORM metadata require deliberate validation.
 
-Migrations 023–025 are implemented and validated locally against disposable
+Migrations 023–028 are implemented and validated locally against disposable
 fresh databases (023 also with the canonical seed). Railway remains at
 migrations 001–022 while deployment is shelved.
 

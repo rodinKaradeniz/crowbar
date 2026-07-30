@@ -109,6 +109,13 @@ class TableResponse(AppBaseModel):
     updated_at: datetime
 
 
+class TableQrResponse(AppBaseModel):
+    table_id: UUID
+    label: str
+    revision: int
+    url: str
+
+
 class CombinationCreate(AppBaseModel):
     name: str = Field(min_length=1, max_length=100)
     table_ids: list[UUID] = Field(min_length=2)
@@ -252,6 +259,7 @@ class BoardSeatingResponse(AppBaseModel):
     source: BoardPartyResponse
     table_ids: list[UUID]
     opened_at: datetime
+    open_tab_id: UUID | None = None
 
 
 class BoardTableResponse(AppBaseModel):

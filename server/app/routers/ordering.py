@@ -46,7 +46,14 @@ from app.schemas.recipe import (
     RecipeIngredientResponse,
     RecipeSetRequest,
 )
-from app.services import happy_hour_service, menu_service, order_service, recipe_service
+from app.services import (
+    happy_hour_service,
+    menu_service,
+    order_service,
+    recipe_service,
+    tab_service,
+    table_qr_service,
+)
 from app.services.order_ws_manager import manager
 from app.services.websocket_auth import authorize_staff_websocket
 
@@ -116,10 +123,38 @@ async def place_order(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="This business is not currently accepting orders.",
         )
+    if body.table_identifier:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Table QR ordering no longer accepts a typed table label",
+        )
+    if not body.table_token:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Scan the table QR code to place a dine-in order",
+        )
     # Public endpoint = customer self-service channel → enforce the age gate.
     try:
-        order = await order_service.place_order(db, business_id, body)
-    except order_service.AgeConfirmationRequired as e:
+        table, seating = await table_qr_service.resolve_active_table_seating(
+            db, business_id=business_id, token=body.table_token
+        )
+        tab = await tab_service.open_seating_tab(
+            db,
+            business_id=business_id,
+            seating_id=seating.id,
+            opened_by=None,
+            table_id=table.id,
+            channel="qr",
+        )
+        order = await order_service.place_order(
+            db,
+            business_id,
+            body,
+            table_id=table.id,
+            tab_id=tab.id,
+            channel="qr",
+        )
+    except (order_service.AgeConfirmationRequired, table_qr_service.TableQrError) as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
         )
@@ -127,7 +162,12 @@ async def place_order(
     await publish(DomainEvent(
         event_type="order.placed",
         business_id=str(business_id),
-        payload={"order_id": str(order.id)},
+        payload={"order_id": str(order.id), "tab_id": str(tab.id)},
+    ))
+    await publish(DomainEvent(
+        event_type="floor_plan.tab_updated",
+        business_id=str(business_id),
+        payload={"tab_id": str(tab.id), "seating_id": str(seating.id)},
     ))
     return order
 

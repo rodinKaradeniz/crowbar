@@ -17,6 +17,7 @@ from app.models.table_area import TableArea
 from app.models.table_assignment import QueueTableAssignment, ReservationTableAssignment
 from app.models.table_combination import TableCombination, TableCombinationMember
 from app.models.table_seating import TableSeating, TableSeatingTable
+from app.models.tab import Tab
 from app.schemas.floor_plan import (
     BoardAreaResponse,
     BoardPartyResponse,
@@ -25,6 +26,7 @@ from app.schemas.floor_plan import (
     FloorPlanBoardResponse,
 )
 from app.services.location_service import get_primary_location as find_primary_location
+from app.services.table_qr_service import issue_table_token
 
 
 class FloorPlanError(Exception):
@@ -297,6 +299,22 @@ async def set_table_state(
     table.operational_state_changed_at = datetime.now(timezone.utc)
     await db.flush()
     return table
+
+
+async def issue_table_qr(
+    db: AsyncSession,
+    business_id: UUID,
+    table_id: UUID,
+    *,
+    rotate: bool = False,
+) -> tuple[Table, str]:
+    table = await _get_table(db, business_id, table_id, lock=rotate)
+    if not table.is_active:
+        raise _conflict("Inactive tables cannot receive a QR code")
+    if rotate:
+        table.qr_token_revision += 1
+        await db.flush()
+    return table, issue_table_token(table)
 
 
 async def _locked_tables(db, business_id: UUID, table_ids: list[UUID]) -> list[Table]:
@@ -683,6 +701,17 @@ async def close_seating(db, business_id: UUID, seating_id: UUID, actor_id: UUID)
         raise _not_found("Seating")
     if seating.status != "open":
         raise _conflict("Seating is already closed")
+    open_tab = await db.scalar(
+        select(Tab.id)
+        .where(
+            Tab.business_id == business_id,
+            Tab.seating_id == seating.id,
+            Tab.status == "open",
+        )
+        .with_for_update()
+    )
+    if open_tab:
+        raise _conflict("Settle the open tab before ending this seating")
     now = datetime.now(timezone.utc)
     seating.status = "closed"
     seating.closed_by = actor_id
@@ -992,6 +1021,18 @@ async def get_board(
             )
         ).scalars().unique().all()
     )
+    open_tabs_by_seating = {
+        seating_id: tab_id
+        for seating_id, tab_id in (
+            await db.execute(
+                select(Tab.seating_id, Tab.id).where(
+                    Tab.business_id == business.id,
+                    Tab.status == "open",
+                    Tab.seating_id.is_not(None),
+                )
+            )
+        ).all()
+    }
     seating_reservation_ids = [
         item.reservation_id
         for item in seatings
@@ -1043,6 +1084,7 @@ async def get_board(
             source=source,
             table_ids=seating_table_ids,
             opened_at=seating.opened_at,
+            open_tab_id=open_tabs_by_seating.get(seating.id),
         )
         for table_id in seating_table_ids:
             seatings_by_table[table_id] = response

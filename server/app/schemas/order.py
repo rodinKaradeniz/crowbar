@@ -41,7 +41,10 @@ class OrderLineItemResponse(AppBaseModel):
 # ─── Orders ───────────────────────────────────────────────────────────────────
 
 class OrderPlaceRequest(AppBaseModel):
+    # Legacy compatibility only. New public dine-in ordering resolves a signed
+    # registered-table credential instead of accepting a browser-entered label.
     table_identifier: str | None = Field(None, max_length=100)
+    table_token: str | None = Field(None, min_length=16, max_length=500)
     items: list[OrderLineItemRequest] = Field(..., min_length=1)
     notes: str | None = None
     idempotency_key: str = Field(..., min_length=1, max_length=100)
@@ -68,6 +71,8 @@ class OrderResponse(AppBaseModel):
     id: UUID
     business_id: UUID
     location_id: UUID | None = None
+    table_id: UUID | None = None
+    tab_id: UUID | None = None
     session_token: str
     table_identifier: str | None = None
     status: str
@@ -77,4 +82,3 @@ class OrderResponse(AppBaseModel):
     placed_at: datetime
     line_items: list[OrderLineItemResponse] = []
     status_timeline: list[OrderStatusTimelineResponse] = []
-

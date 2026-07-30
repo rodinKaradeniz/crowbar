@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Plus, RefreshCw, Receipt } from "lucide-react";
 
@@ -29,7 +30,6 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import {
   clientListTabs,
-  clientOpenTab,
   clientGetTab,
   clientCloseTab,
 } from "@/lib/client-api";
@@ -54,6 +54,8 @@ export function TabsClient({ businessId }: { businessId: string }) {
   const [closeOpen, setCloseOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [method, setMethod] = useState<TabSettledMethod>("card");
+  const searchParams = useSearchParams();
+  const requestedTabId = searchParams.get("tab");
 
   const selected = tabs.find((t) => t.id === selectedId) ?? null;
 
@@ -76,20 +78,6 @@ export function TabsClient({ businessId }: { businessId: string }) {
     });
   }
 
-  async function handleOpenTab() {
-    setBusy(true);
-    try {
-      const tab = await clientOpenTab();
-      upsertTab(tab);
-      setSelectedId(tab.id);
-      toast.success("Tab opened");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to open tab");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function handleRefresh(tabId: string) {
     setBusy(true);
     try {
@@ -101,6 +89,13 @@ export function TabsClient({ businessId }: { businessId: string }) {
       setBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (!requestedTabId) return;
+    void handleRefresh(requestedTabId).then(() => setSelectedId(requestedTabId));
+  // The query is a one-time navigation target; changing `tabs` must not refetch.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedTabId]);
 
   async function handleClose() {
     if (!selected) return;
@@ -126,17 +121,13 @@ export function TabsClient({ businessId }: { businessId: string }) {
             Group multiple orders under one running total and settle at the end.
           </p>
         </div>
-        <Button onClick={handleOpenTab} disabled={busy}>
-          <Plus className="size-4" />
-          Open new tab
-        </Button>
       </div>
 
       {tabs.length === 0 ? (
         <EmptyState
           icon={Receipt}
           title="No open tabs"
-          description="Open a tab to start grouping orders under a single running total."
+          description="Start a tab from an occupied table on the Floor board."
         />
       ) : (
         <div className="grid gap-6 md:grid-cols-[280px_1fr]">
@@ -180,6 +171,7 @@ export function TabsClient({ businessId }: { businessId: string }) {
                   </CardTitle>
                   <p className="text-xs text-muted-foreground mt-1">
                     Opened {new Date(selected.openedAt).toLocaleString()}
+                    {selected.seatingId ? " · seating tab" : " · standalone tab"}
                     {selected.settledMethod
                       ? ` · settled by ${selected.settledMethod}`
                       : ""}

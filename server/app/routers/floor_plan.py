@@ -43,6 +43,7 @@ from app.schemas.floor_plan import (
     TableAssignmentResponse,
     TableCreate,
     TableResponse,
+    TableQrResponse,
     TableStateUpdate,
     TableUpdate,
 )
@@ -332,6 +333,43 @@ async def set_table_state(
         location_id=table.location_id,
     )
     return table
+
+
+async def _table_qr_response(
+    db: AsyncSession, business: Business, table_id: UUID, *, rotate: bool = False
+) -> TableQrResponse:
+    table, token = await floor_plan_service.issue_table_qr(
+        db, business.id, table_id, rotate=rotate
+    )
+    return TableQrResponse(
+        table_id=table.id,
+        label=table.label,
+        revision=table.qr_token_revision,
+        url=f"/menu/{business.slug}?table_token={token}",
+    )
+
+
+@router.get("/tables/{table_id}/qr", response_model=TableQrResponse)
+async def get_table_qr(
+    table_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    business: Business = Depends(get_current_business),
+    _: User = Depends(require_roles("owner", "manager")),
+):
+    return await _table_qr_response(db, business, table_id)
+
+
+@router.post("/tables/{table_id}/qr/rotate", response_model=TableQrResponse)
+async def rotate_table_qr(
+    table_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    business: Business = Depends(get_current_business),
+    _: User = Depends(require_roles("owner", "manager")),
+):
+    response = await _table_qr_response(db, business, table_id, rotate=True)
+    await db.commit()
+    await _publish_change("table.qr_rotated", business.id, resource_id=table_id)
+    return response
 
 
 @router.get("/combinations", response_model=list[CombinationResponse])

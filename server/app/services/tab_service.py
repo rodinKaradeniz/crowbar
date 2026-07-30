@@ -18,7 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.order import Order
+from app.models.table import Table
 from app.models.tab import Tab
+from app.models.table_seating import TableSeating, TableSeatingTable
 from app.schemas.order import OrderPlaceRequest
 from app.services import order_service
 
@@ -26,11 +28,22 @@ from app.services import order_service
 async def open_tab(
     db: AsyncSession,
     business_id: UUID,
-    opened_by: UUID,
+    opened_by: UUID | None,
     table_id: UUID | None = None,
     customer_id: UUID | None = None,
     channel: str = "staff",
 ) -> Tab:
+    if table_id is not None:
+        table = await db.scalar(
+            select(Table).where(
+                Table.id == table_id,
+                Table.business_id == business_id,
+                Table.is_active.is_(True),
+                Table.deleted_at.is_(None),
+            )
+        )
+        if table is None:
+            raise ValueError("Table not found")
     tab = Tab(
         business_id=business_id,
         table_id=table_id,
@@ -43,6 +56,76 @@ async def open_tab(
     await db.flush()
     await db.refresh(tab)
     return tab
+
+
+async def open_seating_tab(
+    db: AsyncSession,
+    *,
+    business_id: UUID,
+    seating_id: UUID,
+    opened_by: UUID | None,
+    table_id: UUID | None = None,
+    channel: str,
+) -> Tab:
+    """Return a seating's one open tab, creating it under the seating lock."""
+    seating = await db.scalar(
+        select(TableSeating)
+        .where(
+            TableSeating.id == seating_id,
+            TableSeating.business_id == business_id,
+        )
+        .with_for_update()
+    )
+    if seating is None:
+        raise ValueError("Seating not found")
+    if seating.status != "open":
+        raise ValueError("This seating has already ended")
+    tab = await db.scalar(
+        select(Tab).where(
+            Tab.business_id == business_id,
+            Tab.seating_id == seating.id,
+            Tab.status == "open",
+        )
+    )
+    if tab is not None:
+        return tab
+    seating_table_ids = list(
+        (
+            await db.execute(
+                select(TableSeatingTable.table_id).where(
+                    TableSeatingTable.seating_id == seating.id
+                )
+            )
+        ).scalars().all()
+    )
+    if table_id is not None and table_id not in seating_table_ids:
+        raise ValueError("Table is not part of this seating")
+    tab = Tab(
+        business_id=business_id,
+        seating_id=seating.id,
+        table_id=table_id or seating_table_ids[0],
+        channel=channel,
+        opened_by=opened_by,
+        status="open",
+    )
+    db.add(tab)
+    await db.flush()
+    await db.refresh(tab)
+    return tab
+
+
+async def active_seating_for_table(
+    db: AsyncSession, *, business_id: UUID, table_id: UUID
+) -> UUID | None:
+    return await db.scalar(
+        select(TableSeating.id)
+        .join(TableSeatingTable, TableSeatingTable.seating_id == TableSeating.id)
+        .where(
+            TableSeating.business_id == business_id,
+            TableSeatingTable.table_id == table_id,
+            TableSeating.status == "open",
+        )
+    )
 
 
 async def get_tab(db: AsyncSession, business_id: UUID, tab_id: UUID) -> Tab | None:
@@ -98,11 +181,19 @@ async def add_order_to_tab(
 
     Callers must validate that the tab exists and is open (see router).
     """
+    tab = await get_tab(db, business_id, tab_id)
+    if tab is None or tab.status != "open":
+        raise ValueError("Tab is not open")
     # Staff-entered order (in-person) — skip the customer self-service age gate.
     order = await order_service.place_order(
-        db, business_id, request, require_age_confirmation=False
+        db,
+        business_id,
+        request,
+        require_age_confirmation=False,
+        table_id=tab.table_id,
+        tab_id=tab_id,
+        channel="staff",
     )
-    order.tab_id = tab_id
     await db.flush()
     await db.refresh(order, ["line_items", "status_timeline"])
     return order

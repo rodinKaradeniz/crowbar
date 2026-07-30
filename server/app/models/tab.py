@@ -25,6 +25,11 @@ class Tab(Base, UUIDMixin, TimestampMixin):
         ForeignKey("tables.id", ondelete="SET NULL"),
         nullable=True,
     )
+    seating_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("table_seatings.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
     customer_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("customers.id", ondelete="SET NULL"),
@@ -33,10 +38,10 @@ class Tab(Base, UUIDMixin, TimestampMixin):
     status: Mapped[str] = mapped_column(String(16), default="open", nullable=False)
     # status: open | closed
     channel: Mapped[str] = mapped_column(String(16), default="staff", nullable=False)
-    opened_by: Mapped[uuid.UUID] = mapped_column(
+    opened_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id"),
-        nullable=False,
+        nullable=True,
     )
     opened_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

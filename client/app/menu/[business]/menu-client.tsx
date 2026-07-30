@@ -36,7 +36,7 @@ interface MenuClientProps {
 
 export default function MenuClient({ businessId, businessSlug }: MenuClientProps) {
   const searchParams = useSearchParams();
-  const table = searchParams.get("table");
+  const tableToken = searchParams.get("table_token");
 
   const [menu, setMenu] = useState<Menu | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,10 +84,6 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
     setSelectedItem(null);
   }
 
-  function removeFromCart(index: number) {
-    setCart((prev) => prev.filter((_, i) => i !== index));
-  }
-
   // Happy hour is decided server-side (menu.happyHourActive). When active, an
   // item with happyHourPrice set is displayed and totalled at the lower price.
   const hhActive = menu?.happyHourActive ?? false;
@@ -123,7 +119,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
 
       {/* Masthead — set like the cover of a printed list */}
       <header className="px-6 pt-10 pb-6 text-center fade-rise">
-        {table && <p className="eyebrow text-brass mb-2">Table {table}</p>}
+        {tableToken && <p className="eyebrow text-brass mb-2">Table ordering</p>}
         <h1 className="font-display text-3xl tracking-tight">{menu.name}</h1>
         <div className="rule-double mt-5 mx-auto max-w-36" />
       </header>
@@ -215,9 +211,9 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
         <div className="fixed bottom-0 inset-x-0 z-20 bg-background/95 backdrop-blur">
           <div className="rule-double" />
           <div className="p-4 max-w-xl mx-auto">
-            {isAcceptingOrders ? (
+            {isAcceptingOrders && tableToken ? (
               <Link
-                href={`/order/${businessSlug}${table ? `?table=${encodeURIComponent(table)}` : ""}`}
+                href={`/order/${businessSlug}${tableToken ? `?table_token=${encodeURIComponent(tableToken)}` : ""}`}
                 onClick={() => {
                   if (typeof window !== "undefined") {
                     sessionStorage.setItem(`cart_${businessSlug}`, JSON.stringify(cart));
@@ -236,7 +232,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
             ) : (
               <Button className="w-full" size="lg" disabled>
                 <ShoppingCart className="h-5 w-5 mr-2" />
-                Ordering unavailable
+                {isAcceptingOrders ? "Scan your table QR to order" : "Ordering unavailable"}
               </Button>
             )}
           </div>

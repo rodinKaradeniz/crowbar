@@ -101,7 +101,7 @@ below; it did not promote them ahead of the current availability stage.
   rescheduling reuse the same resource checks; exact turn-buffer boundaries are
   valid. Onboarding asks how the first service holds capacity.
 
-### 2. Floor plan and table management — in progress
+### 2. Floor plan and table management — complete
 
 - **Complete — operational domain contract and backend foundation:** Every
   business has a primary-location lifecycle. Areas own registered tables with
@@ -121,7 +121,7 @@ below; it did not promote them ahead of the current availability stage.
   location, and all floor-plan mutations commit before publishing invalidation
   events. Staff WebSockets use short-lived business-bound credentials and only
   invalidate the board; HTTP remains the authoritative fallback.
-- **In progress — host service board and management UI:** The authenticated
+- **Complete — host service board and management UI:** The authenticated
   Floor workspace now consumes the authoritative board with responsive
   area/table cards, unassigned reservations, queue parties, occupied,
   cleaning, temporary-closure, and availability actions. Its shared table
@@ -129,13 +129,15 @@ below; it did not promote them ahead of the current availability stage.
   removed table-less accept/seat commands. Owners/managers configure areas,
   tables, combinations, and service-day cutoff. Reservations and Schedule
   details now expose planned assignment, reassignment, and removal through the
-  same table selector. Validate the completed service loop with realistic host
-  workflows before calling this stage complete.
-- **Ready — ordering and tab continuity:** Replace new free-form dine-in table
-  identifiers with registered business-scoped tables and opaque, revisioned QR
-  tokens. Validate tab tables within the tenant and carry the same table and
-  guest journey through seating, tab, orders, and departure. Historical order
-  labels remain read-only compatibility data.
+  same table selector. Focused integration coverage validates the service loop,
+  including planning a later reservation on an occupied table and returning it
+  to ready when the current seating closes.
+- **Complete — ordering and tab continuity:** Migration 028 keeps historical
+  free-text order labels read-only while new public dine-in orders require an
+  opaque, revisioned credential for a registered table. The server validates
+  the credential, active table, tenant, and active seating; QR and staff rounds
+  share the seating's sole open tab. Owners/managers can rotate a table link,
+  while Floor starts/opens tabs and requires settlement before departure.
 - **Deferred within this stage — visual editor and richer service stages:** Add
   drag-and-drop geometry, turn-time assistance, and richer meal stages only
   after the area-based service loop is proven. Crowbar-owned stages must not
