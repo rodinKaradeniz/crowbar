@@ -32,6 +32,7 @@ import {
   MenuItemStockInfo,
   RecipeIngredient,
   Reservation,
+  ReservationWaitlistEntry,
   ServiceType,
   StockMovement,
   Tab,
@@ -225,6 +226,20 @@ function toReservation(r: Record<string, unknown>): Reservation {
     reconfirmedAt: (r.reconfirmed_at as string) || undefined,
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
+  };
+}
+
+function toReservationWaitlistEntry(entry: Record<string, unknown>): ReservationWaitlistEntry {
+  return {
+    id: entry.id as string, businessId: entry.business_id as string,
+    serviceTypeId: entry.service_type_id as string, customerId: entry.customer_id as string,
+    requestedStartsAt: entry.requested_starts_at as string, flexibleUntil: entry.flexible_until as string,
+    guests: entry.guests as number, status: entry.status as ReservationWaitlistEntry["status"],
+    offeredAt: (entry.offered_at as string) || undefined,
+    offeredReservationTime: (entry.offered_reservation_time as string) || undefined,
+    offerExpiresAt: (entry.offer_expires_at as string) || undefined,
+    acceptedAt: (entry.accepted_at as string) || undefined,
+    createdAt: entry.created_at as string, updatedAt: entry.updated_at as string,
   };
 }
 
@@ -685,6 +700,29 @@ export async function clientReschedulePublicReservation(token: string, data: {
 
 export async function clientAcceptWaitlistOffer(token: string): Promise<Reservation> {
   return toReservation(await clientFetch<Record<string, unknown>>(`/reservations/waitlist/offers/${encodeURIComponent(token)}/accept`, { method: "POST" }));
+}
+
+export interface ReservationWaitlistCreateInput {
+  businessId: string; serviceTypeId: string; requestedStartsAt: string; flexibleUntil: string;
+  guests: number; name: string; phone: string; email: string;
+}
+
+function waitlistPayload(data: ReservationWaitlistCreateInput) {
+  return { business_id: data.businessId, service_type_id: data.serviceTypeId,
+    requested_starts_at: data.requestedStartsAt, flexible_until: data.flexibleUntil,
+    guests: data.guests, name: data.name, phone: data.phone, email: data.email };
+}
+
+export async function clientCreatePublicReservationWaitlist(data: ReservationWaitlistCreateInput): Promise<ReservationWaitlistEntry> {
+  return toReservationWaitlistEntry(await clientFetch<Record<string, unknown>>( "/reservations/waitlist/public", { method: "POST", body: JSON.stringify(waitlistPayload(data)) }));
+}
+
+export async function clientCreateReservationWaitlist(data: ReservationWaitlistCreateInput): Promise<ReservationWaitlistEntry> {
+  return toReservationWaitlistEntry(await authFetch<Record<string, unknown>>( "/reservations/waitlist", { method: "POST", body: JSON.stringify(waitlistPayload(data)) }));
+}
+
+export async function clientOfferReservationWaitlist(entryId: string, reservationTime: string): Promise<ReservationWaitlistEntry> {
+  return toReservationWaitlistEntry(await authFetch<Record<string, unknown>>( `/reservations/waitlist/${entryId}/offer`, { method: "POST", body: JSON.stringify({ reservation_time: reservationTime }) }));
 }
 
 // ─── Guest CRM ──────────────────────────────────────────────────────────────

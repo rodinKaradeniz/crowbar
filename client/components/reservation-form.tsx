@@ -26,6 +26,7 @@ import { AvailabilitySlot, ServiceType } from "@/types";
 import {
   ClientApiError,
   clientCreatePublicReservation,
+  clientCreatePublicReservationWaitlist,
   clientGetAvailability,
 } from "@/lib/client-api";
 import { toast } from "sonner";
@@ -34,6 +35,7 @@ import {
   formatSlotDate,
   formatSlotTime,
   getAvailabilityAlternatives,
+  venueLocalDateTimeToIso,
 } from "@/lib/availability";
 
 interface ReservationFormProps {
@@ -65,7 +67,7 @@ export function ReservationForm({
     businessTimezone,
   );
   const [step, setStep] = useState<
-    "type" | "datetime" | "info" | "confirmation" | "success"
+    "type" | "datetime" | "info" | "confirmation" | "success" | "waitlist" | "waitlist-success"
   >(preselectedServiceTypeId ? "datetime" : "type");
   const [date, setDate] = useState<Date | undefined>(venueToday);
   const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null);
@@ -88,6 +90,8 @@ export function ReservationForm({
   const [marketingSmsOptIn, setMarketingSmsOptIn] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [waitlistTime, setWaitlistTime] = useState("19:00");
+  const [waitlistFlexMinutes, setWaitlistFlexMinutes] = useState("60");
 
   const selectedServiceType = serviceTypeId
     ? serviceTypes.find((serviceType) => serviceType.id === serviceTypeId) ?? null
@@ -222,6 +226,43 @@ export function ReservationForm({
     }
   };
 
+  const handleWaitlistSubmit = async () => {
+    if (!date || !serviceTypeId || !guests) return;
+    const requestedStartsAt = venueLocalDateTimeToIso(
+      date,
+      waitlistTime,
+      availabilityTimezone,
+    );
+    if (!requestedStartsAt) {
+      setSubmitError("That time does not occur at the venue on this date. Please choose another time.");
+      return;
+    }
+    const flexibleUntil = new Date(
+      new Date(requestedStartsAt).getTime() + Number(waitlistFlexMinutes) * 60_000,
+    ).toISOString();
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      await clientCreatePublicReservationWaitlist({
+        businessId,
+        serviceTypeId,
+        requestedStartsAt,
+        flexibleUntil,
+        guests: Number(guests),
+        name: `${firstName} ${lastName}`.trim(),
+        phone,
+        email,
+      });
+      setStep("waitlist-success");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not join the waitlist";
+      setSubmitError(message);
+      toast.error(message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   if (step === "success") {
     return (
       <div className="flex flex-col gap-6 p-6 items-center text-center">
@@ -236,6 +277,57 @@ export function ReservationForm({
           Make Another Reservation
         </Button>
       </div>
+    );
+  }
+
+  if (step === "waitlist-success") {
+    return (
+      <div className="flex flex-col items-center gap-6 p-6 text-center">
+        <CheckCircle2 className="h-14 w-14 text-primary" />
+        <div>
+          <h2 className="font-display text-2xl">You&apos;re on the waitlist</h2>
+          <p className="mt-2 text-muted-foreground">
+            If a suitable table opens, we&apos;ll email you a 15-minute offer to confirm it.
+          </p>
+        </div>
+        <Button onClick={() => window.location.reload()} className="w-full">Make another request</Button>
+      </div>
+    );
+  }
+
+  if (step === "waitlist") {
+    return (
+      <form className="flex flex-col gap-6 p-6" onSubmit={(event) => { event.preventDefault(); void handleWaitlistSubmit(); }}>
+        <FieldGroup>
+          <div className="text-center">
+            <h2 className="font-display text-xl">Join the waitlist</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Choose your preferred time in {availabilityTimezone}. We only send an offer if a matching slot opens.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Field><FieldLabel htmlFor="waitlist-first-name">First name</FieldLabel><Input id="waitlist-first-name" value={firstName} onChange={(event) => setFirstName(event.target.value)} required /></Field>
+            <Field><FieldLabel htmlFor="waitlist-last-name">Last name</FieldLabel><Input id="waitlist-last-name" value={lastName} onChange={(event) => setLastName(event.target.value)} required /></Field>
+          </div>
+          <Field><FieldLabel htmlFor="waitlist-phone">Phone number</FieldLabel><Input id="waitlist-phone" type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} required /></Field>
+          <Field><FieldLabel htmlFor="waitlist-email">Email</FieldLabel><Input id="waitlist-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></Field>
+          <div className="grid grid-cols-2 gap-4">
+            <Field><FieldLabel htmlFor="waitlist-time">Preferred time</FieldLabel><Input id="waitlist-time" type="time" value={waitlistTime} onChange={(event) => setWaitlistTime(event.target.value)} required /></Field>
+            <Field>
+              <FieldLabel htmlFor="waitlist-flexibility">We can offer up to</FieldLabel>
+              <Select value={waitlistFlexMinutes} onValueChange={setWaitlistFlexMinutes}>
+                <SelectTrigger id="waitlist-flexibility"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="30">30 minutes later</SelectItem><SelectItem value="60">1 hour later</SelectItem><SelectItem value="90">90 minutes later</SelectItem></SelectContent>
+              </Select>
+            </Field>
+          </div>
+          {submitError && <p className="rounded-md bg-destructive/15 p-3 text-sm text-destructive" role="alert">{submitError}</p>}
+          <div className="flex gap-3">
+            <Button type="button" variant="outline" className="flex-1" onClick={() => setStep("datetime")} disabled={isSubmitting}>Back</Button>
+            <Button type="submit" className="flex-1" disabled={!firstName || !lastName || !phone || !email || !waitlistTime || isSubmitting}>{isSubmitting ? <><Loader2 className="mr-2 animate-spin" />Joining…</> : "Join waitlist"}</Button>
+          </div>
+        </FieldGroup>
+      </form>
     );
   }
 
@@ -501,9 +593,12 @@ export function ReservationForm({
                 {availabilityError}
               </div>
             ) : availableSlots.length === 0 ? (
-              <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground" aria-live="polite">
-                No times are available for this date. Try another day.
-              </p>
+              <div className="rounded-md border border-dashed p-4 text-sm" aria-live="polite">
+                <p className="text-muted-foreground">No times are available for this date.</p>
+                <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => { setSubmitError(null); setStep("waitlist"); }}>
+                  Join the waitlist
+                </Button>
+              </div>
             ) : (
               <div className="grid grid-cols-3 gap-2">
                 {availableSlots.map((slot) => (

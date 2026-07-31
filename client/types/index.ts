@@ -636,6 +636,23 @@ export interface Reservation {
   updatedAt: string;
 }
 
+export interface ReservationWaitlistEntry {
+  id: string;
+  businessId: string;
+  serviceTypeId: string;
+  customerId: string;
+  requestedStartsAt: string;
+  flexibleUntil: string;
+  guests: number;
+  status: "waiting" | "offered" | "accepted" | "expired" | "removed";
+  offeredAt?: string;
+  offeredReservationTime?: string;
+  offerExpiresAt?: string;
+  acceptedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AvailabilitySlot {
   startsAt: string;
   endsAt: string;

@@ -710,6 +710,29 @@ and reminder delivery stays transactional rather than marketing-based.
 `server/app/jobs/reservation_reminders.py`,
 `client/app/reserve/manage/`, `client/app/business/profile/booking/`
 
+## 2026-07-31 — Waitlist offers stay within the guest's explicit flexibility window
+
+**Context:** The protection backend could create and accept a future waitlist
+entry, but had no operational surface. A host needs to review the actual
+request and make an offer only after availability is current; a guest needs a
+simple fallback when their selected date is already full.
+
+**Decision:** Show a public waitlist path only after live availability returns
+no slots. The guest supplies a preferred venue-local time and a 30-, 60-, or
+90-minute later flexibility window. In Reservations, staff can add requests,
+review active entries, and choose only a freshly fetched, server-approved slot
+within that window. Sending the offer retains the existing one-guest,
+15-minute-expiry and atomic acceptance behavior.
+
+**Consequences:** The browser never estimates capacity or converts a selected
+time using the staff member's timezone. A daylight-saving local time that does
+not occur is rejected before submission. An issued offer is not a reservation
+until the guest accepts it.
+
+**References:** `client/components/reservation-form.tsx`,
+`client/components/reservation-waitlist-panel.tsx`,
+`client/lib/availability.ts`, `client/lib/client-api.ts`
+
 ## Entry Template
 
 ```markdown

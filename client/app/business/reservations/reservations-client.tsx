@@ -11,9 +11,10 @@ import {
 } from "@/components/reservation-edit-dialog";
 import { StaffReservationDialog } from "@/components/staff-reservation-dialog";
 import { ReservationTablePlan } from "@/components/reservation-table-plan";
+import { ReservationWaitlistPanel } from "@/components/reservation-waitlist-panel";
 import { Button } from "@/components/ui/button";
 import { CalendarClock, Pencil, Plus, X } from "lucide-react";
-import type { Reservation, ServiceType } from "@/types";
+import type { Reservation, ReservationWaitlistEntry, ServiceType } from "@/types";
 import { CustomerResponse } from "@/lib/api-client";
 import { clientMarkReservationNoShow, clientUpdateReservation } from "@/lib/client-api";
 import { toast } from "sonner";
@@ -21,6 +22,8 @@ import { isReservationReschedulable } from "@/lib/availability";
 
 interface ReservationsClientProps {
   initialReservations: Reservation[];
+  initialWaitlistEntries: ReservationWaitlistEntry[];
+  businessId: string;
   serviceTypes: ServiceType[];
   customers: CustomerResponse[];
   businessTimezone: string;
@@ -31,6 +34,8 @@ interface ReservationsClientProps {
 
 export default function ReservationsClient({
   initialReservations,
+  initialWaitlistEntries,
+  businessId,
   serviceTypes,
   customers,
   businessTimezone,
@@ -227,6 +232,15 @@ export default function ReservationsClient({
             canOverride={canOverride}
           />
         )}
+      />
+
+      <ReservationWaitlistPanel
+        initialEntries={initialWaitlistEntries}
+        businessId={businessId}
+        businessTimezone={businessTimezone}
+        businessMaxGuests={businessMaxGuests}
+        serviceTypes={serviceTypes}
+        customers={customers}
       />
 
       {/* Edit Reservation Dialog */}

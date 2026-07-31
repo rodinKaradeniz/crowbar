@@ -113,9 +113,9 @@ service-context flags, notes/tags/preferences, public marketing consent
 provenance, manager privacy actions, and a one-shot 24-month retention job.
 Reservation protection now adds schedule-configured late-change, arrival-grace,
 reminder, and reconfirmation policies; signed guest management links; staff
-no-show records; and a future-reservation waitlist offer backend. The remaining
-stage-4 work is exposing waitlist create/offer controls in the public and staff
-reservation UI before moving to purchasing and cost control.
+no-show records; and a future-reservation waitlist. Guests can join it from an
+unavailable date and staff can create, review, and issue one-at-a-time live
+offers from Reservations. The next product stage is purchasing and cost control.
 [docs/TODO.md](docs/TODO.md) owns every stage boundary and deferred item.
 
 Migrations 023–030 are local only. Railway remains at migrations 001–022; its

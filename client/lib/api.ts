@@ -5,6 +5,7 @@ import {
   Business,
   ServiceType,
   Reservation,
+  ReservationWaitlistEntry,
   VisitorResponse,
 } from "@/types";
 import {
@@ -27,6 +28,8 @@ import {
   type ServiceTypeResponse,
   type BookingScheduleResponse,
   type ReservationResponse,
+  type ReservationWaitlistResponse,
+  apiGetReservationWaitlist,
   type VisitorResponseRaw,
   type BusinessDashboardStats,
   type LoginResponse,
@@ -200,6 +203,20 @@ function toReservation(r: ReservationResponse): Reservation {
   };
 }
 
+function toReservationWaitlistEntry(entry: ReservationWaitlistResponse): ReservationWaitlistEntry {
+  return {
+    id: entry.id, businessId: entry.business_id, serviceTypeId: entry.service_type_id,
+    customerId: entry.customer_id, requestedStartsAt: entry.requested_starts_at,
+    flexibleUntil: entry.flexible_until, guests: entry.guests,
+    status: entry.status as ReservationWaitlistEntry["status"],
+    offeredAt: entry.offered_at || undefined,
+    offeredReservationTime: entry.offered_reservation_time || undefined,
+    offerExpiresAt: entry.offer_expires_at || undefined,
+    acceptedAt: entry.accepted_at || undefined,
+    createdAt: entry.created_at, updatedAt: entry.updated_at,
+  };
+}
+
 // ─── Auth (server-side) ─────────────────────────────────────────────────────
 
 export type { LoginResponse };
@@ -341,6 +358,13 @@ export async function fetchBusinessReservations(
   if (!token) return [];
   const data = await apiGetBusinessReservations(businessId, token, status);
   return data.map(toReservation);
+}
+
+export async function fetchReservationWaitlist(): Promise<ReservationWaitlistEntry[]> {
+  if (USE_MOCK) return [];
+  const token = await getToken();
+  if (!token) return [];
+  return (await apiGetReservationWaitlist(token)).map(toReservationWaitlistEntry);
 }
 
 // ─── Analytics ───────────────────────────────────────────────────────────────

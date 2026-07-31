@@ -168,11 +168,12 @@ below; it did not promote them ahead of the current availability stage.
   arrival grace, reminders, and optional reconfirmation. Secure guest links
   allow cancellation, reconfirmation, and atomic rescheduling before arrival;
   staff record no-shows after grace; a future waitlist supports one guest, one
-  15-minute offer, and an atomic acceptance recheck.
-- **Deferred within this stage:** Surface waitlist creation and offer controls
-  in the public reservation and staff reservation pages. Deposits, card holds,
-  fees, blacklists, and automatic punitive action remain deferred to the
-  confirmed POS/payment integration stage.
+  15-minute offer, and an atomic acceptance recheck. Guests can join from a
+  fully booked date with a preferred-time flexibility window; staff can add,
+  review, and offer only live slots inside that window.
+- **Deferred within this stage:** Deposits, card holds, fees, blacklists, and
+  automatic punitive action remain deferred to the confirmed POS/payment
+  integration stage.
 
 ### 5. Purchasing and cost control
 

@@ -235,6 +235,23 @@ export interface ReservationResponse {
   updated_at: string;
 }
 
+export interface ReservationWaitlistResponse {
+  id: string;
+  business_id: string;
+  service_type_id: string;
+  customer_id: string;
+  requested_starts_at: string;
+  flexible_until: string;
+  guests: number;
+  status: string;
+  offered_at: string | null;
+  offered_reservation_time: string | null;
+  offer_expires_at: string | null;
+  accepted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export async function apiGetBusinessReservations(
   businessId: string,
   token: string,
@@ -242,6 +259,10 @@ export async function apiGetBusinessReservations(
 ): Promise<ReservationResponse[]> {
   const query = status ? `?status=${status}` : "";
   return apiFetch(`/api/reservations/business/${businessId}${query}`, { token });
+}
+
+export async function apiGetReservationWaitlist(token: string): Promise<ReservationWaitlistResponse[]> {
+  return apiFetch("/api/reservations/waitlist", { token, cache: "no-store" });
 }
 
 // ─── Customers ───────────────────────────────────────────────────────────────

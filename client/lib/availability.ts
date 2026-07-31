@@ -50,6 +50,35 @@ export function calendarDateForSlot(value: string, timezone: string): Date {
   return new Date(part("year"), part("month") - 1, part("day"));
 }
 
+/** Converts a venue-local calendar selection into an ISO instant. */
+export function venueLocalDateTimeToIso(
+  date: Date,
+  time: string,
+  timezone: string,
+): string | null {
+  const match = /^(\d{2}):(\d{2})$/.exec(time);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const desired = Date.UTC(year, month - 1, day, hours, minutes);
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  });
+  const toUtcWallClock = (instant: number) => {
+    const parts = formatter.formatToParts(new Date(instant));
+    const part = (name: Intl.DateTimeFormatPartTypes) => Number(parts.find((item) => item.type === name)?.value);
+    return Date.UTC(part("year"), part("month") - 1, part("day"), part("hour"), part("minute"));
+  };
+  let instant = desired;
+  for (let pass = 0; pass < 2; pass += 1) instant = desired - (toUtcWallClock(instant) - instant);
+  return toUtcWallClock(instant) === desired ? new Date(instant).toISOString() : null;
+}
+
 export function getAvailabilityAlternatives(
   error: AvailabilityErrorLike,
 ): AvailabilitySlot[] {

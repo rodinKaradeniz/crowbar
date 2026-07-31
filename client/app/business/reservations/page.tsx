@@ -6,6 +6,7 @@ import {
   fetchBusinessReservations,
   fetchServiceTypesByBusiness,
   fetchBusinessCustomers,
+  fetchReservationWaitlist,
 } from "@/lib/api";
 import { ModuleDisabled } from "@/components/module-disabled";
 import { hasModule, MODULE_KEYS } from "@/lib/modules";
@@ -19,11 +20,12 @@ export default async function ReservationsPage() {
 
   const businessId = user.businessId;
 
-  const [business, reservations, serviceTypes, customers] = await Promise.all([
+  const [business, reservations, serviceTypes, customers, waitlistEntries] = await Promise.all([
     fetchBusiness(businessId),
     fetchBusinessReservations(businessId, "confirmed"),
     fetchServiceTypesByBusiness(businessId),
     fetchBusinessCustomers(businessId),
+    fetchReservationWaitlist(),
   ]);
 
   if (!business) {
@@ -37,6 +39,8 @@ export default async function ReservationsPage() {
   return (
     <ReservationsClient
       initialReservations={reservations}
+      initialWaitlistEntries={waitlistEntries}
+      businessId={businessId}
       serviceTypes={serviceTypes}
       customers={customers}
       businessTimezone={business.timezone ?? "UTC"}
