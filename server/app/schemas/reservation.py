@@ -53,6 +53,8 @@ class PublicReservationCreate(AppBaseModel):
     name: str
     note: str | None = None
     guests: int = 1
+    marketing_email_opt_in: bool = False
+    marketing_sms_opt_in: bool = False
 
     @field_validator("phone", mode="before")
     @classmethod

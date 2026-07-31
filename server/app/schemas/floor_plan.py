@@ -5,6 +5,7 @@ from uuid import UUID
 from pydantic import Field, field_validator, model_validator
 
 from app.schemas.base import AppBaseModel
+from app.schemas.customer import GuestBoardContext
 
 
 TableShape = Literal["round", "square", "rectangle", "bar", "booth"]
@@ -252,6 +253,8 @@ class BoardPartyResponse(AppBaseModel):
     starts_at: datetime | None = None
     ends_at: datetime | None = None
     assigned_table_ids: list[UUID]
+    customer_id: UUID | None = None
+    guest_context: GuestBoardContext | None = None
 
 
 class BoardSeatingResponse(AppBaseModel):

@@ -97,6 +97,33 @@ venues. A turn buffer holds the chosen resource after a reservation ends, with
 an exact end/start boundary permitted. Existing booking types remain in legacy
 count-guard compatibility mode until an owner configures a resource policy.
 
+### Guest CRM and privacy
+
+Each business has a separate, phone-keyed guest identity. Reservations and
+phone-bearing queue walk-ins attach to that identity; a guest profile projects
+its reservation, queue, tab, and order history from the authoritative
+operational records rather than maintaining a duplicate history ledger.
+
+Staff may add titled team notes, free-text preferences, optional date of birth,
+and reusable VIP/regular/no-show-risk/birthday or custom tags. A reservation
+request is visit-specific by default. Dietary or allergy information becomes a
+future-visit profile detail only when staff record that the guest asked for it
+to be retained; Floor presents it as a passive, prominent service flag rather
+than requiring every staff member to complete an acknowledgement step.
+Crowbar does not verify identity or age from a declared date of birth.
+
+Public reservation confirmation offers separate, unchecked email and SMS
+marketing opt-ins. They are not required for a booking or transactional
+reservation messages, and Crowbar records their source, channel, notice
+version, and capture time. There is no marketing automation in this stage.
+
+The venue acts as controller for its guest data and Crowbar acts as processor.
+Owners and managers can export a portable profile, correct it through the
+profile, reconcile duplicates while retaining history, and anonymise a guest
+on a deletion request. The default policy anonymises guest contact and CRM
+data after 24 months of inactivity while preserving anonymous operational
+history; a venue remains responsible for any lawful retention obligation.
+
 ### Ordering and inventory
 
 Pricing is server-authoritative. The browser cannot determine final

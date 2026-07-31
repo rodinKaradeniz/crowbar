@@ -173,17 +173,11 @@ export default function CustomersClient({
                   )}
 
                   <TableCell>
-                    {v.source === "reservation" ? (
-                      <Link
-                        href={`/business/reservations?customer=${v.id}`}
-                      >
-                        <Button variant="ghost" size="sm" className="text-xs h-7">
-                          Reservations <ArrowRight className="ml-1 h-3 w-3" />
-                        </Button>
-                      </Link>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">Walk-in</span>
-                    )}
+                    <Link href={`/business/customers/${v.id}`}>
+                      <Button variant="ghost" size="sm" className="text-xs h-7">
+                        Profile <ArrowRight className="ml-1 h-3 w-3" />
+                      </Button>
+                    </Link>
                   </TableCell>
                 </TableRow>
               ))}

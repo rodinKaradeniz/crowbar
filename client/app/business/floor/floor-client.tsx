@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   Armchair,
   CheckCircle2,
@@ -106,6 +107,8 @@ function PartyCard({
           <p className="mt-0.5 text-xs text-muted-foreground">
             <span className="figures">{party.partySize}</span> guests · {party.sourceType === "queue" ? party.status : formatVenueTime(party.startsAt)}
           </p>
+          {party.guestContext?.dietaryDetails && <p className="mt-2 flex items-center gap-1 text-xs font-medium text-oxblood"><CircleAlert className="size-3" /> {party.guestContext.dietaryDetails}</p>}
+          {party.guestContext?.tags.length ? <p className="mt-1 truncate text-xs text-muted-foreground">{party.guestContext.tags.join(" · ")}</p> : null}
         </div>
         <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium capitalize">
           {party.sourceType === "queue" ? "Walk-in" : "Booking"}
@@ -117,6 +120,7 @@ function PartyCard({
           <Button size="sm" variant="outline" onClick={onSecondary}>{secondaryLabel}</Button>
         )}
       </div>
+      {party.customerId && <Link href={`/business/customers/${party.customerId}`} className="mt-3 inline-block text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">Guest profile</Link>}
     </div>
   );
 }

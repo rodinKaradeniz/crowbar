@@ -21,6 +21,8 @@ from app.models.order import Order
 from app.models.table import Table
 from app.models.tab import Tab
 from app.models.table_seating import TableSeating, TableSeatingTable
+from app.models.reservation import Reservation
+from app.models.queue_entry import QueueEntry
 from app.schemas.order import OrderPlaceRequest
 from app.services import order_service
 
@@ -100,10 +102,20 @@ async def open_seating_tab(
     )
     if table_id is not None and table_id not in seating_table_ids:
         raise ValueError("Table is not part of this seating")
+    customer_id = None
+    if seating.reservation_id:
+        customer_id = await db.scalar(
+            select(Reservation.customer_id).where(Reservation.id == seating.reservation_id)
+        )
+    elif seating.queue_entry_id:
+        customer_id = await db.scalar(
+            select(QueueEntry.customer_id).where(QueueEntry.id == seating.queue_entry_id)
+        )
     tab = Tab(
         business_id=business_id,
         seating_id=seating.id,
         table_id=table_id or seating_table_ids[0],
+        customer_id=customer_id,
         channel=channel,
         opened_by=opened_by,
         status="open",

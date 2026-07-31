@@ -654,6 +654,34 @@ assignment by posting directly to the API.
 `server/app/services/floor_plan_service.py`, `client/app/business/floor/`,
 `client/app/order/[business]/`
 
+## 2026-07-30 — Guest CRM favors useful service context over compliance theatre
+
+**Context:** The operational loop needed a durable guest profile before
+no-show protection and retention automation, but a proposed allergy workflow
+would have required every staff member to acknowledge a warning. Queue walk-ins
+also still produced synthetic visitor rows despite the established phone-keyed
+customer identity.
+
+**Decision:** Build one business-scoped guest profile from authoritative
+reservation, queue, tab, order, and note records. Phone-bearing queue joins
+now upsert the canonical customer. Keep visit requests on the visit by default;
+staff can retain dietary information only when the guest has asked them to do
+so, which records provenance without a separate guest-facing consent ritual.
+Floor presents the resulting allergy/dietary information and tags as passive
+arrival context. Use optional staff-profile DOB, separate unchecked public
+email/SMS marketing choices, manager-only merge/export/anonymisation actions,
+and a default 24-month inactivity anonymisation policy. The venue is controller
+and Crowbar processor for this EU/Germany-oriented initial contract.
+
+**Consequences:** No automatic marketing or identity verification is implied,
+and no persistent allergy is inferred from a staff assumption. Historical
+operations remain available in anonymous form after erasure. The retention job
+is a one-shot process until deployment scheduling is explicitly resumed.
+
+**References:** `server/db/migrations/029_guest_crm_and_privacy.sql`,
+`server/app/services/customer_service.py`, `server/app/jobs/customer_retention.py`,
+`client/app/business/customers/`, `docs/PRODUCT.md`, `docs/TODO.md`
+
 ## Entry Template
 
 ```markdown

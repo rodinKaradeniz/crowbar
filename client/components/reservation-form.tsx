@@ -84,6 +84,8 @@ export function ReservationForm({
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [note, setNote] = useState("");
+  const [marketingEmailOptIn, setMarketingEmailOptIn] = useState(false);
+  const [marketingSmsOptIn, setMarketingSmsOptIn] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -199,6 +201,8 @@ export function ReservationForm({
         email,
         guests: Number(guests),
         note: note || undefined,
+        marketingEmailOptIn,
+        marketingSmsOptIn,
       });
       toast.success("Reservation submitted successfully!");
       setStep("success");
@@ -314,6 +318,18 @@ export function ReservationForm({
                 terms and conditions
               </button>
             </TermsAndConditionsDialog>
+          </label>
+        </div>
+
+        <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
+          <p className="text-sm font-medium">Stay in touch <span className="font-normal text-muted-foreground">(optional)</span></p>
+          <label className="flex items-start gap-2 text-sm">
+            <Checkbox checked={marketingEmailOptIn} onCheckedChange={(checked) => setMarketingEmailOptIn(checked === true)} />
+            <span>Send me occasional news and offers by email.</span>
+          </label>
+          <label className="flex items-start gap-2 text-sm">
+            <Checkbox checked={marketingSmsOptIn} onCheckedChange={(checked) => setMarketingSmsOptIn(checked === true)} />
+            <span>Send me occasional news and offers by SMS.</span>
           </label>
         </div>
 

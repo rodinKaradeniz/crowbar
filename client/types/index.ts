@@ -194,6 +194,69 @@ export interface QueueStatus {
   estimatedWaitMinutes?: number;
 }
 
+// ─── Guest CRM ──────────────────────────────────────────────────────────────
+
+export interface GuestTag {
+  id: string;
+  name: string;
+  createdBy?: string;
+  createdAt: string;
+}
+
+export interface GuestNote {
+  id: string;
+  title: string;
+  body: string;
+  createdBy?: string;
+  updatedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GuestMarketingConsent {
+  channel: "email" | "sms";
+  isConsented: boolean;
+  source: string;
+  noticeVersion: string;
+  capturedAt: string;
+  withdrawnAt?: string;
+}
+
+export interface GuestTimelineEntry {
+  id: string;
+  kind: "reservation" | "queue" | "tab" | "order" | "note";
+  occurredAt: string;
+  title: string;
+  detail?: string;
+  amount?: number;
+  status?: string;
+}
+
+export interface GuestProfile {
+  id: string;
+  businessId: string;
+  name?: string;
+  phone?: string;
+  email?: string;
+  dateOfBirth?: string;
+  preferences?: string;
+  dietaryDetails?: string;
+  dietaryDetailsSource?: string;
+  dietaryDetailsRecordedAt?: string;
+  anonymizedAt?: string;
+  tags: GuestTag[];
+  notes: GuestNote[];
+  consents: GuestMarketingConsent[];
+  timeline: GuestTimelineEntry[];
+}
+
+export interface GuestListItem {
+  id: string;
+  name?: string;
+  phone?: string;
+  email?: string;
+}
+
 // ─── Floor plan ──────────────────────────────────────────────────────────────
 
 export type TableOperationalState = "ready" | "cleaning" | "out_of_service";
@@ -262,6 +325,13 @@ export interface FloorPlanParty {
   startsAt?: string;
   endsAt?: string;
   assignedTableIds: string[];
+  customerId?: string;
+  guestContext?: {
+    customerId: string;
+    tags: string[];
+    dietaryDetails?: string;
+    preferences?: string;
+  };
 }
 
 export interface FloorPlanAssignment {

@@ -13,6 +13,8 @@ import {
   FloorPlanSettings,
   FloorPlanSeating,
   FloorPlanTable,
+  GuestProfile,
+  GuestListItem,
   HighRiskReservation,
   InventoryItem,
   LibraryItem,
@@ -217,6 +219,30 @@ function toReservation(r: Record<string, unknown>): Reservation {
       (r.availability_overridden_at as string) || undefined,
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
+  };
+}
+
+function toGuestProfile(value: Record<string, unknown>): GuestProfile {
+  const tags = (value.tags as Record<string, unknown>[] | undefined) ?? [];
+  const notes = (value.notes as Record<string, unknown>[] | undefined) ?? [];
+  const consents = (value.consents as Record<string, unknown>[] | undefined) ?? [];
+  const timeline = (value.timeline as Record<string, unknown>[] | undefined) ?? [];
+  return {
+    id: value.id as string,
+    businessId: value.business_id as string,
+    name: (value.name as string | null) ?? undefined,
+    phone: (value.phone as string | null) ?? undefined,
+    email: (value.email as string | null) ?? undefined,
+    dateOfBirth: (value.date_of_birth as string | null) ?? undefined,
+    preferences: (value.preferences as string | null) ?? undefined,
+    dietaryDetails: (value.dietary_details as string | null) ?? undefined,
+    dietaryDetailsSource: (value.dietary_details_source as string | null) ?? undefined,
+    dietaryDetailsRecordedAt: (value.dietary_details_recorded_at as string | null) ?? undefined,
+    anonymizedAt: (value.anonymized_at as string | null) ?? undefined,
+    tags: tags.map((tag) => ({ id: tag.id as string, name: tag.name as string, createdBy: (tag.created_by as string | null) ?? undefined, createdAt: tag.created_at as string })),
+    notes: notes.map((note) => ({ id: note.id as string, title: note.title as string, body: note.body as string, createdBy: (note.created_by as string | null) ?? undefined, updatedBy: (note.updated_by as string | null) ?? undefined, createdAt: note.created_at as string, updatedAt: note.updated_at as string })),
+    consents: consents.map((consent) => ({ channel: consent.channel as "email" | "sms", isConsented: consent.is_consented as boolean, source: consent.source as string, noticeVersion: consent.notice_version as string, capturedAt: consent.captured_at as string, withdrawnAt: (consent.withdrawn_at as string | null) ?? undefined })),
+    timeline: timeline.map((entry) => ({ id: entry.id as string, kind: entry.kind as GuestProfile["timeline"][number]["kind"], occurredAt: entry.occurred_at as string, title: entry.title as string, detail: (entry.detail as string | null) ?? undefined, amount: entry.amount === null || entry.amount === undefined ? undefined : toMoney(entry.amount), status: (entry.status as string | null) ?? undefined })),
   };
 }
 
@@ -594,6 +620,8 @@ export async function clientCreatePublicReservation(data: {
   email: string;
   note?: string;
   guests: number;
+  marketingEmailOptIn?: boolean;
+  marketingSmsOptIn?: boolean;
 }): Promise<Reservation> {
   const apiData: Record<string, unknown> = {
     business_id: data.businessId,
@@ -604,6 +632,8 @@ export async function clientCreatePublicReservation(data: {
     email: data.email,
     note: data.note,
     guests: data.guests,
+    marketing_email_opt_in: data.marketingEmailOptIn ?? false,
+    marketing_sms_opt_in: data.marketingSmsOptIn ?? false,
   };
 
   const result = await clientFetch<Record<string, unknown>>(
@@ -614,6 +644,52 @@ export async function clientCreatePublicReservation(data: {
     },
   );
   return toReservation(result);
+}
+
+// ─── Guest CRM ──────────────────────────────────────────────────────────────
+
+export async function clientGetGuestProfile(customerId: string): Promise<GuestProfile> {
+  return toGuestProfile(await authFetch<Record<string, unknown>>(`/customers/${customerId}`));
+}
+
+export async function clientListGuests(): Promise<GuestListItem[]> {
+  const result = await authFetch<Record<string, unknown>[]>("/customers");
+  return result.map((guest) => ({ id: guest.id as string, name: (guest.name as string | null) ?? undefined, phone: (guest.phone as string | null) ?? undefined, email: (guest.email as string | null) ?? undefined }));
+}
+
+export async function clientUpdateGuestProfile(customerId: string, data: {
+  name?: string; email?: string; dateOfBirth?: string | null; preferences?: string | null;
+  dietaryDetails?: string | null; saveDietaryDetails?: boolean;
+}): Promise<GuestProfile> {
+  return toGuestProfile(await authFetch<Record<string, unknown>>(`/customers/${customerId}`, {
+    method: "PATCH", body: JSON.stringify({ name: data.name, email: data.email, date_of_birth: data.dateOfBirth, preferences: data.preferences, dietary_details: data.dietaryDetails, save_dietary_details: data.saveDietaryDetails }),
+  }));
+}
+
+export async function clientAddGuestTag(customerId: string, name: string) {
+  return authFetch(`/customers/${customerId}/tags`, { method: "POST", body: JSON.stringify({ name }) });
+}
+
+export async function clientRemoveGuestTag(customerId: string, tagId: string): Promise<void> {
+  await authFetch(`/customers/${customerId}/tags/${tagId}`, { method: "DELETE" });
+}
+
+export async function clientAddGuestNote(customerId: string, title: string, body: string) {
+  return authFetch(`/customers/${customerId}/notes`, { method: "POST", body: JSON.stringify({ title, body }) });
+}
+
+export async function clientRequestGuestDeletion(customerId: string): Promise<void> {
+  await authFetch(`/customers/${customerId}/data-requests`, { method: "POST", body: JSON.stringify({ request_type: "deletion" }) });
+}
+
+export async function clientExportGuest(customerId: string): Promise<GuestProfile> {
+  return toGuestProfile(await authFetch<Record<string, unknown>>(`/customers/${customerId}/export`));
+}
+
+export async function clientMergeGuest(customerId: string, sourceCustomerId: string): Promise<GuestProfile> {
+  return toGuestProfile(await authFetch<Record<string, unknown>>(`/customers/${customerId}/merge`, {
+    method: "POST", body: JSON.stringify({ source_customer_id: sourceCustomerId }),
+  }));
 }
 
 // ─── Authenticated: Reservation mutations ────────────────────────────────────
@@ -1112,6 +1188,13 @@ function toFloorPlanParty(value: Record<string, unknown>) {
     startsAt: (value.starts_at as string) || undefined,
     endsAt: (value.ends_at as string) || undefined,
     assignedTableIds: (value.assigned_table_ids as string[]) ?? [],
+    customerId: (value.customer_id as string | null) ?? undefined,
+    guestContext: value.guest_context ? {
+      customerId: (value.guest_context as Record<string, unknown>).customer_id as string,
+      tags: ((value.guest_context as Record<string, unknown>).tags as string[]) ?? [],
+      dietaryDetails: ((value.guest_context as Record<string, unknown>).dietary_details as string | null) ?? undefined,
+      preferences: ((value.guest_context as Record<string, unknown>).preferences as string | null) ?? undefined,
+    } : undefined,
   };
 }
 

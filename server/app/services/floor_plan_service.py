@@ -25,8 +25,10 @@ from app.schemas.floor_plan import (
     BoardTableResponse,
     FloorPlanBoardResponse,
 )
+from app.schemas.customer import GuestBoardContext
 from app.services.location_service import get_primary_location as find_primary_location
 from app.services.table_qr_service import issue_table_token
+from app.services.customer_service import get_guest_context
 
 
 class FloorPlanError(Exception):
@@ -864,6 +866,7 @@ def _reservation_party(
         starts_at=reservation.time,
         ends_at=reservation.ends_at,
         assigned_table_ids=assigned_table_ids,
+        customer_id=reservation.customer_id,
     )
 
 
@@ -877,6 +880,7 @@ def _queue_party(
         party_size=entry.party_size,
         status=entry.status,
         assigned_table_ids=assigned_table_ids,
+        customer_id=entry.customer_id,
     )
 
 
@@ -1171,7 +1175,7 @@ async def get_board(
             )
         )
 
-    return FloorPlanBoardResponse(
+    board = FloorPlanBoardResponse(
         business_id=business.id,
         location_id=location.id,
         timezone=business.timezone,
@@ -1190,3 +1194,26 @@ async def get_board(
             for item in queue_entries
         ],
     )
+    parties: list[BoardPartyResponse] = [
+        *board.unassigned_reservations,
+        *board.queue_entries,
+    ]
+    for area in board.areas:
+        for table in area.tables:
+            if table.active_seating:
+                parties.append(table.active_seating.source)
+            if table.active_assignment:
+                parties.append(table.active_assignment)
+            if table.next_reservation:
+                parties.append(table.next_reservation)
+    contexts: dict[UUID, dict | None] = {}
+    for party in parties:
+        if party.customer_id is None:
+            continue
+        if party.customer_id not in contexts:
+            contexts[party.customer_id] = await get_guest_context(
+                db, business_id=business.id, customer_id=party.customer_id
+            )
+        context = contexts[party.customer_id]
+        party.guest_context = GuestBoardContext(**context) if context else None
+    return board

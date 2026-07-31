@@ -24,6 +24,7 @@ from app.services.availability_service import (
 )
 from app.core.errors import ErrorCode
 from app.services.customer_identity_service import upsert_customer
+from app.services.customer_service import record_public_marketing_consents
 from app.services.location_service import get_primary_location
 from app.services.floor_plan_service import _ensure_reservation_tables_available
 
@@ -391,6 +392,14 @@ async def create_public_reservation(
     )
     db.add(reservation)
     await db.flush()
+    await record_public_marketing_consents(
+        db,
+        customer_id=customer.id,
+        business_id=data.business_id,
+        reservation_id=reservation.id,
+        email_opt_in=data.marketing_email_opt_in,
+        sms_opt_in=data.marketing_sms_opt_in,
+    )
     await _apply_automatic_table_assignment(
         db,
         reservation=reservation,

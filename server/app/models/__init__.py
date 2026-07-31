@@ -6,7 +6,7 @@ from app.models.booking_schedule import (
     BookingScheduleWindow,
 )
 from app.models.business import Business
-from app.models.customer import Customer
+from app.models.customer import Customer, CustomerDataRequest, CustomerMarketingConsent, CustomerMergeAudit, CustomerNote, CustomerTag
 from app.models.happy_hour_window import HappyHourWindow
 from app.models.inventory import InventoryItem, StockMovement
 from app.models.location import Location
@@ -29,6 +29,11 @@ __all__ = [
     "User",
     "Business",
     "Customer",
+    "CustomerTag",
+    "CustomerNote",
+    "CustomerMarketingConsent",
+    "CustomerDataRequest",
+    "CustomerMergeAudit",
     "Location",
     "Staff",
     "ServiceType",

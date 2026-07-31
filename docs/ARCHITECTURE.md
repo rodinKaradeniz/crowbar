@@ -168,6 +168,25 @@ address. A blocked request uses the standard `RATE_LIMITED` error body and
 incident does not take reservations or ordering offline. The Next.js docs
 assistant has no equivalent control yet.
 
+### Guest CRM and retention
+
+`customers` remains the business-scoped, phone-keyed identity boundary.
+Reservation creation and phone-bearing queue joins upsert that identity. Guest
+profile reads assemble timeline entries from reservations, queue entries, tabs,
+orders, and authored guest notes; the profile does not maintain a second copy
+of operational events. The `/api/customers` routes derive the business from
+the authenticated staff context for every read and mutation. Owners/managers
+alone can merge, export, or anonymise profiles; all staff can use operational
+notes and profile context.
+
+Migration 029 adds CRM notes, tags, consent provenance, data-request records,
+merge audit records, optional profile fields, and anonymisation metadata.
+Public reservation capture records independent email/SMS marketing choices
+only after the reservation has resolved to its canonical customer. The
+one-shot `app.jobs.customer_retention` applies the documented 24-month
+inactivity policy; scheduling it is a deployment concern and is not assumed by
+the API process.
+
 ### Real-time operational projections
 
 1. Authenticated browser code requests a short-lived WebSocket token from

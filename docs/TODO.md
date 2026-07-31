@@ -146,21 +146,20 @@ below; it did not promote them ahead of the current availability stage.
 
 ### 3. Rich guest CRM
 
-- **Needs decision:** Define the hospitality profile boundary: reservation,
-  queue, order, tab and spend history; notes; preferences; dietary restrictions
-  and allergies; seating preferences; birthdays; VIP/regular/no-show tags; and
-  marketing consent.
-- **Ready after decision:** Build one business-scoped guest timeline on the
-  existing phone-keyed customer identity path. Add merge/reconciliation,
-  correction, portable export, retention, deletion, and consent behavior before
-  using profiles for automation. Define Crowbar's controller/processor roles
-  rather than assuming them, and ensure venues have practical access to and
-  export of their guest data without a marketplace dependency.
-- **Ready after decision:** Add pre-shift guest context and useful segments
-  without exposing one venue's customer data to another. Surface actionable
-  context such as first visits, VIPs, allergies, prior no-shows, high-risk
-  reservations, and relevant preferences rather than only another analytics
-  chart.
+- **Complete — business-scoped guest CRM:** Migration 029 expands the existing
+  phone-keyed identity with a dedicated staff profile and authoritative
+  reservation, queue, tab, order, and team-note timeline. Queue joins with a
+  phone now attach to the identity. Staff record optional DOB, preferences,
+  guest-provided dietary details, tags, and authored notes; Floor presents
+  dietary details and tags as passive arrival context. Public reservation
+  confirmation captures separate unchecked email/SMS marketing choices. Owners
+  and managers can merge, export, correct, and anonymise profiles; the
+  one-shot retention job applies the default 24-month inactivity policy.
+- **Deferred — production privacy operations:** Obtain legal review of the
+  EU/Germany-facing privacy notice and processor terms, configure venue privacy
+  contacts and a production schedule for the retention job, and add guest-led
+  self-service access/withdrawal flows before marketing automation or external
+  data sharing.
 
 ### 4. No-show and reservation protection
 
@@ -244,6 +243,12 @@ changes a stage's design.
 
 ## Product and UX
 
+- **Ready:** Audit both planned enhancements and established workflows for
+  unnecessary staff friction or speculative state. Prefer the smallest useful
+  operational cue over mandatory acknowledgements, repeated confirmation, or
+  lifecycle states that do not save a bartender, host, or manager time. Record
+  which controls are removed, made optional, or retained with an observed
+  service rationale.
 - **Needs decision:** Confirm Crowbar's initial ideal customer profile and
   product wedge before later stages diverge: cocktail/bar-led venues,
   full-service restaurants, or small multi-venue groups have materially
