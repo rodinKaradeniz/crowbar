@@ -16,7 +16,9 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.config import settings
 from app.models.business import Business
 from app.models.reservation import Reservation
-from app.services import sms_service
+from app.models.booking_schedule import BookingSchedule
+from app.services.reservation_guest_token_service import issue_guest_token
+from app.services import email_service, sms_service
 
 logger = logging.getLogger(__name__)
 
@@ -30,13 +32,13 @@ class ReminderRun:
 async def run_reservation_reminders(
     *, now: datetime | None = None
 ) -> ReminderRun:
-    """Send unsent reminders for confirmed reservations about 24 hours away."""
+    """Send unsent reminders using each booking type's effective policy."""
     run_at = now or datetime.now(timezone.utc)
     if run_at.tzinfo is None:
         raise ValueError("now must be timezone-aware")
 
-    window_start = run_at + timedelta(hours=23)
-    window_end = run_at + timedelta(hours=25)
+    window_start = run_at + timedelta(minutes=1)
+    window_end = run_at + timedelta(hours=48)
 
     engine = create_async_engine(settings.database_url, echo=False)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -47,8 +49,13 @@ async def run_reservation_reminders(
     try:
         async with session_factory() as db:
             result = await db.execute(
-                select(Reservation, Business)
+                select(Reservation, Business, BookingSchedule)
                 .join(Business, Business.id == Reservation.business_id)
+                .outerjoin(
+                    BookingSchedule,
+                    (BookingSchedule.business_id == Reservation.business_id)
+                    & (BookingSchedule.service_type_id == Reservation.service_type_id),
+                )
                 .where(
                     Reservation.status == "confirmed",
                     Reservation.time >= window_start,
@@ -58,21 +65,49 @@ async def run_reservation_reminders(
                 .order_by(Reservation.time, Reservation.id)
             )
 
-            for reservation, business in result.all():
-                channels = business.notification_channels or []
-                if "sms" not in channels:
+            for reservation, business, override_policy in result.all():
+                policy = override_policy
+                if policy is None:
+                    policy = await db.scalar(
+                        select(BookingSchedule).where(
+                            BookingSchedule.business_id == reservation.business_id,
+                            BookingSchedule.service_type_id.is_(None),
+                        )
+                    )
+                if policy is None or not policy.reminder_enabled:
                     skipped += 1
                     continue
+                lead = timedelta(minutes=policy.reminder_lead_minutes)
+                if not run_at + lead - timedelta(hours=1) <= reservation.time <= run_at + lead + timedelta(hours=1):
+                    skipped += 1
+                    continue
+                channels = business.notification_channels or []
 
                 reservation_time = reservation.time.strftime(
                     "%A, %B %d at %I:%M %p UTC"
                 )
+                token = issue_guest_token(
+                    business_id=reservation.business_id,
+                    reservation_id=reservation.id,
+                    revision=reservation.guest_token_revision,
+                )
                 body = (
                     f"Reminder from {business.name}: you have a reservation "
-                    f"tomorrow ({reservation_time}). Reply STOP to opt out."
+                    f"at {reservation_time}. Manage it: {settings.frontend_url}/reserve/manage/{token} "
+                    "Reply STOP to opt out."
                 )
 
-                if sms_service.send_sms(reservation.phone, body):
+                management_url = f"{settings.frontend_url}/reserve/manage/{token}"
+                delivered = False
+                if "email" in channels:
+                    delivered = email_service.send_reservation_reminder(
+                        to_email=reservation.email,
+                        business_name=business.name,
+                        management_url=management_url,
+                    ) or delivered
+                if "sms" in channels and sms_service.send_sms(reservation.phone, body):
+                    delivered = True
+                if delivered:
                     reservation.sms_reminder_sent = True
                     sent += 1
                 else:

@@ -1,10 +1,11 @@
-from datetime import date
+from datetime import date, datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import api_error, forbidden, not_found
+from app.core.errors import ErrorCode, api_error, forbidden, not_found
 from app.core.rate_limit import (
     PUBLIC_IDENTITY_WRITE_LIMIT,
     PUBLIC_WRITE_IP_LIMIT,
@@ -23,14 +24,22 @@ from app.models.business import Business
 from app.models.user import User
 from app.schemas.reservation import (
     PublicReservationCreate,
+    PublicReservationManagementReschedule,
     ReservationCreate,
+    ReservationNoShow,
     ReservationReschedule,
     ReservationResponse,
     ReservationUpdate,
 )
+from app.schemas.reservation_waitlist import (
+    ReservationWaitlistCreate,
+    ReservationWaitlistOffer,
+    ReservationWaitlistResponse,
+)
 from app.schemas.booking_schedule import AvailabilityResponse
 from app.services import email_service
 from app.services import reservation_service
+from app.services import reservation_waitlist_service
 from app.services.availability_service import (
     AvailabilityError,
     get_availability,
@@ -45,6 +54,18 @@ from app.services.reservation_notifications import (
     send_reschedule_sms,
 )
 from app.core.events import DomainEvent, publish
+from app.config import settings
+from app.services.reservation_guest_token_service import (
+    ReservationGuestTokenError,
+    issue_guest_token,
+    parse_guest_token,
+)
+from app.services.reservation_waitlist_token_service import (
+    WaitlistOfferTokenError,
+    issue_offer_token,
+    parse_offer_token,
+)
+from app.models.reservation_waitlist import ReservationWaitlistEntry
 
 router = APIRouter(prefix="/api/reservations", tags=["reservations"])
 
@@ -72,6 +93,7 @@ def _send_reservation_email(
     business_timezone: str,
     calendar_sequence: int,
     message_kind: str = "created",
+    management_url: str | None = None,
 ) -> None:
     email_service.send_reservation_confirmation(
         to_email=to_email,
@@ -86,7 +108,30 @@ def _send_reservation_email(
         business_timezone=business_timezone,
         calendar_sequence=calendar_sequence,
         message_kind=message_kind,
+        management_url=management_url,
     )
+
+
+def _reservation_management_url(reservation) -> str:
+    token = issue_guest_token(
+        business_id=reservation.business_id,
+        reservation_id=reservation.id,
+        revision=reservation.guest_token_revision,
+    )
+    return f"{settings.frontend_url}/reserve/manage/{token}"
+
+
+async def _get_guest_reservation(db: AsyncSession, token: str, *, for_update: bool = False):
+    try:
+        business_id, reservation_id, revision = parse_guest_token(token)
+    except ReservationGuestTokenError as exc:
+        raise api_error(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, str(exc)) from exc
+    reservation = await reservation_service.get_reservation_by_id(
+        db, reservation_id, business_id=business_id, load_relations=True, for_update=for_update
+    )
+    if reservation is None or reservation.guest_token_revision != revision:
+        raise api_error(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "This reservation link is no longer valid")
+    return reservation
 
 
 def _reservation_duration_minutes(reservation) -> int:
@@ -224,6 +269,7 @@ async def create_public_reservation(
         reservation_id=str(reservation.id),
         business_timezone=reservation.business.timezone if reservation.business else "UTC",
         calendar_sequence=int(reservation.updated_at.timestamp()),
+        management_url=_reservation_management_url(reservation),
     )
     await publish(DomainEvent(
         event_type="reservation.created",
@@ -237,6 +283,226 @@ async def create_public_reservation(
             "ends_at": reservation.ends_at.isoformat(),
             "source": "public",
         },
+    ))
+    return reservation
+
+
+@router.get("/public/manage/{guest_token}", response_model=ReservationResponse)
+async def get_public_reservation_management(
+    guest_token: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """A bearer link deliberately exposes only its own reservation."""
+    return await _get_guest_reservation(db, guest_token)
+
+
+@router.post("/public/manage/{guest_token}/cancel", response_model=ReservationResponse)
+async def cancel_public_reservation(
+    guest_token: str,
+    db: AsyncSession = Depends(get_db),
+):
+    reservation = await _get_guest_reservation(db, guest_token, for_update=True)
+    if reservation.time <= datetime.now(timezone.utc):
+        raise api_error(
+            status.HTTP_409_CONFLICT,
+            ErrorCode.RESERVATION_NOT_RESCHEDULABLE,
+            "Please contact the venue about a reservation that has already started",
+        )
+    try:
+        reservation = await reservation_service.cancel_reservation(
+            db, reservation=reservation, actor_kind="guest"
+        )
+    except AvailabilityError as exc:
+        raise _availability_http_error(exc) from exc
+    await db.commit()
+    await db.refresh(reservation)
+    await publish(DomainEvent(
+        event_type="reservation.cancelled",
+        business_id=str(reservation.business_id),
+        payload={"reservation_id": str(reservation.id), "source": "guest", "late": reservation.cancelled_late},
+    ))
+    return reservation
+
+
+@router.post("/public/manage/{guest_token}/reconfirm", response_model=ReservationResponse)
+async def reconfirm_public_reservation(
+    guest_token: str,
+    db: AsyncSession = Depends(get_db),
+):
+    reservation = await _get_guest_reservation(db, guest_token, for_update=True)
+    try:
+        reservation = await reservation_service.reconfirm_reservation(db, reservation=reservation)
+    except AvailabilityError as exc:
+        raise _availability_http_error(exc) from exc
+    await db.commit()
+    await publish(DomainEvent(
+        event_type="reservation.reconfirmed",
+        business_id=str(reservation.business_id),
+        payload={"reservation_id": str(reservation.id), "source": "guest"},
+    ))
+    return reservation
+
+
+@router.post("/public/manage/{guest_token}/reschedule", response_model=ReservationResponse)
+async def reschedule_public_reservation(
+    guest_token: str,
+    data: PublicReservationManagementReschedule,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    reservation = await _get_guest_reservation(db, guest_token, for_update=True)
+    if reservation.time <= datetime.now(timezone.utc):
+        raise api_error(
+            status.HTTP_409_CONFLICT,
+            ErrorCode.RESERVATION_NOT_RESCHEDULABLE,
+            "Please contact the venue about a reservation that has already started",
+        )
+    old_snapshot = ReservationSnapshot.from_model(reservation)
+    try:
+        reservation = await reservation_service.reschedule_reservation(
+            db,
+            reservation=reservation,
+            data=ReservationReschedule(
+                service_type_id=data.service_type_id, time=data.time, guests=data.guests
+            ),
+        )
+    except AvailabilityError as exc:
+        raise _availability_http_error(exc) from exc
+    await db.refresh(reservation, ["business", "service_type", "customer"])
+    await db.commit()
+    background_tasks.add_task(
+        _send_reservation_email,
+        to_email=reservation.email,
+        customer_name=reservation.customer.name if reservation.customer else "",
+        business_name=reservation.business.name if reservation.business else "",
+        service_type_name=reservation.service_type.name if reservation.service_type else "",
+        reservation_time=reservation.time,
+        duration_minutes=_reservation_duration_minutes(reservation),
+        guests=reservation.guests,
+        status=reservation.status,
+        reservation_id=str(reservation.id),
+        business_timezone=reservation.business.timezone if reservation.business else "UTC",
+        calendar_sequence=int(reservation.updated_at.timestamp()),
+        message_kind="rescheduled",
+        management_url=_reservation_management_url(reservation),
+    )
+    await publish(DomainEvent(
+        event_type="reservation.rescheduled",
+        business_id=str(reservation.business_id),
+        payload={"reservation_id": str(reservation.id), "source": "guest", "old_time": old_snapshot.time.isoformat()},
+    ))
+    return reservation
+
+
+@router.post("/waitlist/public", response_model=ReservationWaitlistResponse, status_code=status.HTTP_201_CREATED)
+async def create_public_waitlist_entry(
+    data: ReservationWaitlistCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    client_ip = get_client_ip(request)
+    await enforce_rate_limits(
+        RateLimitCheck(policy=PUBLIC_WRITE_IP_LIMIT, key_parts=("waitlist", str(data.business_id), client_ip)),
+        RateLimitCheck(policy=PUBLIC_IDENTITY_WRITE_LIMIT, key_parts=("waitlist", str(data.business_id), data.phone)),
+    )
+    try:
+        entry = await reservation_waitlist_service.create_waitlist_entry(db, data=data)
+    except AvailabilityError as exc:
+        raise _availability_http_error(exc) from exc
+    await db.commit()
+    await db.refresh(entry)
+    return entry
+
+
+@router.get("/waitlist", response_model=list[ReservationWaitlistResponse])
+async def list_reservation_waitlist(
+    db: AsyncSession = Depends(get_db),
+    business: Business = Depends(get_current_business),
+    _: None = Depends(require_module("reservations")),
+):
+    return await reservation_waitlist_service.list_waitlist_entries(db, business_id=business.id)
+
+
+@router.post("/waitlist", response_model=ReservationWaitlistResponse, status_code=status.HTTP_201_CREATED)
+async def create_staff_waitlist_entry(
+    data: ReservationWaitlistCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    business: Business = Depends(get_current_business),
+    _: None = Depends(require_module("reservations")),
+):
+    data = data.model_copy(update={"business_id": business.id})
+    try:
+        entry = await reservation_waitlist_service.create_waitlist_entry(
+            db, data=data, actor=current_user, public=False
+        )
+    except AvailabilityError as exc:
+        raise _availability_http_error(exc) from exc
+    await db.commit()
+    await db.refresh(entry)
+    return entry
+
+
+@router.post("/waitlist/{entry_id}/offer", response_model=ReservationWaitlistResponse)
+async def offer_reservation_waitlist_entry(
+    entry_id: UUID,
+    data: ReservationWaitlistOffer,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    business: Business = Depends(get_current_business),
+    _: None = Depends(require_module("reservations")),
+):
+    try:
+        entry = await reservation_waitlist_service.offer_waitlist_entry(
+            db, business_id=business.id, entry_id=entry_id, reservation_time=data.reservation_time
+        )
+    except AvailabilityError as exc:
+        raise _availability_http_error(exc) from exc
+    from app.models.customer import Customer
+    customer = await db.get(Customer, entry.customer_id)
+    await db.commit()
+    await db.refresh(entry)
+    if customer and customer.email:
+        token = issue_offer_token(
+            business_id=entry.business_id, entry_id=entry.id, revision=entry.offer_token_revision
+        )
+        background_tasks.add_task(
+            email_service.send_waitlist_offer,
+            to_email=customer.email,
+            business_name=business.name,
+            offer_url=f"{settings.frontend_url}/reserve/waitlist/{token}",
+        )
+    return entry
+
+
+@router.post("/waitlist/offers/{offer_token}/accept", response_model=ReservationResponse)
+async def accept_public_waitlist_offer(
+    offer_token: str,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        business_id, entry_id, revision = parse_offer_token(offer_token)
+    except WaitlistOfferTokenError as exc:
+        raise api_error(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, str(exc)) from exc
+    entry = await db.scalar(
+        select(ReservationWaitlistEntry).where(
+            ReservationWaitlistEntry.id == entry_id,
+            ReservationWaitlistEntry.business_id == business_id,
+            ReservationWaitlistEntry.offer_token_revision == revision,
+        ).with_for_update()
+    )
+    if entry is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "This waitlist offer is no longer valid")
+    try:
+        reservation = await reservation_waitlist_service.accept_waitlist_offer(db, entry=entry)
+    except AvailabilityError as exc:
+        raise _availability_http_error(exc) from exc
+    await db.commit()
+    await db.refresh(reservation)
+    await publish(DomainEvent(
+        event_type="reservation.created",
+        business_id=str(reservation.business_id),
+        payload={"reservation_id": str(reservation.id), "source": "waitlist"},
     ))
     return reservation
 
@@ -286,6 +552,7 @@ async def create_reservation(
         reservation_id=str(reservation.id),
         business_timezone=reservation.business.timezone if reservation.business else "UTC",
         calendar_sequence=int(reservation.updated_at.timestamp()),
+        management_url=_reservation_management_url(reservation),
     )
     await publish(DomainEvent(
         event_type="reservation.created",
@@ -473,6 +740,7 @@ async def update_reservation(
             db,
             reservation=old_reservation,
             data=data,
+            actor=current_user,
         )
     except AvailabilityError as exc:
         raise _availability_http_error(exc) from exc
@@ -509,6 +777,35 @@ async def update_reservation(
             "old_status": old_snap.status,
             "new_status": data.status or old_snap.status,
         },
+    ))
+    return reservation
+
+
+@router.post("/{reservation_id}/no-show", response_model=ReservationResponse)
+async def mark_reservation_no_show(
+    reservation_id: UUID,
+    data: ReservationNoShow,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    business: Business = Depends(get_current_business),
+    _: None = Depends(require_module("reservations")),
+):
+    reservation = await reservation_service.get_reservation_by_id(
+        db, reservation_id, business_id=business.id, for_update=True
+    )
+    if reservation is None:
+        raise not_found("Reservation")
+    try:
+        reservation = await reservation_service.mark_reservation_no_show(
+            db, reservation=reservation, actor=current_user, note=data.note
+        )
+    except AvailabilityError as exc:
+        raise _availability_http_error(exc) from exc
+    await db.commit()
+    await publish(DomainEvent(
+        event_type="reservation.no_show",
+        business_id=str(reservation.business_id),
+        payload={"reservation_id": str(reservation.id), "actor_user_id": str(current_user.id)},
     ))
     return reservation
 

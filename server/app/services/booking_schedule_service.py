@@ -85,6 +85,11 @@ async def create_default_booking_schedule(
         advance_booking_days=max(business.advance_booking_days or 30, 1),
         slot_interval_minutes=max(business.time_slot_interval or 15, 1),
         default_duration_minutes=max(business.reservation_time or 60, 1),
+        cancellation_window_minutes=120,
+        arrival_grace_period_minutes=15,
+        reminder_enabled=True,
+        reminder_lead_minutes=1440,
+        reconfirmation_enabled=True,
         windows=windows_from_operating_hours(business.operating_hours),
     )
     db.add(schedule)
@@ -194,6 +199,11 @@ async def _replace_schedule(
     schedule.advance_booking_days = data.advance_booking_days
     schedule.slot_interval_minutes = data.slot_interval_minutes
     schedule.default_duration_minutes = data.default_duration_minutes
+    schedule.cancellation_window_minutes = data.cancellation_window_minutes
+    schedule.arrival_grace_period_minutes = data.arrival_grace_period_minutes
+    schedule.reminder_enabled = data.reminder_enabled
+    schedule.reminder_lead_minutes = data.reminder_lead_minutes
+    schedule.reconfirmation_enabled = data.reconfirmation_enabled
     schedule.windows = [_window_from_input(window) for window in data.windows]
     schedule.exceptions = [
         _exception_from_input(exception) for exception in data.exceptions

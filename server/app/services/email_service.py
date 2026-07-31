@@ -86,6 +86,7 @@ def send_reservation_confirmation(
     reservation_id: str,
     business_timezone: str,
     calendar_sequence: int,
+    management_url: str | None = None,
     status: str = "confirmed",
     message_kind: str = "created",
 ) -> bool:
@@ -121,6 +122,11 @@ def send_reservation_confirmation(
         f"<li><strong>Date & time:</strong> {time_str}</li>",
         f"<li><strong>Guests:</strong> {guests}</li>",
         "</ul>",
+        (
+            f'<p><a href="{management_url}">Manage this reservation</a></p>'
+            if management_url
+            else ""
+        ),
         "<p>We look forward to seeing you!</p>",
     ])
 
@@ -144,6 +150,45 @@ def send_reservation_confirmation(
 
     try:
         resend.Emails.send(params)
+        return True
+    except Exception:
+        return False
+
+
+def send_waitlist_offer(*, to_email: str, business_name: str, offer_url: str) -> bool:
+    if not _ensure_resend_configured():
+        return False
+    resend.api_key = settings.resend_api_key
+    try:
+        resend.Emails.send({
+            "from": f"{settings.email_from_name} <{settings.email_from_address}>",
+            "to": [to_email],
+            "subject": f"A table is available – {business_name}",
+            "html": "\n".join([
+                f"<p>{business_name} has a table available for you.</p>",
+                f'<p><a href="{offer_url}">Accept this offer</a></p>',
+                "<p>This offer expires in 15 minutes.</p>",
+            ]),
+        })
+        return True
+    except Exception:
+        return False
+
+
+def send_reservation_reminder(*, to_email: str, business_name: str, management_url: str) -> bool:
+    if not _ensure_resend_configured():
+        return False
+    resend.api_key = settings.resend_api_key
+    try:
+        resend.Emails.send({
+            "from": f"{settings.email_from_name} <{settings.email_from_address}>",
+            "to": [to_email],
+            "subject": f"Reservation reminder – {business_name}",
+            "html": "\n".join([
+                f"<p>This is a reminder about your reservation at {business_name}.</p>",
+                f'<p><a href="{management_url}">Manage or reconfirm your reservation</a></p>',
+            ]),
+        })
         return True
     except Exception:
         return False

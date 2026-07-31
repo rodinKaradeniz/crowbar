@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import delete, select
@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.reservation import Reservation
+from app.models.booking_schedule import BookingSchedule
 from app.models.table import Table
 from app.models.table_assignment import ReservationTableAssignment
 from app.models.user import User
@@ -193,10 +194,19 @@ async def update_reservation(
     *,
     reservation: Reservation,
     data: ReservationUpdate,
+    actor: User | None = None,
 ) -> Reservation:
     update_data = data.model_dump(exclude_unset=True)
+    if update_data.get("status") == "cancelled" and reservation.status != "cancelled":
+        await cancel_reservation(
+            db,
+            reservation=reservation,
+            actor_kind="staff",
+            now=datetime.now(timezone.utc),
+        )
+        update_data.pop("status")
     if (
-        reservation.status in {"cancelled", "completed"}
+        reservation.status in {"cancelled", "completed", "no_show"}
         and update_data.get("status") in {"pending", "confirmed"}
     ):
         raise AvailabilityError(
@@ -207,6 +217,107 @@ async def update_reservation(
     for key, value in update_data.items():
         setattr(reservation, key, value)
 
+    await db.flush()
+    await db.refresh(reservation)
+    return reservation
+
+
+async def get_reservation_policy(
+    db: AsyncSession, *, reservation: Reservation
+) -> BookingSchedule | None:
+    """Return the complete service override or business default policy."""
+    policy = await db.scalar(
+        select(BookingSchedule).where(
+            BookingSchedule.business_id == reservation.business_id,
+            BookingSchedule.service_type_id == reservation.service_type_id,
+        )
+    )
+    if policy is None:
+        policy = await db.scalar(
+            select(BookingSchedule).where(
+                BookingSchedule.business_id == reservation.business_id,
+                BookingSchedule.service_type_id.is_(None),
+            )
+        )
+    return policy
+
+
+async def cancel_reservation(
+    db: AsyncSession,
+    *,
+    reservation: Reservation,
+    actor_kind: str,
+    now: datetime | None = None,
+) -> Reservation:
+    if reservation.status not in {"pending", "confirmed"}:
+        raise AvailabilityError(
+            status_code=409,
+            code=ErrorCode.RESERVATION_NOT_RESCHEDULABLE,
+            message="Only active reservations can be cancelled",
+        )
+    current_time = now or datetime.now(timezone.utc)
+    policy = await get_reservation_policy(db, reservation=reservation)
+    window = policy.cancellation_window_minutes if policy else 120
+    reservation.status = "cancelled"
+    reservation.cancelled_at = current_time
+    reservation.cancelled_by = actor_kind
+    reservation.cancelled_late = reservation.time - current_time < timedelta(minutes=window)
+    reservation.guest_token_revision += 1
+    await db.flush()
+    await db.refresh(reservation)
+    return reservation
+
+
+async def mark_reservation_no_show(
+    db: AsyncSession,
+    *,
+    reservation: Reservation,
+    actor: User,
+    note: str | None,
+    now: datetime | None = None,
+) -> Reservation:
+    if reservation.status not in {"pending", "confirmed"}:
+        raise AvailabilityError(
+            status_code=409,
+            code=ErrorCode.RESERVATION_NOT_RESCHEDULABLE,
+            message="Only active reservations can be marked as no-show",
+        )
+    current_time = now or datetime.now(timezone.utc)
+    policy = await get_reservation_policy(db, reservation=reservation)
+    grace = policy.arrival_grace_period_minutes if policy else 15
+    if current_time < reservation.time + timedelta(minutes=grace):
+        raise AvailabilityError(
+            status_code=409,
+            code=ErrorCode.CONFLICT,
+            message="The arrival grace period has not ended",
+        )
+    reservation.status = "no_show"
+    reservation.no_show_at = current_time
+    reservation.no_show_by = actor.id
+    reservation.no_show_note = note.strip() if note else None
+    reservation.guest_token_revision += 1
+    await db.flush()
+    await db.refresh(reservation)
+    return reservation
+
+
+async def reconfirm_reservation(
+    db: AsyncSession, *, reservation: Reservation, now: datetime | None = None
+) -> Reservation:
+    if reservation.status not in {"pending", "confirmed"} or reservation.time <= (now or datetime.now(timezone.utc)):
+        raise AvailabilityError(
+            status_code=409,
+            code=ErrorCode.RESERVATION_NOT_RESCHEDULABLE,
+            message="This reservation can no longer be reconfirmed",
+        )
+    policy = await get_reservation_policy(db, reservation=reservation)
+    if policy is not None and not policy.reconfirmation_enabled:
+        raise AvailabilityError(
+            status_code=409,
+            code=ErrorCode.CONFLICT,
+            message="This venue does not request reconfirmation",
+        )
+    reservation.reconfirmed_at = now or datetime.now(timezone.utc)
     await db.flush()
     await db.refresh(reservation)
     return reservation

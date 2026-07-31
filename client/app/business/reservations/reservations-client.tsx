@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { CalendarClock, Pencil, Plus, X } from "lucide-react";
 import type { Reservation, ServiceType } from "@/types";
 import { CustomerResponse } from "@/lib/api-client";
-import { clientUpdateReservation } from "@/lib/client-api";
+import { clientMarkReservationNoShow, clientUpdateReservation } from "@/lib/client-api";
 import { toast } from "sonner";
 import { isReservationReschedulable } from "@/lib/availability";
 
@@ -46,6 +46,7 @@ export default function ReservationsClient({
   const [creatingReservation, setCreatingReservation] = useState(false);
   const [cancellingReservation, setCancellingReservation] =
     useState<Reservation | null>(null);
+  const [noShowReservation, setNoShowReservation] = useState<Reservation | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [serviceTypeFilter, setServiceTypeFilter] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -122,6 +123,21 @@ export default function ReservationsClient({
     }
   };
 
+  const handleNoShowConfirm = async () => {
+    if (!noShowReservation) return;
+    setActionLoading(noShowReservation.id);
+    try {
+      await clientMarkReservationNoShow(noShowReservation.id);
+      toast.success("Reservation marked as no-show");
+      setNoShowReservation(null);
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not mark this reservation as no-show");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   return (
     <div className="page-container">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -189,6 +205,19 @@ export default function ReservationsClient({
               <X className="h-4 w-4 mr-1" />
               Cancel
             </Button>
+            {reservation.status === "pending" || reservation.status === "confirmed" ? (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={actionLoading === reservation.id}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setNoShowReservation(reservation);
+                }}
+              >
+                No-show
+              </Button>
+            ) : null}
           </>
         )}
         detailActions={(reservation) => (
@@ -209,6 +238,15 @@ export default function ReservationsClient({
           onSave={handleSave}
         />
       )}
+      <ConfirmationDialog
+        open={noShowReservation !== null}
+        onOpenChange={(open) => !open && setNoShowReservation(null)}
+        title="Mark as no-show?"
+        description={`This is available after the venue's arrival grace period and immediately releases ${noShowReservation?.guests ?? 1} covers back to availability.`}
+        confirmLabel="Mark no-show"
+        variant="destructive"
+        onConfirm={() => void handleNoShowConfirm()}
+      />
 
       <StaffReservationDialog
         reservation={reschedulingReservation}

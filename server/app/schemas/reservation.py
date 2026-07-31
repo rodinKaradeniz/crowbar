@@ -77,6 +77,16 @@ class ReservationUpdate(AppBaseModel):
     status: Literal["pending", "confirmed", "cancelled", "completed"] | None = None
 
 
+class ReservationNoShow(AppBaseModel):
+    note: str | None = Field(default=None, max_length=1000)
+
+
+class PublicReservationManagementReschedule(AppBaseModel):
+    service_type_id: UUID
+    time: datetime
+    guests: int = Field(ge=1)
+
+
 class ReservationReschedule(AppBaseModel):
     model_config = ConfigDict(from_attributes=True, extra="forbid")
 
@@ -109,5 +119,16 @@ class ReservationResponse(AppBaseModel):
     availability_override_actor_name: str | None = None
     availability_override_reason: str | None = None
     availability_overridden_at: datetime | None = None
+    cancelled_at: datetime | None = None
+    cancelled_by: str | None = None
+    cancelled_late: bool | None = None
+    no_show_at: datetime | None = None
+    no_show_note: str | None = None
+    reconfirmed_at: datetime | None = None
+    cancellation_window_minutes: int | None = None
+    arrival_grace_period_minutes: int | None = None
+    reminder_enabled: bool | None = None
+    reminder_lead_minutes: int | None = None
+    reconfirmation_enabled: bool | None = None
     created_at: datetime
     updated_at: datetime

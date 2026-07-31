@@ -97,6 +97,28 @@ venues. A turn buffer holds the chosen resource after a reservation ends, with
 an exact end/start boundary permitted. Existing booking types remain in legacy
 count-guard compatibility mode until an owner configures a resource policy.
 
+### Reservation protection
+
+Booking schedules also own a complete reservation-protection policy, with a
+business default and optional booking-type replacement. Owners and managers set
+the late-change window, arrival grace period, reminder timing, and whether a
+guest can explicitly reconfirm. Staff may mark an active booking as a no-show
+only after the effective grace period. A no-show is a distinct terminal record
+that releases capacity and appears in the guest timeline, without a fee or
+automatic risk action.
+
+Guests receive an account-free, signed management link in transactional
+reservation messages. Until the reservation starts, it supports cancellation,
+reconfirmation, and server-validated rescheduling. Changes inside the late
+window release capacity but are recorded as late rather than blocked. Links
+are revision-bound and expire when the reservation is cancelled or no-showed.
+
+A future-reservation waitlist is distinct from the current-service queue. A
+host makes a single 15-minute offer within the guest's flexible range; accepting
+it atomically rechecks availability and creates a normal reservation. Deposits,
+holds, fees, blacklists, and automatic punitive actions remain excluded until
+the payment integration stage.
+
 ### Guest CRM and privacy
 
 Each business has a separate, phone-keyed guest identity. Reservations and

@@ -135,6 +135,11 @@ export interface BookingSchedule {
   advanceBookingDays: number;
   slotIntervalMinutes: number;
   defaultDurationMinutes: number;
+  cancellationWindowMinutes: number;
+  arrivalGracePeriodMinutes: number;
+  reminderEnabled: boolean;
+  reminderLeadMinutes: number;
+  reconfirmationEnabled: boolean;
   windows: BookingScheduleWindow[];
   exceptions: BookingScheduleException[];
   createdAt: string;
@@ -146,6 +151,11 @@ export interface BookingScheduleDraft {
   advanceBookingDays: number;
   slotIntervalMinutes: number;
   defaultDurationMinutes: number;
+  cancellationWindowMinutes: number;
+  arrivalGracePeriodMinutes: number;
+  reminderEnabled: boolean;
+  reminderLeadMinutes: number;
+  reconfirmationEnabled: boolean;
   windows: BookingScheduleWindow[];
   exceptions: BookingScheduleException[];
 }
@@ -610,12 +620,18 @@ export interface Reservation {
   phone: string;
   email: string;
   note?: string;
-  status: "confirmed" | "pending" | "cancelled" | "completed";
+  status: "confirmed" | "pending" | "cancelled" | "completed" | "no_show";
   guests: number;
   availabilityOverrideBy?: string;
   availabilityOverrideActorName?: string;
   availabilityOverrideReason?: string;
   availabilityOverriddenAt?: string;
+  cancelledAt?: string;
+  cancelledBy?: "guest" | "staff";
+  cancelledLate?: boolean;
+  noShowAt?: string;
+  noShowNote?: string;
+  reconfirmedAt?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -111,10 +111,14 @@ registered-table tab/QR ordering continuity. Guest CRM now has a dedicated
 profile, authoritative cross-workflow timeline, queue identity linking,
 service-context flags, notes/tags/preferences, public marketing consent
 provenance, manager privacy actions, and a one-shot 24-month retention job.
-The next product stage is no-show and reservation protection.
+Reservation protection now adds schedule-configured late-change, arrival-grace,
+reminder, and reconfirmation policies; signed guest management links; staff
+no-show records; and a future-reservation waitlist offer backend. The remaining
+stage-4 work is exposing waitlist create/offer controls in the public and staff
+reservation UI before moving to purchasing and cost control.
 [docs/TODO.md](docs/TODO.md) owns every stage boundary and deferred item.
 
-Migrations 023–029 are local only. Railway remains at migrations 001–022; its
+Migrations 023–030 are local only. Railway remains at migrations 001–022; its
 partially provisioned rollout is intentionally shelved and must not resume
 without explicit user authorization. [docs/deployment.md](docs/deployment.md)
 owns the verified resume point.

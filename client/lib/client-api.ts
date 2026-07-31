@@ -217,6 +217,12 @@ function toReservation(r: Record<string, unknown>): Reservation {
       (r.availability_override_reason as string) || undefined,
     availabilityOverriddenAt:
       (r.availability_overridden_at as string) || undefined,
+    cancelledAt: (r.cancelled_at as string) || undefined,
+    cancelledBy: (r.cancelled_by as Reservation["cancelledBy"]) || undefined,
+    cancelledLate: (r.cancelled_late as boolean | null) ?? undefined,
+    noShowAt: (r.no_show_at as string) || undefined,
+    noShowNote: (r.no_show_note as string) || undefined,
+    reconfirmedAt: (r.reconfirmed_at as string) || undefined,
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
   };
@@ -277,6 +283,11 @@ function toBookingSchedule(data: Record<string, unknown>): BookingSchedule {
     advanceBookingDays: data.advance_booking_days as number,
     slotIntervalMinutes: data.slot_interval_minutes as number,
     defaultDurationMinutes: data.default_duration_minutes as number,
+    cancellationWindowMinutes: data.cancellation_window_minutes as number,
+    arrivalGracePeriodMinutes: data.arrival_grace_period_minutes as number,
+    reminderEnabled: data.reminder_enabled as boolean,
+    reminderLeadMinutes: data.reminder_lead_minutes as number,
+    reconfirmationEnabled: data.reconfirmation_enabled as boolean,
     windows: windows.map((window) => ({
       id: window.id as string | undefined,
       weekday: window.weekday as number,
@@ -314,6 +325,11 @@ function bookingSchedulePayload(data: BookingScheduleDraft) {
     advance_booking_days: data.advanceBookingDays,
     slot_interval_minutes: data.slotIntervalMinutes,
     default_duration_minutes: data.defaultDurationMinutes,
+    cancellation_window_minutes: data.cancellationWindowMinutes,
+    arrival_grace_period_minutes: data.arrivalGracePeriodMinutes,
+    reminder_enabled: data.reminderEnabled,
+    reminder_lead_minutes: data.reminderLeadMinutes,
+    reconfirmation_enabled: data.reconfirmationEnabled,
     windows: data.windows.map((window) => ({
       weekday: window.weekday,
       start_time: window.startTime,
@@ -646,6 +662,31 @@ export async function clientCreatePublicReservation(data: {
   return toReservation(result);
 }
 
+export async function clientGetPublicManagedReservation(token: string): Promise<Reservation> {
+  return toReservation(await clientFetch<Record<string, unknown>>(`/reservations/public/manage/${encodeURIComponent(token)}`));
+}
+
+export async function clientCancelPublicReservation(token: string): Promise<Reservation> {
+  return toReservation(await clientFetch<Record<string, unknown>>(`/reservations/public/manage/${encodeURIComponent(token)}/cancel`, { method: "POST" }));
+}
+
+export async function clientReconfirmPublicReservation(token: string): Promise<Reservation> {
+  return toReservation(await clientFetch<Record<string, unknown>>(`/reservations/public/manage/${encodeURIComponent(token)}/reconfirm`, { method: "POST" }));
+}
+
+export async function clientReschedulePublicReservation(token: string, data: {
+  serviceTypeId: string; time: string; guests: number;
+}): Promise<Reservation> {
+  return toReservation(await clientFetch<Record<string, unknown>>(`/reservations/public/manage/${encodeURIComponent(token)}/reschedule`, {
+    method: "POST",
+    body: JSON.stringify({ service_type_id: data.serviceTypeId, time: data.time, guests: data.guests }),
+  }));
+}
+
+export async function clientAcceptWaitlistOffer(token: string): Promise<Reservation> {
+  return toReservation(await clientFetch<Record<string, unknown>>(`/reservations/waitlist/offers/${encodeURIComponent(token)}/accept`, { method: "POST" }));
+}
+
 // ─── Guest CRM ──────────────────────────────────────────────────────────────
 
 export async function clientGetGuestProfile(customerId: string): Promise<GuestProfile> {
@@ -783,6 +824,12 @@ export async function clientUpdateReservation(
     },
   );
   return toReservation(result);
+}
+
+export async function clientMarkReservationNoShow(id: string, note?: string): Promise<Reservation> {
+  return toReservation(await authFetch<Record<string, unknown>>(`/reservations/${id}/no-show`, {
+    method: "POST", body: JSON.stringify({ note }),
+  }));
 }
 
 export async function clientGetReservationRescheduleAvailability(data: {

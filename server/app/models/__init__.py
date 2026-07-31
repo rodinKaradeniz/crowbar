@@ -15,6 +15,7 @@ from app.models.notification import Notification
 from app.models.order import Order, OrderLineItem, OrderStatusTimeline
 from app.models.recipe import MenuItemIngredient
 from app.models.reservation import Reservation
+from app.models.reservation_waitlist import ReservationWaitlistEntry
 from app.models.service_type import ServiceType
 from app.models.staff import Staff
 from app.models.tab import Tab
@@ -38,6 +39,7 @@ __all__ = [
     "Staff",
     "ServiceType",
     "Reservation",
+    "ReservationWaitlistEntry",
     "Notification",
     "Menu",
     "MenuCategory",

@@ -163,20 +163,16 @@ below; it did not promote them ahead of the current availability stage.
 
 ### 4. No-show and reservation protection
 
-- **Needs decision:** Define cancellation windows, no-show/late policies,
-  reconfirmation, grace periods, waitlist backfilling, and which experiences
-  require stronger protection.
-- **Ready after decision:** Add automated confirmations and reminders,
-  cancellation/no-show history, staff intervention queues, and released-slot
-  offers to eligible waitlisted guests.
-- **Ready after decision:** Add secure, one-click guest cancellation and
-  rescheduling without requiring an account. A successful change must
-  atomically release the old capacity, claim any new capacity, and trigger the
-  same waitlist-backfill rules as a staff action. Design expiry, replay,
-  impersonation, and notification behavior for the guest-management token.
-- **Deferred within this stage:** Monetary deposits and card holds depend on
-  the confirmed POS/payment integration stage; design the policy now without
-  introducing a second payment architecture.
+- **Complete — configurable, non-monetary protection:** Booking schedules own
+  business-default and booking-type replacement policies for late changes,
+  arrival grace, reminders, and optional reconfirmation. Secure guest links
+  allow cancellation, reconfirmation, and atomic rescheduling before arrival;
+  staff record no-shows after grace; a future waitlist supports one guest, one
+  15-minute offer, and an atomic acceptance recheck.
+- **Deferred within this stage:** Surface waitlist creation and offer controls
+  in the public reservation and staff reservation pages. Deposits, card holds,
+  fees, blacklists, and automatic punitive action remain deferred to the
+  confirmed POS/payment integration stage.
 
 ### 5. Purchasing and cost control
 

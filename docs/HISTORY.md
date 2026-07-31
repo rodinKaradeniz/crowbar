@@ -682,6 +682,34 @@ is a one-shot process until deployment scheduling is explicitly resumed.
 `server/app/services/customer_service.py`, `server/app/jobs/customer_retention.py`,
 `client/app/business/customers/`, `docs/PRODUCT.md`, `docs/TODO.md`
 
+## 2026-07-31 — Reservation protection records operations before it charges guests
+
+**Context:** The reservation loop could hold capacity and send a basic reminder,
+but guests could not change a booking without contacting staff and a missed
+arrival was indistinguishable from a cancellation. The product needed useful
+host controls without inventing payment or punitive automation before POS work.
+
+**Decision:** Put late-change, grace, reminder, and reconfirmation settings in
+the existing complete booking-schedule default/override model. Keep guest
+cancellation and rescheduling available until start time, recording late
+changes instead of blocking them. Make no-show a staff action after grace,
+with optional note. Use revision-bound signed guest links rather than an
+account or staff JWT. Model the future waitlist separately from today's queue,
+with one host-issued 15-minute offer and an atomic availability recheck on
+acceptance. Defer deposits, holds, fees, blacklists, and automatic penalties.
+
+**Consequences:** Cancellation and no-show state immediately release the same
+capacity and table resources as any other terminal reservation. Venues can
+tune policy globally or for a specific booking type without partial policy
+inheritance. Guest and waitlist links are invalidated by their record revision,
+and reminder delivery stays transactional rather than marketing-based.
+
+**References:** `server/db/migrations/030_reservation_protection.sql`,
+`server/app/services/reservation_service.py`,
+`server/app/services/reservation_waitlist_service.py`,
+`server/app/jobs/reservation_reminders.py`,
+`client/app/reserve/manage/`, `client/app/business/profile/booking/`
+
 ## Entry Template
 
 ```markdown

@@ -57,6 +57,11 @@ function toDraft(schedule: BookingSchedule): BookingScheduleDraft {
     advanceBookingDays: schedule.advanceBookingDays,
     slotIntervalMinutes: schedule.slotIntervalMinutes,
     defaultDurationMinutes: schedule.defaultDurationMinutes,
+    cancellationWindowMinutes: schedule.cancellationWindowMinutes,
+    arrivalGracePeriodMinutes: schedule.arrivalGracePeriodMinutes,
+    reminderEnabled: schedule.reminderEnabled,
+    reminderLeadMinutes: schedule.reminderLeadMinutes,
+    reconfirmationEnabled: schedule.reconfirmationEnabled,
     windows: schedule.windows.map((window) => ({ ...window })),
     exceptions: schedule.exceptions.map((exception) => ({
       ...exception,
@@ -232,7 +237,10 @@ export default function BusinessBookingClient({
       | "minimumNoticeMinutes"
       | "advanceBookingDays"
       | "slotIntervalMinutes"
-      | "defaultDurationMinutes",
+      | "defaultDurationMinutes"
+      | "cancellationWindowMinutes"
+      | "arrivalGracePeriodMinutes"
+      | "reminderLeadMinutes",
     value: string,
   ) => setDraft((current) => ({ ...current, [key]: Number(value) }));
 
@@ -509,6 +517,55 @@ export default function BusinessBookingClient({
                 .
               </div>
             )}
+          </section>
+
+          <section className="rounded-lg border bg-card p-4">
+            <h2 className="font-semibold">Reservation protection</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Guests can still cancel or reschedule until their reservation starts; changes inside the window are recorded as late so staff can respond.
+            </p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {([
+                ["cancellationWindowMinutes", "Late-change window", "Minutes before arrival that count as late"],
+                ["arrivalGracePeriodMinutes", "Arrival grace period", "Minutes after start before staff can mark no-show"],
+                ["reminderLeadMinutes", "Reminder lead time", "Minutes before arrival"],
+              ] as const).map(([key, label, help]) => (
+                <label key={key} className="text-sm font-medium">
+                  {label}
+                  <Input
+                    type="number"
+                    min={key === "reminderLeadMinutes" ? 1 : 0}
+                    value={draft[key]}
+                    onChange={(event) => updateDraftNumber(key, event.target.value)}
+                    disabled={!editable}
+                    className="mt-2"
+                  />
+                  <span className="mt-1 block text-xs font-normal text-muted-foreground">{help}</span>
+                </label>
+              ))}
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <label className="flex items-start gap-3 rounded-md border p-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={draft.reminderEnabled}
+                  onChange={(event) => setDraft((current) => ({ ...current, reminderEnabled: event.target.checked }))}
+                  disabled={!editable}
+                  className="mt-0.5 size-4 rounded border-input"
+                />
+                <span><span className="block font-medium">Send reminder</span><span className="text-muted-foreground">Send the configured transactional reminder before the reservation.</span></span>
+              </label>
+              <label className="flex items-start gap-3 rounded-md border p-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={draft.reconfirmationEnabled}
+                  onChange={(event) => setDraft((current) => ({ ...current, reconfirmationEnabled: event.target.checked }))}
+                  disabled={!editable}
+                  className="mt-0.5 size-4 rounded border-input"
+                />
+                <span><span className="block font-medium">Allow guest reconfirmation</span><span className="text-muted-foreground">Show “I&apos;m still coming” on the secure reservation link; no reply never cancels a booking.</span></span>
+              </label>
+            </div>
           </section>
         </TabsContent>
 

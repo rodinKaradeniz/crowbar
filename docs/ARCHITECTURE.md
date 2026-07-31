@@ -187,6 +187,25 @@ one-shot `app.jobs.customer_retention` applies the documented 24-month
 inactivity policy; scheduling it is a deployment concern and is not assumed by
 the API process.
 
+### Reservation protection
+
+Migration 030 extends the booking-schedule replacement contract with
+late-change, arrival-grace, reminder, and reconfirmation settings. Reservation
+state retains cancellation/no-show/reconfirmation provenance; active capacity
+queries continue to use only pending and confirmed rows, so a recorded late
+change or no-show releases the same resources immediately. Guest-management
+and waitlist-offer credentials are opaque HMAC signatures bound to a mutable
+row revision; they never carry the primary staff JWT and are rejected after a
+reservation or offer revision changes. Public mutations lock the target row,
+revalidate time/state and availability, commit, then publish an event.
+
+`reservation_waitlist_entries` models future reservation interest separately
+from queue entries. A host-selected offer expires after 15 minutes and its
+acceptance calls the authoritative reservation-creation path, including the
+resource claim. The reminder job resolves the service override or business
+default and sends transactional email with optional SMS; its existing
+`sms_reminder_sent` field remains the cross-channel de-duplication marker.
+
 ### Real-time operational projections
 
 1. Authenticated browser code requests a short-lived WebSocket token from

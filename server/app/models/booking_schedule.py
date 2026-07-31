@@ -82,6 +82,19 @@ class BookingSchedule(Base, UUIDMixin, TimestampMixin):
     default_duration_minutes: Mapped[int] = mapped_column(
         Integer, default=60, nullable=False
     )
+    cancellation_window_minutes: Mapped[int] = mapped_column(
+        Integer, default=120, nullable=False
+    )
+    arrival_grace_period_minutes: Mapped[int] = mapped_column(
+        Integer, default=15, nullable=False
+    )
+    reminder_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    reminder_lead_minutes: Mapped[int] = mapped_column(
+        Integer, default=1440, nullable=False
+    )
+    reconfirmation_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
 
     business: Mapped["Business"] = relationship(back_populates="booking_schedules")
     service_type: Mapped["ServiceType | None"] = relationship(

@@ -185,6 +185,11 @@ export interface BookingScheduleResponse {
   advance_booking_days: number;
   slot_interval_minutes: number;
   default_duration_minutes: number;
+  cancellation_window_minutes: number;
+  arrival_grace_period_minutes: number;
+  reminder_enabled: boolean;
+  reminder_lead_minutes: number;
+  reconfirmation_enabled: boolean;
   windows: BookingScheduleWindowResponse[];
   exceptions: BookingScheduleExceptionResponse[];
   created_at: string;
@@ -220,6 +225,12 @@ export interface ReservationResponse {
   availability_override_actor_name: string | null;
   availability_override_reason: string | null;
   availability_overridden_at: string | null;
+  cancelled_at: string | null;
+  cancelled_by: string | null;
+  cancelled_late: boolean | null;
+  no_show_at: string | null;
+  no_show_note: string | null;
+  reconfirmed_at: string | null;
   created_at: string;
   updated_at: string;
 }

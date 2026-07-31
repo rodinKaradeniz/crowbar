@@ -61,6 +61,11 @@ class BookingScheduleReplace(AppBaseModel):
     advance_booking_days: int = Field(default=30, ge=1)
     slot_interval_minutes: int = Field(default=15, ge=1)
     default_duration_minutes: int = Field(default=60, ge=1)
+    cancellation_window_minutes: int = Field(default=120, ge=0)
+    arrival_grace_period_minutes: int = Field(default=15, ge=0)
+    reminder_enabled: bool = True
+    reminder_lead_minutes: int = Field(default=1440, ge=1)
+    reconfirmation_enabled: bool = True
     windows: list[BookingScheduleWindowInput] = Field(default_factory=list)
     exceptions: list[BookingScheduleExceptionInput] = Field(default_factory=list)
 
@@ -114,6 +119,11 @@ class BookingScheduleResponse(AppBaseModel):
     advance_booking_days: int
     slot_interval_minutes: int
     default_duration_minutes: int
+    cancellation_window_minutes: int
+    arrival_grace_period_minutes: int
+    reminder_enabled: bool
+    reminder_lead_minutes: int
+    reconfirmation_enabled: bool
     windows: list[BookingScheduleWindowResponse]
     exceptions: list[BookingScheduleExceptionResponse]
     created_at: datetime

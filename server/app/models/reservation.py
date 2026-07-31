@@ -84,6 +84,16 @@ class Reservation(Base, UUIDMixin, TimestampMixin):
     availability_overridden_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True)
     )
+    guest_token_revision: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancelled_by: Mapped[str | None] = mapped_column(String(16))
+    cancelled_late: Mapped[bool | None] = mapped_column(Boolean)
+    no_show_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    no_show_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    no_show_note: Mapped[str | None] = mapped_column(Text)
+    reconfirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     business: Mapped["Business"] = relationship(back_populates="reservations")
     customer: Mapped["Customer"] = relationship()
@@ -91,6 +101,7 @@ class Reservation(Base, UUIDMixin, TimestampMixin):
     availability_override_user: Mapped["User | None"] = relationship(
         foreign_keys=[availability_override_by]
     )
+    no_show_user: Mapped["User | None"] = relationship(foreign_keys=[no_show_by])
 
     @property
     def availability_override_actor_name(self) -> str | None:
