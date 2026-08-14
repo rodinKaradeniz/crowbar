@@ -15,6 +15,10 @@ class Business(Base, UUIDMixin, TimestampMixin):
     # IANA timezone name (e.g. 'Europe/Istanbul'). Interprets wall-clock times
     # such as operating hours and happy-hour windows. Defaults to 'UTC'.
     timezone: Mapped[str] = mapped_column(String(64), default="UTC", nullable=False)
+    country_code: Mapped[str] = mapped_column(String(2), default="DE", nullable=False)
+    currency_code: Mapped[str] = mapped_column(String(3), default="EUR", nullable=False)
+    locale: Mapped[str] = mapped_column(String(35), default="de-DE", nullable=False)
+    tax_label: Mapped[str] = mapped_column(String(50), default="VAT", nullable=False)
     service_day_cutoff: Mapped[time] = mapped_column(
         Time, default=lambda: time(5, 0), nullable=False
     )

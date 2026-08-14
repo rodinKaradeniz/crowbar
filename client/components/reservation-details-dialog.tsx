@@ -15,6 +15,7 @@ import { isReservationReschedulable } from "@/lib/availability";
 import { ReservationOverrideNotice } from "@/components/reservation-override-notice";
 import type { ReactNode } from "react";
 import { formatBusinessTime } from "@/lib/business-time";
+import { useRegionalSettings } from "@/contexts/regional-context";
 
 interface ReservationDetailsDialogProps {
   reservation: Reservation | null;
@@ -43,6 +44,7 @@ export function ReservationDetailsDialog({
   businessTimezone,
   tablePlan,
 }: ReservationDetailsDialogProps) {
+  const { locale } = useRegionalSettings();
   if (!reservation) return null;
 
   const customer = customers.find((c) => c.id === reservation.customerId);
@@ -77,7 +79,7 @@ export function ReservationDetailsDialog({
           <div className="space-y-3 pt-4 border-t">
             <div className="contact-row">
               <Clock className="contact-icon" />
-              <span>{formatBusinessTime(reservation.time, businessTimezone)}</span>
+              <span>{formatBusinessTime(reservation.time, businessTimezone, locale)}</span>
             </div>
             <div className="contact-row">
               <Users className="contact-icon" />

@@ -37,6 +37,7 @@ from app.routers import (
     service_types,
     staff,
     tabs,
+    tax,
 )
 from app.routers.floor_plan import floor_plan_error_handler
 
@@ -143,6 +144,7 @@ app.include_router(queue.router)
 app.include_router(ordering.router)
 app.include_router(inventory.router)
 app.include_router(tabs.router)
+app.include_router(tax.router)
 app.include_router(happy_hour.router)
 app.include_router(insights.router)
 

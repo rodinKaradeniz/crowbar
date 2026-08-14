@@ -39,6 +39,9 @@ function toOrderFromWS(o: Record<string, unknown>): Order {
     tableIdentifier: (o.table_identifier as string) || undefined,
     status: o.status as Order["status"],
     idempotencyKey: o.idempotency_key as string,
+    currencyCode: o.currency_code as string,
+    subtotalAmount: toMoney(o.subtotal_amount),
+    taxAmount: toMoney(o.tax_amount),
     // Decimal fields coerced via the shared toMoney helper (mirrors toOrder in
     // client-api.ts) so callers can rely on the declared `number` type.
     totalAmount: toMoney(o.total_amount),
@@ -51,6 +54,16 @@ function toOrderFromWS(o: Record<string, unknown>): Order {
       itemName: li.item_name as string,
       quantity: Number(li.quantity),
       unitPrice: toMoney(li.unit_price),
+      currencyCode: li.currency_code as string,
+      taxProfileId: (li.tax_profile_id as string) || undefined,
+      taxProfileVersionId: (li.tax_profile_version_id as string) || undefined,
+      taxProfileName: li.tax_profile_name as string,
+      taxProfileCode: li.tax_profile_code as string,
+      taxRate: toMoney(li.tax_rate),
+      priceIncludesTax: li.price_includes_tax as boolean,
+      subtotalAmount: toMoney(li.subtotal_amount),
+      taxAmount: toMoney(li.tax_amount),
+      totalAmount: toMoney(li.total_amount),
       selectedModifiers: ((li.selected_modifiers as Record<string, unknown>[]) ?? []).map((s) => ({
         modifierId: s.modifier_id as string,
         name: s.name as string,

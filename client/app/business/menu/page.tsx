@@ -26,6 +26,7 @@ export default async function MenuPage() {
     <MenuManagementClient
       businessId={business.id}
       businessSlug={business.slug}
+      canManageTax={user.role === "owner" || user.role === "manager"}
     />
   );
 }

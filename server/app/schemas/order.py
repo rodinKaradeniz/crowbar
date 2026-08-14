@@ -29,6 +29,16 @@ class OrderLineItemResponse(AppBaseModel):
     item_name: str
     quantity: int
     unit_price: Decimal
+    currency_code: str
+    tax_profile_id: UUID | None = None
+    tax_profile_version_id: UUID | None = None
+    tax_profile_name: str
+    tax_profile_code: str
+    tax_rate: Decimal
+    price_includes_tax: bool
+    subtotal_amount: Decimal
+    tax_amount: Decimal
+    total_amount: Decimal
     selected_modifiers: list[dict] = []
     routing_tag: str
     is_alcoholic: bool = False
@@ -75,6 +85,9 @@ class OrderResponse(AppBaseModel):
     table_identifier: str | None = None
     status: str
     idempotency_key: str
+    currency_code: str
+    subtotal_amount: Decimal
+    tax_amount: Decimal
     total_amount: Decimal
     notes: str | None = None
     placed_at: datetime

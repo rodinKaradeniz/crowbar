@@ -1,5 +1,5 @@
-export function formatBusinessTime(value: string | Date, timeZone: string): string {
-  return new Intl.DateTimeFormat(undefined, {
+export function formatBusinessTime(value: string | Date, timeZone: string, locale?: string): string {
+  return new Intl.DateTimeFormat(locale, {
     timeZone,
     hour: "2-digit",
     minute: "2-digit",
@@ -7,8 +7,8 @@ export function formatBusinessTime(value: string | Date, timeZone: string): stri
   }).format(new Date(value));
 }
 
-export function formatBusinessDate(value: string | Date, timeZone: string): string {
-  return new Intl.DateTimeFormat(undefined, {
+export function formatBusinessDate(value: string | Date, timeZone: string, locale?: string): string {
+  return new Intl.DateTimeFormat(locale, {
     timeZone,
     year: "numeric",
     month: "short",
@@ -16,8 +16,8 @@ export function formatBusinessDate(value: string | Date, timeZone: string): stri
   }).format(new Date(value));
 }
 
-export function formatBusinessDateTime(value: string | Date, timeZone: string): string {
-  return new Intl.DateTimeFormat(undefined, {
+export function formatBusinessDateTime(value: string | Date, timeZone: string, locale?: string): string {
+  return new Intl.DateTimeFormat(locale, {
     timeZone,
     year: "numeric",
     month: "short",

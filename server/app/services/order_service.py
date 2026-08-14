@@ -17,7 +17,7 @@ from app.models.menu import Menu, MenuCategory, MenuItem, Modifier, ModifierGrou
 from app.models.order import Order, OrderLineItem, OrderStatusTimeline
 from app.models.table import Table
 from app.schemas.order import OrderPlaceRequest, OrderStatusUpdateRequest
-from app.services import happy_hour_service, recipe_service
+from app.services import happy_hour_service, recipe_service, tax_service
 from app.services.floor_plan_service import resolve_service_window
 
 logger = logging.getLogger(__name__)
@@ -231,6 +231,9 @@ def order_to_dict(order: Order) -> dict:
         "table_identifier": order.table_identifier,
         "status": order.status,
         "idempotency_key": order.idempotency_key,
+        "currency_code": order.currency_code,
+        "subtotal_amount": float(order.subtotal_amount),
+        "tax_amount": float(order.tax_amount),
         "total_amount": float(order.total_amount),
         "notes": order.notes,
         "placed_at": order.placed_at.isoformat() if order.placed_at else None,
@@ -242,6 +245,16 @@ def order_to_dict(order: Order) -> dict:
                 "item_name": li.item_name,
                 "quantity": li.quantity,
                 "unit_price": float(li.unit_price),
+                "currency_code": li.currency_code,
+                "tax_profile_id": str(li.tax_profile_id) if li.tax_profile_id else None,
+                "tax_profile_version_id": str(li.tax_profile_version_id) if li.tax_profile_version_id else None,
+                "tax_profile_name": li.tax_profile_name,
+                "tax_profile_code": li.tax_profile_code,
+                "tax_rate": float(li.tax_rate),
+                "price_includes_tax": li.price_includes_tax,
+                "subtotal_amount": float(li.subtotal_amount),
+                "tax_amount": float(li.tax_amount),
+                "total_amount": float(li.total_amount),
                 "selected_modifiers": li.selected_modifiers or [],
                 "routing_tag": li.routing_tag,
                 "is_alcoholic": li.is_alcoholic,
@@ -329,7 +342,15 @@ async def place_order(
         )
 
     session_token = secrets.token_urlsafe(32)
-    total = Decimal("0.00")
+    placed_at = datetime.now(timezone.utc)
+    business = await db.scalar(
+        select(Business).where(Business.id == business_id).with_for_update()
+    )
+    if business is None:
+        raise OrderValidationError("Business not found")
+    subtotal = Decimal("0")
+    tax_total = Decimal("0")
+    total = Decimal("0")
 
     # Determine happy-hour state once, server-side, at the moment the order is
     # placed. This uses the SAME is_happy_hour_active as the public menu read
@@ -350,6 +371,9 @@ async def place_order(
         request_fingerprint=fingerprint,
         notes=request.notes,
         age_confirmed=request.age_confirmed,
+        currency_code=business.currency_code,
+        subtotal_amount=Decimal("0"),
+        tax_amount=Decimal("0"),
         total_amount=Decimal("0.00"),
     )
     try:
@@ -386,7 +410,21 @@ async def place_order(
         if unit_price < 0:
             raise OrderValidationError(f"The configured price for {item.name} is invalid")
 
-        line_total = unit_price * item_req.quantity
+        entered_line_total = unit_price * item_req.quantity
+        try:
+            tax_profile, tax_version = await tax_service.resolve_profile_version(
+                db, business_id, item.tax_profile_id, placed_at
+            )
+        except tax_service.TaxProfileError as exc:
+            raise OrderValidationError(f"{item.name}: {exc}") from exc
+        line_subtotal, line_tax, line_total = tax_service.calculate_line_tax(
+            entered_line_total,
+            tax_version.rate,
+            tax_version.price_includes_tax,
+            business.currency_code,
+        )
+        subtotal += line_subtotal
+        tax_total += line_tax
         total += line_total
 
         li = OrderLineItem(
@@ -395,6 +433,16 @@ async def place_order(
             item_name=item.name,
             quantity=item_req.quantity,
             unit_price=unit_price,
+            currency_code=business.currency_code,
+            tax_profile_id=tax_profile.id,
+            tax_profile_version_id=tax_version.id,
+            tax_profile_name=tax_version.name,
+            tax_profile_code=tax_profile.code,
+            tax_rate=tax_version.rate,
+            price_includes_tax=tax_version.price_includes_tax,
+            subtotal_amount=line_subtotal,
+            tax_amount=line_tax,
+            total_amount=line_total,
             selected_modifiers=selected_mods,
             routing_tag=item.routing_tag,
             is_alcoholic=item.is_alcoholic,
@@ -402,6 +450,8 @@ async def place_order(
         )
         db.add(li)
 
+    order.subtotal_amount = subtotal
+    order.tax_amount = tax_total
     order.total_amount = total
     db.add(
         OrderStatusTimeline(

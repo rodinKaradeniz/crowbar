@@ -2,6 +2,7 @@ import { AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { fetchBusinessBySlug } from "@/lib/api";
 import OrderClient from "./order-client";
+import { RegionalSettingsProvider } from "@/contexts/regional-context";
 
 interface OrderPageProps {
   params: Promise<{ business: string }>;
@@ -29,10 +30,18 @@ export default async function OrderPage({ params }: OrderPageProps) {
   }
 
   return (
+    <RegionalSettingsProvider settings={{
+      countryCode: business.countryCode,
+      currencyCode: business.currencyCode,
+      locale: business.locale,
+      timezone: business.timezone,
+      taxLabel: business.taxLabel,
+    }}>
     <OrderClient
       businessId={business.id}
       businessSlug={business.slug}
       legalDrinkingAge={business.legalDrinkingAge ?? 18}
     />
+    </RegionalSettingsProvider>
   );
 }

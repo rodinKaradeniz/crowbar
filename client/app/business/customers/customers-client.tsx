@@ -17,6 +17,7 @@ import { VisitorResponse, ServiceType } from "@/types";
 import { cn } from "@/lib/utils";
 import { Search } from "lucide-react";
 import { formatBusinessDate } from "@/lib/business-time";
+import { useRegionalSettings } from "@/contexts/regional-context";
 
 interface CustomersClientProps {
   visitors: VisitorResponse[];
@@ -49,6 +50,7 @@ export default function CustomersClient({
   customerSegments,
   businessTimezone,
 }: CustomersClientProps) {
+  const { locale } = useRegionalSettings();
   const [searchQuery, setSearchQuery] = useState("");
 
   const hasSegments = customerSegments && Object.keys(customerSegments).length > 0;
@@ -141,7 +143,7 @@ export default function CustomersClient({
                   <TableCell>
                     {v.lastVisit ? (
                       <span className="text-sm">
-                        {formatBusinessDate(v.lastVisit, businessTimezone)}
+                        {formatBusinessDate(v.lastVisit, businessTimezone, locale)}
                       </span>
                     ) : (
                       <span className="text-muted-foreground">—</span>

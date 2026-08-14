@@ -2,6 +2,7 @@ import { AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { fetchBusinessBySlug } from "@/lib/api";
 import MenuClient from "./menu-client";
+import { RegionalSettingsProvider } from "@/contexts/regional-context";
 
 interface MenuPageProps {
   params: Promise<{ business: string }>;
@@ -28,5 +29,15 @@ export default async function MenuPage({ params }: MenuPageProps) {
     );
   }
 
-  return <MenuClient businessId={business.id} businessSlug={business.slug} />;
+  return (
+    <RegionalSettingsProvider settings={{
+      countryCode: business.countryCode,
+      currencyCode: business.currencyCode,
+      locale: business.locale,
+      timezone: business.timezone,
+      taxLabel: business.taxLabel,
+    }}>
+      <MenuClient businessId={business.id} businessSlug={business.slug} />
+    </RegionalSettingsProvider>
+  );
 }

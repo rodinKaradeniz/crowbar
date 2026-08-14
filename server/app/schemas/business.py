@@ -17,6 +17,10 @@ class BusinessCreate(AppBaseModel):
     email: str
     phone: str
     timezone: str = "UTC"
+    country_code: str = "DE"
+    currency_code: str = "EUR"
+    locale: str = "de-DE"
+    tax_label: str = "VAT"
     address: str | None = None
     description: str | None = None
     image: str | None = None
@@ -34,6 +38,10 @@ class BusinessUpdate(AppBaseModel):
     email: str | None = None
     phone: str | None = None
     timezone: str | None = None
+    country_code: str | None = None
+    currency_code: str | None = None
+    locale: str | None = None
+    tax_label: str | None = None
     address: str | None = None
     description: str | None = None
     image: str | None = None
@@ -57,6 +65,10 @@ class BusinessResponse(AppBaseModel):
     email: str
     phone: str
     timezone: str = "UTC"
+    country_code: str = "DE"
+    currency_code: str = "EUR"
+    locale: str = "de-DE"
+    tax_label: str = "VAT"
     legal_drinking_age: int = 18
     address: str | None = None
     description: str | None = None
@@ -83,6 +95,10 @@ class PublicBusinessResponse(AppBaseModel):
     email: str
     phone: str
     timezone: str = "UTC"
+    country_code: str = "DE"
+    currency_code: str = "EUR"
+    locale: str = "de-DE"
+    tax_label: str = "VAT"
     legal_drinking_age: int = 18
     address: str | None = None
     description: str | None = None

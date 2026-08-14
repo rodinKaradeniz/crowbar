@@ -26,6 +26,7 @@ import {
   LayoutGrid,
 } from "lucide-react";
 import { formatMoney } from "@/lib/money";
+import { useRegionalSettings } from "@/contexts/regional-context";
 
 // ─── Status model (Kanban columns are the primary axis) ───────────────────────
 
@@ -98,6 +99,7 @@ interface Props {
 }
 
 export function TicketBoardClient({ businessId }: Props) {
+  const { currencyCode, locale } = useRegionalSettings();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAcceptingOrders, setIsAcceptingOrders] = useState(true);
@@ -145,7 +147,7 @@ export function TicketBoardClient({ businessId }: Props) {
       if (!knownIdsRef.current.has(o.id)) {
         knownIdsRef.current.add(o.id);
         toast(`New order${o.tableIdentifier ? ` — Table ${o.tableIdentifier}` : ""}`, {
-          description: `${o.lineItems.length} item(s) · ${formatMoney(o.totalAmount)}`,
+          description: `${o.lineItems.length} item(s) · ${formatMoney(o.totalAmount, currencyCode, locale)}`,
         });
       }
     }

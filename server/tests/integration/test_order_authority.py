@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime, timezone
 from decimal import Decimal
 
 import pytest
@@ -9,7 +10,8 @@ from app.models.business import Business
 from app.models.menu import Menu, MenuCategory, MenuItem, Modifier, ModifierGroup
 from app.models.order import Order
 from app.schemas.order import OrderPlaceRequest
-from app.services import order_service
+from app.schemas.tax import TaxProfileVersionCreate
+from app.services import order_service, tax_service
 
 
 async def _menu_context(
@@ -24,6 +26,7 @@ async def _menu_context(
     )
     db.add(business)
     await db.flush()
+    tax_profiles = await tax_service.create_default_profiles(db, business)
     menu = Menu(business_id=business.id, name="Live", is_active=True)
     db.add(menu)
     await db.flush()
@@ -40,6 +43,7 @@ async def _menu_context(
         business_id=business.id,
         name="House Soda",
         price=Decimal("10.00"),
+        tax_profile_id=tax_profiles[0].id,
         is_available=True,
         routing_tag="bar",
     )
@@ -104,6 +108,9 @@ async def test_order_uses_authoritative_item_and_modifier_snapshots(
 
     assert created is True
     assert order.total_amount == Decimal("24.00")
+    assert order.currency_code == "EUR"
+    assert order.subtotal_amount == Decimal("20.17")
+    assert order.tax_amount == Decimal("3.83")
     assert order.line_items[0].item_name == "House Soda"
     assert order.line_items[0].unit_price == Decimal("12.00")
     assert order.line_items[0].selected_modifiers == [
@@ -113,6 +120,110 @@ async def test_order_uses_authoritative_item_and_modifier_snapshots(
             "price_delta": 2.0,
         }
     ]
+    assert order.line_items[0].tax_profile_code == "STANDARD"
+    assert order.line_items[0].tax_profile_name == "Standard"
+    assert order.line_items[0].tax_rate == Decimal("19")
+    assert order.line_items[0].price_includes_tax is True
+
+
+@pytest.mark.asyncio
+async def test_tax_profile_changes_only_affect_later_orders(db_session: AsyncSession):
+    business, item, modifier = await _menu_context(db_session, "tax-version")
+    original, _ = await order_service.place_order(
+        db_session,
+        business.id,
+        _request(item, modifier, key="old-tax", quantity=1),
+        require_age_confirmation=False,
+        channel="staff",
+    )
+    profile_id = original.line_items[0].tax_profile_id
+
+    await tax_service.add_version(
+        db_session,
+        business.id,
+        profile_id,
+        None,  # System-created test version; created_by is intentionally nullable.
+        TaxProfileVersionCreate(
+            name="Scheduled operational rate",
+            rate=Decimal("7"),
+            price_includes_tax=False,
+            effective_from=datetime.now(timezone.utc),
+        ),
+    )
+    later, _ = await order_service.place_order(
+        db_session,
+        business.id,
+        _request(item, modifier, key="new-tax", quantity=1),
+        require_age_confirmation=False,
+        channel="staff",
+    )
+
+    assert original.line_items[0].tax_profile_name == "Standard"
+    assert original.line_items[0].tax_rate == Decimal("19")
+    assert original.line_items[0].total_amount == Decimal("12.00")
+    assert later.line_items[0].tax_profile_name == "Scheduled operational rate"
+    assert later.line_items[0].tax_rate == Decimal("7")
+    assert later.line_items[0].subtotal_amount == Decimal("12.00")
+    assert later.line_items[0].tax_amount == Decimal("0.84")
+    assert later.line_items[0].total_amount == Decimal("12.84")
+
+
+@pytest.mark.asyncio
+async def test_order_totals_mixed_inclusive_and_exclusive_profiles(
+    db_session: AsyncSession,
+):
+    business, first_item, modifier = await _menu_context(db_session, "mixed-tax")
+    profiles = await tax_service.list_profiles(db_session, business.id)
+    reduced = next(profile for profile in profiles if profile.code == "REDUCED")
+    await tax_service.add_version(
+        db_session,
+        business.id,
+        reduced.id,
+        None,
+        TaxProfileVersionCreate(
+            name="Reduced exclusive",
+            rate=Decimal("7"),
+            price_includes_tax=False,
+            effective_from=datetime.now(timezone.utc),
+        ),
+    )
+    second_item = MenuItem(
+        category_id=first_item.category_id,
+        business_id=business.id,
+        tax_profile_id=reduced.id,
+        name="Snack",
+        price=Decimal("10.00"),
+        is_available=True,
+        routing_tag="kitchen",
+    )
+    db_session.add(second_item)
+    await db_session.flush()
+    request = OrderPlaceRequest.model_validate(
+        {
+            "items": [
+                {
+                    "item_id": first_item.id,
+                    "quantity": 1,
+                    "selected_modifiers": [{"modifier_id": modifier.id}],
+                },
+                {"item_id": second_item.id, "quantity": 1},
+            ],
+            "idempotency_key": "mixed-tax-key",
+        }
+    )
+
+    order, _ = await order_service.place_order(
+        db_session,
+        business.id,
+        request,
+        require_age_confirmation=False,
+        channel="staff",
+    )
+
+    assert order.subtotal_amount == Decimal("20.08")
+    assert order.tax_amount == Decimal("2.62")
+    assert order.total_amount == Decimal("22.70")
+    assert {line.price_includes_tax for line in order.line_items} == {True, False}
 
 
 @pytest.mark.asyncio

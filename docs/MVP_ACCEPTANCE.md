@@ -308,8 +308,8 @@ stages remain open only for the explicitly later-stage breadth.
 - Money and business-time formatting now cross shared frontend boundaries; no
   retained code uses US-default phone parsing, browser dialogs, hard-coded
   dollar/Euro display glyphs, or browser-local venue timestamps on the audited
-  operational paths. Stage 2 replaces the temporary EUR/`de-DE` MVP boundary
-  with persisted tenant configuration and tax snapshots.
+  operational paths. Stage 2 subsequently replaced the temporary EUR/`de-DE`
+  boundary with persisted tenant configuration and tax snapshots.
 
 Final verification: 150 backend tests passed against PostgreSQL; 41 frontend
 tests passed; frontend lint, TypeScript, and Next.js production build passed;
@@ -318,10 +318,42 @@ repeat-seed verifier passed; and `git diff --check` passed. The 160 backend
 warnings all originate in `python-jose`'s deprecated `datetime.utcnow()` use;
 Node/Vitest and Next.js also report runtime/convention deprecations. These are
 recorded as maintenance debt in `TODO.md` and do not conceal a failed check.
-- ML source contains two tests, but the audited checkout had no reproducible ML
-  test environment available to run them.
-- Railway remains intentionally paused at migrations 001–022. No stage-0 work
-  authorizes deployment or other external mutation.
+
+## Stage 2 closure evidence — 2026-08-14
+
+Stage 2 is complete locally and closes `MONEY-01` plus the Stage 2 portions of
+`BIZ`, `ORDER`, `HH`, `ANALYTICS-01`, `QUEUE-03`, and both Stage 2 acceptance
+rows.
+
+- Migration 037 adds tenant country/currency/formatting locale/tax label,
+  regional audit, stable tax profiles, append-only effective versions, explicit
+  menu/library assignment, wider currency-neutral amount storage, and immutable
+  order/line currency-tax snapshots. Upgrade-in-place and full 001–037 fresh
+  migration both pass; the canonical German demo seed passes twice.
+- Registration, onboarding, and Settings → Region & operational tax use
+  validated CLDR-backed choices and explicit editable suggestions. Currency
+  locks after monetary activity; country-aware phone normalization, configured
+  money/date/time formatting, and non-fiscal tax disclosure flow through public
+  and staff surfaces.
+- Owners/managers exclusively manage profiles and new priced-item assignment.
+  Runtime code never infers food/beverage treatment. Profile changes append,
+  assigned profiles cannot be archived, foreign profiles are rejected, and old
+  order lines remain unchanged across later versions.
+- `test_regional_tax`, `test_regional_tax_routes`, and
+  `test_order_authority` cover ISO/locale/timezone/phone validation, EUR/JPY/KWD
+  precision, half-up inclusive/exclusive rounding, mixed profiles, temporal
+  versions, immutable snapshots, permissions, and tenant isolation. Frontend
+  money/business-time tests cover configured currencies/locales and Berlin DST.
+
+Final Stage 2 verification: 161 PostgreSQL backend tests and 43 frontend tests
+passed; frontend lint, TypeScript, and Next.js production build passed; the
+existing database applied migration 037; the disposable full migration and
+repeat-seed verifier passed; Python compilation and `git diff --check` passed.
+Known dependency/framework deprecation warnings remain the maintenance debt
+already recorded in `TODO.md`; no check was weakened.
+
+Railway remains intentionally paused at migrations 001–022. No local stage
+completion authorizes deployment or other external mutation.
 
 Stage implementations replace these observations with dated command output,
 test names, screenshots or recordings where useful, and links to any durable

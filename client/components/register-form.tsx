@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -15,6 +15,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { clientGetRegionalOptions, clientGetRegionalSuggestion } from "@/lib/client-api";
+import type { RegionalOption } from "@/types";
 
 const PASSWORD_MIN_LENGTH = 12;
 
@@ -28,12 +31,37 @@ export function RegisterForm({
   const [businessSlug, setBusinessSlug] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [countryCode, setCountryCode] = useState("DE");
+  const [currencyCode, setCurrencyCode] = useState("EUR");
+  const [formatLocale, setFormatLocale] = useState("de-DE");
+  const [timezone] = useState(() => {
+    try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; }
+    catch { return "UTC"; }
+  });
+  const [taxLabel, setTaxLabel] = useState("VAT");
+  const [countries, setCountries] = useState<RegionalOption[]>([]);
   const [address, setAddress] = useState("");
   const [description, setDescription] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    void clientGetRegionalOptions("en").then((options) => setCountries(options.countries)).catch(() => {});
+  }, []);
+
+  async function changeCountry(code: string) {
+    setCountryCode(code);
+    try {
+      const suggestion = await clientGetRegionalSuggestion(code);
+      setCurrencyCode(suggestion.currencyCode);
+      setFormatLocale(suggestion.locale);
+      setTaxLabel(suggestion.taxLabel);
+    } catch {
+      // The owner can complete every regional field during onboarding.
+    }
+  }
 
   const handleBusinessName = (value: string) => {
     setBusinessName(value);
@@ -68,6 +96,11 @@ export function RegisterForm({
           businessSlug,
           businessAddress: address || null,
           businessDescription: description || null,
+          countryCode,
+          currencyCode,
+          locale: formatLocale,
+          timezone,
+          taxLabel,
         }),
       });
       const body = await response.json().catch(() => ({}));
@@ -115,8 +148,17 @@ export function RegisterForm({
             <Input id="business-email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
           </Field>
           <Field>
+            <FieldLabel>Venue country</FieldLabel>
+            <Select value={countryCode} onValueChange={(value) => void changeCountry(value)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>{countries.map((option) => <SelectItem key={option.code} value={option.code}>{option.name}</SelectItem>)}</SelectContent>
+            </Select>
+            <FieldDescription>Sets editable regional suggestions and national phone parsing.</FieldDescription>
+          </Field>
+          <Field>
             <FieldLabel htmlFor="business-phone">Venue phone</FieldLabel>
             <Input id="business-phone" type="tel" autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} required />
+            <FieldDescription>Enter a national or international number for the selected country.</FieldDescription>
           </Field>
           <Field>
             <FieldLabel htmlFor="business-address">Address</FieldLabel>

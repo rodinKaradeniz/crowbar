@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import forbidden, not_found
@@ -10,6 +10,7 @@ from app.dependencies import get_current_business, require_roles
 from app.models.business import Business
 from app.models.user import User
 from app.schemas.business import BusinessResponse, BusinessUpdate, PublicBusinessResponse
+from app.schemas.tax import RegionalAuditResponse
 from app.services import business_service
 
 router = APIRouter(prefix="/api/businesses", tags=["businesses"])
@@ -61,15 +62,32 @@ async def update_business(
     data: BusinessUpdate,
     db: AsyncSession = Depends(get_db),
     current_business: Business = Depends(get_current_business),
-    _: User = Depends(require_roles("owner", "manager")),
+    actor: User = Depends(require_roles("owner", "manager")),
 ):
     """Update own business. Requires owner or manager role."""
     if current_business.id != business_id:
         raise forbidden("Not authorized for this business")
-    business = await business_service.update_business(db, business_id, data)
+    try:
+        business = await business_service.update_business(
+            db, business_id, data, actor_id=actor.id
+        )
+    except business_service.BusinessConfigurationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if business is None:
         raise not_found("Business")
     return business
+
+
+@router.get("/{business_id}/regional-audit", response_model=list[RegionalAuditResponse])
+async def get_regional_audit(
+    business_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_business: Business = Depends(get_current_business),
+    _: User = Depends(require_roles("owner", "manager")),
+):
+    if current_business.id != business_id:
+        raise forbidden("Not authorized for this business")
+    return await business_service.list_regional_audits(db, business_id)
 
 
 @router.delete("/{business_id}", status_code=status.HTTP_204_NO_CONTENT)

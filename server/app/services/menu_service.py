@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import select
@@ -5,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.menu import ItemLibrary, Menu, MenuCategory, MenuItem, Modifier, ModifierGroup
+from app.models.tax import TaxProfile
 from app.schemas.menu import (
     LibraryItemCreate,
     LibraryItemUpdate,
@@ -17,17 +19,75 @@ from app.schemas.menu import (
     ModifierCreate,
     ModifierGroupCreate,
 )
+from app.services import tax_service
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
+
+async def _resolve_tax_profile_id(
+    db: AsyncSession, business_id: UUID, requested_id: UUID | None
+) -> UUID:
+    if requested_id is None:
+        raise tax_service.TaxProfileError(
+            "Choose an explicit tax profile before adding a priced item"
+        )
+    profile_id = requested_id
+    await tax_service.resolve_profile_version(
+        db, business_id, profile_id, datetime.now(timezone.utc)
+    )
+    return profile_id
 
 async def _load_menu(db: AsyncSession, menu_id: UUID, business_id: UUID) -> Menu | None:
     result = await db.execute(
         select(Menu)
         .where(Menu.id == menu_id, Menu.business_id == business_id)
         .options(
-            selectinload(Menu.categories).selectinload(MenuCategory.items).selectinload(MenuItem.modifier_groups).selectinload(ModifierGroup.modifiers)
+            selectinload(Menu.categories)
+            .selectinload(MenuCategory.items)
+            .selectinload(MenuItem.modifier_groups)
+            .selectinload(ModifierGroup.modifiers),
+            selectinload(Menu.categories)
+            .selectinload(MenuCategory.items)
+            .selectinload(MenuItem.tax_profile)
+            .selectinload(TaxProfile.versions),
         )
+    )
+    return result.scalar_one_or_none()
+
+
+async def _load_category(
+    db: AsyncSession, category_id: UUID, business_id: UUID
+) -> MenuCategory | None:
+    result = await db.execute(
+        select(MenuCategory)
+        .where(
+            MenuCategory.id == category_id,
+            MenuCategory.business_id == business_id,
+        )
+        .options(
+            selectinload(MenuCategory.items)
+            .selectinload(MenuItem.modifier_groups)
+            .selectinload(ModifierGroup.modifiers),
+            selectinload(MenuCategory.items)
+            .selectinload(MenuItem.tax_profile)
+            .selectinload(TaxProfile.versions),
+        )
+        .execution_options(populate_existing=True)
+    )
+    return result.scalar_one_or_none()
+
+
+async def _load_item(
+    db: AsyncSession, item_id: UUID, business_id: UUID
+) -> MenuItem | None:
+    result = await db.execute(
+        select(MenuItem)
+        .where(MenuItem.id == item_id, MenuItem.business_id == business_id)
+        .options(
+            selectinload(MenuItem.modifier_groups).selectinload(ModifierGroup.modifiers),
+            selectinload(MenuItem.tax_profile).selectinload(TaxProfile.versions),
+        )
+        .execution_options(populate_existing=True)
     )
     return result.scalar_one_or_none()
 
@@ -47,8 +107,7 @@ async def create_menu(db: AsyncSession, business_id: UUID, data: MenuCreate) -> 
     for cat_data in data.categories:
         await _create_category_for_menu(db, menu.id, business_id, cat_data)
 
-    await db.refresh(menu, ["categories"])
-    return menu
+    return await _load_menu(db, menu.id, business_id)
 
 
 async def list_menus(db: AsyncSession, business_id: UUID) -> list[Menu]:
@@ -56,7 +115,14 @@ async def list_menus(db: AsyncSession, business_id: UUID) -> list[Menu]:
         select(Menu)
         .where(Menu.business_id == business_id)
         .options(
-            selectinload(Menu.categories).selectinload(MenuCategory.items).selectinload(MenuItem.modifier_groups).selectinload(ModifierGroup.modifiers)
+            selectinload(Menu.categories)
+            .selectinload(MenuCategory.items)
+            .selectinload(MenuItem.modifier_groups)
+            .selectinload(ModifierGroup.modifiers),
+            selectinload(Menu.categories)
+            .selectinload(MenuCategory.items)
+            .selectinload(MenuItem.tax_profile)
+            .selectinload(TaxProfile.versions),
         )
         .order_by(Menu.created_at)
     )
@@ -69,7 +135,14 @@ async def get_active_menu(db: AsyncSession, business_id: UUID) -> Menu | None:
         select(Menu)
         .where(Menu.business_id == business_id, Menu.is_active == True)  # noqa: E712
         .options(
-            selectinload(Menu.categories).selectinload(MenuCategory.items).selectinload(MenuItem.modifier_groups).selectinload(ModifierGroup.modifiers)
+            selectinload(Menu.categories)
+            .selectinload(MenuCategory.items)
+            .selectinload(MenuItem.modifier_groups)
+            .selectinload(ModifierGroup.modifiers),
+            selectinload(Menu.categories)
+            .selectinload(MenuCategory.items)
+            .selectinload(MenuItem.tax_profile)
+            .selectinload(TaxProfile.versions),
         )
         .order_by(Menu.created_at)
         .limit(1)
@@ -94,8 +167,7 @@ async def update_menu(
     if data.is_active is not None:
         menu.is_active = data.is_active
     await db.flush()
-    await db.refresh(menu)
-    return menu
+    return await _load_menu(db, menu.id, business_id)
 
 
 async def delete_menu(db: AsyncSession, menu_id: UUID, business_id: UUID) -> bool:
@@ -140,19 +212,13 @@ async def create_category(
     if result.scalar_one_or_none() is None:
         return None
     cat = await _create_category_for_menu(db, menu_id, business_id, data)
-    await db.refresh(cat, ["items"])
-    return cat
+    return await _load_category(db, cat.id, business_id)
 
 
 async def update_category(
     db: AsyncSession, category_id: UUID, business_id: UUID, data: MenuCategoryUpdate
 ) -> MenuCategory | None:
-    result = await db.execute(
-        select(MenuCategory).where(
-            MenuCategory.id == category_id, MenuCategory.business_id == business_id
-        )
-    )
-    cat = result.scalar_one_or_none()
+    cat = await _load_category(db, category_id, business_id)
     if cat is None:
         return None
     if data.name is not None:
@@ -162,8 +228,7 @@ async def update_category(
     if data.is_active is not None:
         cat.is_active = data.is_active
     await db.flush()
-    await db.refresh(cat)
-    return cat
+    return await _load_category(db, cat.id, business_id)
 
 
 async def delete_category(db: AsyncSession, category_id: UUID, business_id: UUID) -> bool:
@@ -185,9 +250,11 @@ async def delete_category(db: AsyncSession, category_id: UUID, business_id: UUID
 async def _create_item_for_category(
     db: AsyncSession, category_id: UUID, business_id: UUID, data: MenuItemCreate
 ) -> MenuItem:
+    tax_profile_id = await _resolve_tax_profile_id(db, business_id, data.tax_profile_id)
     item = MenuItem(
         category_id=category_id,
         business_id=business_id,
+        tax_profile_id=tax_profile_id,
         name=data.name,
         description=data.description,
         price=data.price,
@@ -219,19 +286,13 @@ async def create_item(
     if result.scalar_one_or_none() is None:
         return None
     item = await _create_item_for_category(db, category_id, business_id, data)
-    await db.refresh(item, ["modifier_groups"])
-    return item
+    return await _load_item(db, item.id, business_id)
 
 
 async def update_item(
     db: AsyncSession, item_id: UUID, business_id: UUID, data: MenuItemUpdate
 ) -> MenuItem | None:
-    result = await db.execute(
-        select(MenuItem).where(
-            MenuItem.id == item_id, MenuItem.business_id == business_id
-        ).options(selectinload(MenuItem.modifier_groups).selectinload(ModifierGroup.modifiers))
-    )
-    item = result.scalar_one_or_none()
+    item = await _load_item(db, item_id, business_id)
     if item is None:
         return None
     if data.name is not None:
@@ -255,26 +316,23 @@ async def update_item(
         item.display_order = data.display_order
     if data.image is not None:
         item.image = data.image
+    if data.tax_profile_id is not None:
+        item.tax_profile_id = await _resolve_tax_profile_id(
+            db, business_id, data.tax_profile_id
+        )
     await db.flush()
-    await db.refresh(item)
-    return item
+    return await _load_item(db, item.id, business_id)
 
 
 async def toggle_item_availability(
     db: AsyncSession, item_id: UUID, business_id: UUID
 ) -> MenuItem | None:
-    result = await db.execute(
-        select(MenuItem).where(
-            MenuItem.id == item_id, MenuItem.business_id == business_id
-        )
-    )
-    item = result.scalar_one_or_none()
+    item = await _load_item(db, item_id, business_id)
     if item is None:
         return None
     item.is_available = not item.is_available
     await db.flush()
-    await db.refresh(item)
-    return item
+    return await _load_item(db, item.id, business_id)
 
 
 async def delete_item(db: AsyncSession, item_id: UUID, business_id: UUID) -> bool:
@@ -389,8 +447,10 @@ async def list_library_items(db: AsyncSession, business_id: UUID) -> list[ItemLi
 async def create_library_item(
     db: AsyncSession, business_id: UUID, data: LibraryItemCreate
 ) -> ItemLibrary:
+    tax_profile_id = await _resolve_tax_profile_id(db, business_id, data.tax_profile_id)
     item = ItemLibrary(
         business_id=business_id,
+        tax_profile_id=tax_profile_id,
         name=data.name,
         description=data.description,
         price=data.price,
@@ -424,6 +484,10 @@ async def update_library_item(
         item.routing_tag = data.routing_tag
     if data.prep_time_minutes is not None:
         item.prep_time_minutes = data.prep_time_minutes
+    if data.tax_profile_id is not None:
+        item.tax_profile_id = await _resolve_tax_profile_id(
+            db, business_id, data.tax_profile_id
+        )
     await db.flush()
     await db.refresh(item)
     return item
@@ -457,6 +521,7 @@ async def save_item_to_library(
         return None
     lib_item = ItemLibrary(
         business_id=business_id,
+        tax_profile_id=source.tax_profile_id,
         name=source.name,
         description=source.description,
         price=source.price,
@@ -493,6 +558,7 @@ async def add_library_item_to_category(
     new_item = MenuItem(
         category_id=category_id,
         business_id=business_id,
+        tax_profile_id=lib_item.tax_profile_id,
         name=lib_item.name,
         description=lib_item.description,
         price=lib_item.price,
@@ -503,5 +569,4 @@ async def add_library_item_to_category(
     )
     db.add(new_item)
     await db.flush()
-    await db.refresh(new_item, ["modifier_groups"])
-    return new_item
+    return await _load_item(db, new_item.id, business_id)

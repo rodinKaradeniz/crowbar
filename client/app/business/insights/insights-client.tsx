@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useRegionalSettings } from "@/contexts/regional-context";
 import {
   BrainCircuit,
   RefreshCw,
@@ -85,6 +86,7 @@ export default function InsightsClient({
   rawHighRisk,
   businessTimezone,
 }: InsightsClientProps) {
+  const { locale } = useRegionalSettings();
   const router = useRouter();
   const [isRunning, setIsRunning] = useState(false);
 
@@ -118,7 +120,7 @@ export default function InsightsClient({
     if (diffMins < 60) return `${diffMins}m ago`;
     const diffHours = Math.floor(diffMins / 60);
     if (diffHours < 24) return `${diffHours}h ago`;
-    return date.toLocaleDateString("en-US", {
+    return date.toLocaleDateString(locale, {
       timeZone: businessTimezone,
       month: "short",
       day: "numeric",
@@ -182,7 +184,7 @@ export default function InsightsClient({
       {hasData && (
         <>
           {/* Section 1: Demand Forecast */}
-          <DemandForecastSection demandForecast={demandForecast} />
+          <DemandForecastSection demandForecast={demandForecast} locale={locale} />
 
           {/* Section 2: Customer Segmentation + Cancellation side by side */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -191,6 +193,7 @@ export default function InsightsClient({
               cancellation={cancellation}
               highRiskReservations={rawHighRisk ?? []}
               businessTimezone={businessTimezone}
+              locale={locale}
             />
           </div>
 
@@ -206,8 +209,10 @@ export default function InsightsClient({
 
 function DemandForecastSection({
   demandForecast,
+  locale,
 }: {
   demandForecast: MLDemandForecastResult | null;
+  locale: string;
 }) {
   if (!demandForecast || demandForecast.status !== "success") {
     return (
@@ -235,7 +240,7 @@ function DemandForecastSection({
     (forecasts[name] || []).map((f) => ({
       ...f,
       business: name,
-      day: new Date(`${f.date}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" }),
+      day: new Date(`${f.date}T12:00:00Z`).toLocaleDateString(locale, { weekday: "short", timeZone: "UTC" }),
     }))
   );
 
@@ -504,11 +509,13 @@ function CancellationSection({
   cancellation,
   highRiskReservations,
   businessTimezone,
+  locale,
 }: {
   cancellation: MLCancellationResult | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   highRiskReservations: any[];
   businessTimezone: string;
+  locale: string;
 }) {
   if (!cancellation || cancellation.status !== "success") {
     return (
@@ -644,7 +651,7 @@ function CancellationSection({
                       className="flex items-center justify-between p-2 rounded-md border bg-muted/30 text-xs"
                     >
                       <span className="text-muted-foreground">
-                        {new Date(r.time).toLocaleString("en-US", {
+                        {new Date(r.time).toLocaleString(locale, {
                           timeZone: businessTimezone,
                           month: "short",
                           day: "numeric",

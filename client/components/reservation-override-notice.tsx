@@ -3,6 +3,7 @@
 import { ShieldAlert } from "lucide-react";
 import type { Reservation } from "@/types";
 import { formatBusinessDateTime } from "@/lib/business-time";
+import { useRegionalSettings } from "@/contexts/regional-context";
 
 interface ReservationOverrideNoticeProps {
   reservation: Reservation;
@@ -15,6 +16,7 @@ export function ReservationOverrideNotice({
   compact = false,
   businessTimezone,
 }: ReservationOverrideNoticeProps) {
+  const { locale } = useRegionalSettings();
   if (!reservation.availabilityOverrideReason) return null;
 
   if (compact) {
@@ -37,7 +39,7 @@ export function ReservationOverrideNotice({
       <p className="mt-2 text-xs text-muted-foreground">
         {reservation.availabilityOverrideActorName || "Authorized staff member"}
         {reservation.availabilityOverriddenAt
-          ? ` · ${formatBusinessDateTime(reservation.availabilityOverriddenAt, businessTimezone)}`
+          ? ` · ${formatBusinessDateTime(reservation.availabilityOverriddenAt, businessTimezone, locale)}`
           : ""}
       </p>
     </div>

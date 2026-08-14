@@ -67,9 +67,10 @@ reviews system would need:
 
 ## E.164 Phone Number Normalization
 
-**Partially shipped:** Stage 1 removed historical US-default parsing from
-reservation and queue paths. Stage 2 still owns tenant-country-aware parsing,
-validation, display, and E.164 storage/delivery behavior.
+**Shipped:** Stage 1 removed historical US-default parsing. Stage 2 now stores
+an ISO country per tenant and normalizes business, reservation, waitlist, and
+queue phone input to E.164 through that country's numbering plan. Country
+selection and address text remain editable rather than hard-coded to Germany.
 
 ---
 

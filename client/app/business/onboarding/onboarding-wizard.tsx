@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,10 +13,14 @@ import {
   clientCreateServiceType,
   clientCompleteOnboarding,
   clientUpdateEnabledModules,
+  clientGetRegionalOptions,
+  clientGetRegionalSuggestion,
 } from "@/lib/client-api";
 import { Building2, Clock, Layers, Puzzle, ChevronRight, ChevronLeft, Check } from "lucide-react";
 import { TimezoneCombobox } from "@/components/timezone-combobox";
 import { DAYS_OF_WEEK } from "@/lib/days";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { RegionalOption } from "@/types";
 
 // Day ordering comes from the single source of truth (lib/days.ts).
 const DAYS = DAYS_OF_WEEK.map((d) => d.key);
@@ -60,6 +64,11 @@ interface OnboardingWizardProps {
   initialDescription: string;
   initialAddress: string;
   initialImage: string;
+  initialCountryCode: string;
+  initialCurrencyCode: string;
+  initialLocale: string;
+  initialTimezone: string;
+  initialTaxLabel: string;
 }
 
 export default function OnboardingWizard({
@@ -68,6 +77,11 @@ export default function OnboardingWizard({
   initialDescription,
   initialAddress,
   initialImage,
+  initialCountryCode,
+  initialCurrencyCode,
+  initialLocale,
+  initialTimezone,
+  initialTaxLabel,
 }: OnboardingWizardProps) {
   const router = useRouter();
 
@@ -81,12 +95,38 @@ export default function OnboardingWizard({
   const [image, setImage] = useState(initialImage);
   // Prefill the timezone from the browser; the owner confirms/changes it.
   const [timezone, setTimezone] = useState<string>(() => {
+    if (initialTimezone && initialTimezone !== "UTC") return initialTimezone;
     try {
       return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
     } catch {
       return "UTC";
     }
   });
+  const [countryCode, setCountryCode] = useState(initialCountryCode);
+  const [currencyCode, setCurrencyCode] = useState(initialCurrencyCode);
+  const [locale, setLocale] = useState(initialLocale);
+  const [taxLabel, setTaxLabel] = useState(initialTaxLabel);
+  const [countries, setCountries] = useState<RegionalOption[]>([]);
+  const [currencies, setCurrencies] = useState<RegionalOption[]>([]);
+
+  useEffect(() => {
+    void clientGetRegionalOptions("en").then((options) => {
+      setCountries(options.countries);
+      setCurrencies(options.currencies);
+    }).catch(() => {});
+  }, []);
+
+  async function applyCountrySuggestion(code: string) {
+    setCountryCode(code);
+    try {
+      const suggestion = await clientGetRegionalSuggestion(code);
+      setCurrencyCode(suggestion.currencyCode);
+      setLocale(suggestion.locale);
+      setTaxLabel(suggestion.taxLabel);
+    } catch {
+      // Country remains editable even if optional suggestion data is unavailable.
+    }
+  }
 
   // Step 2: Hours
   const [hours, setHours] = useState<Record<string, DayHours>>(defaultHours);
@@ -108,7 +148,10 @@ export default function OnboardingWizard({
       if (step === 0) {
         if (!name.trim()) { toast.error("Business name is required"); return; }
         if (!timezone) { toast.error("Timezone is required"); return; }
-        await clientUpdateBusiness(businessId, { name, description, address, image, timezone });
+        await clientUpdateBusiness(businessId, {
+          name, description, address, image, timezone,
+          countryCode, currencyCode, locale, taxLabel,
+        });
         setStep(1);
       } else if (step === 1) {
         const operatingHours = Object.fromEntries(
@@ -224,6 +267,26 @@ export default function OnboardingWizard({
                   onChange={(e) => setAddress(e.target.value)}
                   placeholder="123 Main St, City, Country"
                 />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Country *</Label>
+                  <Select value={countryCode} onValueChange={(value) => void applyCountrySuggestion(value)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{countries.map((option) => <SelectItem key={option.code} value={option.code}>{option.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Currency *</Label>
+                  <Select value={currencyCode} onValueChange={setCurrencyCode}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{currencies.map((option) => <SelectItem key={option.code} value={option.code}>{option.code} — {option.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5"><Label htmlFor="biz-locale">Formatting locale *</Label><Input id="biz-locale" value={locale} onChange={(event) => setLocale(event.target.value)} placeholder="de-DE" /></div>
+                <div className="space-y-1.5"><Label htmlFor="biz-tax-label">Tax label *</Label><Input id="biz-tax-label" value={taxLabel} onChange={(event) => setTaxLabel(event.target.value)} placeholder="VAT, GST, MwSt., Tax" /></div>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="biz-tz">Timezone *</Label>

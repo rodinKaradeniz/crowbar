@@ -14,6 +14,7 @@ import { NightTheme } from "@/components/night-theme";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { formatMoney } from "@/lib/money";
+import { useRegionalSettings } from "@/contexts/regional-context";
 
 const STATUS_LABEL: Record<string, string> = {
   received: "Order received",
@@ -39,6 +40,8 @@ interface CartItem {
     happyHourPrice?: number | null;
     isAlcoholic?: boolean;
     routingTag: string;
+    taxRate?: number;
+    priceIncludesTax?: boolean;
   };
   quantity: number;
   selectedModifiers: Array<{ modifierId: string; name: string; priceDelta: number }>;
@@ -56,6 +59,8 @@ interface OrderClientProps {
 }
 
 export default function OrderClient({ businessId, businessSlug, legalDrinkingAge }: OrderClientProps) {
+  const { currencyCode, locale, taxLabel } = useRegionalSettings();
+  const money = (value: number | string) => formatMoney(value, currencyCode, locale);
   const searchParams = useSearchParams();
   const tableToken = searchParams.get("table_token");
 
@@ -116,10 +121,19 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
   const effectivePrice = (item: CartItem["item"]) =>
     hhActive && item.happyHourPrice != null ? item.happyHourPrice : item.price;
 
-  const totalPrice = cart.reduce((sum, ci) => {
-    const modTotal = ci.selectedModifiers.reduce((s, m) => s + m.priceDelta, 0);
-    return sum + (effectivePrice(ci.item) + modTotal) * ci.quantity;
-  }, 0);
+  const currencyDigits = new Intl.NumberFormat(locale, { style: "currency", currency: currencyCode })
+    .resolvedOptions().maximumFractionDigits;
+  const roundCurrency = (value: number) => Number(value.toFixed(currencyDigits));
+  const cartTotals = cart.reduce((totals, ci) => {
+    const modTotal = ci.selectedModifiers.reduce((sum, modifier) => sum + modifier.priceDelta, 0);
+    const entered = roundCurrency((effectivePrice(ci.item) + modTotal) * ci.quantity);
+    const rate = (ci.item.taxRate ?? 0) / 100;
+    const includes = ci.item.priceIncludesTax ?? true;
+    const net = includes && rate > 0 ? roundCurrency(entered / (1 + rate)) : entered;
+    const tax = includes ? roundCurrency(entered - net) : roundCurrency(net * rate);
+    return { subtotal: totals.subtotal + net, tax: totals.tax + tax, total: totals.total + net + tax };
+  }, { subtotal: 0, tax: 0, total: 0 });
+  const totalPrice = roundCurrency(cartTotals.total);
 
   // Whether the cart contains any alcoholic item. Gates the attestation step and
   // is re-validated server-side at placement (the backend is authoritative).
@@ -209,10 +223,15 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
                 ))}
               </div>
               <div className="rule-double" />
+              <div className="flex items-baseline gap-2.5 text-xs text-muted-foreground">
+                <span>Operational {taxLabel}</span>
+                <span className="leader-dots" aria-hidden />
+                <span className="figures">{money(order.taxAmount)}</span>
+              </div>
               <div className="flex items-baseline gap-2.5">
                 <span className="eyebrow">Total</span>
                 <span className="leader-dots text-brass" aria-hidden />
-                <span className="figures text-base">{formatMoney(order.totalAmount)}</span>
+                <span className="figures text-base">{money(order.totalAmount)}</span>
               </div>
             </div>
           ))
@@ -275,7 +294,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
                           <span className="figures text-muted-foreground">{ci.quantity}×</span> {ci.item.name}
                         </span>
                         <span className="leader-dots text-brass" aria-hidden />
-                        <span className="figures text-sm shrink-0">{formatMoney(lineTotal)}</span>
+                        <span className="figures text-sm shrink-0">{money(lineTotal)}</span>
                       </div>
                       {ci.selectedModifiers.length > 0 && (
                         <p className="text-xs text-muted-foreground mt-1">
@@ -326,10 +345,15 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
                     </span>
                   </label>
                 )}
+                <div className="mb-2 flex items-baseline gap-2.5 text-xs text-muted-foreground">
+                  <span>Estimated {taxLabel} (non-fiscal)</span>
+                  <span className="leader-dots" aria-hidden />
+                  <span className="figures">{money(roundCurrency(cartTotals.tax))}</span>
+                </div>
                 <div className="flex items-baseline gap-2.5 mb-3">
                   <span className="eyebrow">Total</span>
                   <span className="leader-dots text-brass" aria-hidden />
-                  <span className="figures text-base">{formatMoney(totalPrice)}</span>
+                  <span className="figures text-base">{money(totalPrice)}</span>
                 </div>
                 <Button
                   className="w-full"

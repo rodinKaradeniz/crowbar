@@ -29,8 +29,7 @@ import {
 } from "@/lib/cart";
 import type { Menu, MenuItem, ModifierGroup, SelectedModifier } from "@/types";
 import { formatMoney } from "@/lib/money";
-
-const money = formatMoney;
+import { useRegionalSettings } from "@/contexts/regional-context";
 
 function generateIdempotencyKey(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -53,6 +52,8 @@ export function TabOrderCompose({
   onOpenChange,
   onAdded,
 }: TabOrderComposeProps) {
+  const { currencyCode, locale } = useRegionalSettings();
+  const money = (value: number | string) => formatMoney(value, currencyCode, locale);
   const [menu, setMenu] = useState<Menu | null>(null);
   const [loading, setLoading] = useState(true);
   const [cart, setCart] = useState<CartItem[]>([]);

@@ -1,6 +1,6 @@
 # Crowbar Architecture
 
-Last verified against the repository and confirmed MVP boundary on 2026-08-13.
+Last verified against the repository and confirmed MVP boundary on 2026-08-14.
 
 ## Product Boundary
 
@@ -14,9 +14,9 @@ bar. Crowbar is the operational system through reservations, queue, floor,
 orders, externally settled tabs, stock, purchasing, costs, guest context, and
 operational reports. A separate compliant register remains payment and fiscal
 authority. The MVP does not implement payment processing, a cash register,
-receipts/invoices, TSE, DSFinV-K, or fiscal/accounting exports. Tenant tax
-profiles planned in the MVP are effective-dated operational estimates, not a
-fiscal subsystem.
+receipts/invoices, TSE, DSFinV-K, or fiscal/accounting exports. Implemented
+tenant tax profiles are effective-dated operational estimates, not a fiscal
+subsystem.
 
 The current tenancy model assumes one active business association per staff
 login. Every newly created business receives a primary location, and migration
@@ -188,6 +188,34 @@ address. A blocked request uses the standard `RATE_LIMITED` error body and
 `Retry-After`. Redis failure is logged and fails open so a protection-layer
 incident does not take reservations or ordering offline. The Next.js docs
 assistant has no equivalent control yet.
+
+### Regional configuration and operational tax
+
+Migration 037 adds `businesses.country_code`, `currency_code`, `locale`, and
+`tax_label`; the existing IANA `timezone`, phone, free-text address, and legal
+age complete the tenant region boundary. `app/core/regional.py` validates ISO
+country/currency identifiers, BCP 47 locales, IANA zones, currency minor-unit
+precision, and country-parsed E.164 phone input. Babel/CLDR supplies public
+country/currency options and editable country suggestions. The frontend
+`RegionalSettingsProvider`, `money.ts`, and `business-time.ts` carry the stored
+values through public and staff presentation. Locale is formatting-only; UI
+copy remains English.
+
+`tax_profiles` is the stable tenant/code identity and
+`tax_profile_versions` is append-only policy history: name, rate,
+inclusive/exclusive flag, effective instant, note, and actor. Owners/managers
+manage profiles and explicitly assign every newly priced menu/library item;
+there is no runtime food/beverage classifier. Modifier and happy-hour pricing
+inherit the menu item's profile. A profile cannot be archived while active
+catalogue or library rows reference it. `business_regional_audits` stores the
+actor and complete before/after region values.
+
+Currency can change only while the tenant has no menu item, library item,
+inventory-cost row, or order. This avoids reinterpreting historical amounts;
+an established-tenant conversion needs a future explicit migration/repricing
+workflow. The seed's German 19/7/zero examples are editable demo data only.
+Non-German businesses receive neutral placeholders and use the same manager
+workflow without code changes.
 
 ### Guest CRM and retention
 
@@ -448,9 +476,16 @@ created.
 Each order stores a canonical request fingerprint. Idempotency keys are unique
 within a business: exact retries return the existing order without publishing
 another event, different requests using the same key conflict, and concurrent
-public/staff retries converge on one persisted order. The Stage 2 tax snapshot
-will extend this server-owned resolution point rather than adding client tax
-authority.
+public/staff retries converge on one persisted order.
+
+At the same server-owned resolution point, placement resolves the effective
+tax-profile version after happy-hour and modifier pricing. Each line is rounded
+half-up to the configured currency minor unit and snapshots currency,
+profile/version IDs, profile name/code, rate, inclusion policy, net subtotal,
+tax, and gross total. The order stores summed subtotal/tax/total and currency.
+Mixed inclusive/exclusive profiles are supported; later profile or menu changes
+cannot rewrite placed lines. These values are operational/non-fiscal and the
+client preview never becomes calculation authority.
 
 ### Inventory and order fulfillment
 
@@ -489,9 +524,9 @@ Backend integration tests do not run migrations. Their autouse fixture creates
 and drops ORM metadata in a dedicated `crowbar_test` PostgreSQL database. This
 means both migrations and ORM metadata require deliberate validation.
 
-Migrations 023–036 are implemented locally. On 2026-08-14 the repeatable
-`scripts/verify-fresh-db.sh` check applied the full 001–036 chain, ran the
-canonical seed twice, asserted its Stage 1 schema/relationship invariants, and
+Migrations 023–037 are implemented locally. On 2026-08-14 the repeatable
+`scripts/verify-fresh-db.sh` check applied the full 001–037 chain, ran the
+canonical seed twice, asserted its schema/relationship invariants, and
 cleaned the disposable database. The seed still lacks the complete Stage 7
 pilot scenario and therefore does not prove the full MVP demo journey. Railway
 remains at migrations 001–022 while deployment is paused.

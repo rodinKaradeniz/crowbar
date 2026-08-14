@@ -23,6 +23,7 @@ import {
   clientSetRecipe,
   clientGetMenuItemStockFlags,
   clientGetInventoryItems,
+  clientGetTaxProfiles,
 } from "@/lib/client-api";
 import type {
   InventoryItem,
@@ -32,6 +33,7 @@ import type {
   MenuItem,
   MenuItemStockInfo,
   RecipeIngredient,
+  TaxProfile,
 } from "@/types";
 import Link from "next/link";
 import { isLiquidUnitType, mlToOz, ozToMl } from "@/lib/units";
@@ -80,7 +82,8 @@ import {
 } from "lucide-react";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { EmptyState } from "@/components/empty-state";
-import { formatMoney, MVP_CURRENCY } from "@/lib/money";
+import { formatMoney } from "@/lib/money";
+import { useRegionalSettings } from "@/contexts/regional-context";
 
 const ROUTING_ICONS: Record<string, React.ReactNode> = {
   kitchen: <ChefHat className="h-3 w-3" />,
@@ -91,12 +94,16 @@ const ROUTING_ICONS: Record<string, React.ReactNode> = {
 interface Props {
   businessId: string;
   businessSlug: string;
+  canManageTax: boolean;
 }
 
-export function MenuManagementClient({ businessId, businessSlug }: Props) {
+export function MenuManagementClient({ businessId, businessSlug, canManageTax }: Props) {
+  const { currencyCode, locale, taxLabel } = useRegionalSettings();
+  const money = (value: number | string) => formatMoney(value, currencyCode, locale);
   const [menus, setMenus] = useState<Menu[]>([]);
   const [selectedMenuId, setSelectedMenuId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [taxProfiles, setTaxProfiles] = useState<TaxProfile[]>([]);
 
   // ── Public QR-menu link (share/copy) ─────────────────────────────────────────
   // The public menu route is keyed by slug (/menu/[slug]); build the absolute URL
@@ -159,6 +166,7 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
     isAlcoholic: false,
     routingTag: "kitchen",
     prepTime: "",
+    taxProfileId: "",
   });
   const [targetCategoryId, setTargetCategoryId] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
@@ -179,6 +187,7 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
     isAlcoholic: false,
     routingTag: "kitchen",
     prepTime: "",
+    taxProfileId: "",
   });
 
   // ── Recipe editor + low-stock badges ─────────────────────────────────────────
@@ -192,6 +201,7 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
   useEffect(() => {
     void loadMenus();
     void loadStockFlags();
+    void clientGetTaxProfiles().then(setTaxProfiles).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [businessId]);
 
@@ -357,6 +367,10 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
   // ── Item CRUD ─────────────────────────────────────────────────────────────────
 
   function openCreateItem(categoryId: string) {
+    if (!canManageTax) {
+      toast.error("Only owners and managers can create priced items and assign their tax profile");
+      return;
+    }
     setEditingItem(null);
     setItemForm({
       name: "",
@@ -366,6 +380,7 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
       isAlcoholic: false,
       routingTag: "kitchen",
       prepTime: "",
+      taxProfileId: taxProfiles.find((profile) => profile.isActive && profile.code === "STANDARD")?.id ?? taxProfiles.find((profile) => profile.isActive)?.id ?? "",
     });
     setTargetCategoryId(categoryId);
     setItemDialog(true);
@@ -384,6 +399,7 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
       isAlcoholic: item.isAlcoholic ?? false,
       routingTag: item.routingTag,
       prepTime: item.prepTimeMinutes ? String(item.prepTimeMinutes) : "",
+      taxProfileId: item.taxProfileId,
     });
     setTargetCategoryId(categoryId);
     setItemDialog(true);
@@ -418,6 +434,7 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
           prepTimeMinutes: itemForm.prepTime
             ? parseInt(itemForm.prepTime)
             : undefined,
+          taxProfileId: canManageTax ? itemForm.taxProfileId || undefined : undefined,
         });
         updateItemInState(updated, targetCategoryId);
       } else {
@@ -434,6 +451,7 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
             prepTimeMinutes: itemForm.prepTime
               ? parseInt(itemForm.prepTime)
               : undefined,
+            taxProfileId: canManageTax ? itemForm.taxProfileId || undefined : undefined,
           },
         );
         addItemToCategory(created, targetCategoryId);
@@ -541,6 +559,10 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
   }
 
   function openCreateLibraryItem() {
+    if (!canManageTax) {
+      toast.error("Only owners and managers can create priced items and assign their tax profile");
+      return;
+    }
     setEditingLibraryItem(null);
     setLibraryItemForm({
       name: "",
@@ -550,6 +572,7 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
       isAlcoholic: false,
       routingTag: "kitchen",
       prepTime: "",
+      taxProfileId: taxProfiles.find((profile) => profile.isActive && profile.code === "STANDARD")?.id ?? taxProfiles.find((profile) => profile.isActive)?.id ?? "",
     });
     setLibraryItemDialog(true);
   }
@@ -564,6 +587,7 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
       isAlcoholic: false,
       routingTag: item.routingTag,
       prepTime: item.prepTimeMinutes ? String(item.prepTimeMinutes) : "",
+      taxProfileId: item.taxProfileId,
     });
     setLibraryItemDialog(true);
   }
@@ -588,6 +612,7 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
             prepTimeMinutes: libraryItemForm.prepTime
               ? parseInt(libraryItemForm.prepTime)
               : undefined,
+            taxProfileId: canManageTax ? libraryItemForm.taxProfileId || undefined : undefined,
           },
         );
         setLibrary((prev) =>
@@ -602,6 +627,7 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
           prepTimeMinutes: libraryItemForm.prepTime
             ? parseInt(libraryItemForm.prepTime)
             : undefined,
+          taxProfileId: canManageTax ? libraryItemForm.taxProfileId || undefined : undefined,
         });
         setLibrary((prev) => [...prev, created]);
       }
@@ -794,6 +820,7 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
                     onDeleteCategory={deleteCategory}
                     onSaveToLibrary={saveToLibrary}
                     onEditRecipe={setRecipeItem}
+                    canCreateItems={canManageTax}
                   />
                 ))
               )}
@@ -869,14 +896,14 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
           <DialogHeader>
             <DialogTitle>{editingItem ? "Edit Item" : "New Item"}</DialogTitle>
           </DialogHeader>
-          <ItemFormFields form={itemForm} onChange={setItemForm} showHappyHour showAlcohol />
+          <ItemFormFields form={itemForm} onChange={setItemForm} showHappyHour showAlcohol taxProfiles={taxProfiles} canManageTax={canManageTax} currencyCode={currencyCode} taxLabel={taxLabel} />
           <DialogFooter>
             <Button variant="outline" onClick={() => setItemDialog(false)}>
               Cancel
             </Button>
             <Button
               onClick={saveItem}
-              disabled={!itemForm.name.trim() || !itemForm.price}
+              disabled={!itemForm.name.trim() || !itemForm.price || (!editingItem && !itemForm.taxProfileId)}
             >
               {editingItem ? "Save" : "Add Item"}
             </Button>
@@ -900,10 +927,10 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
                 ? "Click + to add an item to the selected category."
                 : "Manage reusable item templates."}
             </p>
-            <Button size="sm" variant="outline" onClick={openCreateLibraryItem}>
+            {canManageTax && <Button size="sm" variant="outline" onClick={openCreateLibraryItem}>
               <Plus className="h-3.5 w-3.5 mr-1" />
               New
-            </Button>
+            </Button>}
           </div>
 
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
@@ -917,14 +944,14 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
                 <p className="text-sm text-muted-foreground">
                   No library items yet.
                 </p>
-                <Button
+                {canManageTax && <Button
                   size="sm"
                   className="mt-3"
                   onClick={openCreateLibraryItem}
                 >
                   <Plus className="h-3.5 w-3.5 mr-1" />
                   Add first item
-                </Button>
+                </Button>}
               </div>
             ) : (
               library.map((item) => (
@@ -951,7 +978,7 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
                       </p>
                     )}
                     <p className="text-sm font-semibold mt-1">
-                      {formatMoney(item.price)}
+                      {money(item.price)}
                     </p>
                   </div>
                   <div className="flex gap-1 shrink-0">
@@ -1007,6 +1034,10 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
           <ItemFormFields
             form={libraryItemForm}
             onChange={setLibraryItemForm}
+            taxProfiles={taxProfiles}
+            canManageTax={canManageTax}
+            currencyCode={currencyCode}
+            taxLabel={taxLabel}
           />
           <DialogFooter>
             <Button
@@ -1017,7 +1048,7 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
             </Button>
             <Button
               onClick={saveLibraryItem}
-              disabled={!libraryItemForm.name.trim() || !libraryItemForm.price}
+              disabled={!libraryItemForm.name.trim() || !libraryItemForm.price || (!editingLibraryItem && !libraryItemForm.taxProfileId)}
             >
               {editingLibraryItem ? "Save" : "Add to Library"}
             </Button>
@@ -1088,6 +1119,7 @@ type ItemFormState = {
   isAlcoholic: boolean;
   routingTag: string;
   prepTime: string;
+  taxProfileId: string;
 };
 
 function ItemFormFields({
@@ -1095,6 +1127,10 @@ function ItemFormFields({
   onChange,
   showHappyHour = false,
   showAlcohol = false,
+  taxProfiles,
+  canManageTax,
+  currencyCode,
+  taxLabel,
 }: {
   form: ItemFormState;
   onChange: React.Dispatch<React.SetStateAction<ItemFormState>>;
@@ -1102,6 +1138,10 @@ function ItemFormFields({
   showHappyHour?: boolean;
   // Alcohol flag only applies to live menu items, not library templates.
   showAlcohol?: boolean;
+  taxProfiles: TaxProfile[];
+  canManageTax: boolean;
+  currencyCode: string;
+  taxLabel: string;
 }) {
   return (
     <div className="space-y-3 py-2">
@@ -1126,7 +1166,7 @@ function ItemFormFields({
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <Label>Price ({MVP_CURRENCY})</Label>
+          <Label>Price ({currencyCode})</Label>
           <Input
             type="number"
             min="0"
@@ -1151,7 +1191,7 @@ function ItemFormFields({
       </div>
       {showHappyHour && (
         <div className="space-y-1.5">
-          <Label>Happy hour price ({MVP_CURRENCY})</Label>
+          <Label>Happy hour price ({currencyCode})</Label>
           <Input
             type="number"
             min="0"
@@ -1189,6 +1229,14 @@ function ItemFormFields({
             <SelectItem value="any">Any</SelectItem>
           </SelectContent>
         </Select>
+      </div>
+      <div className="space-y-1.5">
+        <Label>Operational tax profile</Label>
+        <Select value={form.taxProfileId} onValueChange={(value) => onChange((current) => ({ ...current, taxProfileId: value }))} disabled={!canManageTax}>
+          <SelectTrigger><SelectValue placeholder="Choose a tax profile" /></SelectTrigger>
+          <SelectContent>{taxProfiles.filter((profile) => profile.isActive).map((profile) => <SelectItem key={profile.id} value={profile.id}>{profile.currentVersion?.name ?? profile.code} · {profile.currentVersion?.rate ?? 0}%</SelectItem>)}</SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">{canManageTax ? `Modifiers inherit this profile. Estimates are non-fiscal ${taxLabel} data.` : "Only owners and managers can change tax assignments."}</p>
       </div>
       {showAlcohol && (
         <div className="flex items-start gap-2 rounded-md border p-3">
@@ -1229,6 +1277,7 @@ function CategorySection({
   onDeleteCategory,
   onSaveToLibrary,
   onEditRecipe,
+  canCreateItems,
 }: {
   menu: Menu;
   category: MenuCategory;
@@ -1241,7 +1290,10 @@ function CategorySection({
   onDeleteCategory: (menuId: string, categoryId: string) => void;
   onSaveToLibrary: (item: MenuItem) => void;
   onEditRecipe: (item: MenuItem) => void;
+  canCreateItems: boolean;
 }) {
+  const { currencyCode, locale } = useRegionalSettings();
+  const money = (value: number | string) => formatMoney(value, currencyCode, locale);
   return (
     <div className="rounded-lg border overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 bg-muted/40 border-b">
@@ -1255,14 +1307,14 @@ function CategorySection({
             <BookMarked className="h-3.5 w-3.5 mr-1" />
             Library
           </Button>
-          <Button
+          {canCreateItems && <Button
             size="sm"
             variant="ghost"
             onClick={() => onAddItem(category.id)}
           >
             <Plus className="h-3.5 w-3.5 mr-1" />
             Item
-          </Button>
+          </Button>}
           <Button
             size="sm"
             variant="ghost"
@@ -1276,10 +1328,7 @@ function CategorySection({
 
       {category.items.length === 0 ? (
         <p className="text-sm text-muted-foreground px-4 py-3">
-          No items.{" "}
-          <button className="underline" onClick={() => onAddItem(category.id)}>
-            Add one
-          </button>
+          {canCreateItems ? <>No items. <button className="underline" onClick={() => onAddItem(category.id)}>Add one</button></> : "No items yet."}
         </p>
       ) : (
         <div className="divide-y">
@@ -1332,7 +1381,7 @@ function CategorySection({
                 )}
               </div>
               <span className="text-sm font-medium tabular-nums shrink-0">
-                {formatMoney(item.price)}
+                {money(item.price)}
               </span>
               <div className="flex gap-1">
                 <Button

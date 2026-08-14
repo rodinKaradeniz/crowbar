@@ -29,6 +29,7 @@ import { ShoppingCart, Plus, Minus, ChefHat } from "lucide-react";
 import Link from "next/link";
 import { NightTheme } from "@/components/night-theme";
 import { formatMoney } from "@/lib/money";
+import { useRegionalSettings } from "@/contexts/regional-context";
 
 interface MenuClientProps {
   businessId: string;
@@ -36,6 +37,8 @@ interface MenuClientProps {
 }
 
 export default function MenuClient({ businessId, businessSlug }: MenuClientProps) {
+  const { currencyCode, locale, taxLabel } = useRegionalSettings();
+  const money = (value: number | string) => formatMoney(value, currencyCode, locale);
   const searchParams = useSearchParams();
   const tableToken = searchParams.get("table_token");
 
@@ -175,14 +178,14 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                         {hhActive && item.happyHourPrice != null ? (
                           <span className="shrink-0 text-right">
                             <span className="figures text-sm text-primary">
-                              {formatMoney(item.happyHourPrice)}
+                              {money(item.happyHourPrice)}
                             </span>{" "}
                             <span className="figures text-xs text-muted-foreground line-through">
-                              {formatMoney(item.price)}
+                              {money(item.price)}
                             </span>
                           </span>
                         ) : (
-                          <span className="figures text-sm shrink-0">{formatMoney(item.price)}</span>
+                          <span className="figures text-sm shrink-0">{money(item.price)}</span>
                         )}
                       </div>
                       {item.description && (
@@ -197,6 +200,11 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                         {item.prepTimeMinutes && (
                           <span className="figures text-xs text-muted-foreground">
                             ~{item.prepTimeMinutes} min
+                          </span>
+                        )}
+                        {item.taxProfileName && (
+                          <span className="text-[11px] text-muted-foreground">
+                            {item.priceIncludesTax ? `incl. ${taxLabel}` : `plus ${taxLabel}`} · {item.taxRate}% {item.taxProfileName}
                           </span>
                         )}
                       </div>
@@ -227,7 +235,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                 <Button className="w-full" size="lg">
                   <ShoppingCart className="h-5 w-5 mr-2" />
                   View Cart · {totalItems} item{totalItems !== 1 ? "s" : ""} ·{" "}
-                  <span className="figures">{formatMoney(totalPrice)}</span>
+                  <span className="figures">{money(totalPrice)}</span>
                 </Button>
               </Link>
             ) : (
@@ -253,15 +261,15 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                 {hhActive && selectedItem.happyHourPrice != null ? (
                   <div className="flex items-baseline gap-2">
                     <p className="figures text-base text-primary">
-                      {formatMoney(selectedItem.happyHourPrice)}
+                      {money(selectedItem.happyHourPrice)}
                     </p>
                     <p className="figures text-sm text-muted-foreground line-through">
-                      {formatMoney(selectedItem.price)}
+                      {money(selectedItem.price)}
                     </p>
                     <span className="eyebrow text-primary">Happy Hour</span>
                   </div>
                 ) : (
-                  <p className="figures text-base">{formatMoney(selectedItem.price)}</p>
+                  <p className="figures text-base">{money(selectedItem.price)}</p>
                 )}
               </SheetHeader>
 
@@ -287,7 +295,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                           </Label>
                           {mod.priceDelta > 0 && (
                             <span className="figures text-xs text-muted-foreground">
-                              +{formatMoney(mod.priceDelta)}
+                              +{money(mod.priceDelta)}
                             </span>
                           )}
                         </div>
@@ -329,7 +337,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                 <Button className="w-full" onClick={addToCart}>
                   Add to Cart ·{" "}
                   <span className="figures">
-                    {formatMoney(
+                    {money(
                       (effectivePrice(selectedItem, hhActive) +
                         modifierTotal(sheetMods)) *
                       sheetQty,

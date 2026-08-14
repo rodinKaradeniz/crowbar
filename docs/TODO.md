@@ -198,25 +198,53 @@ regression tests are closed. Work in the following dependency order.
   has a regression test; every retained route has working auth, onboarding,
   entitlement, failure, and empty-state behavior.
 
-### 2. Germany-ready operational configuration — ready
+### 2. Germany-ready operational configuration — complete
 
-- Add tenant country, `EUR` currency, `de-DE` locale, IANA timezone, and
-  country-aware address/phone defaults. Format money, dates, service days, and
-  phone input from tenant configuration across public and staff surfaces.
-- Add owner/manager-controlled, effective-dated tax profiles assigned to menu
-  items, with inclusive/exclusive pricing policy, audit history, and an
-  immutable line-level tax snapshot at order placement. Seed editable German
-  defaults for food, beverages, and custom/exempt treatment without hard-coding
-  law into old orders.
-- Label tax calculations and exports as operational/non-fiscal for this MVP.
-  They support pricing and margin analysis but do not replace the venue's tax
-  adviser, compliant register, TSE, receipt, or fiscal export.
-- Add tests for tax changes over time, mixed-profile orders, inclusive rounding,
-  locale formatting, DST, and tenant isolation.
-- **Exit gate:** a German tenant can configure and audit operational tax
+**Completed locally 2026-08-14 in migration 037.** The implementation is
+country-neutral; Germany is the first editable demo preset rather than a
+runtime legal rules engine.
+
+- **Complete — regional tenant boundary:** Businesses persist an ISO country,
+  ISO currency, BCP 47 formatting locale, IANA timezone, editable tax label,
+  country-parsed E.164 phone, free-text address, and existing editable legal
+  drinking age. Registration, onboarding, public pages, staff pages, money,
+  operational dates, and service time consume those values. Applying a country
+  suggestion is an explicit UI action and never silently overwrites tenant
+  choices. Product copy remains English; locale controls formatting only.
+- **Complete — safe currency lifecycle:** Currency is editable before priced
+  catalogue, inventory-cost, or order records exist and is locked afterward.
+  Storage supports ISO currencies with up to four decimal places; line totals
+  quantize half-up to the selected currency's minor unit.
+- **Complete — operational tax authority:** Owners/managers create stable,
+  tenant-scoped tax profiles and append effective-dated versions with rate,
+  inclusive/exclusive policy, note, and actor. They must explicitly assign a
+  profile when creating a priced item; runtime code does not infer food or
+  beverage treatment. Ordinary staff may edit non-tax item details and reuse
+  already-classified library items but cannot create profiles, change versions,
+  archive assigned profiles, or change assignments.
+- **Complete — immutable calculations:** Server-authoritative order placement
+  resolves the effective item profile after happy-hour/modifier pricing and
+  snapshots currency, profile/version identity and label, rate, inclusion
+  policy, net subtotal, tax, and gross total on every line plus order totals.
+  Later profile changes do not rewrite old orders. Public checkout and menu
+  disclosures label this as estimated operational/non-fiscal tax.
+- **Complete — editable German seed:** The Puzzles demo uses DE/EUR/`de-DE`/
+  `Europe/Berlin` and editable 19% beverage/standard, 7% food/reduced, 0%
+  exempt, and 0% custom examples. These are demo suggestions to verify with the
+  venue's adviser, not automatic classification or legal advice. Non-German
+  tenants receive editable zero-rate placeholders and configure their own
+  profiles without a code change.
+- **Complete — audit and proof:** Regional changes retain before/after values
+  and actor; tax history is append-only. Unit/integration coverage exercises
+  identifier/phone validation, currency precision, inclusive/exclusive and
+  mixed-profile rounding, temporal versions, immutable snapshots, permissions,
+  tenant isolation, locale formatting, and Berlin DST. The full backend,
+  frontend lint/test/type/build, migration-upgrade, and fresh repeat-seed gates
+  pass; [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md) records exact evidence.
+- **Exit gate — met:** A German tenant can configure and audit operational tax
   treatment without Crowbar representing itself as a fiscal cash register.
 
-### 3. Complete the guest-to-table workflow — ready after stage 2
+### 3. Complete the guest-to-table workflow — ready
 
 - Make the current-service queue explicitly open/closed and schedule/capacity
   aware. Add staff-created walk-ins, duplicate/idempotency protection,
@@ -367,6 +395,16 @@ regression tests are closed. Work in the following dependency order.
   cash drawer, terminals/processors, tips, split/partial tenders, refunds,
   deposits/card holds, reconciliation/payouts, audit export, hardware support,
   and offline fiscal behavior.
+- Add jurisdiction-specific compound/stacked taxes, tax-on-tax rules, cash
+  rounding, filing categories/returns, fiscal invoices, exemption evidence,
+  country-maintained legal preset catalogues, and automatic product
+  classification only after jurisdictional review. The MVP's manual profiles
+  deliberately make none of those claims.
+- Add full UI/content translation and locale negotiation separately from the
+  shipped formatting locale. English product copy is the MVP contract.
+- Design an explicit currency-migration/repricing workflow before allowing an
+  established tenant with priced or monetary history to change currency; do
+  not reinterpret historical amounts in place.
 - Evaluate delivery marketplaces, loyalty/marketing, reviews, workforce
   scheduling/time clock/payroll exports, native apps, multi-location
   management, full customizable RBAC/audit, accounting integrations, and

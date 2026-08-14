@@ -19,6 +19,11 @@ export async function POST(request: NextRequest) {
       business_slug: body.businessSlug,
       business_address: body.businessAddress || null,
       business_description: body.businessDescription || null,
+      country_code: body.countryCode,
+      currency_code: body.currencyCode,
+      locale: body.locale,
+      timezone: body.timezone,
+      tax_label: body.taxLabel,
     };
 
     // Call FastAPI registration endpoint

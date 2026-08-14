@@ -8,12 +8,21 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.core.regional import (
+    normalize_phone,
+    validate_country_code,
+    validate_currency_code,
+    validate_locale,
+    validate_tax_label,
+    validate_timezone,
+)
 from app.models.business import Business
 from app.models.location import Location
 from app.models.password_reset_token import PasswordResetToken
 from app.models.staff import Staff
 from app.models.user import User
 from app.services.booking_schedule_service import create_default_booking_schedule
+from app.services.tax_service import create_default_profiles
 
 
 PASSWORD_MIN_LENGTH = 12
@@ -134,10 +143,22 @@ async def register_business_owner(
     business_slug: str,
     business_address: str | None = None,
     business_description: str | None = None,
+    country_code: str = "DE",
+    currency_code: str = "EUR",
+    locale: str = "de-DE",
+    timezone: str = "Europe/Berlin",
+    tax_label: str = "VAT",
 ) -> tuple[User, Business]:
     """Register a business owner: creates user + business + staff assignment in one transaction."""
     validate_password(password)
     # 1. Create the staff user
+    country_code = validate_country_code(country_code)
+    currency_code = validate_currency_code(currency_code)
+    locale = validate_locale(locale)
+    timezone = validate_timezone(timezone)
+    tax_label = validate_tax_label(tax_label)
+    phone = normalize_phone(phone, country_code) or phone
+
     user = User(
         email=email,
         name=name,
@@ -156,10 +177,16 @@ async def register_business_owner(
         phone=phone,
         address=business_address,
         description=business_description,
+        country_code=country_code,
+        currency_code=currency_code,
+        locale=locale,
+        timezone=timezone,
+        tax_label=tax_label,
     )
     db.add(business)
     await db.flush()
     await create_default_booking_schedule(db, business)
+    await create_default_profiles(db, business, actor_id=user.id)
 
     db.add(
         Location(

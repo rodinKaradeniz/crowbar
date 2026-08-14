@@ -3,14 +3,15 @@
 import { useState } from "react";
 import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { clientAcceptWaitlistOffer } from "@/lib/client-api";
+import { clientAcceptWaitlistOffer, clientGetBusiness } from "@/lib/client-api";
+import { formatBusinessDateTime } from "@/lib/business-time";
 
 export default function AcceptWaitlistOfferClient({ token }: { token: string }) {
   const [message, setMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   async function accept() {
     setSubmitting(true); setMessage(null);
-    try { const reservation = await clientAcceptWaitlistOffer(token); setMessage(`Your table is confirmed for ${new Date(reservation.time).toLocaleString()}.`); }
+    try { const reservation = await clientAcceptWaitlistOffer(token); const business = await clientGetBusiness(reservation.businessId).catch(() => null); setMessage(`Your table is confirmed for ${formatBusinessDateTime(reservation.time, business?.timezone ?? "UTC", business?.locale)}.`); }
     catch (error) { setMessage(error instanceof Error ? error.message : "This offer is no longer available."); }
     finally { setSubmitting(false); }
   }

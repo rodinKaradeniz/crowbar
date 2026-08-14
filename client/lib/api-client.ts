@@ -97,6 +97,10 @@ export interface BusinessResponse {
   advance_booking_days: number;
   operating_hours: Record<string, { open?: string; close?: string; closed?: boolean }>;
   timezone?: string;
+  country_code?: string;
+  currency_code?: string;
+  locale?: string;
+  tax_label?: string;
   legal_drinking_age?: number;
   enabled_modules?: string[];
   onboarding_complete?: boolean;

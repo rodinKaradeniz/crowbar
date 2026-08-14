@@ -50,7 +50,7 @@ class InventoryItem(Base, UUIDMixin, TimestampMixin):
         Numeric(10, 3), default=0, nullable=False
     )
     par_quantity: Mapped[Decimal | None] = mapped_column(Numeric(10, 3), nullable=True)
-    cost_per_unit: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    cost_per_unit: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default="true", nullable=False

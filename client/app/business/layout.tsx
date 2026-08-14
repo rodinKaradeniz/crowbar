@@ -6,6 +6,8 @@ import { StaffThemeInit } from "@/components/staff-theme";
 import { getCurrentUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { BusinessRouteGuard } from "@/components/business-route-guard";
+import { fetchBusiness } from "@/lib/api";
+import { RegionalSettingsProvider } from "@/contexts/regional-context";
 
 // Paints a stored dark preference before hydration so the dashboard doesn't
 // flash light. Mirrors the storage key in components/staff-theme.tsx.
@@ -28,9 +30,17 @@ export default async function BusinessLayout({
   if (user.type !== "staff") {
     redirect("/");
   }
+  const business = await fetchBusiness(user.businessId);
 
   // User is authenticated staff - render layout
   return (
+    <RegionalSettingsProvider settings={{
+      countryCode: business?.countryCode,
+      currencyCode: business?.currencyCode,
+      locale: business?.locale,
+      timezone: business?.timezone,
+      taxLabel: business?.taxLabel,
+    }}>
     <SidebarProvider defaultOpen={false}>
       <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
       <StaffThemeInit />
@@ -48,5 +58,6 @@ export default async function BusinessLayout({
         </DashboardLayoutWrapper>
       </SidebarInset>
     </SidebarProvider>
+    </RegionalSettingsProvider>
   );
 }

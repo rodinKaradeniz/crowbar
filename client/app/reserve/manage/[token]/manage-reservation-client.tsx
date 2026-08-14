@@ -7,14 +7,18 @@ import { Input } from "@/components/ui/input";
 import {
   clientCancelPublicReservation,
   clientGetAvailability,
+  clientGetBusiness,
   clientGetPublicManagedReservation,
   clientReconfirmPublicReservation,
   clientReschedulePublicReservation,
 } from "@/lib/client-api";
 import type { Availability, Reservation } from "@/types";
+import type { Business } from "@/types";
+import { formatBusinessDateTime, formatBusinessTime } from "@/lib/business-time";
 
 export default function ManageReservationClient({ token }: { token: string }) {
   const [reservation, setReservation] = useState<Reservation | null>(null);
+  const [business, setBusiness] = useState<Business | null>(null);
   const [availability, setAvailability] = useState<Availability | null>(null);
   const [date, setDate] = useState("");
   const [guests, setGuests] = useState(1);
@@ -24,7 +28,8 @@ export default function ManageReservationClient({ token }: { token: string }) {
 
   useEffect(() => {
     void clientGetPublicManagedReservation(token)
-      .then((value) => {
+      .then(async (value) => {
+        setBusiness(await clientGetBusiness(value.businessId).catch(() => null));
         setReservation(value);
         setGuests(value.guests);
         setDate(value.time.slice(0, 10));
@@ -70,7 +75,7 @@ export default function ManageReservationClient({ token }: { token: string }) {
   return <main className="theme-night min-h-screen p-5 sm:p-10"><section className="mx-auto max-w-xl rounded-xl border border-border bg-card p-5 shadow-sm sm:p-8">
     <p className="eyebrow text-brass">Reservation</p>
     <h1 className="mt-2 font-display text-3xl">Manage your booking</h1>
-    <p className="mt-4 text-sm text-muted-foreground">{new Date(reservation.time).toLocaleString()} · {reservation.guests} guests</p>
+    <p className="mt-4 text-sm text-muted-foreground">{formatBusinessDateTime(reservation.time, business?.timezone ?? "UTC", business?.locale)} · {reservation.guests} guests</p>
     <p className="mt-2 text-sm capitalize">Status: <strong>{reservation.status.replace("_", " ")}</strong>{reservation.cancelledLate ? " (late cancellation)" : ""}</p>
     {reservation.reconfirmedAt && <p className="mt-2 flex items-center gap-2 text-sm text-emerald-500"><CheckCircle2 className="size-4" /> You&apos;re reconfirmed.</p>}
     {error && <p role="alert" className="mt-4 rounded-md border border-oxblood/40 p-3 text-sm text-rose-500">{error}</p>}
@@ -80,7 +85,7 @@ export default function ManageReservationClient({ token }: { token: string }) {
     </div>}
     {active && <section className="mt-8 border-t pt-6"><h2 className="font-semibold">Reschedule</h2><p className="mt-1 text-sm text-muted-foreground">Choose a date and we&apos;ll show live available times.</p>
       <div className="mt-4 flex flex-wrap gap-3"><Input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="w-auto" /><Input type="number" min="1" value={guests} onChange={(event) => setGuests(Number(event.target.value))} className="w-24" aria-label="Guests" /><Button variant="outline" onClick={() => void loadAvailability()} disabled={action !== null}><CalendarClock /> {action === "slots" ? "Loading…" : "Find times"}</Button></div>
-      {availability && <div className="mt-4 flex flex-wrap gap-2">{slots.length ? slots.map((slot) => <Button key={slot.startsAt} size="sm" variant="outline" disabled={action !== null} onClick={() => void reschedule(slot.startsAt)}>{new Date(slot.startsAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</Button>) : <p className="text-sm text-muted-foreground">No times are available that day.</p>}</div>}
+      {availability && <div className="mt-4 flex flex-wrap gap-2">{slots.length ? slots.map((slot) => <Button key={slot.startsAt} size="sm" variant="outline" disabled={action !== null} onClick={() => void reschedule(slot.startsAt)}>{formatBusinessTime(slot.startsAt, business?.timezone ?? "UTC", business?.locale)}</Button>) : <p className="text-sm text-muted-foreground">No times are available that day.</p>}</div>}
     </section>}
   </section></main>;
 }

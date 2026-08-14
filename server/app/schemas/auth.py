@@ -29,6 +29,11 @@ class BusinessRegisterRequest(AppBaseModel):
     business_slug: str
     business_address: str | None = None
     business_description: str | None = None
+    country_code: str = "DE"
+    currency_code: str = "EUR"
+    locale: str = "de-DE"
+    timezone: str = "Europe/Berlin"
+    tax_label: str = "VAT"
 
     _valid_password = field_validator("password")(validate_password)
 

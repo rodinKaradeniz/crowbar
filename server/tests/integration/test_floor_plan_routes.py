@@ -18,6 +18,7 @@ from app.models.tab import Tab
 from app.models.user import User
 from app.services.auth_service import create_access_token
 from app.services.floor_plan_service import resolve_service_window
+from app.services import tax_service
 
 
 async def _tenant(
@@ -43,6 +44,7 @@ async def _tenant(
     )
     db.add_all([business, user])
     await db.flush()
+    await tax_service.create_default_profiles(db, business, actor_id=user.id)
     location = Location(
         business_id=business.id,
         name="Main",
@@ -363,11 +365,13 @@ async def test_qr_orders_use_one_active_seating_tab_and_require_settlement_befor
     category = MenuCategory(menu_id=menu.id, business_id=business.id, name="Beer")
     db_session.add(category)
     await db_session.flush()
+    tax_profiles = await tax_service.list_profiles(db_session, business.id)
     item = MenuItem(
         category_id=category.id,
         business_id=business.id,
         name="Lager",
         price=7,
+        tax_profile_id=tax_profiles[0].id,
         routing_tag="bar",
     )
     reservation = Reservation(

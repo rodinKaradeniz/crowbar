@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ErrorCode
 from app.models.reservation import Reservation
+from app.models.business import Business
 from app.models.reservation_waitlist import ReservationWaitlistEntry
 from app.models.service_type import ServiceType
 from app.models.user import User
@@ -14,6 +15,7 @@ from app.schemas.reservation_waitlist import ReservationWaitlistCreate
 from app.services.availability_service import AvailabilityError, ensure_public_booking_access, validate_booking_slot
 from app.services.customer_identity_service import upsert_customer
 from app.services.reservation_service import create_reservation
+from app.core.regional import RegionalValidationError, normalize_phone
 
 
 OFFER_MINUTES = 15
@@ -26,6 +28,13 @@ async def create_waitlist_entry(
     actor: User | None = None,
     public: bool = True,
 ) -> ReservationWaitlistEntry:
+    business = await db.get(Business, data.business_id)
+    if business is None:
+        raise AvailabilityError(status_code=404, code=ErrorCode.NOT_FOUND, message="Business not found")
+    try:
+        normalized_phone = normalize_phone(data.phone, business.country_code)
+    except RegionalValidationError as exc:
+        raise AvailabilityError(status_code=422, code=ErrorCode.VALIDATION_ERROR, message=str(exc)) from exc
     if public:
         await ensure_public_booking_access(db, business_id=data.business_id)
     service = await db.scalar(
@@ -43,7 +52,7 @@ async def create_waitlist_entry(
     if data.requested_starts_at <= datetime.now(timezone.utc):
         raise AvailabilityError(status_code=409, code=ErrorCode.BOOKING_UNAVAILABLE, message="Waitlist requests must be in the future")
     customer = await upsert_customer(
-        db, business_id=data.business_id, phone=data.phone, email=data.email, name=data.name
+        db, business_id=data.business_id, phone=normalized_phone, email=data.email, name=data.name
     )
     assert customer is not None
     entry = ReservationWaitlistEntry(

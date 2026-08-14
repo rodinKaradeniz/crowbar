@@ -3,6 +3,7 @@ import ReserveClient from "./reserve-client";
 import { AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { fetchBusinessBySlug, fetchServiceTypesByBusiness } from "@/lib/api";
+import { RegionalSettingsProvider } from "@/contexts/regional-context";
 
 interface ReservePageProps {
   params: Promise<{ business: string }>;
@@ -58,5 +59,15 @@ export default async function ReservePage({ params }: ReservePageProps) {
 
   const serviceTypes = await fetchServiceTypesByBusiness(business.id);
 
-  return <ReserveClient business={business} serviceTypes={serviceTypes} />;
+  return (
+    <RegionalSettingsProvider settings={{
+      countryCode: business.countryCode,
+      currencyCode: business.currencyCode,
+      locale: business.locale,
+      timezone: business.timezone,
+      taxLabel: business.taxLabel,
+    }}>
+      <ReserveClient business={business} serviceTypes={serviceTypes} />
+    </RegionalSettingsProvider>
+  );
 }

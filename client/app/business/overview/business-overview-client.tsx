@@ -102,7 +102,7 @@ export default function BusinessOverviewClient({
   };
 
   const formatTime = (isoString: string) =>
-    new Date(isoString).toLocaleTimeString("en-US", {
+    new Date(isoString).toLocaleTimeString(business.locale, {
       hour: "numeric", minute: "2-digit", hour12: true, timeZone: stats.business_timezone,
     });
 
@@ -119,7 +119,7 @@ export default function BusinessOverviewClient({
       .toISOString().slice(0, 10);
     if (dateKey === stats.service_date) return "Today";
     if (dateKey === tomorrowKey) return "Tomorrow";
-    return date.toLocaleDateString("en-US", {
+    return date.toLocaleDateString(business.locale, {
       month: "short", day: "numeric", timeZone: stats.business_timezone,
     });
   };
@@ -163,7 +163,7 @@ export default function BusinessOverviewClient({
 
   const ops = stats.ops ?? {};
 
-  const todayLabel = new Date(`${stats.service_date}T12:00:00Z`).toLocaleDateString("en-US", {
+  const todayLabel = new Date(`${stats.service_date}T12:00:00Z`).toLocaleDateString(business.locale, {
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -200,7 +200,7 @@ export default function BusinessOverviewClient({
       ? [{ label: "Orders today", value: String(ops.orders_today), icon: Receipt }]
       : []),
     ...(ops.ordered_value_today !== undefined
-      ? [{ label: "Ordered value today", value: formatMoney(ops.ordered_value_today), icon: Banknote }]
+      ? [{ label: "Ordered value today", value: formatMoney(ops.ordered_value_today, business.currencyCode, business.locale), icon: Banknote }]
       : []),
   ];
 
@@ -471,13 +471,13 @@ export default function BusinessOverviewClient({
                   <p className="text-sm mb-3">
                     Staff up{" "}
                     <span className="font-medium">
-                      {new Date(`${busiest.date}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" })}
+                      {new Date(`${busiest.date}T12:00:00Z`).toLocaleDateString(business.locale, { weekday: "long", timeZone: "UTC" })}
                     </span>
                   </p>
                 )}
                 <div className="flex gap-2">
                   {next3.map((day) => {
-                    const dow = new Date(`${day.date}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
+                    const dow = new Date(`${day.date}T12:00:00Z`).toLocaleDateString(business.locale, { weekday: "short", timeZone: "UTC" });
                     const isBusiest = busiest && day.date === busiest.date;
                     return (
                       <div

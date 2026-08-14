@@ -53,6 +53,7 @@ from app.services import (
     recipe_service,
     tab_service,
     table_qr_service,
+    tax_service,
 )
 from app.services.order_ws_manager import manager
 from app.services.websocket_auth import authorize_staff_websocket
@@ -60,6 +61,13 @@ from app.services.websocket_auth import authorize_staff_websocket
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["ordering"])
+
+
+def _can_manage_tax(user: User) -> bool:
+    return bool(
+        user.staff_assignments
+        and user.staff_assignments[0].role in {"owner", "manager"}
+    )
 
 
 # ─── helpers ──────────────────────────────────────────────────────────────────
@@ -291,7 +299,12 @@ async def create_menu(
 ):
     if business.id != business_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    menu = await menu_service.create_menu(db, business_id, body)
+    if any(category.items for category in body.categories) and not _can_manage_tax(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only owners and managers can create priced items")
+    try:
+        menu = await menu_service.create_menu(db, business_id, body)
+    except tax_service.TaxProfileError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     await db.commit()
     await db.refresh(menu, ["categories"])
     return menu
@@ -358,7 +371,12 @@ async def create_category(
 ):
     if business.id != business_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    cat = await menu_service.create_category(db, menu_id, business_id, body)
+    if body.items and not _can_manage_tax(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only owners and managers can create priced items")
+    try:
+        cat = await menu_service.create_category(db, menu_id, business_id, body)
+    except tax_service.TaxProfileError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     if cat is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Menu not found")
     await db.commit()
@@ -427,11 +445,15 @@ async def create_item(
 ):
     if business.id != business_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    item = await menu_service.create_item(db, category_id, business_id, body)
+    if not _can_manage_tax(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only owners and managers can create priced items")
+    try:
+        item = await menu_service.create_item(db, category_id, business_id, body)
+    except tax_service.TaxProfileError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
     await db.commit()
-    await db.refresh(item, ["modifier_groups"])
     return item
 
 
@@ -450,7 +472,12 @@ async def update_item(
 ):
     if business.id != business_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    item = await menu_service.update_item(db, item_id, business_id, body)
+    if body.tax_profile_id is not None and not _can_manage_tax(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only owners and managers can assign tax profiles")
+    try:
+        item = await menu_service.update_item(db, item_id, business_id, body)
+    except tax_service.TaxProfileError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
     await db.commit()
@@ -747,7 +774,12 @@ async def create_library_item(
 ):
     if business.id != business_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    item = await menu_service.create_library_item(db, business_id, body)
+    if not _can_manage_tax(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only owners and managers can create priced items")
+    try:
+        item = await menu_service.create_library_item(db, business_id, body)
+    except tax_service.TaxProfileError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     await db.commit()
     return item
 
@@ -767,7 +799,12 @@ async def update_library_item(
 ):
     if business.id != business_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    item = await menu_service.update_library_item(db, item_id, business_id, body)
+    if body.tax_profile_id is not None and not _can_manage_tax(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only owners and managers can assign tax profiles")
+    try:
+        item = await menu_service.update_library_item(db, item_id, business_id, body)
+    except tax_service.TaxProfileError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Library item not found")
     await db.commit()

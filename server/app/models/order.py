@@ -61,7 +61,10 @@ class Order(Base, UUIDMixin, TimestampMixin):
     # Self-attestation recorded at placement. Whether the order actually contains
     # alcohol is derived from the line items on demand, not stored here.
     age_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    total_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, nullable=False)
+    currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
+    subtotal_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), default=0, nullable=False)
+    tax_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), default=0, nullable=False)
+    total_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), default=0, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     placed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -94,7 +97,21 @@ class OrderLineItem(Base, UUIDMixin, TimestampMixin):
     )
     item_name: Mapped[str] = mapped_column(String(255), nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, nullable=False)
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(18, 4), default=0, nullable=False)
+    currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
+    tax_profile_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tax_profiles.id", ondelete="SET NULL"), nullable=True
+    )
+    tax_profile_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tax_profile_versions.id", ondelete="SET NULL"), nullable=True
+    )
+    tax_profile_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    tax_profile_code: Mapped[str] = mapped_column(String(40), nullable=False)
+    tax_rate: Mapped[Decimal] = mapped_column(Numeric(7, 4), nullable=False)
+    price_includes_tax: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    subtotal_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    tax_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    total_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
     selected_modifiers: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
     routing_tag: Mapped[str] = mapped_column(String(20), default="kitchen", nullable=False)
     # Snapshot of the menu item's is_alcoholic at placement (like routing_tag),

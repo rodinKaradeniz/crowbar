@@ -33,10 +33,14 @@ import {
   RecipeIngredient,
   Reservation,
   ReservationWaitlistEntry,
+  RegionalAudit,
+  RegionalOption,
   ServiceType,
   StockMovement,
   Tab,
   TabSettledMethod,
+  TaxProfile,
+  TaxProfileVersion,
   WasteReason,
 } from "@/types";
 import { toMoney, toOptionalMoney } from "@/lib/money";
@@ -141,6 +145,10 @@ function toBusiness(b: Record<string, unknown>): Business {
     email: b.email as string,
     phone: b.phone as string,
     timezone: (b.timezone as string) || "UTC",
+    countryCode: (b.country_code as string) || "DE",
+    currencyCode: (b.currency_code as string) || "EUR",
+    locale: (b.locale as string) || "de-DE",
+    taxLabel: (b.tax_label as string) || "VAT",
     legalDrinkingAge: (b.legal_drinking_age as number) ?? 18,
     address: (b.address as string) || undefined,
     description: (b.description as string) || undefined,
@@ -372,8 +380,7 @@ export async function clientGetBusinesses(): Promise<Business[]> {
 
 export async function clientGetBusiness(id: string): Promise<Business | null> {
   try {
-    const data = await authFetch<Record<string, unknown>>("/businesses/current");
-    if (data.id !== id) return null;
+    const data = await clientFetch<Record<string, unknown>>(`/businesses/${id}`);
     return toBusiness(data);
   } catch {
     return null;
@@ -594,6 +601,10 @@ export async function clientUpdateBusiness(
     email: string;
     phone: string;
     timezone: string;
+    countryCode: string;
+    currencyCode: string;
+    locale: string;
+    taxLabel: string;
     legalDrinkingAge: number;
     address: string;
     description: string;
@@ -613,6 +624,10 @@ export async function clientUpdateBusiness(
   if (data.email !== undefined) apiData.email = data.email;
   if (data.phone !== undefined) apiData.phone = data.phone;
   if (data.timezone !== undefined) apiData.timezone = data.timezone;
+  if (data.countryCode !== undefined) apiData.country_code = data.countryCode;
+  if (data.currencyCode !== undefined) apiData.currency_code = data.currencyCode;
+  if (data.locale !== undefined) apiData.locale = data.locale;
+  if (data.taxLabel !== undefined) apiData.tax_label = data.taxLabel;
   if (data.legalDrinkingAge !== undefined)
     apiData.legal_drinking_age = data.legalDrinkingAge;
   if (data.address !== undefined) apiData.address = data.address;
@@ -637,6 +652,135 @@ export async function clientUpdateBusiness(
     body: JSON.stringify(apiData),
   });
   return toBusiness(result);
+}
+
+function toTaxProfileVersion(value: Record<string, unknown>): TaxProfileVersion {
+  return {
+    id: value.id as string,
+    taxProfileId: value.tax_profile_id as string,
+    businessId: value.business_id as string,
+    name: value.name as string,
+    rate: toMoney(value.rate),
+    priceIncludesTax: value.price_includes_tax as boolean,
+    effectiveFrom: value.effective_from as string,
+    note: (value.note as string) || undefined,
+    createdBy: (value.created_by as string) || undefined,
+    createdAt: value.created_at as string,
+  };
+}
+
+function toTaxProfile(value: Record<string, unknown>): TaxProfile {
+  const current = value.current_version as Record<string, unknown> | null;
+  return {
+    id: value.id as string,
+    businessId: value.business_id as string,
+    code: value.code as string,
+    isActive: value.is_active as boolean,
+    currentVersion: current ? toTaxProfileVersion(current) : undefined,
+    versions: ((value.versions as Record<string, unknown>[]) ?? []).map(toTaxProfileVersion),
+    archivedAt: (value.archived_at as string) || undefined,
+    createdAt: value.created_at as string,
+    updatedAt: value.updated_at as string,
+  };
+}
+
+export async function clientGetRegionalOptions(locale = "en"): Promise<{
+  countries: RegionalOption[];
+  currencies: RegionalOption[];
+}> {
+  return clientFetch(`/regional/options?locale=${encodeURIComponent(locale)}`);
+}
+
+export async function clientGetRegionalSuggestion(countryCode: string): Promise<{
+  countryCode: string;
+  currencyCode: string;
+  locale: string;
+  taxLabel: string;
+}> {
+  const value = await clientFetch<Record<string, unknown>>(
+    `/regional/suggestion/${encodeURIComponent(countryCode)}`,
+  );
+  return {
+    countryCode: value.country_code as string,
+    currencyCode: value.currency_code as string,
+    locale: value.locale as string,
+    taxLabel: value.tax_label as string,
+  };
+}
+
+export async function clientGetRegionalAudit(businessId: string): Promise<RegionalAudit[]> {
+  const values = await authFetch<Record<string, unknown>[]>(
+    `/businesses/${businessId}/regional-audit`,
+  );
+  return values.map((value) => ({
+    id: value.id as string,
+    businessId: value.business_id as string,
+    changedBy: (value.changed_by as string) || undefined,
+    previousValues: value.previous_values as Record<string, string>,
+    newValues: value.new_values as Record<string, string>,
+    changedAt: value.changed_at as string,
+  }));
+}
+
+export async function clientGetTaxProfiles(): Promise<TaxProfile[]> {
+  const values = await authFetch<Record<string, unknown>[]>("/tax-profiles");
+  return values.map(toTaxProfile);
+}
+
+export async function clientCreateTaxProfile(data: {
+  code: string;
+  name: string;
+  rate: number;
+  priceIncludesTax: boolean;
+  effectiveFrom?: string;
+  note?: string;
+}): Promise<TaxProfile> {
+  const value = await authFetch<Record<string, unknown>>("/tax-profiles", {
+    method: "POST",
+    body: JSON.stringify({
+      code: data.code,
+      name: data.name,
+      rate: data.rate,
+      price_includes_tax: data.priceIncludesTax,
+      effective_from: data.effectiveFrom,
+      note: data.note,
+    }),
+  });
+  return toTaxProfile(value);
+}
+
+export async function clientCreateTaxProfileVersion(
+  profileId: string,
+  data: {
+    name: string;
+    rate: number;
+    priceIncludesTax: boolean;
+    effectiveFrom?: string;
+    note?: string;
+  },
+): Promise<TaxProfile> {
+  const value = await authFetch<Record<string, unknown>>(
+    `/tax-profiles/${profileId}/versions`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name: data.name,
+        rate: data.rate,
+        price_includes_tax: data.priceIncludesTax,
+        effective_from: data.effectiveFrom,
+        note: data.note,
+      }),
+    },
+  );
+  return toTaxProfile(value);
+}
+
+export async function clientArchiveTaxProfile(profileId: string): Promise<TaxProfile> {
+  return toTaxProfile(
+    await authFetch<Record<string, unknown>>(`/tax-profiles/${profileId}/archive`, {
+      method: "POST",
+    }),
+  );
 }
 
 // ─── Public: Reservation creation (no auth) ──────────────────────────────────
@@ -1617,6 +1761,11 @@ function toMenuItem(i: Record<string, unknown>): MenuItem {
     prepTimeMinutes: (i.prep_time_minutes as number) || undefined,
     displayOrder: i.display_order as number,
     image: (i.image as string) || undefined,
+    taxProfileId: i.tax_profile_id as string,
+    taxProfileCode: (i.tax_profile_code as string) || undefined,
+    taxProfileName: (i.tax_profile_name as string) || undefined,
+    taxRate: i.tax_rate === null || i.tax_rate === undefined ? undefined : toMoney(i.tax_rate),
+    priceIncludesTax: i.price_includes_tax as boolean | undefined,
     modifierGroups: ((i.modifier_groups as Record<string, unknown>[]) ?? []).map(toModifierGroup),
   };
 }
@@ -1659,6 +1808,9 @@ function toOrder(o: Record<string, unknown>): Order {
     tableIdentifier: (o.table_identifier as string) || undefined,
     status: o.status as Order["status"],
     idempotencyKey: o.idempotency_key as string,
+    currencyCode: o.currency_code as string,
+    subtotalAmount: toMoney(o.subtotal_amount),
+    taxAmount: toMoney(o.tax_amount),
     // total_amount / prices are Decimal on the backend; toMoney guarantees the
     // declared `number` type regardless of wire format (see lib/money.ts).
     totalAmount: toMoney(o.total_amount),
@@ -1671,6 +1823,16 @@ function toOrder(o: Record<string, unknown>): Order {
       itemName: li.item_name as string,
       quantity: Number(li.quantity),
       unitPrice: toMoney(li.unit_price),
+      currencyCode: li.currency_code as string,
+      taxProfileId: (li.tax_profile_id as string) || undefined,
+      taxProfileVersionId: (li.tax_profile_version_id as string) || undefined,
+      taxProfileName: li.tax_profile_name as string,
+      taxProfileCode: li.tax_profile_code as string,
+      taxRate: toMoney(li.tax_rate),
+      priceIncludesTax: li.price_includes_tax as boolean,
+      subtotalAmount: toMoney(li.subtotal_amount),
+      taxAmount: toMoney(li.tax_amount),
+      totalAmount: toMoney(li.total_amount),
       selectedModifiers: ((li.selected_modifiers as Record<string, unknown>[]) ?? []).map((s) => ({
         modifierId: s.modifier_id as string,
         name: s.name as string,
@@ -1977,6 +2139,7 @@ export async function clientCreateMenuItem(
     prepTimeMinutes?: number;
     displayOrder?: number;
     image?: string;
+    taxProfileId?: string;
   },
 ): Promise<MenuItem> {
   const result = await authFetch<Record<string, unknown>>(
@@ -1994,6 +2157,7 @@ export async function clientCreateMenuItem(
         prep_time_minutes: data.prepTimeMinutes,
         display_order: data.displayOrder ?? 0,
         image: data.image,
+        tax_profile_id: data.taxProfileId,
       }),
     },
   );
@@ -2014,6 +2178,7 @@ export async function clientUpdateMenuItem(
     prepTimeMinutes?: number;
     displayOrder?: number;
     image?: string;
+    taxProfileId?: string;
   },
 ): Promise<MenuItem> {
   const body: Record<string, unknown> = {};
@@ -2029,6 +2194,7 @@ export async function clientUpdateMenuItem(
   if (data.prepTimeMinutes !== undefined) body.prep_time_minutes = data.prepTimeMinutes;
   if (data.displayOrder !== undefined) body.display_order = data.displayOrder;
   if (data.image !== undefined) body.image = data.image;
+  if (data.taxProfileId !== undefined) body.tax_profile_id = data.taxProfileId;
   const result = await authFetch<Record<string, unknown>>(
     `/ordering/${businessId}/items/${itemId}`,
     { method: "PATCH", body: JSON.stringify(body) },
@@ -2087,6 +2253,7 @@ function toLibraryItem(d: Record<string, unknown>): LibraryItem {
     price: toMoney(d.price),
     routingTag: d.routing_tag as string,
     prepTimeMinutes: d.prep_time_minutes as number | undefined,
+    taxProfileId: d.tax_profile_id as string,
   };
 }
 
@@ -2099,7 +2266,7 @@ export async function clientGetLibrary(businessId: string): Promise<LibraryItem[
 
 export async function clientCreateLibraryItem(
   businessId: string,
-  data: { name: string; description?: string; price: number; routingTag?: string; prepTimeMinutes?: number },
+  data: { name: string; description?: string; price: number; routingTag?: string; prepTimeMinutes?: number; taxProfileId?: string },
 ): Promise<LibraryItem> {
   const result = await authFetch<Record<string, unknown>>(
     `/ordering/${businessId}/library`,
@@ -2111,6 +2278,7 @@ export async function clientCreateLibraryItem(
         price: data.price,
         routing_tag: data.routingTag ?? "kitchen",
         prep_time_minutes: data.prepTimeMinutes,
+        tax_profile_id: data.taxProfileId,
       }),
     },
   );
@@ -2120,7 +2288,7 @@ export async function clientCreateLibraryItem(
 export async function clientUpdateLibraryItem(
   businessId: string,
   itemId: string,
-  data: { name?: string; description?: string; price?: number; routingTag?: string; prepTimeMinutes?: number },
+  data: { name?: string; description?: string; price?: number; routingTag?: string; prepTimeMinutes?: number; taxProfileId?: string },
 ): Promise<LibraryItem> {
   const body: Record<string, unknown> = {};
   if (data.name !== undefined) body.name = data.name;
@@ -2128,6 +2296,7 @@ export async function clientUpdateLibraryItem(
   if (data.price !== undefined) body.price = data.price;
   if (data.routingTag !== undefined) body.routing_tag = data.routingTag;
   if (data.prepTimeMinutes !== undefined) body.prep_time_minutes = data.prepTimeMinutes;
+  if (data.taxProfileId !== undefined) body.tax_profile_id = data.taxProfileId;
   const result = await authFetch<Record<string, unknown>>(
     `/ordering/${businessId}/library/${itemId}`,
     { method: "PATCH", body: JSON.stringify(body) },

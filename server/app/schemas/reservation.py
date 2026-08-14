@@ -2,20 +2,9 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-import phonenumbers
 from pydantic import ConfigDict, EmailStr, Field, field_validator
 
 from app.schemas.base import AppBaseModel
-
-
-def _normalize_phone(v: str | None) -> str | None:
-    if not v:
-        return v
-    try:
-        parsed = phonenumbers.parse(v, None)
-        return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
-    except phonenumbers.NumberParseException:
-        return v
 
 
 class ReservationCreate(AppBaseModel):
@@ -35,7 +24,7 @@ class ReservationCreate(AppBaseModel):
     @field_validator("phone", mode="before")
     @classmethod
     def normalize_phone(cls, v: str) -> str:
-        return _normalize_phone(v) or v
+        return v.strip()
 
     @field_validator("name", "availability_override_reason", mode="before")
     @classmethod
@@ -60,7 +49,7 @@ class PublicReservationCreate(AppBaseModel):
     @field_validator("phone", mode="before")
     @classmethod
     def normalize_phone(cls, v: str) -> str:
-        return _normalize_phone(v) or v
+        return v.strip()
 
 
 class ReservationUpdate(AppBaseModel):

@@ -180,12 +180,28 @@ or bank settlement in the MVP. Reports distinguish ordered value, open-tab
 value, and externally settled value; none is labelled accounting or bank
 revenue without an authoritative fiscal/payment integration.
 
-The initial German tenant uses EUR, `de-DE`, `Europe/Berlin`, and country-aware
-phone handling. Tax profiles belong to menu items rather than one business-wide
-percentage because food, beverages, and other classes can differ. Prices are
-tax-inclusive by default for the pilot, while the tenant can configure rates
-and effective dates with an audit trail. Each placed line snapshots the applied
-profile/rate so later changes cannot rewrite historical operational estimates.
+Each tenant owns an ISO country and currency, BCP 47 formatting locale, IANA
+timezone, editable tax label, country-parsed E.164 phone, free-text address,
+and legal drinking age. Country selection only offers editable suggestions;
+it never silently changes neighboring settings. Locale controls number/date
+formatting while MVP interface copy remains English. Currency can change only
+before the tenant has priced catalogue, inventory-cost, or order history.
+
+Tax profiles belong to menu items rather than one business-wide percentage
+because food, beverages, and other classes can differ. Owners/managers must
+explicitly classify newly priced items and may append effective-dated profile
+versions with inclusive/exclusive pricing; ordinary staff may change other
+item details but not tax assignments or policy. Modifier and happy-hour prices
+inherit the parent item's effective profile. Order placement rounds each line
+half-up to the configured currency minor unit and snapshots currency,
+profile/version, label, rate, inclusion policy, net, tax, and gross amounts so
+later configuration cannot rewrite history.
+
+The German demo suggests editable DE/EUR/`de-DE`/`Europe/Berlin` settings and
+19% standard/beverage, 7% reduced/food, exempt, and custom profiles. These are
+explicit seed examples, not runtime product classification, legal advice, or a
+maintained law catalogue. Other countries use the same manual workflow without
+a code change. Every calculated amount is labelled operational/non-fiscal.
 
 ## Security and visibility boundaries
 

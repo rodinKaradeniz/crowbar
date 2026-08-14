@@ -60,6 +60,8 @@ import {
   Trash2,
 } from "lucide-react";
 import { formatBusinessDateTime } from "@/lib/business-time";
+import { formatMoney } from "@/lib/money";
+import { useRegionalSettings } from "@/contexts/regional-context";
 
 interface Props {
   businessId: string;
@@ -157,6 +159,8 @@ function movementDeltaDisplay(movement: StockMovement) {
 }
 
 export function InventoryManagementClient({ businessId, businessTimezone }: Props) {
+  const { currencyCode, locale } = useRegionalSettings();
+  const money = (value: number | string) => formatMoney(value, currencyCode, locale);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [discrepancies, setDiscrepancies] = useState<InventoryDiscrepancy[]>([]);
@@ -527,7 +531,7 @@ export function InventoryManagementClient({ businessId, businessTimezone }: Prop
                     ? `par: ${item.parQuantity} ${item.unit}`
                     : item.unit}
                   {item.costPerUnit != null && (
-                    <span className="ml-2">· ${item.costPerUnit}/{item.unit}</span>
+                    <span className="ml-2">· {money(item.costPerUnit)}/{item.unit}</span>
                   )}
                 </p>
               </div>
@@ -773,7 +777,7 @@ export function InventoryManagementClient({ businessId, businessTimezone }: Prop
                 />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="inv-cost">Cost per unit ($)</Label>
+                <Label htmlFor="inv-cost">Cost per unit ({currencyCode})</Label>
                 <Input
                   id="inv-cost"
                   type="number"
@@ -1022,7 +1026,7 @@ export function InventoryManagementClient({ businessId, businessTimezone }: Prop
                       <p className="text-xs text-muted-foreground mt-1 truncate">{m.notes}</p>
                     )}
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {formatBusinessDateTime(m.createdAt, businessTimezone)}
+                      {formatBusinessDateTime(m.createdAt, businessTimezone, locale)}
                     </p>
                   </div>
                   <div className="shrink-0 text-right">{movementDeltaDisplay(m)}</div>

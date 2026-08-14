@@ -124,7 +124,7 @@ a new explicit instruction.
   Redis references, migrations 001–022, stream consumer, public domain, and
   health check verified.
 - Pending before any migration rollout: reconcile that preserved 001–022
-  database with local migrations 023–036, the exact accepted application
+  database with local migrations 023–037, the exact accepted application
   version, forward recovery, and a backup/restore checkpoint.
 - Pending: deploy the local rate-limit change to FastAPI, set
   `RATE_LIMIT_ENABLED=true`, and verify 429/proxy behavior in Railway.

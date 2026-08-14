@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.reservation import Reservation
+from app.models.business import Business
 from app.models.reservation_delivery_attempt import ReservationDeliveryAttempt
 from app.models.booking_schedule import BookingSchedule
 from app.models.table import Table
@@ -27,6 +28,7 @@ from app.services.availability_service import (
     validate_override_slot,
 )
 from app.core.errors import ErrorCode
+from app.core.regional import RegionalValidationError, normalize_phone
 from app.services.customer_identity_service import upsert_customer
 from app.services.customer_service import record_public_marketing_consents
 
@@ -101,6 +103,13 @@ async def create_reservation(
     override_actor: User | None = None,
     actor: User | None = None,
 ) -> Reservation:
+    business = await db.get(Business, business_id)
+    if business is None:
+        raise AvailabilityError(status_code=404, code=ErrorCode.NOT_FOUND, message="Business not found")
+    try:
+        normalized_phone = normalize_phone(data.phone, business.country_code)
+    except RegionalValidationError as exc:
+        raise AvailabilityError(status_code=422, code=ErrorCode.VALIDATION_ERROR, message=str(exc)) from exc
     if data.availability_override_reason is not None:
         if override_actor is None:
             raise AvailabilityError(
@@ -129,7 +138,7 @@ async def create_reservation(
     customer = await upsert_customer(
         db,
         business_id=business_id,
-        phone=data.phone,
+        phone=normalized_phone,
         email=data.email,
         name=data.name,
     )
@@ -143,7 +152,7 @@ async def create_reservation(
         service_type_id=data.service_type_id,
         time=validated_slot.starts_at,
         ends_at=validated_slot.ends_at,
-        phone=data.phone,
+        phone=normalized_phone,
         email=data.email,
         note=data.note,
         status=status,
@@ -221,6 +230,14 @@ async def update_reservation(
     actor: User | None = None,
 ) -> Reservation:
     update_data = data.model_dump(exclude_unset=True)
+    if update_data.get("phone") is not None:
+        business = await db.get(Business, reservation.business_id)
+        if business is None:
+            raise AvailabilityError(status_code=404, code=ErrorCode.NOT_FOUND, message="Business not found")
+        try:
+            update_data["phone"] = normalize_phone(update_data["phone"], business.country_code)
+        except RegionalValidationError as exc:
+            raise AvailabilityError(status_code=422, code=ErrorCode.VALIDATION_ERROR, message=str(exc)) from exc
     if update_data.get("status") == "cancelled" and reservation.status != "cancelled":
         await cancel_reservation(
             db,
@@ -497,6 +514,14 @@ async def create_public_reservation(
     Upserts a Customer (business-scoped, keyed by phone) and links the
     reservation to it.
     """
+    business = await db.get(Business, data.business_id)
+    if business is None:
+        raise AvailabilityError(status_code=404, code=ErrorCode.NOT_FOUND, message="Business not found")
+    try:
+        normalized_phone = normalize_phone(data.phone, business.country_code)
+    except RegionalValidationError as exc:
+        raise AvailabilityError(status_code=422, code=ErrorCode.VALIDATION_ERROR, message=str(exc)) from exc
+    data = data.model_copy(update={"phone": normalized_phone})
     fingerprint = _public_request_fingerprint(data)
     lock_key = f"reservation:{data.business_id}:{data.idempotency_key}"
     await db.execute(

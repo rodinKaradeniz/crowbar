@@ -30,6 +30,7 @@ icalendar>=5.0.0
 # SMS
 twilio>=9.0.0
 phonenumbers>=8.13.0
+Babel>=2.16.0
 
 # Utilities
 python-dotenv==1.0.1

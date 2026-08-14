@@ -1,7 +1,6 @@
 from datetime import datetime
 from uuid import UUID
 
-import phonenumbers
 from pydantic import Field, field_validator
 
 from app.schemas.base import AppBaseModel
@@ -17,11 +16,7 @@ class QueueJoinRequest(AppBaseModel):
     def normalize_phone(cls, value: str | None) -> str | None:
         if not value:
             return value
-        try:
-            parsed = phonenumbers.parse(value, None)
-            return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
-        except phonenumbers.NumberParseException:
-            return value.strip() or None
+        return value.strip() or None
 
 
 class QueueEntryResponse(AppBaseModel):

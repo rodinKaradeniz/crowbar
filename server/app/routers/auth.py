@@ -13,6 +13,7 @@ from app.core.rate_limit import (
     enforce_rate_limits,
     get_client_ip,
 )
+from app.core.regional import RegionalValidationError
 from app.database import get_db
 from app.dependencies import get_current_business, get_current_user
 from app.models.business import Business
@@ -106,17 +107,25 @@ async def register_business(
         ),
     )
 
-    user, business = await register_business_owner(
-        db,
-        email=data.email,
-        password=data.password,
-        name=data.name,
-        phone=data.phone,
-        business_name=data.business_name,
-        business_slug=data.business_slug,
-        business_address=data.business_address,
-        business_description=data.business_description,
-    )
+    try:
+        user, business = await register_business_owner(
+            db,
+            email=data.email,
+            password=data.password,
+            name=data.name,
+            phone=data.phone,
+            business_name=data.business_name,
+            business_slug=data.business_slug,
+            business_address=data.business_address,
+            business_description=data.business_description,
+            country_code=data.country_code,
+            currency_code=data.currency_code,
+            locale=data.locale,
+            timezone=data.timezone,
+            tax_label=data.tax_label,
+        )
+    except RegionalValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
 
     token = create_access_token(
         str(user.id), user.user_type, user.session_version

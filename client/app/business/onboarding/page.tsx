@@ -28,6 +28,11 @@ export default async function OnboardingPage() {
       initialDescription={business.description ?? ""}
       initialAddress={business.address ?? ""}
       initialImage={business.image ?? ""}
+      initialCountryCode={business.countryCode ?? "DE"}
+      initialCurrencyCode={business.currencyCode ?? "EUR"}
+      initialLocale={business.locale ?? "de-DE"}
+      initialTimezone={business.timezone ?? "Europe/Berlin"}
+      initialTaxLabel={business.taxLabel ?? "VAT"}
     />
   );
 }

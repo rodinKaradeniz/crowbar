@@ -80,6 +80,10 @@ function toBusiness(b: BusinessResponse): Business {
     onboarding_complete?: boolean;
     notification_channels?: string[];
     timezone?: string;
+    country_code?: string;
+    currency_code?: string;
+    locale?: string;
+    tax_label?: string;
     legal_drinking_age?: number;
   };
   return {
@@ -89,6 +93,10 @@ function toBusiness(b: BusinessResponse): Business {
     email: b.email,
     phone: b.phone,
     timezone: raw.timezone ?? "UTC",
+    countryCode: raw.country_code ?? "DE",
+    currencyCode: raw.currency_code ?? "EUR",
+    locale: raw.locale ?? "de-DE",
+    taxLabel: raw.tax_label ?? "VAT",
     legalDrinkingAge: raw.legal_drinking_age ?? 18,
     address: b.address || undefined,
     description: b.description || undefined,

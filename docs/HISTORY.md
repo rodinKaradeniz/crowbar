@@ -43,7 +43,11 @@ changes.
   `docs/MVP_ACCEPTANCE.md`. Known audit defects now have numbered stage owners.
 - **2026-08-14:** MVP stage 1 closed locally with the complete frontend,
   PostgreSQL backend, reproducible ML, and fresh migration/seed gates passing.
-  Germany-ready tenant and operational tax configuration is the next boundary.
+  Germany-ready tenant and operational tax configuration was the next boundary.
+- **2026-08-14:** MVP stage 2 closed locally with country-neutral tenant region
+  configuration, owner/manager-controlled effective tax profiles, immutable
+  order tax snapshots, and migration 037. Stage 3 guest-to-table completion is
+  the next boundary.
 
 ## Durable Decisions
 
@@ -846,6 +850,43 @@ configuration.
 `server/app/jobs/inventory_reconciliation.py`,
 `server/app/jobs/reservation_reminders.py`, `client/lib/business-time.ts`,
 `client/lib/money.ts`
+
+## 2026-08-14 — Region is tenant configuration and tax remains operational
+
+**Context:** The first pilot needs German defaults, but Crowbar's intended bar
+and restaurant market is not Germany-only. Hard-coded currency symbols,
+browser-local time, a business-wide rate, or code-level food classification
+would make expansion unsafe and would falsely imply maintained tax-law
+authority. Historical orders also cannot change meaning when a venue edits a
+rate later.
+
+**Decision:** Persist ISO country/currency, BCP 47 formatting locale, IANA
+timezone, editable tax label, and country-parsed E.164 contact data per tenant.
+Country choice offers explicit editable suggestions only; UI translation is
+separate. Lock currency after monetary activity. Represent operational tax as
+a stable tenant profile with append-only effective-dated versions. Require an
+owner/manager to classify newly priced items explicitly; modifiers and happy
+hour inherit the item. Calculate each line server-side with decimal half-up
+rounding to the currency minor unit and snapshot all currency/profile/rate/
+inclusive/net/tax/gross facts on the placed order. Seed Germany's current 19%
+standard/beverage and 7% reduced/food examples as editable demo data labelled
+non-fiscal, not as runtime law.
+
+**Consequences:** Adding a tenant in another country requires configuration,
+not source changes. Existing monetary history cannot be converted by editing a
+currency field; a future migration/repricing workflow must preserve old units.
+Compound taxes, cash rounding, filings, fiscal invoices/exports, legal preset
+maintenance, automatic product classification, and translated UI remain
+explicit later programs. The venue's compliant register and adviser remain
+authoritative.
+
+**References:** `server/db/migrations/037_regional_tax_configuration.sql`,
+`server/app/core/regional.py`, `server/app/services/tax_service.py`,
+`server/app/services/order_service.py`,
+`client/app/business/settings/region-tax/region-tax-settings-client.tsx`,
+`server/tests/integration/test_regional_tax_routes.py`,
+`server/tests/integration/test_order_authority.py`,
+[German Federal Ministry of Finance: 2026 tax changes](https://www.bundesfinanzministerium.de/Content/DE/Standardartikel/Themen/Steuern/das-aendert-sich-2026.html)
 
 ## 2026-08-14 — The MVP hides unsupported states instead of simulating them
 

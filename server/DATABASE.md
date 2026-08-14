@@ -12,7 +12,7 @@ than Alembic. Run commands from `server/` with `venv/` activated.
 | `python -m db.migrate seed` | Replace the Puzzles demo tenant without running migrations |
 | `docker compose up -d` | Start local PostgreSQL, Redis, and ML |
 | `docker compose down` | Stop local containers while keeping volumes |
-| `../scripts/verify-fresh-db.sh` | Recreate a name-restricted disposable database, run every migration, repeat the canonical seed, and assert stage-1 invariants |
+| `../scripts/verify-fresh-db.sh` | Recreate a name-restricted disposable database, run every migration, repeat the canonical seed, and assert current invariants |
 
 Seeding is a data mutation. The seed deletes and recreates its fixed Puzzles
 tenant and must not be run against shared or production data without explicit
@@ -81,6 +81,11 @@ migrations.
 
 `db/seeds/001_seed_puzzles.sql` is the only seed file. It creates the Puzzles
 tenant with relative reservation dates and data across all current modules.
+Migration 037 and the seed make its DE/EUR/`de-DE`/`Europe/Berlin` region plus
+19% beverage/standard, 7% food/reduced, exempt, and custom operational profiles
+explicit. Those profiles are editable demo suggestions, not fiscal rules. The
+seed also snapshots profile/version and line/order net-tax-gross values on its
+historical orders and remains repeat-safe.
 Local demo staff accounts are:
 
 | Role | Email |

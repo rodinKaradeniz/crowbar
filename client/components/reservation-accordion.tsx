@@ -22,6 +22,7 @@ import { CustomerResponse } from "@/lib/api-client";
 import { ReactNode } from "react";
 import { ReservationOverrideNotice } from "@/components/reservation-override-notice";
 import { formatBusinessDate, formatBusinessDateTime, formatBusinessTime } from "@/lib/business-time";
+import { useRegionalSettings } from "@/contexts/regional-context";
 
 interface ReservationAccordionProps {
   reservations: Reservation[];
@@ -42,6 +43,7 @@ export function ReservationAccordion({
   emptyMessage = "No reservations found.",
   businessTimezone,
 }: ReservationAccordionProps) {
+  const { locale } = useRegionalSettings();
   const customerMap = useMemo(() => {
     const map = new Map<string, CustomerResponse>();
     customers.forEach((c) => map.set(c.id, c));
@@ -94,11 +96,11 @@ export function ReservationAccordion({
                 <ReservationOverrideNotice reservation={reservation} businessTimezone={businessTimezone} compact />
                 <div className="flex items-center gap-1 text-muted-foreground">
                   <Calendar className="h-4 w-4" />
-                  <span>{formatBusinessDate(reservation.time, businessTimezone)}</span>
+                  <span>{formatBusinessDate(reservation.time, businessTimezone, locale)}</span>
                 </div>
                 <div className="flex items-center gap-1 text-muted-foreground">
                   <Clock className="h-4 w-4" />
-                  <span>{formatBusinessTime(reservation.time, businessTimezone)}</span>
+                  <span>{formatBusinessTime(reservation.time, businessTimezone, locale)}</span>
                 </div>
                 <div className="flex items-center gap-1 text-muted-foreground">
                   <Users className="h-4 w-4" />
@@ -160,10 +162,10 @@ export function ReservationAccordion({
                       <Calendar className="contact-icon" />
                       <div>
                         <p className="text-sm font-medium">
-                          {formatBusinessDate(reservation.time, businessTimezone)}
+                          {formatBusinessDate(reservation.time, businessTimezone, locale)}
                         </p>
                         <p className="section-subtitle">
-                          {formatBusinessTime(reservation.time, businessTimezone)}
+                          {formatBusinessTime(reservation.time, businessTimezone, locale)}
                         </p>
                       </div>
                     </div>
@@ -221,7 +223,7 @@ export function ReservationAccordion({
                       <Clock className="contact-icon" />
                       <span className="text-sm text-muted-foreground">
                         Requested:{" "}
-                        {formatBusinessDateTime(reservation.createdAt, businessTimezone)}
+                        {formatBusinessDateTime(reservation.createdAt, businessTimezone, locale)}
                       </span>
                     </div>
                     {reservation.updatedAt !== reservation.createdAt && (
@@ -229,7 +231,7 @@ export function ReservationAccordion({
                         <Clock className="contact-icon" />
                         <span className="text-sm text-muted-foreground">
                           Last updated:{" "}
-                          {formatBusinessDateTime(reservation.updatedAt, businessTimezone)}
+                          {formatBusinessDateTime(reservation.updatedAt, businessTimezone, locale)}
                         </span>
                       </div>
                     )}

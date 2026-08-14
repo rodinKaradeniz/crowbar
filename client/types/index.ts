@@ -34,6 +34,10 @@ export interface Business {
   email: string;
   phone: string;
   timezone?: string; // IANA timezone name (e.g. "Europe/Istanbul"); mappers default to "UTC"
+  countryCode?: string;
+  currencyCode?: string;
+  locale?: string;
+  taxLabel?: string;
   legalDrinkingAge?: number; // age asserted at alcohol checkout; mappers default to 18
   address?: string;
   description?: string;
@@ -435,6 +439,11 @@ export interface MenuItem {
   prepTimeMinutes?: number;
   displayOrder: number;
   image?: string;
+  taxProfileId: string;
+  taxProfileCode?: string;
+  taxProfileName?: string;
+  taxRate?: number;
+  priceIncludesTax?: boolean;
   modifierGroups: ModifierGroup[];
 }
 
@@ -482,6 +491,16 @@ export interface OrderLineItem {
   itemName: string;
   quantity: number;
   unitPrice: number;
+  currencyCode: string;
+  taxProfileId?: string;
+  taxProfileVersionId?: string;
+  taxProfileName: string;
+  taxProfileCode: string;
+  taxRate: number;
+  priceIncludesTax: boolean;
+  subtotalAmount: number;
+  taxAmount: number;
+  totalAmount: number;
   selectedModifiers: SelectedModifier[];
   routingTag: string;
   isAlcoholic?: boolean; // snapshot from the menu item at placement
@@ -506,6 +525,9 @@ export interface Order {
   tableIdentifier?: string;
   status: "received" | "preparing" | "ready" | "served" | "cancelled";
   idempotencyKey: string;
+  currencyCode: string;
+  subtotalAmount: number;
+  taxAmount: number;
   totalAmount: number;
   notes?: string;
   placedAt: string;
@@ -521,6 +543,46 @@ export interface LibraryItem {
   price: number;
   routingTag: string;
   prepTimeMinutes?: number;
+  taxProfileId: string;
+}
+
+export interface TaxProfileVersion {
+  id: string;
+  taxProfileId: string;
+  businessId: string;
+  name: string;
+  rate: number;
+  priceIncludesTax: boolean;
+  effectiveFrom: string;
+  note?: string;
+  createdBy?: string;
+  createdAt: string;
+}
+
+export interface TaxProfile {
+  id: string;
+  businessId: string;
+  code: string;
+  isActive: boolean;
+  currentVersion?: TaxProfileVersion;
+  versions: TaxProfileVersion[];
+  archivedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RegionalAudit {
+  id: string;
+  businessId: string;
+  changedBy?: string;
+  previousValues: Record<string, string>;
+  newValues: Record<string, string>;
+  changedAt: string;
+}
+
+export interface RegionalOption {
+  code: string;
+  name: string;
 }
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────

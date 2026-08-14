@@ -13,7 +13,7 @@ from app.models.menu import Menu, MenuCategory, MenuItem
 from app.models.recipe import MenuItemIngredient
 from app.schemas.inventory import InventoryItemCreate, InventoryItemUpdate, StockMovementCreate
 from app.schemas.recipe import RecipeIngredientInput
-from app.services import inventory_service, recipe_service
+from app.services import inventory_service, recipe_service, tax_service
 from tests.conftest import TestSessionLocal
 
 
@@ -27,6 +27,7 @@ async def _business(db: AsyncSession, suffix: str) -> Business:
     )
     db.add(business)
     await db.flush()
+    await tax_service.create_default_profiles(db, business)
     return business
 
 
@@ -169,11 +170,13 @@ async def test_recipe_replacement_rejects_whole_invalid_payload(
     )
     db_session.add(category)
     await db_session.flush()
+    tax_profiles = await tax_service.list_profiles(db_session, business.id)
     menu_item = MenuItem(
         category_id=category.id,
         business_id=business.id,
         name="Martini",
         price=10,
+        tax_profile_id=tax_profiles[0].id,
     )
     db_session.add(menu_item)
     await db_session.flush()

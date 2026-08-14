@@ -30,6 +30,7 @@ import {
   Users,
   Wine,
   Armchair,
+  Landmark,
 } from "lucide-react";
 import {
   SidebarContent,
@@ -120,6 +121,7 @@ function BusinessSidebarContentInner() {
     ...(canManageBusiness
       ? [
           { title: "Modules", url: "/business/settings/modules", icon: Puzzle },
+          { title: "Region & tax", url: "/business/settings/region-tax", icon: Landmark },
           { title: "Widget", url: "/business/settings/widget", icon: Code2 },
         ]
       : []),

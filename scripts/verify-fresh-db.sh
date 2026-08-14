@@ -53,13 +53,47 @@ BEGIN
   IF EXISTS (
     SELECT 1 FROM orders
     WHERE request_fingerprint IS NULL OR total_amount < 0
+       OR currency_code IS NULL OR subtotal_amount IS NULL OR tax_amount IS NULL
   ) THEN
     RAISE EXCEPTION 'order authority backfill invariant failed';
   END IF;
+  IF (SELECT COUNT(*) FROM businesses
+      WHERE slug = 'puzzles' AND country_code = 'DE' AND currency_code = 'EUR'
+        AND locale = 'de-DE' AND timezone = 'Europe/Berlin') <> 1 THEN
+    RAISE EXCEPTION 'canonical regional configuration is invalid';
+  END IF;
+  IF (SELECT COUNT(*) FROM tax_profiles tp JOIN businesses b ON b.id = tp.business_id
+      WHERE b.slug = 'puzzles' AND tp.code IN ('STANDARD', 'REDUCED', 'EXEMPT', 'CUSTOM')) <> 4 THEN
+    RAISE EXCEPTION 'canonical operational tax profiles are invalid';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM order_line_items
+    WHERE currency_code IS NULL OR tax_profile_id IS NULL
+       OR tax_profile_version_id IS NULL OR tax_profile_name IS NULL
+       OR tax_rate IS NULL OR subtotal_amount IS NULL OR tax_amount IS NULL
+       OR total_amount IS NULL
+  ) THEN
+    RAISE EXCEPTION 'order tax snapshot invariant failed';
+  END IF;
+  IF EXISTS (
+    SELECT 1
+    FROM orders o
+    JOIN (
+      SELECT order_id, SUM(subtotal_amount) subtotal_amount,
+             SUM(tax_amount) tax_amount, SUM(total_amount) total_amount
+      FROM order_line_items GROUP BY order_id
+    ) lines ON lines.order_id = o.id
+    WHERE o.subtotal_amount <> lines.subtotal_amount
+       OR o.tax_amount <> lines.tax_amount OR o.total_amount <> lines.total_amount
+  ) THEN
+    RAISE EXCEPTION 'order tax totals do not reconcile to lines';
+  END IF;
   IF to_regclass('public.inventory_discrepancies') IS NULL
      OR to_regclass('public.reservation_delivery_attempts') IS NULL
-     OR to_regclass('public.password_reset_tokens') IS NULL THEN
-    RAISE EXCEPTION 'stage-1 integrity tables are missing';
+     OR to_regclass('public.password_reset_tokens') IS NULL
+     OR to_regclass('public.business_regional_audits') IS NULL
+     OR to_regclass('public.tax_profile_versions') IS NULL THEN
+    RAISE EXCEPTION 'current integrity tables are missing';
   END IF;
 END $$;
 SQL

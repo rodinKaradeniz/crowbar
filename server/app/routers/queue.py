@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events import DomainEvent, publish
+from app.core.regional import RegionalValidationError, normalize_phone
 from app.core.rate_limit import (
     PUBLIC_IDENTITY_WRITE_LIMIT,
     PUBLIC_WRITE_IP_LIMIT,
@@ -78,11 +79,16 @@ async def join_queue(
         )
     await enforce_rate_limits(*checks)
 
-    # Verify business exists
-    await _load_business_or_404(db, business_id)
+    # Verify business exists and normalize national or international input using
+    # the tenant's selected country rather than a server-global default.
+    business = await _load_business_or_404(db, business_id)
+    try:
+        phone = normalize_phone(body.phone, business.country_code)
+    except RegionalValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
 
     status_dict = await queue_service.join_queue(
-        db, business_id, body.name, body.party_size, body.phone
+        db, business_id, body.name, body.party_size, phone
     )
 
     party_label = f"party of {body.party_size}" if body.party_size > 1 else "1 guest"

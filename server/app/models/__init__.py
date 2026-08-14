@@ -26,6 +26,7 @@ from app.models.table_area import TableArea
 from app.models.table_assignment import QueueTableAssignment, ReservationTableAssignment
 from app.models.table_combination import TableCombination, TableCombinationMember
 from app.models.table_seating import TableSeating, TableSeatingTable
+from app.models.tax import BusinessRegionalAudit, TaxProfile, TaxProfileVersion
 from app.models.user import User
 
 __all__ = [
@@ -73,4 +74,7 @@ __all__ = [
     "BookingScheduleExceptionWindow",
     "Tab",
     "HappyHourWindow",
+    "BusinessRegionalAudit",
+    "TaxProfile",
+    "TaxProfileVersion",
 ]

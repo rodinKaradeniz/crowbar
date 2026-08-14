@@ -14,6 +14,7 @@ class LibraryItemCreate(AppBaseModel):
     price: Decimal = Field(default=Decimal("0.00"), ge=0)
     routing_tag: str = Field(default="kitchen", pattern="^(kitchen|bar|any)$")
     prep_time_minutes: int | None = Field(None, ge=1)
+    tax_profile_id: UUID | None = None
 
 
 class LibraryItemUpdate(AppBaseModel):
@@ -22,6 +23,7 @@ class LibraryItemUpdate(AppBaseModel):
     price: Decimal | None = Field(None, ge=0)
     routing_tag: str | None = Field(None, pattern="^(kitchen|bar|any)$")
     prep_time_minutes: int | None = None
+    tax_profile_id: UUID | None = None
 
 
 class LibraryItemResponse(AppBaseModel):
@@ -32,6 +34,7 @@ class LibraryItemResponse(AppBaseModel):
     price: Decimal
     routing_tag: str
     prep_time_minutes: int | None = None
+    tax_profile_id: UUID
 
 
 
@@ -100,6 +103,7 @@ class MenuItemCreate(AppBaseModel):
     prep_time_minutes: int | None = Field(None, ge=1)
     display_order: int = 0
     image: str | None = None
+    tax_profile_id: UUID | None = None
     modifier_groups: list[ModifierGroupCreate] = []
 
 
@@ -116,6 +120,7 @@ class MenuItemUpdate(AppBaseModel):
     prep_time_minutes: int | None = None
     display_order: int | None = None
     image: str | None = None
+    tax_profile_id: UUID | None = None
 
 
 class MenuItemResponse(AppBaseModel):
@@ -134,6 +139,11 @@ class MenuItemResponse(AppBaseModel):
     prep_time_minutes: int | None = None
     display_order: int
     image: str | None = None
+    tax_profile_id: UUID
+    tax_profile_code: str | None = None
+    tax_profile_name: str | None = None
+    tax_rate: Decimal | None = None
+    price_includes_tax: bool | None = None
     modifier_groups: list[ModifierGroupResponse] = []
 
 
