@@ -58,6 +58,13 @@ when a short label or accessible description is sufficient.
   focus, labels, appropriate ARIA state, and legible contrast.
 - Destructive product actions use the shared `ConfirmationDialog`, never the
   browser `confirm()` dialog.
+- MVP settlement actions and status copy use **Settle externally** / **Settled
+  externally**. Do not use card-terminal imagery, “payment successful,” fiscal
+  receipt language, or other cues that imply Crowbar processed money.
+- Money, date/time, tax, address, and phone presentation comes from tenant
+  country/locale/currency/timezone configuration. The first pilot defaults to
+  Germany, EUR, `de-DE`, and `Europe/Berlin`; do not hard-code those values into
+  reusable components.
 
 ## Current Intentional Page Shapes
 
@@ -77,7 +84,8 @@ The Floor workspace is an area-based host board: compact table cards are the
 primary scan surface on desktop, with unassigned arrivals and walk-ins beside
 them. On small screens the grids stack and operational actions open a sheet.
 It deliberately does not simulate floor geometry or introduce drag-and-drop
-until that later product decision is confirmed.
+for the MVP. The area-based shape is confirmed for the first supervised pilot;
+geometry and drag-and-drop require later pilot evidence and a new decision.
 
 These shapes are not immutable, but replacing them is a product-design decision
 that should preserve the token system, accessibility contract, responsive
@@ -87,7 +95,8 @@ behavior, and functional data/actions.
 
 - Landing FAQ copy in `client/app/page.tsx` is draft marketing copy and needs
   owner review before publication.
-- `ContactDialog` and `FooterContactForm` currently simulate success locally;
-  neither delivers a message to a backend or provider.
+- Contact forms, placeholder reviews, and pricing claims without authoritative
+  workflows were removed in Stage 1. Reintroducing them requires real delivery,
+  moderation, or approved commercial state plus honest failure handling.
 
 These gaps belong in `docs/TODO.md` until resolved.

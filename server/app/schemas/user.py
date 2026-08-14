@@ -1,9 +1,10 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import EmailStr
+from pydantic import EmailStr, field_validator
 
 from app.schemas.base import AppBaseModel
+from app.services.auth_service import validate_password
 
 
 class UserCreate(AppBaseModel):
@@ -12,6 +13,8 @@ class UserCreate(AppBaseModel):
     phone: str | None = None
     password: str
     user_type: str = "customer"
+
+    _valid_password = field_validator("password")(validate_password)
 
 
 class UserUpdate(AppBaseModel):
@@ -29,6 +32,8 @@ class ChangePasswordRequest(AppBaseModel):
     current_password: str
     new_password: str
 
+    _valid_password = field_validator("new_password")(validate_password)
+
 
 class UserResponse(AppBaseModel):
     id: UUID
@@ -38,4 +43,3 @@ class UserResponse(AppBaseModel):
     avatar: str | None = None
     user_type: str
     created_at: datetime
-

@@ -158,6 +158,11 @@ const bookingScheduleResponse = {
   advance_booking_days: 45,
   slot_interval_minutes: 15,
   default_duration_minutes: 90,
+  cancellation_window_minutes: 120,
+  arrival_grace_period_minutes: 15,
+  reminder_enabled: true,
+  reminder_lead_minutes: 1440,
+  reconfirmation_enabled: false,
   windows: [
     {
       id: "window-1",
@@ -226,6 +231,11 @@ describe("booking schedule management", () => {
       advanceBookingDays: 45,
       slotIntervalMinutes: 15,
       defaultDurationMinutes: 90,
+      cancellationWindowMinutes: 120,
+      arrivalGracePeriodMinutes: 15,
+      reminderEnabled: true,
+      reminderLeadMinutes: 1440,
+      reconfirmationEnabled: false,
       windows: [
         {
           id: "client-copy",
@@ -243,6 +253,11 @@ describe("booking schedule management", () => {
       advance_booking_days: 45,
       slot_interval_minutes: 15,
       default_duration_minutes: 90,
+      cancellation_window_minutes: 120,
+      arrival_grace_period_minutes: 15,
+      reminder_enabled: true,
+      reminder_lead_minutes: 1440,
+      reconfirmation_enabled: false,
       windows: [
         {
           weekday: 0,
@@ -477,6 +492,7 @@ describe("structured API errors", () => {
       phone: "+31612345678",
       email: "guest@example.com",
       guests: 2,
+      idempotencyKey: "reservation-client-test",
     });
 
     await expect(request).rejects.toMatchObject({

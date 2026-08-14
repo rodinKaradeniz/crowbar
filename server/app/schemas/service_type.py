@@ -12,7 +12,7 @@ class ServiceTypeCreate(AppBaseModel):
     name: str
     description: str | None = None
     capacity: int = 1
-    max_concurrent_bookings: int | None = Field(default=None, ge=1)
+    max_concurrent_bookings: int = Field(default=1, ge=1)
     availability_resource_mode: Literal["legacy", "tables", "covers"] = "legacy"
     reservable_cover_capacity: int | None = Field(default=None, ge=1)
     resource_turn_buffer_minutes: int = Field(default=0, ge=0)

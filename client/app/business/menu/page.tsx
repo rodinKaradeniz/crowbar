@@ -16,6 +16,7 @@ export default async function MenuPage() {
   if (!business) {
     redirect("/auth/login");
   }
+  if (!business.onboardingComplete) redirect("/business/onboarding");
 
   if (!hasModule(business.enabledModules ?? [], MODULE_KEYS.ORDERING)) {
     return <ModuleDisabled moduleName="Ordering" />;

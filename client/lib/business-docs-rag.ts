@@ -132,6 +132,7 @@ export async function chatWithContext(
     body: JSON.stringify({
       model: CHAT_MODEL,
       temperature: 0.2,
+      max_tokens: 500,
       messages: [
         {
           role: "system",

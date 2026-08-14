@@ -16,6 +16,7 @@ export default async function QueuePage() {
   if (!business) {
     redirect("/auth/login");
   }
+  if (!business.onboardingComplete) redirect("/business/onboarding");
 
   if (!hasModule(business.enabledModules ?? [], MODULE_KEYS.QUEUE)) {
     return <ModuleDisabled moduleName="Queue" />;

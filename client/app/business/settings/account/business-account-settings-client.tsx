@@ -31,18 +31,16 @@ import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 
 interface BusinessAccountSettingsClientProps {
-  userId: string;
   userEmail: string;
   businessId: string;
 }
 
 export default function BusinessAccountSettingsClient({
-  userId,
   userEmail,
   businessId,
 }: BusinessAccountSettingsClientProps) {
   const router = useRouter();
-  const { meContext } = useAuth();
+  const { logout, meContext } = useAuth();
 
   // SMS notification state
   const [smsEnabled, setSmsEnabled] = useState(false);
@@ -102,9 +100,9 @@ export default function BusinessAccountSettingsClient({
     setIsChangingEmail(true);
     try {
       await clientChangeEmail({ new_email: newEmail, password: emailPassword });
-      toast.success("Email updated successfully");
-      setNewEmail("");
-      setEmailPassword("");
+      toast.success("Email updated. Please sign in again.");
+      await logout();
+      router.push("/auth/login");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to change email";
       setEmailError(message);
@@ -123,8 +121,8 @@ export default function BusinessAccountSettingsClient({
       return;
     }
 
-    if (newPassword.length < 8) {
-      setPasswordError("Password must be at least 8 characters");
+    if (newPassword.length < 12 || newPassword.length > 128) {
+      setPasswordError("Password must be between 12 and 128 characters");
       return;
     }
 
@@ -134,10 +132,9 @@ export default function BusinessAccountSettingsClient({
         current_password: currentPassword,
         new_password: newPassword,
       });
-      toast.success("Password updated successfully");
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
+      toast.success("Password updated. Please sign in again.");
+      await logout();
+      router.push("/auth/login");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to change password";
       setPasswordError(message);
@@ -152,8 +149,7 @@ export default function BusinessAccountSettingsClient({
     try {
       await clientDisableAccount();
       toast.success("Account disabled");
-      // Log out and redirect to login
-      await fetch("/api/auth/logout", { method: "POST" });
+      await logout();
       router.push("/auth/login");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to disable account";

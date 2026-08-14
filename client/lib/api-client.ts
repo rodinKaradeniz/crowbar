@@ -114,6 +114,10 @@ export async function apiGetBusiness(id: string, token?: string): Promise<Busine
   return apiFetch(`/api/businesses/${id}`, { token });
 }
 
+export async function apiGetCurrentBusiness(token: string): Promise<BusinessResponse> {
+  return apiFetch("/api/businesses/current", { token });
+}
+
 export async function apiGetBusinessBySlug(slug: string): Promise<BusinessResponse> {
   return apiFetch(`/api/businesses/slug/${slug}`);
 }
@@ -326,6 +330,8 @@ export async function apiGetBusinessStaff(
 
 export interface BusinessDashboardStats {
   today_reservations: number;
+  service_date: string;
+  business_timezone: string;
   pending_requests: number;
   today_guest_count: number;
   status_breakdown: {
@@ -355,7 +361,7 @@ export interface BusinessDashboardStats {
   /** Bar-wide operational snapshot; keys present only for enabled modules. */
   ops?: {
     orders_today?: number;
-    revenue_today?: number;
+    ordered_value_today?: number;
     open_tabs?: number;
     queue_waiting?: number;
     items_below_par?: number;

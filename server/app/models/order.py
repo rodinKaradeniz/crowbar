@@ -3,7 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -15,6 +15,13 @@ if TYPE_CHECKING:
 
 class Order(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "orders"
+    __table_args__ = (
+        UniqueConstraint(
+            "business_id",
+            "idempotency_key",
+            name="uq_orders_business_idempotency_key",
+        ),
+    )
 
     business_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -49,7 +56,8 @@ class Order(Base, UUIDMixin, TimestampMixin):
     scheduled_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="received", nullable=False)
     # status: received | preparing | ready | served | cancelled
-    idempotency_key: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    request_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     # Self-attestation recorded at placement. Whether the order actually contains
     # alcohol is derived from the line items on demand, not stored here.
     age_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

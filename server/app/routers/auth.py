@@ -1,10 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core.rate_limit import (
     ACCOUNT_REGISTRATION_IP_LIMIT,
     LOGIN_IDENTITY_LIMIT,
     LOGIN_IP_LIMIT,
+    PASSWORD_RESET_IDENTITY_LIMIT,
+    PASSWORD_RESET_IP_LIMIT,
     RateLimitCheck,
     enforce_rate_limits,
     get_client_ip,
@@ -15,23 +19,26 @@ from app.models.business import Business
 from app.models.user import User
 from app.schemas.auth import (
     BusinessRegisterRequest,
+    ForgotPasswordRequest,
     LoginRequest,
     LoginResponse,
-    RegisterRequest,
+    ResetPasswordRequest,
     WebSocketTokenResponse,
 )
 from app.schemas.user import ChangeEmailRequest, ChangePasswordRequest, UserResponse, UserUpdate
 from app.services.auth_service import (
     authenticate_user,
+    consume_password_reset,
     create_access_token,
     create_websocket_token,
+    create_password_reset,
     hash_password,
     register_business_owner,
-    register_user,
     verify_password,
     WEBSOCKET_TOKEN_TTL_SECONDS,
 )
 from app.services import staff_service
+from app.services.email_service import send_password_reset
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -42,7 +49,11 @@ async def issue_websocket_token(
     business: Business = Depends(get_current_business),
 ):
     return WebSocketTokenResponse(
-        token=create_websocket_token(str(current_user.id), str(business.id)),
+        token=create_websocket_token(
+            str(current_user.id),
+            str(business.id),
+            current_user.session_version,
+        ),
         expires_in=WEBSOCKET_TOKEN_TTL_SECONDS,
     )
 
@@ -72,37 +83,9 @@ async def login(
             detail="Invalid email or password",
         )
 
-    token = create_access_token(str(user.id), user.user_type)
-    return LoginResponse(
-        access_token=token,
-        user_id=str(user.id),
-        user_type=user.user_type,
+    token = create_access_token(
+        str(user.id), user.user_type, user.session_version
     )
-
-
-@router.post("/register", response_model=LoginResponse, status_code=status.HTTP_201_CREATED)
-async def register(
-    data: RegisterRequest,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-):
-    await enforce_rate_limits(
-        RateLimitCheck(
-            policy=ACCOUNT_REGISTRATION_IP_LIMIT,
-            key_parts=(get_client_ip(request),),
-        ),
-    )
-
-    user = await register_user(
-        db,
-        email=data.email,
-        password=data.password,
-        name=data.name,
-        phone=data.phone,
-        user_type=data.user_type,
-    )
-
-    token = create_access_token(str(user.id), user.user_type)
     return LoginResponse(
         access_token=token,
         user_id=str(user.id),
@@ -135,7 +118,9 @@ async def register_business(
         business_description=data.business_description,
     )
 
-    token = create_access_token(str(user.id), user.user_type)
+    token = create_access_token(
+        str(user.id), user.user_type, user.session_version
+    )
     return LoginResponse(
         access_token=token,
         user_id=str(user.id),
@@ -261,6 +246,7 @@ async def change_email(
             detail="Incorrect password",
         )
     current_user.email = data.new_email
+    current_user.session_version += 1
     await db.flush()
     return {"message": "Email updated successfully"}
 
@@ -278,6 +264,7 @@ async def change_password(
             detail="Incorrect current password",
         )
     current_user.password_hash = hash_password(data.new_password)
+    current_user.session_version += 1
     await db.flush()
     return {"message": "Password updated successfully"}
 
@@ -288,6 +275,68 @@ async def disable_account(
     db: AsyncSession = Depends(get_db),
 ):
     """Disable the current user's account."""
-    current_user.user_type = f"disabled_{current_user.user_type}"
+    current_user.is_active = False
+    current_user.session_version += 1
     await db.flush()
     return {"message": "Account disabled successfully"}
+
+
+@router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)
+async def forgot_password(
+    data: ForgotPasswordRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    normalized_email = str(data.email).strip().casefold()
+    client_ip = get_client_ip(request)
+    await enforce_rate_limits(
+        RateLimitCheck(
+            policy=PASSWORD_RESET_IP_LIMIT,
+            key_parts=(client_ip,),
+        ),
+        RateLimitCheck(
+            policy=PASSWORD_RESET_IDENTITY_LIMIT,
+            key_parts=(normalized_email,),
+        ),
+    )
+
+    user = await db.scalar(
+        select(User).where(
+            User.email == normalized_email,
+            User.user_type == "staff",
+            User.is_active.is_(True),
+        )
+    )
+    if user is not None:
+        _, raw_token = await create_password_reset(db, user)
+        await db.commit()
+        send_password_reset(
+            to_email=user.email,
+            reset_url=f"{settings.frontend_url}/auth/reset-password?token={raw_token}",
+        )
+
+    return {
+        "message": "If an active staff account exists, a reset link has been sent."
+    }
+
+
+@router.post("/reset-password")
+async def reset_password(
+    data: ResetPasswordRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    await enforce_rate_limits(
+        RateLimitCheck(
+            policy=PASSWORD_RESET_IP_LIMIT,
+            key_parts=(get_client_ip(request),),
+        ),
+    )
+    user = await consume_password_reset(db, data.token, data.new_password)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This password reset link is invalid or has expired",
+        )
+    await db.commit()
+    return {"message": "Password updated successfully"}

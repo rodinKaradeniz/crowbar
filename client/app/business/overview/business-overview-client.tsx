@@ -50,12 +50,14 @@ import { BusinessDashboardStats } from "@/lib/api-client";
 import type { MLDemandForecastResult } from "@/lib/ml-api";
 import { cn } from "@/lib/utils";
 import { BusinessDocsChatTrigger } from "@/components/business-docs-chat-trigger";
+import { formatMoney } from "@/lib/money";
 
 interface BusinessOverviewClientProps {
   business: Business;
   stats: BusinessDashboardStats;
   serviceTypes: ServiceType[];
   demandForecast?: MLDemandForecastResult | null;
+  docsAssistantEnabled: boolean;
 }
 
 export default function BusinessOverviewClient({
@@ -63,6 +65,7 @@ export default function BusinessOverviewClient({
   stats,
   serviceTypes,
   demandForecast,
+  docsAssistantEnabled,
 }: BusinessOverviewClientProps) {
   const [expandedReservations, setExpandedReservations] = useState<Set<string>>(new Set());
   const [selectedServiceType, setSelectedServiceType] = useState<string>("all");
@@ -71,7 +74,11 @@ export default function BusinessOverviewClient({
   const toggleReservation = (id: string) => {
     setExpandedReservations((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
   };
@@ -96,17 +103,25 @@ export default function BusinessOverviewClient({
 
   const formatTime = (isoString: string) =>
     new Date(isoString).toLocaleTimeString("en-US", {
-      hour: "numeric", minute: "2-digit", hour12: true,
+      hour: "numeric", minute: "2-digit", hour12: true, timeZone: stats.business_timezone,
     });
 
   const formatDate = (isoString: string) => {
     const date = new Date(isoString);
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    if (date.toDateString() === today.toDateString()) return "Today";
-    if (date.toDateString() === tomorrow.toDateString()) return "Tomorrow";
-    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const dateKey = new Intl.DateTimeFormat("en-CA", {
+      timeZone: stats.business_timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(date);
+    const serviceDate = new Date(`${stats.service_date}T12:00:00Z`);
+    const tomorrowKey = new Date(serviceDate.getTime() + 86_400_000)
+      .toISOString().slice(0, 10);
+    if (dateKey === stats.service_date) return "Today";
+    if (dateKey === tomorrowKey) return "Tomorrow";
+    return date.toLocaleDateString("en-US", {
+      month: "short", day: "numeric", timeZone: stats.business_timezone,
+    });
   };
 
   const weeklyChartData = useMemo(() => {
@@ -148,7 +163,7 @@ export default function BusinessOverviewClient({
 
   const ops = stats.ops ?? {};
 
-  const todayLabel = new Date().toLocaleDateString("en-US", {
+  const todayLabel = new Date(`${stats.service_date}T12:00:00Z`).toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -184,8 +199,8 @@ export default function BusinessOverviewClient({
     ...(ops.orders_today !== undefined
       ? [{ label: "Orders today", value: String(ops.orders_today), icon: Receipt }]
       : []),
-    ...(ops.revenue_today !== undefined
-      ? [{ label: "Revenue today", value: `€${Number(ops.revenue_today).toFixed(2)}`, icon: Banknote }]
+    ...(ops.ordered_value_today !== undefined
+      ? [{ label: "Ordered value today", value: formatMoney(ops.ordered_value_today), icon: Banknote }]
       : []),
   ];
 
@@ -456,13 +471,13 @@ export default function BusinessOverviewClient({
                   <p className="text-sm mb-3">
                     Staff up{" "}
                     <span className="font-medium">
-                      {new Date(busiest.date).toLocaleDateString("en-US", { weekday: "long" })}
+                      {new Date(`${busiest.date}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" })}
                     </span>
                   </p>
                 )}
                 <div className="flex gap-2">
                   {next3.map((day) => {
-                    const dow = new Date(day.date).toLocaleDateString("en-US", { weekday: "short" });
+                    const dow = new Date(`${day.date}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
                     const isBusiest = busiest && day.date === busiest.date;
                     return (
                       <div
@@ -499,13 +514,13 @@ export default function BusinessOverviewClient({
 
       {/* ── Quiet actions row (was carousel slides 1–2) ───────────────────── */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 fade-rise" style={{ animationDelay: "160ms" }}>
-        <button
+        {docsAssistantEnabled && <button
           onClick={() => setChatOpen(true)}
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
         >
           <MessageCircle className="h-4 w-4" />
           Ask the docs assistant
-        </button>
+        </button>}
         <Link
           href={`/reserve/${business.slug}`}
           target="_blank"
@@ -517,7 +532,7 @@ export default function BusinessOverviewClient({
       </div>
 
       {/* Hidden chat sheet — opened from the actions row */}
-      <BusinessDocsChatTrigger open={chatOpen} onOpenChange={setChatOpen} hideTrigger />
+      {docsAssistantEnabled && <BusinessDocsChatTrigger open={chatOpen} onOpenChange={setChatOpen} hideTrigger />}
     </div>
   );
 }

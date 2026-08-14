@@ -81,13 +81,25 @@ async def update_service_type(
         return None
 
     update_data = data.model_dump(exclude_unset=True)
+    effective_mode = update_data.get(
+        "availability_resource_mode", service_type.availability_resource_mode
+    )
+    if update_data.get("max_concurrent_bookings") is None:
+        if "max_concurrent_bookings" in update_data and effective_mode == "legacy":
+            raise ValueError(
+                "Legacy availability requires a positive concurrency guard"
+            )
+        if (
+            update_data.get("availability_resource_mode") == "legacy"
+            and service_type.max_concurrent_bookings is None
+        ):
+            update_data["max_concurrent_bookings"] = 1
     if update_data.get("availability_resource_mode") in {"legacy", "tables"}:
         update_data["reservable_cover_capacity"] = None
     if (
         "reservable_cover_capacity" in update_data
         and update_data["reservable_cover_capacity"] is not None
-        and update_data.get("availability_resource_mode", service_type.availability_resource_mode)
-        != "covers"
+        and effective_mode != "covers"
     ):
         raise ValueError("Cover capacity requires cover-backed availability")
     if update_data.get("availability_resource_mode") == "tables":

@@ -80,6 +80,7 @@ import {
 } from "lucide-react";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { EmptyState } from "@/components/empty-state";
+import { formatMoney, MVP_CURRENCY } from "@/lib/money";
 
 const ROUTING_ICONS: Record<string, React.ReactNode> = {
   kitchen: <ChefHat className="h-3 w-3" />,
@@ -135,8 +136,9 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
   const [deleteTarget, setDeleteTarget] = useState<{
     id: string;
     name: string;
-    type: "menu" | "category";
+    type: "menu" | "category" | "item" | "library";
     menuId?: string;
+    categoryId?: string;
   } | null>(null);
 
   // ── Menu form ───────────────────────────────────────────────────────────────
@@ -456,7 +458,6 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
     menuId: string,
     categoryId: string,
   ) {
-    if (!confirm(`Delete "${item.name}"?`)) return;
     try {
       await clientDeleteMenuItem(businessId, item.id);
       setMenus((prev) =>
@@ -611,7 +612,6 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
   }
 
   async function deleteLibraryItem(item: LibraryItem) {
-    if (!confirm(`Remove "${item.name}" from library?`)) return;
     try {
       await clientDeleteLibraryItem(businessId, item.id);
       setLibrary((prev) => prev.filter((i) => i.id !== item.id));
@@ -782,7 +782,15 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
                     onAddFromLibrary={openLibraryForCategory}
                     onEditItem={openEditItem}
                     onToggleAvail={toggleAvailability}
-                    onDeleteItem={deleteItem}
+                    onDeleteItem={(item, menuId, categoryId) =>
+                      setDeleteTarget({
+                        id: item.id,
+                        name: item.name,
+                        type: "item",
+                        menuId,
+                        categoryId,
+                      })
+                    }
                     onDeleteCategory={deleteCategory}
                     onSaveToLibrary={saveToLibrary}
                     onEditRecipe={setRecipeItem}
@@ -943,7 +951,7 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
                       </p>
                     )}
                     <p className="text-sm font-semibold mt-1">
-                      €{Number(item.price).toFixed(2)}
+                      {formatMoney(item.price)}
                     </p>
                   </div>
                   <div className="flex gap-1 shrink-0">
@@ -970,7 +978,13 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
                       size="sm"
                       variant="ghost"
                       className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                      onClick={() => deleteLibraryItem(item)}
+                      onClick={() =>
+                        setDeleteTarget({
+                          id: item.id,
+                          name: item.name,
+                          type: "library",
+                        })
+                      }
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
@@ -1023,16 +1037,39 @@ export function MenuManagementClient({ businessId, businessSlug }: Props) {
       <ConfirmationDialog
         open={deleteTarget !== null}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title={`Delete ${deleteTarget?.type === "menu" ? "Menu" : "Category"}`}
-        description={`"${deleteTarget?.name}" and all its items will be permanently deleted.`}
-        confirmLabel="Delete"
+        title={
+          deleteTarget?.type === "library"
+            ? "Remove library item"
+            : `Delete ${deleteTarget?.type ?? "item"}`
+        }
+        description={
+          deleteTarget?.type === "menu" || deleteTarget?.type === "category"
+            ? `"${deleteTarget?.name}" and all its items will be permanently deleted.`
+            : `"${deleteTarget?.name}" will be permanently removed.`
+        }
+        confirmLabel={deleteTarget?.type === "library" ? "Remove" : "Delete"}
         variant="destructive"
         onConfirm={() => {
           if (!deleteTarget) return;
           if (deleteTarget.type === "menu") {
             void confirmDeleteMenu(deleteTarget.id);
-          } else {
+          } else if (deleteTarget.type === "category") {
             void confirmDeleteCategory(deleteTarget.menuId!, deleteTarget.id);
+          } else if (deleteTarget.type === "item") {
+            const menu = menus.find((candidate) => candidate.id === deleteTarget.menuId);
+            const item = menu?.categories
+              .flatMap((category) => category.items)
+              .find((candidate) => candidate.id === deleteTarget.id);
+            if (item) {
+              void deleteItem(
+                item,
+                deleteTarget.menuId!,
+                deleteTarget.categoryId!,
+              );
+            }
+          } else {
+            const item = library.find((candidate) => candidate.id === deleteTarget.id);
+            if (item) void deleteLibraryItem(item);
           }
           setDeleteTarget(null);
         }}
@@ -1089,7 +1126,7 @@ function ItemFormFields({
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <Label>Price (€)</Label>
+          <Label>Price ({MVP_CURRENCY})</Label>
           <Input
             type="number"
             min="0"
@@ -1114,7 +1151,7 @@ function ItemFormFields({
       </div>
       {showHappyHour && (
         <div className="space-y-1.5">
-          <Label>Happy hour price (€)</Label>
+          <Label>Happy hour price ({MVP_CURRENCY})</Label>
           <Input
             type="number"
             min="0"
@@ -1295,7 +1332,7 @@ function CategorySection({
                 )}
               </div>
               <span className="text-sm font-medium tabular-nums shrink-0">
-                €{Number(item.price).toFixed(2)}
+                {formatMoney(item.price)}
               </span>
               <div className="flex gap-1">
                 <Button

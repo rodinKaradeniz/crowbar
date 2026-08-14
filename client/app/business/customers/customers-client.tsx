@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { format, parseISO } from "date-fns";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import {
@@ -17,11 +16,13 @@ import { Input } from "@/components/ui/input";
 import { VisitorResponse, ServiceType } from "@/types";
 import { cn } from "@/lib/utils";
 import { Search } from "lucide-react";
+import { formatBusinessDate } from "@/lib/business-time";
 
 interface CustomersClientProps {
   visitors: VisitorResponse[];
   serviceTypes: ServiceType[];
   customerSegments?: Record<string, string>;
+  businessTimezone: string;
 }
 
 const SEGMENT_STYLES: Record<string, string> = {
@@ -46,6 +47,7 @@ const SOURCE_LABELS = {
 export default function CustomersClient({
   visitors,
   customerSegments,
+  businessTimezone,
 }: CustomersClientProps) {
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -139,7 +141,7 @@ export default function CustomersClient({
                   <TableCell>
                     {v.lastVisit ? (
                       <span className="text-sm">
-                        {format(parseISO(v.lastVisit), "MMM d, yyyy")}
+                        {formatBusinessDate(v.lastVisit, businessTimezone)}
                       </span>
                     ) : (
                       <span className="text-muted-foreground">—</span>

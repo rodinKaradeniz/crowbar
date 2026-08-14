@@ -63,7 +63,7 @@ export function TimezoneCombobox({
   disabled,
 }: TimezoneComboboxProps) {
   const [open, setOpen] = React.useState(false);
-  const timezones = React.useMemo(getTimezones, []);
+  const timezones = React.useMemo(() => getTimezones(), []);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

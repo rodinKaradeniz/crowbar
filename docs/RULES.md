@@ -14,6 +14,10 @@ workflow module may add process but cannot weaken them.
    arbitrary-looking behavior.
 5. Read [`TODO.md`](TODO.md) before planning or touching related deferred work.
 
+Read [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md) before implementing or verifying
+supervised-MVP stages 1–7. Close or update its existing route, risk, and
+acceptance rows instead of maintaining a separate release checklist.
+
 `PRODUCT.md` owns product behavior and wins on product conflicts.
 `ARCHITECTURE.md` owns present system shape; `HISTORY.md` owns rationale;
 `TODO.md` owns deliberate future work. This file owns day-to-day process and
@@ -102,6 +106,9 @@ of this order and specialized references.
 - Do not run database reset, shared seeding, volume deletion, destructive Git
   commands, deployment, or external writes without explicit authorization.
 - Do not claim that `docs/deployment.md` is implemented.
+- Do not describe Crowbar MVP as a German cash register, payment processor,
+  fiscal record, receipt system, or tax authority. “Settled externally” means
+  the venue's separate compliant register remains authoritative.
 - Do not implement an item from `docs/backlog.md` without reconciling it against
   source and `docs/TODO.md`; the backlog is a legacy ledger.
 - Do not add speculative rules, history, or TODO items as if they were agreed
@@ -136,6 +143,11 @@ of this order and specialized references.
 - Explicitly commit before `publish()`; publishing is failure-tolerant and is
   not a transactional outbox.
 - Preserve idempotency and legal transition rules in services.
+- Treat MVP tab settlement as an audited external-register assertion. Do not
+  add payment, tender, cash, receipt, refund, or fiscal semantics to that path.
+- Keep tenant-configured tax profiles effective-dated and snapshot the applied
+  operational estimate on order lines; never rewrite old orders after a rate
+  change.
 - Add PostgreSQL-backed integration tests for auth, tenancy, constraints, and
   route/service coordination.
 - Install `requirements-test.txt` after a venv rebuild; runtime requirements do

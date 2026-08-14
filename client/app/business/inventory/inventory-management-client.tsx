@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   clientGetInventoryItems,
@@ -9,6 +9,8 @@ import {
   clientDeleteInventoryItem,
   clientRecordStockMovement,
   clientGetStockMovements,
+  clientGetInventoryDiscrepancies,
+  type InventoryDiscrepancy,
 } from "@/lib/client-api";
 import type { InventoryItem, StockMovement, WasteReason } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -57,9 +59,11 @@ import {
   RefreshCw,
   Trash2,
 } from "lucide-react";
+import { formatBusinessDateTime } from "@/lib/business-time";
 
 interface Props {
   businessId: string;
+  businessTimezone: string;
 }
 
 type ItemFormState = {
@@ -152,9 +156,10 @@ function movementDeltaDisplay(movement: StockMovement) {
   );
 }
 
-export function InventoryManagementClient({ businessId }: Props) {
+export function InventoryManagementClient({ businessId, businessTimezone }: Props) {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [discrepancies, setDiscrepancies] = useState<InventoryDiscrepancy[]>([]);
 
   // ── Item dialog ─────────────────────────────────────────────────────────────
   const [itemDialog, setItemDialog] = useState(false);
@@ -177,21 +182,25 @@ export function InventoryManagementClient({ businessId }: Props) {
   // ── Delete confirmation ─────────────────────────────────────────────────────
   const [itemToDelete, setItemToDelete] = useState<InventoryItem | null>(null);
 
-  useEffect(() => {
-    void loadItems();
-  }, [businessId]);
-
-  async function loadItems() {
+  const loadItems = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await clientGetInventoryItems(businessId);
+      const [data, openDiscrepancies] = await Promise.all([
+        clientGetInventoryItems(businessId),
+        clientGetInventoryDiscrepancies(businessId),
+      ]);
       setItems(data);
+      setDiscrepancies(openDiscrepancies);
     } catch {
       toast.error("Failed to load inventory");
     } finally {
       setLoading(false);
     }
-  }
+  }, [businessId]);
+
+  useEffect(() => {
+    void loadItems();
+  }, [loadItems]);
 
   // ── Item CRUD ────────────────────────────────────────────────────────────────
 
@@ -257,10 +266,10 @@ export function InventoryManagementClient({ businessId }: Props) {
           // null clears the pour size (item is 'each', or the field was cleared).
           defaultPourMl: isLiquid ? defaultPourMl : null,
           parQuantity:
-            itemForm.parQuantity !== "" ? Number(itemForm.parQuantity) : undefined,
+            itemForm.parQuantity !== "" ? Number(itemForm.parQuantity) : null,
           costPerUnit:
-            itemForm.costPerUnit !== "" ? Number(itemForm.costPerUnit) : undefined,
-          notes: itemForm.notes.trim() || undefined,
+            itemForm.costPerUnit !== "" ? Number(itemForm.costPerUnit) : null,
+          notes: itemForm.notes.trim() || null,
         });
         setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
         toast.success("Item updated");
@@ -298,9 +307,9 @@ export function InventoryManagementClient({ businessId }: Props) {
     try {
       await clientDeleteInventoryItem(businessId, item.id);
       setItems((prev) => prev.filter((i) => i.id !== item.id));
-      toast.success("Item deleted");
+      toast.success("Item archived; movement history was preserved");
     } catch {
-      toast.error("Failed to delete item");
+      toast.error("Failed to archive item");
     }
   }
 
@@ -471,6 +480,18 @@ export function InventoryManagementClient({ businessId }: Props) {
         </div>
       )}
 
+      {discrepancies.length > 0 && (
+        <div className="flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <div className="font-medium">
+              {discrepancies.length} inventory integrity {discrepancies.length === 1 ? "incident needs" : "incidents need"} review
+            </div>
+            <div className="mt-1">{discrepancies.map((incident) => incident.details).join(" · ")}</div>
+          </div>
+        </div>
+      )}
+
       {/* Item list */}
       {loading ? (
         <div className="text-sm text-muted-foreground">Loading inventory…</div>
@@ -571,7 +592,7 @@ export function InventoryManagementClient({ businessId }: Props) {
                   size="sm"
                   variant="ghost"
                   className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                  title="Delete item"
+                  title="Archive item"
                   onClick={() => deleteItem(item)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -1001,7 +1022,7 @@ export function InventoryManagementClient({ businessId }: Props) {
                       <p className="text-xs text-muted-foreground mt-1 truncate">{m.notes}</p>
                     )}
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {new Date(m.createdAt).toLocaleString()}
+                      {formatBusinessDateTime(m.createdAt, businessTimezone)}
                     </p>
                   </div>
                   <div className="shrink-0 text-right">{movementDeltaDisplay(m)}</div>
@@ -1015,9 +1036,9 @@ export function InventoryManagementClient({ businessId }: Props) {
       <ConfirmationDialog
         open={itemToDelete !== null}
         onOpenChange={(open) => !open && setItemToDelete(null)}
-        title="Delete Item"
-        description={`"${itemToDelete?.name}" and all its movement history will be permanently deleted.`}
-        confirmLabel="Delete"
+        title="Archive Item"
+        description={`Archive "${itemToDelete?.name}"? It will leave active inventory, while its movement history remains available for audit.`}
+        confirmLabel="Archive"
         variant="destructive"
         onConfirm={() => {
           if (itemToDelete) void confirmDeleteItem(itemToDelete);

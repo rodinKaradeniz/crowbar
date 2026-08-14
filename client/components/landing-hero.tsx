@@ -5,7 +5,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowDown, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { PricingModal } from "@/components/pricing-modal";
 import heroPhoto from "@/assets/crowbar-hero.jpg";
 
 /**
@@ -96,15 +95,10 @@ export function LandingHero() {
         <div className="flex flex-col sm:flex-row gap-4 mt-10">
           <Button asChild size="lg">
             <Link href="/auth/register" className="flex items-center gap-2">
-              Start free trial
+              Create a venue workspace
               <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>
-          <PricingModal>
-            <Button variant="outline" size="lg">
-              See pricing
-            </Button>
-          </PricingModal>
         </div>
       </div>
 

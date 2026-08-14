@@ -11,6 +11,7 @@ from app.models.business import Business
 from app.models.user import User
 from app.schemas.inventory import (
     InventoryItemCreate,
+    InventoryDiscrepancyResponse,
     InventoryItemResponse,
     InventoryItemUpdate,
     StockMovementCreate,
@@ -104,6 +105,24 @@ async def delete_item(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/api/inventory/{business_id}/discrepancies",
+    response_model=list[InventoryDiscrepancyResponse],
+    dependencies=[Depends(require_module(_MODULE))],
+)
+async def list_discrepancies(
+    business_id: UUID,
+    discrepancy_status: str = Query(default="open", pattern="^(open|resolved)$"),
+    db: AsyncSession = Depends(get_db),
+    business: Business = Depends(get_current_business),
+):
+    if business.id != business_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    return await inventory_service.list_discrepancies(
+        db, business_id, status=discrepancy_status
+    )
 
 
 # ─── Low-stock ────────────────────────────────────────────────────────────────

@@ -34,6 +34,16 @@ changes.
   work for shift operations, self-service booking changes, bar-native counts,
   workforce economics, offline survival, retention, and provider-neutral
   integrations without promoting those ideas ahead of availability.
+- **2026-08-13:** The first release was reframed as a supervised, non-fiscal
+  operational pilot for a single-location German bar. The roadmap now has an
+  explicit stages 0–9 local-to-pilot sequence, while payment and German fiscal
+  POS work remain a separate post-MVP program.
+- **2026-08-14:** MVP stage 0 closed with an authoritative route disposition,
+  workflow ownership trace, risk register, and stage 1–7 acceptance matrix in
+  `docs/MVP_ACCEPTANCE.md`. Known audit defects now have numbered stage owners.
+- **2026-08-14:** MVP stage 1 closed locally with the complete frontend,
+  PostgreSQL backend, reproducible ML, and fresh migration/seed gates passing.
+  Germany-ready tenant and operational tax configuration is the next boundary.
 
 ## Durable Decisions
 
@@ -732,6 +742,133 @@ until the guest accepts it.
 **References:** `client/components/reservation-form.tsx`,
 `client/components/reservation-waitlist-panel.tsx`,
 `client/lib/availability.ts`, `client/lib/client-api.ts`
+
+## 2026-08-13 — The first pilot is operational, externally settled, and non-fiscal
+
+**Context:** A codebase audit found that Crowbar already has valuable
+reservation, floor, ordering, inventory, CRM, and insight foundations, but
+production payment and German cash-register compliance would introduce a
+separate domain involving tenders, receipts, TSE, DSFinV-K, refunds, and fiscal
+retention. Pulling that work into the first pilot would delay proving the bar's
+core service and stock workflows. The first known venue is a single-location
+bar in Germany, Railway is the intended deployment target, and the user wants
+complete local verification before resuming deployment.
+
+**Decision:** Target a supervised MVP pilot in which Crowbar owns the
+non-fiscal operational record from reservation through queue, tables, orders,
+inventory, purchasing, cost control, guest context, and reporting. The venue's
+separate compliant register remains payment and fiscal authority. Crowbar
+records an audited **settled externally** assertion with a total snapshot and
+optional informational method/reference; it does not process payment, model
+partial tenders, or issue receipts/invoices. Purchasing includes suppliers,
+purchase orders, receiving, invoice/reference capture, stock counts, and cost
+analysis but not supplier-invoice payment. German tenant configuration uses
+EUR, locale/timezone/country-aware contact handling, and effective-dated
+per-item tax profiles for operational estimates; it is not a fiscal tax
+engine. The existing area-based Floor board is sufficient for the pilot.
+
+Development follows the confirmed order in `TODO.md`: contract/baseline;
+correctness/security; Germany configuration; guest-to-table; ordering/external
+settlement; stock/purchasing/cost; staff/CRM/reporting; local demo/release gate;
+Railway; supervised rollout. Deployment remains a separately authorized
+external action after the local gate.
+
+**Consequences:** Product copy, schemas, analytics, and staff actions must not
+call Crowbar's external assertion a processed payment or authoritative
+revenue. Tax-rate changes must not rewrite historical order estimates. Payment,
+cash, tips, split/partial tenders, refunds, deposits/card holds, fiscal receipts,
+TSE, DSFinV-K, and bank settlement stay out of MVP implementation even when a
+nearby workflow would make a shortcut tempting. Broader DASH replacement
+remains the long-term direction, but pilot evidence controls post-MVP order.
+
+**References:** `docs/PRODUCT.md`, `docs/TODO.md`, `docs/deployment.md`,
+`server/app/services/tab_service.py`
+
+## 2026-08-14 — Staff identity and order input become revocable server-owned boundaries
+
+**Context:** The Stage 0 audit found request-selected staff tenancy, weak role
+escalation controls, raw reusable invitation secrets, ineffective account
+disablement, dead customer/OTP login branches, and public/staff order payloads
+that could influence modifier names and price deltas. These were release-level
+authority defects rather than missing polish.
+
+**Decision:** Keep guests account-free and allow staff entry only through
+business-owner registration or an expiring, hashed, single-use invitation.
+Enforce the `owner > manager > staff` hierarchy, tenant derivation, last-owner
+and self-removal protections, and a shared password policy. Bind HTTP and
+WebSocket credentials to a user `session_version` incremented by security
+changes. Resolve every order item, modifier, constraint, price, table, seating,
+tab and customer link on the server. Scope idempotency to the tenant and bind it
+to a canonical request fingerprint; an exact concurrent retry returns one
+order while different reuse conflicts.
+
+**Consequences:** Browser visibility is not authorization, removing a staff
+assignment invalidates an already issued credential, and no future client may
+add a second order-pricing path. Stage 2 tax snapshots extend the authoritative
+line-resolution transaction. Customer accounts and phone OTP remain outside
+the MVP unless a later product decision reintroduces them deliberately.
+
+**References:** `server/db/migrations/032_auth_and_invitation_hardening.sql`,
+`server/db/migrations/033_order_authority_and_idempotency.sql`,
+`server/app/services/auth_service.py`, `server/app/services/order_service.py`,
+`server/tests/integration/test_staff_security.py`,
+`server/tests/integration/test_order_authority.py`
+
+## 2026-08-14 — Integrity incidents are durable and service time belongs to the venue
+
+**Context:** Concurrent inventory movements could diverge from their ledger,
+recipe writes could partly succeed, deduction failures disappeared, public
+reservation retries could duplicate work, CRM retention used profile-edit
+time, and reminder success was represented by one coarse flag. Staff pages also
+rendered operational timestamps in whichever timezone the browser happened to
+use.
+
+**Decision:** Lock inventory balances, archive items, reject recipes atomically,
+deduplicate threshold alerts, and persist reconciliation/deduction
+discrepancies. Serialize CRM identity resolution, preserve conservative consent
+and suppression, and derive inactivity from operational records. Give public
+reservations a tenant/request fingerprint. Record reservation delivery per
+message and channel with retry state, format messages and service-day metrics
+in the business timezone, and route retained frontend operational timestamps
+through an explicit business-time boundary.
+
+**Consequences:** A fulfillment status can remain non-blocking without hiding
+stock corruption; operators can see and reconcile the incident. A successful
+channel is not resent merely because another failed. Browser location no longer
+changes the displayed day/time of reservations, floor arrivals, inventory
+movements, tabs, CRM activity, or insights. Stage 2 replaces the temporary
+EUR/`de-DE` boundary and region-neutral phone parsing with stored tenant
+configuration.
+
+**References:** `server/db/migrations/034_inventory_integrity.sql`,
+`server/db/migrations/035_reservation_and_crm_integrity.sql`,
+`server/db/migrations/036_reservation_delivery_attempts.sql`,
+`server/app/jobs/inventory_reconciliation.py`,
+`server/app/jobs/reservation_reminders.py`, `client/lib/business-time.ts`,
+`client/lib/money.ts`
+
+## 2026-08-14 — The MVP hides unsupported states instead of simulating them
+
+**Context:** Retained pages mixed incomplete onboarding and module access with
+dead customer/payment/QR paths, browser dialogs, fake contact success,
+placeholder reviews, unapproved pricing claims, and unrestricted reservation
+embedding. Those surfaces made a supervised demo less trustworthy even where
+the underlying operations worked.
+
+**Decision:** Apply shared onboarding and entitlement guards, align ordinary
+staff controls with API authority, retain only signed registered-table QR
+entry, and replace native alert/confirm with accessible application patterns.
+Remove unsupported customer-account, OTP, contact, pricing, review, and payment
+package surfaces. Reservation embedding defaults to self and accepts only an
+explicit deployment list of exact HTTP(S) origins.
+
+**Consequences:** Hidden features are not represented as shipped, and a future
+support, review, pricing, customer-account, or payment workflow must return with
+its own authoritative state and abuse/failure handling. Operators must set
+`RESERVATION_FRAME_ANCESTORS` before an external site can embed booking.
+
+**References:** `client/components/business-route-guard.tsx`,
+`client/next.config.ts`, `client/app/page.tsx`, `docs/deployment.md`
 
 ## Entry Template
 

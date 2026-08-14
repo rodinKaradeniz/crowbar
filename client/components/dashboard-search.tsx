@@ -15,12 +15,10 @@ import {
   Calendar,
   Bell,
   User,
-  Settings,
   ShieldCheck,
   Users,
   Clock,
   Tag,
-  Building2,
   Info,
   CalendarCog,
   UserCircle,
@@ -36,51 +34,6 @@ interface SearchItem {
   group: string;
   keywords?: string[];
 }
-
-const customerSearchItems: SearchItem[] = [
-  {
-    title: "Overview",
-    url: "/customer/overview",
-    icon: LayoutDashboard,
-    group: "Navigation",
-    keywords: ["dashboard", "home"],
-  },
-  {
-    title: "Reservations",
-    url: "/customer/reservations",
-    icon: Calendar,
-    group: "Navigation",
-    keywords: ["bookings", "appointments"],
-  },
-  {
-    title: "Requests",
-    url: "/customer/requests",
-    icon: Bell,
-    group: "Navigation",
-    keywords: ["pending", "notifications"],
-  },
-  {
-    title: "Profile Settings",
-    url: "/customer/settings/profile",
-    icon: User,
-    group: "Settings",
-    keywords: ["name", "avatar", "personal"],
-  },
-  {
-    title: "Account Settings",
-    url: "/customer/settings/account",
-    icon: ShieldCheck,
-    group: "Settings",
-    keywords: ["password", "email", "security"],
-  },
-  {
-    title: "For customers",
-    url: "/for-customers",
-    icon: BookOpen,
-    group: "Help",
-    keywords: ["help", "guide", "how to", "docs", "documentation"],
-  },
-];
 
 const businessSearchItems: SearchItem[] = [
   {
@@ -192,11 +145,9 @@ interface DashboardSearchProps {
 export function DashboardSearch({
   open,
   onOpenChange,
-  variant,
 }: DashboardSearchProps) {
   const router = useRouter();
-  const items =
-    variant === "customer" ? customerSearchItems : businessSearchItems;
+  const items = businessSearchItems;
 
   // Group items by their group
   const groups = React.useMemo(() => {

@@ -1,9 +1,7 @@
 {
   "title": "For Customers",
   "pages": [
-    "getting-started",
     "making-a-reservation",
-    "managing-reservations",
-    "account-settings"
+    "managing-reservations"
   ]
 }

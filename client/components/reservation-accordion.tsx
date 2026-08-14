@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo } from "react";
-import { format } from "date-fns";
 import {
   Calendar,
   Clock,
@@ -22,6 +21,7 @@ import { Reservation, ServiceType } from "@/types";
 import { CustomerResponse } from "@/lib/api-client";
 import { ReactNode } from "react";
 import { ReservationOverrideNotice } from "@/components/reservation-override-notice";
+import { formatBusinessDate, formatBusinessDateTime, formatBusinessTime } from "@/lib/business-time";
 
 interface ReservationAccordionProps {
   reservations: Reservation[];
@@ -30,6 +30,7 @@ interface ReservationAccordionProps {
   actionButtons?: (reservation: Reservation) => ReactNode;
   detailActions?: (reservation: Reservation) => ReactNode;
   emptyMessage?: string;
+  businessTimezone: string;
 }
 
 export function ReservationAccordion({
@@ -39,6 +40,7 @@ export function ReservationAccordion({
   actionButtons,
   detailActions,
   emptyMessage = "No reservations found.",
+  businessTimezone,
 }: ReservationAccordionProps) {
   const customerMap = useMemo(() => {
     const map = new Map<string, CustomerResponse>();
@@ -65,8 +67,6 @@ export function ReservationAccordion({
       {reservations.map((reservation) => {
         const customerInfo = customerMap.get(reservation.customerId);
         const serviceType = serviceTypeMap.get(reservation.serviceTypeId);
-        const reservationDate = new Date(reservation.time);
-
         return (
           <AccordionItem
             key={reservation.id}
@@ -91,14 +91,14 @@ export function ReservationAccordion({
                     </span>
                   </div>
                 )}
-                <ReservationOverrideNotice reservation={reservation} compact />
+                <ReservationOverrideNotice reservation={reservation} businessTimezone={businessTimezone} compact />
                 <div className="flex items-center gap-1 text-muted-foreground">
                   <Calendar className="h-4 w-4" />
-                  <span>{format(reservationDate, "MMM d, yyyy")}</span>
+                  <span>{formatBusinessDate(reservation.time, businessTimezone)}</span>
                 </div>
                 <div className="flex items-center gap-1 text-muted-foreground">
                   <Clock className="h-4 w-4" />
-                  <span>{format(reservationDate, "h:mm a")}</span>
+                  <span>{formatBusinessTime(reservation.time, businessTimezone)}</span>
                 </div>
                 <div className="flex items-center gap-1 text-muted-foreground">
                   <Users className="h-4 w-4" />
@@ -160,10 +160,10 @@ export function ReservationAccordion({
                       <Calendar className="contact-icon" />
                       <div>
                         <p className="text-sm font-medium">
-                          {format(reservationDate, "EEEE, MMMM d, yyyy")}
+                          {formatBusinessDate(reservation.time, businessTimezone)}
                         </p>
                         <p className="section-subtitle">
-                          {format(reservationDate, "h:mm a")}
+                          {formatBusinessTime(reservation.time, businessTimezone)}
                         </p>
                       </div>
                     </div>
@@ -205,7 +205,7 @@ export function ReservationAccordion({
                   </div>
                 )}
 
-                <ReservationOverrideNotice reservation={reservation} />
+                <ReservationOverrideNotice reservation={reservation} businessTimezone={businessTimezone} />
 
                 {detailActions && (
                   <div className="border-t pt-4">
@@ -221,10 +221,7 @@ export function ReservationAccordion({
                       <Clock className="contact-icon" />
                       <span className="text-sm text-muted-foreground">
                         Requested:{" "}
-                        {format(
-                          new Date(reservation.createdAt),
-                          "MMM d, yyyy 'at' h:mm a"
-                        )}
+                        {formatBusinessDateTime(reservation.createdAt, businessTimezone)}
                       </span>
                     </div>
                     {reservation.updatedAt !== reservation.createdAt && (
@@ -232,10 +229,7 @@ export function ReservationAccordion({
                         <Clock className="contact-icon" />
                         <span className="text-sm text-muted-foreground">
                           Last updated:{" "}
-                          {format(
-                            new Date(reservation.updatedAt),
-                            "MMM d, yyyy 'at' h:mm a"
-                          )}
+                          {formatBusinessDateTime(reservation.updatedAt, businessTimezone)}
                         </span>
                       </div>
                     )}

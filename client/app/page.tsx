@@ -2,17 +2,12 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight, GalleryVerticalEnd } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ContactDialog } from "@/components/contact-dialog";
-import { FooterContactForm } from "@/components/footer-contact-form";
-import { BusinessesCarouselSection } from "@/components/businesses-carousel-section";
 import { LandingNavbar } from "@/components/landing-navbar";
 import { LandingHero } from "@/components/landing-hero";
-import { PricingModal } from "@/components/pricing-modal";
 import { PhotoPanelGroup, PhotoPanelSection } from "@/components/photo-panel-section";
 import { FeatureStack, type StackFeature } from "@/components/feature-stack";
 import { FaqSection, type FaqItem } from "@/components/faq-section";
 import { Reveal } from "@/components/reveal";
-import { fetchBusinesses } from "@/lib/api";
 import beerTapPhoto from "@/assets/beer-tap.jpg";
 import inventoryPhoto from "@/assets/inventory.jpg";
 import cocktailPhoto from "@/assets/cocktail.jpg";
@@ -96,7 +91,7 @@ const faqItems: FaqItem[] = [
   {
     question: "Can we run tabs?",
     answer:
-      "Yes. Open a tab, add rounds to it through the night — from the guest's QR order or entered by staff — and close it out with one running total. Crowbar records how a tab was settled (cash, card, or comp), but card processing itself isn't built in yet.",
+      "Yes. Staff and guest rounds share one running tab. After the venue completes payment in its separate compliant register, staff record the tab as settled externally. Crowbar does not process payment or issue a receipt.",
   },
   {
     question: "Does it handle happy hour?",
@@ -111,8 +106,6 @@ const faqItems: FaqItem[] = [
 ];
 
 export default async function Home() {
-  const businesses = await fetchBusinesses();
-
   return (
     <div className="flex flex-col bg-background">
       <LandingNavbar />
@@ -154,35 +147,13 @@ export default async function Home() {
 
       {/* ── The modules — sticky fanning deck ──────────────────────────── */}
       <FeatureStack features={features} />
-      <div className="text-center pb-24 -mt-[10vh]">
-        <PricingModal>
-          <button className="text-sm text-primary hover:underline font-medium">
-            View pricing →
-          </button>
-        </PricingModal>
-      </div>
-
-      {/* ── Social proof ───────────────────────────────────────────────── */}
-      <section className="py-16 md:py-24 bg-muted/40">
-        <div className="container mx-auto px-6">
-          <Reveal className="max-w-3xl mx-auto text-center mb-12">
-            <h2 className="font-display text-3xl md:text-4xl mb-3">
-              Trusted by businesses like these
-            </h2>
-            <p className="text-muted-foreground">
-              Venues use Crowbar to run their nights, from reservations to
-              real-time orders.
-            </p>
-          </Reveal>
-          <BusinessesCarouselSection businesses={businesses} />
-        </div>
-      </section>
+      <div className="pb-24 -mt-[10vh]" />
 
       {/* ── FAQ — giant-numeral rail + numbered accordion ──────────────── */}
       <FaqSection
         eyebrow="Questions"
         title="Asked at the bar"
-        intro="Straight answers before you commit to a trial. Anything we missed, ask us directly below."
+        intro="Straight answers about the current venue workflow."
         items={faqItems}
       />
 
@@ -210,21 +181,16 @@ export default async function Home() {
                 Ready to run a smoother night?
               </h2>
               <p className="text-muted-foreground mb-10 max-w-xl">
-                Join businesses already using Crowbar to reduce no-shows, keep
-                tickets moving, and never 86 a drink by surprise.
+                Set up a venue workspace for reservations, service, ordering,
+                and stock operations.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <Button asChild size="lg">
                   <Link href="/auth/register" className="flex items-center gap-2">
-                    Start free trial
+                    Create a venue workspace
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                 </Button>
-                <ContactDialog>
-                  <Button variant="outline" size="lg">
-                    Talk to us
-                  </Button>
-                </ContactDialog>
               </div>
 
               <div className="mt-16">
@@ -242,14 +208,6 @@ export default async function Home() {
               </div>
             </Reveal>
 
-            {/* Contact form — in place, no dialog */}
-            <Reveal delay={120}>
-              <p className="eyebrow mb-4">Get in Touch</p>
-              <p className="text-sm text-muted-foreground mb-6">
-                Have questions? We&apos;d love to hear from you.
-              </p>
-              <FooterContactForm />
-            </Reveal>
           </div>
 
           <div className="rule-double" aria-hidden />

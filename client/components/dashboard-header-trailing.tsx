@@ -7,13 +7,14 @@ import { useMounted } from "@/hooks/use-mounted";
 
 interface DashboardHeaderTrailingProps {
   variant: "customer" | "business";
+  docsAssistantEnabled?: boolean;
 }
 
 /**
  * Radix (Tooltip + Dialog/Sheet) generates unstable ids between SSR and hydration.
  * Render lightweight placeholders until mounted, then mount the real triggers.
  */
-export function DashboardHeaderTrailing({ variant }: DashboardHeaderTrailingProps) {
+export function DashboardHeaderTrailing({ variant, docsAssistantEnabled = false }: DashboardHeaderTrailingProps) {
   const mounted = useMounted();
 
   if (!mounted) {
@@ -21,7 +22,7 @@ export function DashboardHeaderTrailing({ variant }: DashboardHeaderTrailingProp
       <div className="flex shrink-0 items-center gap-2">
         <span className="inline-block h-9 w-9 shrink-0" aria-hidden />
         <span className="inline-block h-9 w-9 shrink-0" aria-hidden />
-        {variant === "business" ? (
+        {variant === "business" && docsAssistantEnabled ? (
           <span className="inline-block h-9 w-9 shrink-0" aria-hidden />
         ) : null}
       </div>
@@ -32,7 +33,7 @@ export function DashboardHeaderTrailing({ variant }: DashboardHeaderTrailingProp
     <>
       <StaffThemeToggle />
       <NotificationTrigger />
-      {variant === "business" ? <BusinessDocsChatTrigger /> : null}
+      {variant === "business" && docsAssistantEnabled ? <BusinessDocsChatTrigger /> : null}
     </>
   );
 }

@@ -49,8 +49,8 @@ def _patch_is_material(data: ReservationUpdate) -> bool:
     return bool(_MATERIAL_PATCH_KEYS & patch.keys())
 
 
-def _fmt_time(dt: datetime) -> str:
-    return dt.strftime("%Y-%m-%d %H:%M")
+def _fmt_time(dt: datetime, timezone_name: str = "UTC") -> str:
+    return dt.astimezone(ZoneInfo(timezone_name)).strftime("%Y-%m-%d %H:%M")
 
 
 async def notify_staff_new_reservation(
@@ -62,6 +62,7 @@ async def notify_staff_new_reservation(
     actor: User | None = None,
 ) -> None:
     business_name = reservation.business.name if reservation.business else "Business"
+    timezone_name = reservation.business.timezone if reservation.business else "UTC"
     service_name = reservation.service_type.name if reservation.service_type else "Service"
     status_label = "Request" if reservation.status == "pending" else "Booking"
     first = (
@@ -76,7 +77,7 @@ async def notify_staff_new_reservation(
         else f"New {status_label.lower()}: {service_name}"
     )
     body = (
-        f"{customer_display_name} — {_fmt_time(reservation.time)} at {business_name}.{first}"
+        f"{customer_display_name} — {_fmt_time(reservation.time, timezone_name)} at {business_name}.{first}"
     )
     if is_override:
         body = f"{body} Reason: {reservation.availability_override_reason}"
@@ -122,16 +123,17 @@ async def notify_after_reservation_create(
 
 
 def _staff_patch_kind(old: ReservationSnapshot, new: Reservation) -> tuple[str, str, str]:
+    timezone_name = new.business.timezone if new.business else "UTC"
     if new.status == "cancelled" and old.status != "cancelled":
         return (
             nconst.RESERVATION_CANCELLED,
             "Reservation cancelled",
-            f"Reservation {_fmt_time(new.time)} is now cancelled.",
+            f"Reservation {_fmt_time(new.time, timezone_name)} is now cancelled.",
         )
     return (
         nconst.RESERVATION_UPDATED,
         "Reservation updated",
-        f"A reservation for {_fmt_time(new.time)} was updated.",
+        f"A reservation for {_fmt_time(new.time, timezone_name)} was updated.",
     )
 
 
@@ -161,12 +163,13 @@ async def notify_after_reservation_patch(
 
     # SMS: ping the customer when staff confirm/cancel/update their booking.
     if actor.user_type == "staff" and new.business:
+        timezone_name = new.business.timezone or "UTC"
         if new.status == "cancelled" and old.status != "cancelled":
-            sms_body = f"Your booking for {_fmt_time(new.time)} was cancelled."
+            sms_body = f"Your booking for {_fmt_time(new.time, timezone_name)} was cancelled."
         elif old.status == "pending" and new.status == "confirmed":
-            sms_body = f"Your booking for {_fmt_time(new.time)} is confirmed."
+            sms_body = f"Your booking for {_fmt_time(new.time, timezone_name)} is confirmed."
         else:
-            sms_body = f"Your booking for {_fmt_time(new.time)} was updated."
+            sms_body = f"Your booking for {_fmt_time(new.time, timezone_name)} was updated."
         channels = new.business.notification_channels or []
         notification_service.send_sms_if_enabled(
             channels,
@@ -183,11 +186,9 @@ async def notify_after_reservation_reschedule(
     actor: User,
 ) -> None:
     timezone_name = new.business.timezone if new.business else "UTC"
-    old_local_time = old.time.astimezone(ZoneInfo(timezone_name))
-    local_time = new.time.astimezone(ZoneInfo(timezone_name))
     is_override = new.availability_override_reason is not None
     body = (
-        f"Reservation moved from {_fmt_time(old_local_time)} to {_fmt_time(local_time)}."
+        f"Reservation moved from {_fmt_time(old.time, timezone_name)} to {_fmt_time(new.time, timezone_name)}."
     )
     if is_override:
         body = f"{body} Availability overridden: {new.availability_override_reason}"
@@ -228,11 +229,10 @@ def send_reschedule_sms(
     reservation_time: datetime,
     timezone_name: str,
 ) -> None:
-    local_time = reservation_time.astimezone(ZoneInfo(timezone_name))
     notification_service.send_sms_if_enabled(
         notification_channels,
         phone,
-        f"Crowbar: Your reservation at {business_name} was rescheduled to {_fmt_time(local_time)}.",
+        f"Crowbar: Your reservation at {business_name} was rescheduled to {_fmt_time(reservation_time, timezone_name)}.",
     )
 
 
@@ -248,7 +248,7 @@ async def notify_after_reservation_delete(
         business_id=reservation.business_id,
         kind=nconst.RESERVATION_CANCELLED,
         title="Reservation removed",
-        body=f"A reservation for {_fmt_time(reservation.time)} was removed.",
+        body=f"A reservation for {_fmt_time(reservation.time, reservation.business.timezone if reservation.business else 'UTC')} was removed.",
         payload={"reservation_id": str(reservation.id)},
         exclude_user_id=exclude,
     )
@@ -258,5 +258,5 @@ async def notify_after_reservation_delete(
         notification_service.send_sms_if_enabled(
             channels,
             reservation.phone,
-            f"Crowbar: Your booking for {_fmt_time(reservation.time)} was cancelled.",
+            f"Crowbar: Your booking for {_fmt_time(reservation.time, reservation.business.timezone or 'UTC')} was cancelled.",
         )

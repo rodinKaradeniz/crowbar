@@ -12,7 +12,7 @@ from app.models.tab import Tab
 from app.models.user import User
 from app.schemas.order import OrderPlaceRequest, OrderResponse
 from app.schemas.tab import TabCloseRequest, TabOpenRequest, TabResponse
-from app.services import tab_service
+from app.services import order_service, tab_service
 
 logger = logging.getLogger(__name__)
 
@@ -169,18 +169,29 @@ async def add_order_to_tab(
             status_code=status.HTTP_409_CONFLICT, detail="Tab is closed"
         )
     try:
-        order = await tab_service.add_order_to_tab(db, business.id, tab_id, body)
+        order, created = await tab_service.add_order_to_tab(
+            db, business.id, tab_id, body
+        )
+    except order_service.OrderIdempotencyConflict as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+        ) from exc
+    except order_service.OrderValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     await db.commit()
     # Tab orders still flow through the ticket board — emit order.placed so the
     # WS-driven board picks them up exactly like a standalone order.
-    await publish(DomainEvent(
-        event_type="order.placed",
-        business_id=str(business.id),
-        payload={"order_id": str(order.id), "tab_id": str(tab_id)},
-    ))
-    if tab.seating_id:
+    if created:
+        await publish(DomainEvent(
+            event_type="order.placed",
+            business_id=str(business.id),
+            payload={"order_id": str(order.id), "tab_id": str(tab_id)},
+        ))
+    if created and tab.seating_id:
         await publish(DomainEvent(
             event_type="floor_plan.tab_updated",
             business_id=str(business.id),

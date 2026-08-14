@@ -10,7 +10,7 @@ import {
 } from "@/types";
 import {
   apiGetBusinesses,
-  apiGetBusiness,
+  apiGetCurrentBusiness,
   apiGetBusinessBySlug,
   apiGetServiceTypesByBusiness,
   apiGetServiceType,
@@ -293,7 +293,9 @@ export async function fetchBusiness(id: string): Promise<Business | null> {
   if (USE_MOCK) return mock.fetchBusiness(id);
   try {
     const token = await getToken();
-    const data = await apiGetBusiness(id, token || undefined);
+    if (!token) return null;
+    const data = await apiGetCurrentBusiness(token);
+    if (data.id !== id) return null;
     return toBusiness(data);
   } catch {
     return null;

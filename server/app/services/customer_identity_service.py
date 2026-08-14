@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.customer import Customer
@@ -21,6 +21,13 @@ async def upsert_customer(
     """
     if not phone:
         return None
+
+    identity_key = f"customer:{business_id}:{phone}"
+    await db.execute(
+        select(
+            func.pg_advisory_xact_lock(func.hashtextextended(identity_key, 0))
+        )
+    )
 
     stmt = select(Customer).where(
         Customer.business_id == business_id,

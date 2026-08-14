@@ -63,7 +63,7 @@ describe("AuthContext", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("user").textContent).toBe("Test User");
-      expect(screen.getByTestId("user-type").textContent).toBe("customer");
+      expect(screen.getByTestId("user-type").textContent).toBe("staff");
     });
   });
 

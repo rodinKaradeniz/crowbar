@@ -25,6 +25,7 @@ import {
   History,
   LayoutGrid,
 } from "lucide-react";
+import { formatMoney } from "@/lib/money";
 
 // ─── Status model (Kanban columns are the primary axis) ───────────────────────
 
@@ -144,7 +145,7 @@ export function TicketBoardClient({ businessId }: Props) {
       if (!knownIdsRef.current.has(o.id)) {
         knownIdsRef.current.add(o.id);
         toast(`New order${o.tableIdentifier ? ` — Table ${o.tableIdentifier}` : ""}`, {
-          description: `${o.lineItems.length} item(s) · €${o.totalAmount.toFixed(2)}`,
+          description: `${o.lineItems.length} item(s) · ${formatMoney(o.totalAmount)}`,
         });
       }
     }

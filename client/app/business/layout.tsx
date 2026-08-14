@@ -5,6 +5,7 @@ import { DashboardErrorBoundary } from "@/components/dashboard-error-boundary";
 import { StaffThemeInit } from "@/components/staff-theme";
 import { getCurrentUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { BusinessRouteGuard } from "@/components/business-route-guard";
 
 // Paints a stored dark preference before hydration so the dashboard doesn't
 // flash light. Mirrors the storage key in components/staff-theme.tsx.
@@ -35,9 +36,14 @@ export default async function BusinessLayout({
       <StaffThemeInit />
       <BusinessSidebar />
       <SidebarInset>
-        <DashboardLayoutWrapper variant="business">
+        <DashboardLayoutWrapper
+          variant="business"
+          docsAssistantEnabled={process.env.DOCS_ASSISTANT_ENABLED === "true" && Boolean(process.env.OPENAI_API_KEY)}
+        >
           <DashboardErrorBoundary>
-            <main className="flex-1 overflow-auto">{children}</main>
+            <main className="flex-1 overflow-auto">
+              <BusinessRouteGuard>{children}</BusinessRouteGuard>
+            </main>
           </DashboardErrorBoundary>
         </DashboardLayoutWrapper>
       </SidebarInset>

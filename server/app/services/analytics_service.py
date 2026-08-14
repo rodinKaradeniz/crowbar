@@ -1,24 +1,34 @@
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants.days import DAY_ABBREVIATIONS
 from app.models.inventory import InventoryItem
+from app.models.business import Business
 from app.models.order import Order
 from app.models.queue_entry import QueueEntry
 from app.models.reservation import Reservation
 from app.models.service_type import ServiceType
 from app.models.tab import Tab
 from app.services.order_service import _business_day_start_utc
+from app.services.floor_plan_service import resolve_service_window
 
 
 async def get_business_dashboard_stats(db: AsyncSession, business_id: UUID) -> dict:
     now = datetime.now(timezone.utc)
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    today_end = today_start + timedelta(days=1)
-    seven_days_ago = now - timedelta(days=7)
+    business = await db.scalar(select(Business).where(Business.id == business_id))
+    if business is None:
+        raise ValueError("Business not found")
+    service_date, today_start, today_end = resolve_service_window(
+        business, now=now
+    )
+    zone = ZoneInfo(business.timezone)
+    seven_day_start = resolve_service_window(
+        business, service_date=service_date - timedelta(days=6)
+    )[1]
     thirty_days_ago = now - timedelta(days=30)
     sixty_days_ago = now - timedelta(days=60)
 
@@ -49,7 +59,8 @@ async def get_business_dashboard_stats(db: AsyncSession, business_id: UUID) -> d
     last_7_result = await db.execute(
         select(Reservation).where(
             Reservation.business_id == business_id,
-            Reservation.time >= seven_days_ago,
+            Reservation.time >= seven_day_start,
+            Reservation.time < today_end,
         )
     )
     last_7_reservations = list(last_7_result.scalars().all())
@@ -88,11 +99,13 @@ async def get_business_dashboard_stats(db: AsyncSession, business_id: UUID) -> d
     
     # Group reservations by day of week
     for day_offset in range(7):
-        day_start = seven_days_ago + timedelta(days=day_offset)
-        day_end = day_start + timedelta(days=1)
-        
+        day_date = service_date - timedelta(days=6 - day_offset)
+        day_start, day_end = resolve_service_window(
+            business, service_date=day_date
+        )[1:]
+
         # Get day name (0 = Monday, 6 = Sunday)
-        day_of_week = day_start.weekday()  # 0 = Monday, 6 = Sunday
+        day_of_week = day_date.weekday()  # 0 = Monday, 6 = Sunday
         day_name = day_names[day_of_week]
         
         # Get reservations for this day
@@ -154,6 +167,8 @@ async def get_business_dashboard_stats(db: AsyncSession, business_id: UUID) -> d
 
     return {
         "today_reservations": len(today_reservations),
+        "service_date": service_date.isoformat(),
+        "business_timezone": business.timezone,
         "pending_requests": pending_count,
         "today_guest_count": today_guest_count,
         "status_breakdown": status_breakdown,
@@ -201,7 +216,7 @@ async def get_bar_ops_snapshot(
             )
         ).one()
         ops["orders_today"] = int(orders_row[0] or 0)
-        ops["revenue_today"] = float(orders_row[1] or 0)
+        ops["ordered_value_today"] = float(orders_row[1] or 0)
 
         open_tabs = (
             await db.execute(

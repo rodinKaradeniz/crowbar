@@ -11,7 +11,6 @@ import {
   Globe,
   Clock,
   Users,
-  Star,
   CalendarDays,
   GalleryVerticalEnd,
 } from "lucide-react";
@@ -247,15 +246,6 @@ export default function ReserveClient({ business, serviceTypes }: ReserveClientP
           </section>
         )}
 
-        {/* Reviews placeholder */}
-        <section className="fade-rise" style={{ animationDelay: "280ms" }}>
-          <SectionHeading>Reviews</SectionHeading>
-          <div className="rounded-lg border border-dashed p-10 text-center">
-            <Star className="w-8 h-8 mx-auto mb-3 text-brass/50" />
-            <h3 className="font-display text-base mb-1">No reviews yet</h3>
-            <p className="text-sm text-muted-foreground">Be the first to leave a review after your visit.</p>
-          </div>
-        </section>
       </div>
 
       {/* Sticky mobile CTA */}

@@ -1,17 +1,19 @@
 "use client";
 
-import { format, parseISO } from "date-fns";
 import { ShieldAlert } from "lucide-react";
 import type { Reservation } from "@/types";
+import { formatBusinessDateTime } from "@/lib/business-time";
 
 interface ReservationOverrideNoticeProps {
   reservation: Reservation;
   compact?: boolean;
+  businessTimezone: string;
 }
 
 export function ReservationOverrideNotice({
   reservation,
   compact = false,
+  businessTimezone,
 }: ReservationOverrideNoticeProps) {
   if (!reservation.availabilityOverrideReason) return null;
 
@@ -35,10 +37,7 @@ export function ReservationOverrideNotice({
       <p className="mt-2 text-xs text-muted-foreground">
         {reservation.availabilityOverrideActorName || "Authorized staff member"}
         {reservation.availabilityOverriddenAt
-          ? ` · ${format(
-              parseISO(reservation.availabilityOverriddenAt),
-              "MMM d, yyyy 'at' h:mm a",
-            )}`
+          ? ` · ${formatBusinessDateTime(reservation.availabilityOverriddenAt, businessTimezone)}`
           : ""}
       </p>
     </div>

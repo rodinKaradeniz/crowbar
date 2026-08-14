@@ -16,10 +16,11 @@ export default async function TabsPage() {
   if (!business) {
     redirect("/auth/login");
   }
+  if (!business.onboardingComplete) redirect("/business/onboarding");
 
   if (!hasModule(business.enabledModules ?? [], MODULE_KEYS.ORDERING)) {
     return <ModuleDisabled moduleName="Ordering" />;
   }
 
-  return <TabsClient businessId={business.id} />;
+  return <TabsClient businessId={business.id} businessTimezone={business.timezone ?? "UTC"} />;
 }

@@ -9,6 +9,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -16,6 +17,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.config import settings
 from app.models.business import Business
 from app.models.reservation import Reservation
+from app.models.reservation_delivery_attempt import ReservationDeliveryAttempt
 from app.models.booking_schedule import BookingSchedule
 from app.services.reservation_guest_token_service import issue_guest_token
 from app.services import email_service, sms_service
@@ -60,9 +62,9 @@ async def run_reservation_reminders(
                     Reservation.status == "confirmed",
                     Reservation.time >= window_start,
                     Reservation.time <= window_end,
-                    Reservation.sms_reminder_sent.is_(False),
                 )
                 .order_by(Reservation.time, Reservation.id)
+                .with_for_update(of=Reservation, skip_locked=True)
             )
 
             for reservation, business, override_policy in result.all():
@@ -83,9 +85,9 @@ async def run_reservation_reminders(
                     continue
                 channels = business.notification_channels or []
 
-                reservation_time = reservation.time.strftime(
-                    "%A, %B %d at %I:%M %p UTC"
-                )
+                reservation_time = reservation.time.astimezone(
+                    ZoneInfo(business.timezone or "UTC")
+                ).strftime("%A, %B %d at %I:%M %p %Z")
                 token = issue_guest_token(
                     business_id=reservation.business_id,
                     reservation_id=reservation.id,
@@ -98,17 +100,60 @@ async def run_reservation_reminders(
                 )
 
                 management_url = f"{settings.frontend_url}/reserve/manage/{token}"
-                delivered = False
-                if "email" in channels:
-                    delivered = email_service.send_reservation_reminder(
-                        to_email=reservation.email,
-                        business_name=business.name,
-                        management_url=management_url,
-                    ) or delivered
-                if "sms" in channels and sms_service.send_sms(reservation.phone, body):
-                    delivered = True
-                if delivered:
-                    reservation.sms_reminder_sent = True
+                configured_channels = [
+                    channel for channel in ("email", "sms") if channel in channels
+                ]
+                attempts_result = await db.execute(
+                    select(ReservationDeliveryAttempt).where(
+                        ReservationDeliveryAttempt.reservation_id == reservation.id,
+                        ReservationDeliveryAttempt.message_kind == "reminder",
+                    )
+                )
+                attempts = {
+                    attempt.channel: attempt
+                    for attempt in attempts_result.scalars().all()
+                }
+
+                delivered_any = False
+                for channel in configured_channels:
+                    attempt = attempts.get(channel)
+                    if attempt is not None and attempt.status == "delivered":
+                        delivered_any = True
+                        continue
+                    if attempt is None:
+                        attempt = ReservationDeliveryAttempt(
+                            reservation_id=reservation.id,
+                            business_id=reservation.business_id,
+                            message_kind="reminder",
+                            channel=channel,
+                        )
+                        db.add(attempt)
+                        attempts[channel] = attempt
+
+                    attempt.attempt_count = (attempt.attempt_count or 0) + 1
+                    attempt.last_attempt_at = run_at
+                    if channel == "email":
+                        delivered = bool(reservation.email) and email_service.send_reservation_reminder(
+                            to_email=reservation.email,
+                            business_name=business.name,
+                            management_url=management_url,
+                        )
+                    else:
+                        delivered = bool(reservation.phone) and sms_service.send_sms(
+                            reservation.phone, body
+                        )
+
+                    attempt.status = "delivered" if delivered else "failed"
+                    attempt.delivered_at = run_at if delivered else None
+                    attempt.last_error = None if delivered else "provider_rejected_or_unavailable"
+                    delivered_any = delivered_any or delivered
+
+                all_delivered = bool(configured_channels) and all(
+                    attempts[channel].status == "delivered"
+                    for channel in configured_channels
+                )
+                reservation.sms_reminder_sent = all_delivered
+                if delivered_any:
                     sent += 1
                 else:
                     skipped += 1

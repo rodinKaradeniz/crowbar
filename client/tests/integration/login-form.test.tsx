@@ -44,16 +44,20 @@ describe("LoginForm", () => {
     });
 
     expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /login/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /log in/i })).toBeInTheDocument();
   });
 
-  it("renders auth method toggle buttons", async () => {
+  it("keeps removed customer and OTP login paths out of the MVP", async () => {
     renderLoginForm();
 
     await waitFor(() => {
-      expect(screen.getByText("Email & Password")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: /staff login/i })).toBeInTheDocument();
     });
-    expect(screen.getByText("Phone & OTP")).toBeInTheDocument();
+    expect(screen.queryByText(/phone & otp/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /forgot password/i })).toHaveAttribute(
+      "href",
+      "/auth/forgot-password",
+    );
   });
 
   it("shows error message on failed login", async () => {
@@ -66,7 +70,7 @@ describe("LoginForm", () => {
 
     await user.type(screen.getByLabelText(/email/i), "wrong@example.com");
     await user.type(screen.getByLabelText(/password/i), "badpassword");
-    await user.click(screen.getByRole("button", { name: /login/i }));
+    await user.click(screen.getByRole("button", { name: /log in/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/invalid email or password/i)).toBeInTheDocument();
@@ -83,7 +87,7 @@ describe("LoginForm", () => {
 
     await user.type(screen.getByLabelText(/email/i), "test@example.com");
     await user.type(screen.getByLabelText(/password/i), "password123");
-    await user.click(screen.getByRole("button", { name: /login/i }));
+    await user.click(screen.getByRole("button", { name: /log in/i }));
 
     // Give it a moment and verify no error appears
     await waitFor(() => {
@@ -93,30 +97,14 @@ describe("LoginForm", () => {
     });
   });
 
-  it("switches to OTP form when Phone & OTP is clicked", async () => {
-    const user = userEvent.setup();
+  it("has a link to business registration", async () => {
     renderLoginForm();
 
     await waitFor(() => {
-      expect(screen.getByText("Phone & OTP")).toBeInTheDocument();
+      expect(screen.getByText(/register the business/i)).toBeInTheDocument();
     });
 
-    await user.click(screen.getByText("Phone & OTP"));
-
-    await waitFor(() => {
-      expect(screen.getByLabelText(/phone number/i)).toBeInTheDocument();
-    });
-    expect(screen.getByRole("button", { name: /send code/i })).toBeInTheDocument();
-  });
-
-  it("has a link to the registration page", async () => {
-    renderLoginForm();
-
-    await waitFor(() => {
-      expect(screen.getByText(/sign up/i)).toBeInTheDocument();
-    });
-
-    const signUpLink = screen.getByText(/sign up/i);
-    expect(signUpLink.closest("a")).toHaveAttribute("href", "/auth/register");
+    const registrationLink = screen.getByText(/register the business/i);
+    expect(registrationLink.closest("a")).toHaveAttribute("href", "/auth/register");
   });
 });

@@ -15,6 +15,7 @@ second set of agent instructions: [`../AGENTS.md`](../AGENTS.md) and
 | Present technical system and data/request flows | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
 | Decisions and their rationale | [`HISTORY.md`](HISTORY.md) |
 | Deferred work and delivery order | [`TODO.md`](TODO.md) |
+| MVP surface inventory, risk assignment, and release evidence | [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md) |
 | Visual-system rules | [`DESIGN.md`](DESIGN.md) |
 | On-demand workflow-module strategy | [`SKILLS.md`](SKILLS.md) |
 

@@ -11,6 +11,7 @@ from sqlalchemy import (
     String,
     Text,
     text,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -39,6 +40,11 @@ class Reservation(Base, UUIDMixin, TimestampMixin):
             "ends_at",
             postgresql_where=text("status IN ('pending', 'confirmed')"),
         ),
+        UniqueConstraint(
+            "business_id",
+            "idempotency_key",
+            name="uq_reservations_business_idempotency_key",
+        ),
     )
 
     business_id: Mapped[uuid.UUID] = mapped_column(
@@ -65,13 +71,14 @@ class Reservation(Base, UUIDMixin, TimestampMixin):
     ends_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
-    phone: Mapped[str] = mapped_column(String(50), nullable=False)
-    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     note: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default="pending")
     guests: Mapped[int] = mapped_column(Integer, default=1)
     channel: Mapped[str | None] = mapped_column(String(16), nullable=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    request_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
     sms_reminder_sent: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, server_default="false"
     )

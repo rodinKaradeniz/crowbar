@@ -105,14 +105,16 @@ export async function fetchBusinessDashboardStats(
 // ─── Customers ──────────────────────────────────────────────────────────────
 
 export async function fetchBusinessCustomers(
-  _businessId: string
+  businessId: string
 ): Promise<CustomerResponse[]> {
+  void businessId;
   return mockCustomers;
 }
 
 export async function fetchBusinessVisitors(
-  _businessId: string
+  businessId: string
 ): Promise<VisitorResponse[]> {
+  void businessId;
   const reservationVisitors: VisitorResponse[] = mockCustomers.map((c) => ({
     id: c.id,
     name: c.name ?? "Unknown",
@@ -153,7 +155,8 @@ export async function fetchBusinessVisitors(
 // ─── Staff ──────────────────────────────────────────────────────────────────
 
 export async function fetchBusinessStaff(
-  _businessId: string
+  businessId: string
 ): Promise<StaffResponse[]> {
+  void businessId;
   return mockStaff;
 }

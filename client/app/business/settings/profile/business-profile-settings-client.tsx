@@ -16,14 +16,12 @@ import { clientUpdateProfile } from "@/lib/client-api";
 import { toast } from "sonner";
 
 interface BusinessProfileSettingsClientProps {
-  userId: string;
   initialName: string;
   initialPhone: string;
   initialAvatar: string;
 }
 
 export default function BusinessProfileSettingsClient({
-  userId,
   initialName,
   initialPhone,
   initialAvatar,

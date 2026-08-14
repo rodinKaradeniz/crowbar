@@ -38,6 +38,7 @@ async def get_current_user(
                 },
             )
         user_id: str | None = payload.get("sub")
+        session_version = payload.get("session_version")
         if user_id is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -52,10 +53,14 @@ async def get_current_user(
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
 
-    if user is None:
+    if (
+        user is None
+        or not user.is_active
+        or session_version != user.session_version
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"code": ErrorCode.UNAUTHORIZED, "message": "User not found", "details": None},
+            detail={"code": ErrorCode.UNAUTHORIZED, "message": "Session is no longer valid", "details": None},
         )
 
     return user

@@ -109,12 +109,13 @@ def test_schedule_rejects_duplicate_windows_and_exception_dates():
         BookingScheduleReplace(exceptions=[closed, closed])
 
 
-def test_service_concurrency_defaults_to_one_and_cannot_be_null():
+def test_service_concurrency_defaults_to_one_and_resource_guard_can_be_null():
     service = ServiceTypeCreate(
         business_id="00000000-0000-0000-0000-000000000001",
         name="Table",
     )
     assert service.max_concurrent_bookings == 1
 
-    with pytest.raises(ValidationError, match="cannot be null"):
-        ServiceTypeUpdate(max_concurrent_bookings=None)
+    update = ServiceTypeUpdate(max_concurrent_bookings=None)
+    assert update.max_concurrent_bookings is None
+    assert "max_concurrent_bookings" in update.model_fields_set

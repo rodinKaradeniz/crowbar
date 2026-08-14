@@ -47,7 +47,9 @@ ml/
 ├── notebooks/
 │   └── exploration.ipynb           # Interactive EDA & prototyping
 ├── Dockerfile                      # python:3.12-slim + LightGBM deps
+├── Dockerfile.test                 # reproducible Python 3.12 test image
 ├── requirements.txt                # Pinned deps (fastapi, lightgbm, scikit-learn, pandas, etc.)
+├── requirements-test.txt           # Runtime pins plus pinned test runner
 └── env.example                     # DATABASE_URL, DATABASE_URL_SYNC, ENVIRONMENT, LOG_LEVEL
 ```
 
@@ -158,3 +160,13 @@ uvicorn src.main:app --reload --port 8001
 # Then call through FastAPI with an authenticated staff session:
 # POST http://localhost:8000/api/insights/run
 ```
+
+### Run the reproducible ML test environment
+
+```bash
+docker build -f ml/Dockerfile.test -t crowbar-ml-test ml
+docker run --rm crowbar-ml-test
+```
+
+This deliberately uses Python 3.12, matching the production ML image, rather
+than whichever Python version happens to be installed on the host.

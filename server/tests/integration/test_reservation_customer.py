@@ -11,12 +11,13 @@ Verifies the post-cutover invariants:
   - The Customer row picks up name/email if the public-form path supplies them.
 """
 
+import asyncio
 from datetime import datetime, time, timedelta, timezone
 
 import pytest
 import pytest_asyncio
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models.business import Business
 from app.models.booking_schedule import BookingSchedule, BookingScheduleWindow
@@ -82,6 +83,7 @@ async def test_create_public_reservation_creates_customer(
         email="frank@example.com",
         name="Frank",
         guests=2,
+        idempotency_key="frank-1",
     )
 
     r = await reservation_service.create_public_reservation(db_session, data)
@@ -141,11 +143,11 @@ async def test_two_reservations_same_phone_share_customer(
     )
     r1 = await reservation_service.create_public_reservation(
         db_session,
-        PublicReservationCreate(time=_future_time(3), **common),
+        PublicReservationCreate(time=_future_time(3), idempotency_key="hank-1", **common),
     )
     r2 = await reservation_service.create_public_reservation(
         db_session,
-        PublicReservationCreate(time=_future_time(4), **common),
+        PublicReservationCreate(time=_future_time(4), idempotency_key="hank-2", **common),
     )
 
     assert r1.customer_id == r2.customer_id
@@ -178,6 +180,7 @@ async def test_subsequent_public_reservation_fills_in_name_and_email(
         email="iris@example.com",
         name="Iris",
         guests=2,
+        idempotency_key="iris-public",
     )
     r2 = await reservation_service.create_public_reservation(db_session, public_data)
 
@@ -187,3 +190,65 @@ async def test_subsequent_public_reservation_fills_in_name_and_email(
     ).scalar_one()
     assert customer.name == "Iris"
     assert customer.email == "iris@example.com"
+
+
+@pytest.mark.asyncio
+async def test_public_reservation_idempotency_replays_and_rejects_changed_request(
+    db_session: AsyncSession, biz: Business, service_type: ServiceType
+):
+    original = PublicReservationCreate(
+        business_id=biz.id,
+        service_type_id=service_type.id,
+        time=_future_time(7),
+        phone="+4915111111111",
+        email="retry@example.com",
+        name="Retry Guest",
+        guests=2,
+        idempotency_key="stable-public-key",
+    )
+    created = await reservation_service.create_public_reservation(db_session, original)
+    replay = await reservation_service.create_public_reservation(db_session, original)
+
+    assert replay.id == created.id
+    assert replay._idempotent_created is False
+
+    changed = original.model_copy(update={"guests": 3})
+    with pytest.raises(
+        reservation_service.ReservationIdempotencyConflict,
+        match="different reservation",
+    ):
+        await reservation_service.create_public_reservation(db_session, changed)
+
+
+@pytest.mark.asyncio
+async def test_concurrent_public_reservation_retry_creates_one_row(
+    db_session: AsyncSession, biz: Business, service_type: ServiceType
+):
+    data = PublicReservationCreate(
+        business_id=biz.id,
+        service_type_id=service_type.id,
+        time=_future_time(8),
+        phone="+4915222222222",
+        email="concurrent@example.com",
+        name="Concurrent Guest",
+        guests=2,
+        idempotency_key="concurrent-public-key",
+    )
+    await db_session.commit()
+    session_factory = async_sessionmaker(
+        db_session.bind, class_=AsyncSession, expire_on_commit=False
+    )
+
+    async def submit() -> tuple[str, bool]:
+        async with session_factory() as session:
+            reservation = await reservation_service.create_public_reservation(
+                session, data
+            )
+            result = (str(reservation.id), reservation._idempotent_created)
+            await session.commit()
+            return result
+
+    results = await asyncio.gather(submit(), submit())
+
+    assert results[0][0] == results[1][0]
+    assert sorted(created for _, created in results) == [False, True]

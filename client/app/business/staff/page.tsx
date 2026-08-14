@@ -25,5 +25,11 @@ export default async function BusinessStaff() {
     redirect("/business/onboarding");
   }
 
-  return <StaffClient initialStaff={staffData} />;
+  return (
+    <StaffClient
+      initialStaff={staffData}
+      currentUserId={user.id}
+      currentRole={user.role}
+    />
+  );
 }

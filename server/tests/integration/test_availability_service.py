@@ -363,6 +363,7 @@ async def test_schedule_row_lock_prevents_concurrent_overbooking(
                         email=f"guest{index}@example.com",
                         name=f"Guest {index}",
                         guests=2,
+                        idempotency_key=f"capacity-{index}",
                     ),
                 )
                 await session.commit()

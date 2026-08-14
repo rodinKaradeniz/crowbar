@@ -11,7 +11,6 @@ export default async function BusinessAccountSettings() {
 
   return (
     <BusinessAccountSettingsClient
-      userId={user.id}
       userEmail={user.email}
       businessId={user.businessId}
     />

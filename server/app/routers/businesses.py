@@ -1,33 +1,39 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import ErrorCode, forbidden, not_found
+from app.core.errors import forbidden, not_found
 from app.core.rate_limit import enforce_public_read_limit
 from app.database import get_db
-from app.dependencies import get_current_business, get_current_user, require_roles
+from app.dependencies import get_current_business, require_roles
 from app.models.business import Business
 from app.models.user import User
-from app.schemas.business import BusinessCreate, BusinessResponse, BusinessUpdate
+from app.schemas.business import BusinessResponse, BusinessUpdate, PublicBusinessResponse
 from app.services import business_service
-from app.services import staff_service
 
 router = APIRouter(prefix="/api/businesses", tags=["businesses"])
 
 
 @router.get(
     "",
-    response_model=list[BusinessResponse],
+    response_model=list[PublicBusinessResponse],
     dependencies=[Depends(enforce_public_read_limit)],
 )
 async def list_businesses(db: AsyncSession = Depends(get_db)):
     return await business_service.get_businesses(db)
 
 
+@router.get("/current", response_model=BusinessResponse)
+async def get_current_business_profile(
+    current_business: Business = Depends(get_current_business),
+):
+    return current_business
+
+
 @router.get(
     "/{business_id}",
-    response_model=BusinessResponse,
+    response_model=PublicBusinessResponse,
     dependencies=[Depends(enforce_public_read_limit)],
 )
 async def get_business(business_id: UUID, db: AsyncSession = Depends(get_db)):
@@ -39,7 +45,7 @@ async def get_business(business_id: UUID, db: AsyncSession = Depends(get_db)):
 
 @router.get(
     "/slug/{slug}",
-    response_model=BusinessResponse,
+    response_model=PublicBusinessResponse,
     dependencies=[Depends(enforce_public_read_limit)],
 )
 async def get_business_by_slug(slug: str, db: AsyncSession = Depends(get_db)):
@@ -47,15 +53,6 @@ async def get_business_by_slug(slug: str, db: AsyncSession = Depends(get_db)):
     if business is None:
         raise not_found("Business")
     return business
-
-
-@router.post("", response_model=BusinessResponse, status_code=status.HTTP_201_CREATED)
-async def create_business(
-    data: BusinessCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    return await business_service.create_business(db, data)
 
 
 @router.patch("/{business_id}", response_model=BusinessResponse)

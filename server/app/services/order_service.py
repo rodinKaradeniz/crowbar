@@ -1,19 +1,24 @@
+import hashlib
+import json
 import logging
 import secrets
 from datetime import datetime, time, timezone
 from decimal import Decimal
 from uuid import UUID
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from zoneinfo import ZoneInfoNotFoundError
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.business import Business
-from app.models.menu import MenuItem
+from app.models.menu import Menu, MenuCategory, MenuItem, Modifier, ModifierGroup
 from app.models.order import Order, OrderLineItem, OrderStatusTimeline
+from app.models.table import Table
 from app.schemas.order import OrderPlaceRequest, OrderStatusUpdateRequest
 from app.services import happy_hour_service, recipe_service
+from app.services.floor_plan_service import resolve_service_window
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +54,158 @@ def order_contains_alcohol(items) -> bool:
 
 class AgeConfirmationRequired(ValueError):
     """Raised at placement when an alcoholic cart lacks a valid age attestation."""
+
+
+class OrderValidationError(ValueError):
+    """The submitted cart references unavailable or incompatible menu data."""
+
+
+class OrderIdempotencyConflict(ValueError):
+    """An idempotency key was reused for a different order request."""
+
+
+def _request_fingerprint(
+    request: OrderPlaceRequest,
+    *,
+    table_id: UUID | None,
+    tab_id: UUID | None,
+    channel: str | None,
+) -> str:
+    payload = {
+        "table_id": str(table_id) if table_id else None,
+        "tab_id": str(tab_id) if tab_id else None,
+        "channel": channel,
+        "notes": request.notes,
+        "age_confirmed": request.age_confirmed,
+        "items": [
+            {
+                "item_id": str(item.item_id),
+                "quantity": item.quantity,
+                "modifier_ids": sorted(
+                    str(modifier.modifier_id)
+                    for modifier in item.selected_modifiers
+                ),
+                "notes": item.notes,
+            }
+            for item in request.items
+        ],
+    }
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+async def _load_idempotent_order(
+    db: AsyncSession,
+    *,
+    business_id: UUID,
+    idempotency_key: str,
+    fingerprint: str,
+) -> Order | None:
+    result = await db.execute(
+        select(Order)
+        .where(
+            Order.business_id == business_id,
+            Order.idempotency_key == idempotency_key,
+        )
+        .options(
+            selectinload(Order.line_items),
+            selectinload(Order.status_timeline),
+        )
+    )
+    existing = result.scalar_one_or_none()
+    if existing is not None and existing.request_fingerprint != fingerprint:
+        raise OrderIdempotencyConflict(
+            "This idempotency key was already used for a different order"
+        )
+    return existing
+
+
+async def _resolve_cart(
+    db: AsyncSession,
+    *,
+    business_id: UUID,
+    request: OrderPlaceRequest,
+    location_id: UUID | None,
+) -> list[tuple[object, MenuItem, list[Modifier]]]:
+    requested_ids = {item.item_id for item in request.items}
+    menu_location_filter = (
+        Menu.location_id.is_(None)
+        if location_id is None
+        else or_(Menu.location_id.is_(None), Menu.location_id == location_id)
+    )
+    rows = await db.scalars(
+        select(MenuItem)
+        .join(MenuCategory, MenuCategory.id == MenuItem.category_id)
+        .join(Menu, Menu.id == MenuCategory.menu_id)
+        .where(
+            MenuItem.id.in_(requested_ids),
+            MenuItem.business_id == business_id,
+            MenuItem.is_available.is_(True),
+            MenuCategory.business_id == business_id,
+            MenuCategory.is_active.is_(True),
+            Menu.business_id == business_id,
+            Menu.is_active.is_(True),
+            menu_location_filter,
+        )
+        .options(
+            selectinload(MenuItem.modifier_groups).selectinload(
+                ModifierGroup.modifiers
+            )
+        )
+    )
+    items_by_id = {item.id: item for item in rows.unique().all()}
+    if set(items_by_id) != requested_ids:
+        raise OrderValidationError(
+            "One or more menu items are unavailable for this table"
+        )
+
+    resolved = []
+    for item_request in request.items:
+        item = items_by_id[item_request.item_id]
+        groups = {group.id: group for group in item.modifier_groups}
+        available_modifiers = {
+            modifier.id: (group, modifier)
+            for group in groups.values()
+            for modifier in group.modifiers
+            if modifier.is_available
+        }
+        requested_modifier_ids = [
+            modifier.modifier_id for modifier in item_request.selected_modifiers
+        ]
+        if len(requested_modifier_ids) != len(set(requested_modifier_ids)):
+            raise OrderValidationError("A modifier cannot be selected more than once")
+        if any(
+            modifier_id not in available_modifiers
+            for modifier_id in requested_modifier_ids
+        ):
+            raise OrderValidationError(
+                f"A selected modifier is unavailable for {item.name}"
+            )
+
+        selected_by_group: dict[UUID, list[Modifier]] = {
+            group_id: [] for group_id in groups
+        }
+        for modifier_id in requested_modifier_ids:
+            group, modifier = available_modifiers[modifier_id]
+            selected_by_group[group.id].append(modifier)
+        for group in groups.values():
+            selected_count = len(selected_by_group[group.id])
+            minimum = max(group.min_select, 1 if group.required else 0)
+            if selected_count < minimum or selected_count > group.max_select:
+                raise OrderValidationError(
+                    f"Select between {minimum} and {group.max_select} option(s) for {group.name}"
+                )
+        resolved.append(
+            (
+                item_request,
+                item,
+                [
+                    available_modifiers[modifier_id][1]
+                    for modifier_id in requested_modifier_ids
+                ],
+            )
+        )
+    return resolved
 
 
 async def _load_order(db: AsyncSession, order_id: UUID, business_id: UUID) -> Order | None:
@@ -115,9 +272,10 @@ async def place_order(
     require_age_confirmation: bool = True,
     table_id: UUID | None = None,
     tab_id: UUID | None = None,
+    customer_id: UUID | None = None,
     channel: str | None = None,
     allow_legacy_table_identifier: bool = False,
-) -> Order:
+) -> tuple[Order, bool]:
     """Create an order. Idempotent: returns existing order if same idempotency_key.
 
     ``require_age_confirmation`` gates the alcohol self-attestation. It is True on
@@ -127,30 +285,36 @@ async def place_order(
     alcoholic item, a truthy ``request.age_confirmed`` is required or
     ``AgeConfirmationRequired`` is raised (mapped to 422 by the router).
     """
-    # Idempotency check
-    existing = await db.execute(
-        select(Order)
-        .where(Order.idempotency_key == request.idempotency_key)
-        .options(selectinload(Order.line_items), selectinload(Order.status_timeline))
+    fingerprint = _request_fingerprint(
+        request, table_id=table_id, tab_id=tab_id, channel=channel
     )
-    existing_order = existing.scalar_one_or_none()
+    existing_order = await _load_idempotent_order(
+        db,
+        business_id=business_id,
+        idempotency_key=request.idempotency_key,
+        fingerprint=fingerprint,
+    )
     if existing_order is not None:
-        return existing_order
+        return existing_order, False
 
-    # Resolve the requested menu items up front so the alcohol/age gate can run
-    # before any rows are written.
-    resolved: list[tuple[object, MenuItem]] = []
-    for item_req in request.items:
-        item_result = await db.execute(
-            select(MenuItem).where(
-                MenuItem.id == item_req.item_id,
-                MenuItem.business_id == business_id,
+    location_id = None
+    if table_id is not None:
+        location_id = await db.scalar(
+            select(Table.location_id).where(
+                Table.id == table_id,
+                Table.business_id == business_id,
+                Table.is_active.is_(True),
+                Table.deleted_at.is_(None),
             )
         )
-        item = item_result.scalar_one_or_none()
-        if item is None:
-            continue
-        resolved.append((item_req, item))
+        if location_id is None:
+            raise OrderValidationError("The order table is unavailable")
+    resolved = await _resolve_cart(
+        db,
+        business_id=business_id,
+        request=request,
+        location_id=location_id,
+    )
 
     # Age attestation gate (customer self-service channels only). Derived from the
     # resolved items via the single source of truth, then re-validated here so the
@@ -158,7 +322,7 @@ async def place_order(
     if (
         require_age_confirmation
         and not request.age_confirmed
-        and order_contains_alcohol(item for _, item in resolved)
+        and order_contains_alcohol(item for _, item, _ in resolved)
     ):
         raise AgeConfirmationRequired(
             "Age confirmation is required for orders containing alcohol."
@@ -174,21 +338,36 @@ async def place_order(
 
     order = Order(
         business_id=business_id,
+        location_id=location_id,
         session_token=session_token,
         table_id=table_id,
         tab_id=tab_id,
+        customer_id=customer_id,
         channel=channel,
         table_identifier=(request.table_identifier if allow_legacy_table_identifier else None),
         status="received",
         idempotency_key=request.idempotency_key,
+        request_fingerprint=fingerprint,
         notes=request.notes,
         age_confirmed=request.age_confirmed,
         total_amount=Decimal("0.00"),
     )
-    db.add(order)
-    await db.flush()
+    try:
+        async with db.begin_nested():
+            db.add(order)
+            await db.flush()
+    except IntegrityError:
+        existing_order = await _load_idempotent_order(
+            db,
+            business_id=business_id,
+            idempotency_key=request.idempotency_key,
+            fingerprint=fingerprint,
+        )
+        if existing_order is None:
+            raise
+        return existing_order, False
 
-    for item_req, item in resolved:
+    for item_req, item, modifiers in resolved:
         # Apply the flat happy-hour override when a window is active and the item
         # opts in (happy_hour_price set). Modifiers are added on top as usual.
         if hh_active and item.happy_hour_price is not None:
@@ -196,13 +375,16 @@ async def place_order(
         else:
             unit_price = item.price
         selected_mods = []
-        for mod_req in item_req.selected_modifiers:
-            unit_price += mod_req.price_delta
+        for modifier in modifiers:
+            unit_price += modifier.price_delta
             selected_mods.append({
-                "modifier_id": mod_req.modifier_id,
-                "name": mod_req.name,
-                "price_delta": float(mod_req.price_delta),
+                "modifier_id": str(modifier.id),
+                "name": modifier.name,
+                "price_delta": float(modifier.price_delta),
             })
+
+        if unit_price < 0:
+            raise OrderValidationError(f"The configured price for {item.name} is invalid")
 
         line_total = unit_price * item_req.quantity
         total += line_total
@@ -229,7 +411,7 @@ async def place_order(
     )
     await db.flush()
     await db.refresh(order, ["line_items", "status_timeline"])
-    return order
+    return order, True
 
 
 async def _business_day_start_utc(db: AsyncSession, business_id: UUID) -> datetime:
@@ -237,16 +419,13 @@ async def _business_day_start_utc(db: AsyncSession, business_id: UUID) -> dateti
 
     Uses businesses.timezone (IANA); falls back to UTC on a missing/invalid zone
     (same defensive posture as happy_hour_service)."""
-    tz_name = await db.scalar(
-        select(Business.timezone).where(Business.id == business_id)
-    )
+    business = await db.scalar(select(Business).where(Business.id == business_id))
+    if business is None:
+        return datetime.combine(datetime.now(timezone.utc).date(), time.min, tzinfo=timezone.utc)
     try:
-        tz = ZoneInfo(tz_name) if tz_name else timezone.utc
+        return resolve_service_window(business)[1]
     except (ZoneInfoNotFoundError, ValueError):
-        tz = timezone.utc
-    now_local = datetime.now(tz)
-    start_local = datetime.combine(now_local.date(), time.min, tzinfo=tz)
-    return start_local.astimezone(timezone.utc)
+        return datetime.combine(datetime.now(timezone.utc).date(), time.min, tzinfo=timezone.utc)
 
 
 async def get_orders_for_board(

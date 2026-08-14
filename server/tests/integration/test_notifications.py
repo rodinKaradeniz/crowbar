@@ -15,7 +15,7 @@ async def _create_business_owner(client: AsyncClient) -> tuple[str, str]:
         "/api/auth/register-business",
         json={
             "email": "owner-notif@test.com",
-            "password": "pass123",
+            "password": "password1234",
             "name": "Owner",
             "phone": "+31612345678",
             "business_name": "Notif Bar",
@@ -98,6 +98,7 @@ class TestNotificationsPublicReservation:
                 "email": "walkin@example.com",
                 "name": "Walk-in",
                 "guests": 2,
+                "idempotency_key": "notification-public-1",
             },
         )
         assert resp.status_code == 201
@@ -140,6 +141,7 @@ class TestNotificationsMarkRead:
                 "email": "guest2@example.com",
                 "name": "Guest",
                 "guests": 1,
+                "idempotency_key": "notification-public-2",
             },
         )
 

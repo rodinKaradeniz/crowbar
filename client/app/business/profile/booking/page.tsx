@@ -25,6 +25,7 @@ export default async function BusinessBooking() {
   if (!business) {
     redirect("/auth/login");
   }
+  if (!business.onboardingComplete) redirect("/business/onboarding");
 
   if (!hasModule(business.enabledModules ?? [], MODULE_KEYS.RESERVATIONS)) {
     return <ModuleDisabled moduleName="Reservations" />;

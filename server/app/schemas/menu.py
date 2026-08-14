@@ -19,7 +19,7 @@ class LibraryItemCreate(AppBaseModel):
 class LibraryItemUpdate(AppBaseModel):
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = None
-    price: Decimal | None = None
+    price: Decimal | None = Field(None, ge=0)
     routing_tag: str | None = Field(None, pattern="^(kitchen|bar|any)$")
     prep_time_minutes: int | None = None
 
@@ -51,7 +51,7 @@ class ModifierCreate(AppBaseModel):
 
 class ModifierUpdate(AppBaseModel):
     name: str | None = Field(None, min_length=1, max_length=255)
-    price_delta: Decimal | None = None
+    price_delta: Decimal | None = Field(None, ge=0)
     is_available: bool | None = None
 
 
@@ -106,7 +106,7 @@ class MenuItemCreate(AppBaseModel):
 class MenuItemUpdate(AppBaseModel):
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = None
-    price: Decimal | None = None
+    price: Decimal | None = Field(None, ge=0)
     # happy_hour_price uses a sentinel-free convention: absent = unchanged, null
     # = clear the discount. See update_item in menu_service for the handling.
     happy_hour_price: Decimal | None = Field(default=None, ge=0)
@@ -190,4 +190,3 @@ class MenuResponse(AppBaseModel):
     # The client must trust this flag rather than computing from local time.
     happy_hour_active: bool = False
     categories: list[MenuCategoryResponse] = []
-

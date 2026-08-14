@@ -12,7 +12,7 @@ def _normalize_phone(v: str | None) -> str | None:
     if not v:
         return v
     try:
-        parsed = phonenumbers.parse(v, "US")
+        parsed = phonenumbers.parse(v, None)
         return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
     except phonenumbers.NumberParseException:
         return v
@@ -55,6 +55,7 @@ class PublicReservationCreate(AppBaseModel):
     guests: int = 1
     marketing_email_opt_in: bool = False
     marketing_sms_opt_in: bool = False
+    idempotency_key: str = Field(min_length=1, max_length=100)
 
     @field_validator("phone", mode="before")
     @classmethod
@@ -110,8 +111,8 @@ class ReservationResponse(AppBaseModel):
     service_type_id: UUID
     time: datetime
     ends_at: datetime
-    phone: str
-    email: str
+    phone: str | None
+    email: str | None
     note: str | None = None
     status: str
     guests: int

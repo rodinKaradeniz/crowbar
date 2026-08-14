@@ -16,10 +16,11 @@ export default async function InventoryPage() {
   if (!business) {
     redirect("/auth/login");
   }
+  if (!business.onboardingComplete) redirect("/business/onboarding");
 
   if (!hasModule(business.enabledModules ?? [], MODULE_KEYS.INVENTORY)) {
     return <ModuleDisabled moduleName="Inventory" />;
   }
 
-  return <InventoryManagementClient businessId={business.id} />;
+  return <InventoryManagementClient businessId={business.id} businessTimezone={business.timezone ?? "UTC"} />;
 }

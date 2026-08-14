@@ -616,6 +616,8 @@ export function getMockBusinessDashboardStats(businessId: string): BusinessDashb
 
   return {
     today_reservations: todayReservations.length,
+    service_date: todayStr,
+    business_timezone: "Europe/Berlin",
     pending_requests: pendingReservations.length,
     today_guest_count: todayReservations.reduce((sum, r) => sum + r.guests, 0),
     status_breakdown: {

@@ -260,13 +260,13 @@ async def record_public_marketing_consents(db: AsyncSession, *, customer_id: UUI
         existing = await db.scalar(select(CustomerMarketingConsent).where(CustomerMarketingConsent.customer_id == customer_id, CustomerMarketingConsent.channel == channel))
         if existing is None:
             db.add(CustomerMarketingConsent(business_id=business_id, customer_id=customer_id, channel=channel, is_consented=is_consented, source="public_reservation", notice_version="eu-de-v1", reservation_id=reservation_id, captured_at=now, withdrawn_at=None if is_consented else now))
-        elif is_consented:
-            existing.is_consented = True
+        else:
+            existing.is_consented = is_consented
             existing.source = "public_reservation"
             existing.notice_version = "eu-de-v1"
             existing.reservation_id = reservation_id
             existing.captured_at = now
-            existing.withdrawn_at = None
+            existing.withdrawn_at = None if is_consented else now
     await db.flush()
 
 
@@ -283,17 +283,45 @@ async def merge_customers(db: AsyncSession, *, business_id: UUID, target: Custom
             CustomerTag.customer_id == source.id,
             CustomerTag.name.in_(target_tag_names),
         ))
-    target_consent_channels = list((await db.execute(select(CustomerMarketingConsent.channel).where(
-        CustomerMarketingConsent.business_id == business_id,
-        CustomerMarketingConsent.customer_id == target.id,
-    ))).scalars().all())
-    if target_consent_channels:
-        await db.execute(delete(CustomerMarketingConsent).where(
-            CustomerMarketingConsent.business_id == business_id,
-            CustomerMarketingConsent.customer_id == source.id,
-            CustomerMarketingConsent.channel.in_(target_consent_channels),
-        ))
-    for model in (Reservation, QueueEntry, Tab, Order, CustomerTag, CustomerNote, CustomerMarketingConsent, CustomerDataRequest):
+    target_consents = {
+        consent.channel: consent
+        for consent in (
+            await db.scalars(
+                select(CustomerMarketingConsent).where(
+                    CustomerMarketingConsent.business_id == business_id,
+                    CustomerMarketingConsent.customer_id == target.id,
+                )
+            )
+        ).all()
+    }
+    source_consents = list(
+        (
+            await db.scalars(
+                select(CustomerMarketingConsent).where(
+                    CustomerMarketingConsent.business_id == business_id,
+                    CustomerMarketingConsent.customer_id == source.id,
+                )
+            )
+        ).all()
+    )
+    for source_consent in source_consents:
+        target_consent = target_consents.get(source_consent.channel)
+        if target_consent is None:
+            source_consent.customer_id = target.id
+            target_consents[source_consent.channel] = source_consent
+            continue
+        target_consent.is_consented = (
+            target_consent.is_consented and source_consent.is_consented
+        )
+        if not target_consent.is_consented:
+            target_consent.withdrawn_at = (
+                target_consent.withdrawn_at
+                or source_consent.withdrawn_at
+                or datetime.now(timezone.utc)
+            )
+        await db.delete(source_consent)
+
+    for model in (Reservation, QueueEntry, Tab, Order, CustomerTag, CustomerNote, CustomerDataRequest):
         await db.execute(update(model).where(model.business_id == business_id, model.customer_id == source.id).values(customer_id=target.id))
     if not target.name:
         target.name = source.name
@@ -315,7 +343,7 @@ async def merge_customers(db: AsyncSession, *, business_id: UUID, target: Custom
     return target
 
 
-async def anonymize_customer(db: AsyncSession, *, business_id: UUID, customer: Customer, actor_id: UUID, detail: str | None = None) -> CustomerDataRequest:
+async def anonymize_customer(db: AsyncSession, *, business_id: UUID, customer: Customer, actor_id: UUID | None, detail: str | None = None) -> CustomerDataRequest:
     now = datetime.now(timezone.utc)
     customer.name = None
     customer.phone = None
@@ -351,10 +379,68 @@ async def export_customer_data(db: AsyncSession, *, business_id: UUID, customer_
 async def anonymize_inactive_customers(db: AsyncSession, *, business_id: UUID | None = None, now: datetime | None = None) -> int:
     """Apply the documented 24-month inactivity policy; suitable for a daily job."""
     cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=730)
-    query = select(Customer).where(Customer.anonymized_at.is_(None), Customer.merged_into_customer_id.is_(None), Customer.updated_at < cutoff)
+    query = select(Customer).where(
+        Customer.anonymized_at.is_(None),
+        Customer.merged_into_customer_id.is_(None),
+    )
     if business_id is not None:
         query = query.where(Customer.business_id == business_id)
     customers = list((await db.execute(query)).scalars().all())
+    anonymized = 0
     for customer in customers:
-        await anonymize_customer(db, business_id=customer.business_id, customer=customer, actor_id=None, detail="24-month inactivity policy")
-    return len(customers)
+        reservation_activity = await db.scalar(
+            select(func.max(func.coalesce(Reservation.updated_at, Reservation.time))).where(
+                Reservation.business_id == customer.business_id,
+                Reservation.customer_id == customer.id,
+            )
+        )
+        queue_activity = await db.scalar(
+            select(
+                func.max(
+                    func.coalesce(
+                        QueueEntry.completed_at,
+                        QueueEntry.seated_at,
+                        QueueEntry.joined_at,
+                    )
+                )
+            ).where(
+                QueueEntry.business_id == customer.business_id,
+                QueueEntry.customer_id == customer.id,
+            )
+        )
+        tab_activity = await db.scalar(
+            select(func.max(func.coalesce(Tab.closed_at, Tab.opened_at))).where(
+                Tab.business_id == customer.business_id,
+                Tab.customer_id == customer.id,
+            )
+        )
+        order_activity = await db.scalar(
+            select(func.max(Order.placed_at)).where(
+                Order.business_id == customer.business_id,
+                Order.customer_id == customer.id,
+            )
+        )
+        last_activity = max(
+            (
+                activity
+                for activity in (
+                    customer.created_at,
+                    reservation_activity,
+                    queue_activity,
+                    tab_activity,
+                    order_activity,
+                )
+                if activity is not None
+            ),
+        )
+        if last_activity >= cutoff:
+            continue
+        await anonymize_customer(
+            db,
+            business_id=customer.business_id,
+            customer=customer,
+            actor_id=None,
+            detail="24-month inactivity policy",
+        )
+        anonymized += 1
+    return anonymized

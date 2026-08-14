@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models.business import Business
 from app.models.staff import Staff
+from app.models.user import User
 
 
 async def authorize_staff_websocket(
@@ -25,6 +26,7 @@ async def authorize_staff_websocket(
         )
         user_id = payload.get("sub")
         token_business_id = payload.get("business_id")
+        session_version = payload.get("session_version")
         if (
             payload.get("token_use") != "websocket"
             or user_id is None
@@ -33,6 +35,17 @@ async def authorize_staff_websocket(
             await ws.close(code=1008)
             return False
     except JWTError:
+        await ws.close(code=1008)
+        return False
+
+    user = await db.scalar(
+        select(User).where(
+            User.id == user_id,
+            User.is_active.is_(True),
+            User.session_version == session_version,
+        )
+    )
+    if user is None:
         await ws.close(code=1008)
         return False
 

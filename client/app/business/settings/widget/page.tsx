@@ -9,12 +9,14 @@ export default async function WidgetSettingsPage() {
   if (!user || user.type !== "staff") {
     redirect("/auth/login");
   }
+  if (user.role === "staff") redirect("/business/overview");
 
   const business = await fetchBusiness(user.businessId);
 
   if (!business) {
     redirect("/auth/login");
   }
+  if (!business.onboardingComplete) redirect("/business/onboarding");
 
   return <WidgetSnippetClient slug={business.slug} />;
 }

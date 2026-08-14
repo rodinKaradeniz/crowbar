@@ -10,9 +10,7 @@ from app.schemas.base import AppBaseModel
 # ─── Selected modifier (embedded in line item) ────────────────────────────────
 
 class SelectedModifier(AppBaseModel):
-    modifier_id: str
-    name: str
-    price_delta: Decimal
+    modifier_id: UUID
 
 
 # ─── Order Line Items ─────────────────────────────────────────────────────────
@@ -45,8 +43,8 @@ class OrderPlaceRequest(AppBaseModel):
     # registered-table credential instead of accepting a browser-entered label.
     table_identifier: str | None = Field(None, max_length=100)
     table_token: str | None = Field(None, min_length=16, max_length=500)
-    items: list[OrderLineItemRequest] = Field(..., min_length=1)
-    notes: str | None = None
+    items: list[OrderLineItemRequest] = Field(..., min_length=1, max_length=100)
+    notes: str | None = Field(None, max_length=2000)
     idempotency_key: str = Field(..., min_length=1, max_length=100)
     # Self-attestation that the guest is of legal drinking age. Required (must be
     # True) at placement only when the cart contains an alcoholic item on a

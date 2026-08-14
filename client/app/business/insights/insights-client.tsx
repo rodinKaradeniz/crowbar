@@ -57,6 +57,7 @@ interface InsightsClientProps {
   rawKpis: any | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   rawHighRisk: any[];
+  businessTimezone: string;
 }
 
 const SEGMENT_COLORS: Record<string, string> = {
@@ -75,8 +76,6 @@ const SEGMENT_ICONS: Record<string, string> = {
   lost: "💤",
 };
 
-const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
 export default function InsightsClient({
   status,
   segmentation,
@@ -84,6 +83,7 @@ export default function InsightsClient({
   demandForecast,
   rawKpis,
   rawHighRisk,
+  businessTimezone,
 }: InsightsClientProps) {
   const router = useRouter();
   const [isRunning, setIsRunning] = useState(false);
@@ -119,6 +119,7 @@ export default function InsightsClient({
     const diffHours = Math.floor(diffMins / 60);
     if (diffHours < 24) return `${diffHours}h ago`;
     return date.toLocaleDateString("en-US", {
+      timeZone: businessTimezone,
       month: "short",
       day: "numeric",
       hour: "numeric",
@@ -189,6 +190,7 @@ export default function InsightsClient({
             <CancellationSection
               cancellation={cancellation}
               highRiskReservations={rawHighRisk ?? []}
+              businessTimezone={businessTimezone}
             />
           </div>
 
@@ -233,7 +235,7 @@ function DemandForecastSection({
     (forecasts[name] || []).map((f) => ({
       ...f,
       business: name,
-      day: new Date(f.date).toLocaleDateString("en-US", { weekday: "short" }),
+      day: new Date(`${f.date}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" }),
     }))
   );
 
@@ -501,10 +503,12 @@ function SegmentationSection({
 function CancellationSection({
   cancellation,
   highRiskReservations,
+  businessTimezone,
 }: {
   cancellation: MLCancellationResult | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   highRiskReservations: any[];
+  businessTimezone: string;
 }) {
   if (!cancellation || cancellation.status !== "success") {
     return (
@@ -641,6 +645,7 @@ function CancellationSection({
                     >
                       <span className="text-muted-foreground">
                         {new Date(r.time).toLocaleString("en-US", {
+                          timeZone: businessTimezone,
                           month: "short",
                           day: "numeric",
                           hour: "numeric",

@@ -66,6 +66,8 @@ function BusinessSidebarContentInner() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, meContext, logout } = useAuth();
+  const currentRole = meContext?.role ?? (user?.type === "staff" ? user.role : undefined);
+  const canManageBusiness = currentRole === "owner" || currentRole === "manager";
 
   // Default to showing all items while meContext is still loading
   const hasModule = (m: ModuleKey) =>
@@ -115,8 +117,12 @@ function BusinessSidebarContentInner() {
   const settingsSubItems = [
     { title: "Profile", url: "/business/settings/profile", icon: User },
     { title: "Account", url: "/business/settings/account", icon: ShieldCheck },
-    { title: "Modules", url: "/business/settings/modules", icon: Puzzle },
-    { title: "Widget", url: "/business/settings/widget", icon: Code2 },
+    ...(canManageBusiness
+      ? [
+          { title: "Modules", url: "/business/settings/modules", icon: Puzzle },
+          { title: "Widget", url: "/business/settings/widget", icon: Code2 },
+        ]
+      : []),
   ];
 
   const isBusinessActive = pathname.startsWith("/business/profile");
@@ -406,7 +412,7 @@ function BusinessSidebarContentInner() {
               </SidebarMenuItem>
 
               {/* Collapsible Business Menu */}
-              <Collapsible
+              {canManageBusiness && <Collapsible
                 defaultOpen={isBusinessActive}
                 className="group/collapsible"
               >
@@ -439,7 +445,7 @@ function BusinessSidebarContentInner() {
                     </SidebarMenuSub>
                   </CollapsibleContent>
                 </SidebarMenuItem>
-              </Collapsible>
+              </Collapsible>}
 
               {/* Collapsible Settings Menu */}
               <Collapsible

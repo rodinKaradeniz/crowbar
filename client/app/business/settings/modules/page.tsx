@@ -8,6 +8,7 @@ export default async function ModulesSettingsPage() {
   if (!user || user.type !== "staff") {
     redirect("/auth/login");
   }
+  if (user.role === "staff") redirect("/business/overview");
 
   return <ModulesSettingsClient businessId={user.businessId} />;
 }

@@ -3,7 +3,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { ResetPasswordForm } from "@/components/reset-password-form";
 
-export default function ResetPasswordPage() {
+export default async function ResetPasswordPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ token?: string }>;
+}) {
+  const { token } = await searchParams;
   return (
     <div className="flex min-h-svh w-full">
       {/* Left side - Form */}
@@ -18,7 +23,7 @@ export default function ResetPasswordPage() {
         </div>
         <div className="flex flex-1 items-center justify-center">
           <div className="w-full max-w-xs">
-            <ResetPasswordForm />
+            <ResetPasswordForm token={token} />
           </div>
         </div>
       </div>

@@ -74,8 +74,8 @@ export default function ReservationsClient({
           customer?.name?.toLowerCase().includes(searchLower) ||
           customer?.email?.toLowerCase().includes(searchLower) ||
           customer?.phone?.toLowerCase().includes(searchLower) ||
-          reservation.phone.toLowerCase().includes(searchLower) ||
-          reservation.email.toLowerCase().includes(searchLower);
+          reservation.phone?.toLowerCase().includes(searchLower) ||
+          reservation.email?.toLowerCase().includes(searchLower);
 
         if (!matchesSearch) return false;
       }
@@ -170,6 +170,7 @@ export default function ReservationsClient({
         serviceTypes={serviceTypes}
         customers={customers}
         emptyMessage="No confirmed reservations found."
+        businessTimezone={businessTimezone}
         actionButtons={(reservation) => (
           <>
             <Button

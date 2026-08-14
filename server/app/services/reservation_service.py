@@ -1,11 +1,14 @@
+import hashlib
+import json
 from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.reservation import Reservation
+from app.models.reservation_delivery_attempt import ReservationDeliveryAttempt
 from app.models.booking_schedule import BookingSchedule
 from app.models.table import Table
 from app.models.table_assignment import ReservationTableAssignment
@@ -26,6 +29,27 @@ from app.services.availability_service import (
 from app.core.errors import ErrorCode
 from app.services.customer_identity_service import upsert_customer
 from app.services.customer_service import record_public_marketing_consents
+
+
+class ReservationIdempotencyConflict(ValueError):
+    """A public reservation key was reused with different request data."""
+
+
+def _public_request_fingerprint(data: PublicReservationCreate) -> str:
+    payload = {
+        "business_id": str(data.business_id),
+        "service_type_id": str(data.service_type_id),
+        "time": data.time.isoformat(),
+        "phone": data.phone,
+        "email": str(data.email).strip().casefold(),
+        "name": data.name.strip(),
+        "note": data.note,
+        "guests": data.guests,
+        "marketing_email_opt_in": data.marketing_email_opt_in,
+        "marketing_sms_opt_in": data.marketing_sms_opt_in,
+    }
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 from app.services.location_service import get_primary_location
 from app.services.floor_plan_service import _ensure_reservation_tables_available
 
@@ -432,6 +456,12 @@ async def reschedule_reservation(
     reservation.ends_at = validated_slot.ends_at
     reservation.guests = data.guests
     reservation.sms_reminder_sent = False
+    await db.execute(
+        delete(ReservationDeliveryAttempt).where(
+            ReservationDeliveryAttempt.reservation_id == reservation.id,
+            ReservationDeliveryAttempt.message_kind == "reminder",
+        )
+    )
     reservation.availability_override_by = (
         override_actor.id if data.availability_override_reason else None
     )
@@ -467,6 +497,27 @@ async def create_public_reservation(
     Upserts a Customer (business-scoped, keyed by phone) and links the
     reservation to it.
     """
+    fingerprint = _public_request_fingerprint(data)
+    lock_key = f"reservation:{data.business_id}:{data.idempotency_key}"
+    await db.execute(
+        select(
+            func.pg_advisory_xact_lock(func.hashtextextended(lock_key, 0))
+        )
+    )
+    existing = await db.scalar(
+        select(Reservation).where(
+            Reservation.business_id == data.business_id,
+            Reservation.idempotency_key == data.idempotency_key,
+        )
+    )
+    if existing is not None:
+        if existing.request_fingerprint != fingerprint:
+            raise ReservationIdempotencyConflict(
+                "This idempotency key was already used for a different reservation"
+            )
+        existing._idempotent_created = False
+        return existing
+
     await ensure_public_booking_access(db, business_id=data.business_id)
     validated_slot = await validate_booking_slot(
         db,
@@ -500,6 +551,8 @@ async def create_public_reservation(
         status=status,
         guests=data.guests,
         channel="web",
+        idempotency_key=data.idempotency_key,
+        request_fingerprint=fingerprint,
     )
     db.add(reservation)
     await db.flush()
@@ -517,4 +570,5 @@ async def create_public_reservation(
         table_ids=validated_slot.table_ids,
         actor_id=None,
     )
+    reservation._idempotent_created = True
     return reservation

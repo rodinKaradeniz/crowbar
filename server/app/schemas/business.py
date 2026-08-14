@@ -74,3 +74,25 @@ class BusinessResponse(AppBaseModel):
     is_accepting_orders: bool = True
     public_reservations_enabled: bool = True
     created_at: datetime
+
+
+class PublicBusinessResponse(AppBaseModel):
+    id: UUID
+    name: str
+    slug: str
+    email: str
+    phone: str
+    timezone: str = "UTC"
+    legal_drinking_age: int = 18
+    address: str | None = None
+    description: str | None = None
+    image: str | None = None
+    website: str | None = None
+    tags: list[str] | None = None
+    max_guests: int
+    reservation_time: int
+    time_slot_interval: int
+    advance_booking_days: int
+    operating_hours: dict
+    public_reservations_enabled: bool = True
+    created_at: datetime

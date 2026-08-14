@@ -5,6 +5,20 @@ const backendUrl =
   process.env.NEXT_PUBLIC_API_URL ||
   "http://localhost:8000";
 
+const configuredFrameAncestors = (
+  process.env.RESERVATION_FRAME_ANCESTORS || "'self'"
+)
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(
+    (origin) =>
+      origin === "'self'" ||
+      /^https?:\/\/[a-z0-9.-]+(?::\d+)?$/i.test(origin),
+  );
+const reservationFrameAncestors = configuredFrameAncestors.length
+  ? configuredFrameAncestors.join(" ")
+  : "'self'";
+
 const nextConfig: NextConfig = {
   async rewrites() {
     return [
@@ -19,7 +33,10 @@ const nextConfig: NextConfig = {
       {
         source: "/reserve/:path*",
         headers: [
-          { key: "Content-Security-Policy", value: "frame-ancestors *" },
+          {
+            key: "Content-Security-Policy",
+            value: `frame-ancestors ${reservationFrameAncestors}`,
+          },
         ],
       },
     ];

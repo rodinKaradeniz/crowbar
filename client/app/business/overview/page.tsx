@@ -37,6 +37,7 @@ export default async function BusinessOverview() {
       stats={stats}
       serviceTypes={serviceTypes}
       demandForecast={demandForecast}
+      docsAssistantEnabled={process.env.DOCS_ASSISTANT_ENABLED === "true" && Boolean(process.env.OPENAI_API_KEY)}
     />
   );
 }

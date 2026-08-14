@@ -208,9 +208,10 @@ def entry_to_dict(entry: QueueEntry, position: int | None = None) -> dict:
 
 
 def _build_status(entry: QueueEntry, position: int | None, total_waiting: int) -> dict:
-    estimated = (position * 5) if position and position > 0 else None
     return {
         "entry": entry_to_dict(entry, position),
         "total_waiting": total_waiting,
-        "estimated_wait_minutes": estimated,
+        # A trustworthy estimate needs configured or measured service data.
+        # Stage 3 owns that model; omit it rather than fabricate a number.
+        "estimated_wait_minutes": None,
     }

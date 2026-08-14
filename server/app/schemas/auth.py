@@ -1,6 +1,7 @@
-from pydantic import EmailStr
+from pydantic import EmailStr, field_validator
 
 from app.schemas.base import AppBaseModel
+from app.services.auth_service import validate_password
 
 
 class LoginRequest(AppBaseModel):
@@ -15,6 +16,8 @@ class RegisterRequest(AppBaseModel):
     phone: str | None = None
     user_type: str = "customer"
 
+    _valid_password = field_validator("password")(validate_password)
+
 
 class BusinessRegisterRequest(AppBaseModel):
     """Register a new business owner: creates user + business + staff assignment."""
@@ -26,6 +29,19 @@ class BusinessRegisterRequest(AppBaseModel):
     business_slug: str
     business_address: str | None = None
     business_description: str | None = None
+
+    _valid_password = field_validator("password")(validate_password)
+
+
+class ForgotPasswordRequest(AppBaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(AppBaseModel):
+    token: str
+    new_password: str
+
+    _valid_password = field_validator("new_password")(validate_password)
 
 
 class LoginResponse(AppBaseModel):

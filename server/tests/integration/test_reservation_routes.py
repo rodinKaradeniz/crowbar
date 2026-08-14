@@ -25,7 +25,7 @@ async def _create_business_owner(client: AsyncClient) -> tuple[str, str]:
         "/api/auth/register-business",
         json={
             "email": "owner@testbiz.com",
-            "password": "pass123",
+            "password": "password1234",
             "name": "Owner",
             "phone": "+31612345678",
             "business_name": "Test Bar",
@@ -142,6 +142,7 @@ class TestReservationLifecycle:
                 "phone": "+31612345678",
                 "email": "customer@test.com",
                 "guests": 3,
+                "idempotency_key": "list-public",
             },
         )
 
@@ -179,6 +180,7 @@ class TestPublicReservation:
                 "email": "guest@example.com",
                 "name": "Walk-in Guest",
                 "guests": 2,
+                "idempotency_key": "create-public",
             },
         )
         assert resp.status_code == 201
@@ -208,6 +210,7 @@ class TestPublicReservation:
                 "email": "guest@example.com",
                 "name": "Walk-in Guest",
                 "guests": 2,
+                "idempotency_key": "disabled-public",
             },
         )
         assert public.status_code == 403
@@ -244,6 +247,7 @@ class TestPublicReservation:
                 "email": "guest@example.com",
                 "name": "Guest",
                 "guests": 2,
+                "idempotency_key": "guest-cancel",
             },
         )
         assert created.status_code == 201
@@ -360,7 +364,7 @@ class TestReservationEdgeCases:
             "/api/reservations/00000000-0000-0000-0000-000000000000",
             headers=auth_headers,
         )
-        assert resp.status_code == 403
+        assert resp.status_code == 404
 
     @pytest.mark.asyncio
     async def test_delete_nonexistent_reservation(
@@ -370,4 +374,4 @@ class TestReservationEdgeCases:
             "/api/reservations/00000000-0000-0000-0000-000000000000",
             headers=auth_headers,
         )
-        assert resp.status_code == 403
+        assert resp.status_code == 404

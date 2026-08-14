@@ -1,8 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Ban, Mail, Pencil, RefreshCw, Trash2, Users } from "lucide-react";
+import { toast } from "sonner";
+
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Field,
   FieldDescription,
@@ -17,95 +29,117 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { StaffResponse } from "@/lib/api-client";
-import { Mail, Pencil, Trash2, Users } from "lucide-react";
-import { clientSendInvite, clientUpdateStaff, clientDeleteStaff } from "@/lib/client-api";
-import { toast } from "sonner";
+import {
+  clientDeleteStaff,
+  clientListInvitations,
+  clientResendInvitation,
+  clientRevokeInvitation,
+  clientSendInvite,
+  clientUpdateStaff,
+  type StaffInvitation,
+} from "@/lib/client-api";
+
+type StaffRole = "owner" | "manager" | "staff";
 
 interface StaffClientProps {
   initialStaff: StaffResponse[];
+  currentUserId: string;
+  currentRole: StaffRole;
 }
 
-export default function StaffClient({ initialStaff }: StaffClientProps) {
+export default function StaffClient({
+  initialStaff,
+  currentUserId,
+  currentRole,
+}: StaffClientProps) {
   const router = useRouter();
-  const [staffMembers, setStaffMembers] = useState<StaffResponse[]>(initialStaff);
+  const canAdminister = currentRole === "owner" || currentRole === "manager";
+  const assignableRoles: StaffRole[] =
+    currentRole === "owner" ? ["owner", "manager", "staff"] : ["staff"];
+  const [staffMembers, setStaffMembers] = useState(initialStaff);
+  const [invitations, setInvitations] = useState<StaffInvitation[]>([]);
   const [editingStaff, setEditingStaff] = useState<StaffResponse | null>(null);
   const [deletingStaff, setDeletingStaff] = useState<StaffResponse | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Invite form state
+  const [actionInvitationId, setActionInvitationId] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [role, setRole] = useState<"owner" | "manager" | "staff">("staff");
+  const [role, setRole] = useState<StaffRole>("staff");
+  const [editRole, setEditRole] = useState<StaffRole>("staff");
 
-  // Edit form state
-  const [editRole, setEditRole] = useState<"owner" | "manager" | "staff">("staff");
+  useEffect(() => {
+    if (!canAdminister) return;
+    let active = true;
+    clientListInvitations()
+      .then((values) => {
+        if (active) setInvitations(values);
+      })
+      .catch((error) => {
+        toast.error(error instanceof Error ? error.message : "Failed to load invitations");
+      });
+    return () => {
+      active = false;
+    };
+  }, [canAdminister]);
 
-  const resetInviteForm = () => {
-    setInviteEmail("");
-    setRole("staff");
+  const canManageMember = (member: StaffResponse) => {
+    if (member.user_id === currentUserId) return false;
+    if (currentRole === "owner") return true;
+    return currentRole === "manager" && member.role === "staff";
   };
 
   const handleInvite = () => {
-    resetInviteForm();
+    setEditingStaff(null);
+    setInviteEmail("");
+    setRole("staff");
     setIsDialogOpen(true);
   };
 
-  const handleEdit = (staff: StaffResponse) => {
-    setEditingStaff(staff);
-    setEditRole(staff.role as "owner" | "manager" | "staff");
+  const handleEdit = (member: StaffResponse) => {
+    setEditingStaff(member);
+    setEditRole(member.role as StaffRole);
     setIsDialogOpen(true);
-  };
-
-  const handleDelete = (staff: StaffResponse) => {
-    setDeletingStaff(staff);
   };
 
   const handleConfirmDelete = async () => {
-    if (deletingStaff) {
-      try {
-        await clientDeleteStaff(deletingStaff.id);
-        setStaffMembers(staffMembers.filter((s) => s.id !== deletingStaff.id));
-        setDeletingStaff(null);
-        toast.success("Staff member removed");
-        router.refresh();
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to delete staff member");
-      }
+    if (!deletingStaff) return;
+    try {
+      await clientDeleteStaff(deletingStaff.id);
+      setStaffMembers((members) => members.filter((member) => member.id !== deletingStaff.id));
+      toast.success("Staff access removed");
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to remove staff access");
+    } finally {
+      setDeletingStaff(null);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setIsSubmitting(true);
-
     try {
       if (editingStaff) {
-        await clientUpdateStaff(editingStaff.id, { role: editRole });
-        setStaffMembers(
-          staffMembers.map((s) =>
-            s.id === editingStaff.id ? { ...s, role: editRole } : s
-          )
+        const updated = await clientUpdateStaff(editingStaff.id, { role: editRole });
+        setStaffMembers((members) =>
+          members.map((member) =>
+            member.id === editingStaff.id ? { ...member, role: updated.role } : member,
+          ),
         );
-        toast.success("Staff member updated");
-        setIsDialogOpen(false);
-        setEditingStaff(null);
-        router.refresh();
+        toast.success("Staff role updated; existing sessions were revoked");
       } else {
-        await clientSendInvite(inviteEmail, role);
-        toast.success(`Invitation sent to ${inviteEmail}`);
-        setIsDialogOpen(false);
-        resetInviteForm();
+        const invitation = await clientSendInvite(inviteEmail, role);
+        setInvitations((values) => [invitation, ...values]);
+        if (invitation.deliveryStatus === "sent") {
+          toast.success(`Invitation sent to ${invitation.email}`);
+        } else {
+          toast.warning("Invitation saved, but email delivery failed. You can retry below.");
+        }
       }
+      setIsDialogOpen(false);
+      setEditingStaff(null);
+      router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to save");
     } finally {
@@ -113,91 +147,148 @@ export default function StaffClient({ initialStaff }: StaffClientProps) {
     }
   };
 
-  const getRoleBadgeClass = (staffRole: string) => {
-    switch (staffRole) {
-      case "owner":
-        return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200";
-      case "manager":
-        return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200";
-      default:
-        return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200";
+  const handleInvitationAction = async (
+    invitation: StaffInvitation,
+    action: "resend" | "revoke",
+  ) => {
+    setActionInvitationId(invitation.id);
+    try {
+      const updated =
+        action === "resend"
+          ? await clientResendInvitation(invitation.id)
+          : await clientRevokeInvitation(invitation.id);
+      setInvitations((values) =>
+        values.map((value) => (value.id === updated.id ? updated : value)),
+      );
+      if (action === "revoke") {
+        toast.success("Invitation revoked");
+      } else if (updated.deliveryStatus === "sent") {
+        toast.success("Invitation resent");
+      } else {
+        toast.warning("Invitation refreshed, but email delivery failed again");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : `Failed to ${action} invitation`);
+    } finally {
+      setActionInvitationId(null);
     }
   };
 
+  const roleBadgeClass = (value: string) => {
+    if (value === "owner") {
+      return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200";
+    }
+    if (value === "manager") {
+      return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200";
+    }
+    return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200";
+  };
+
+  const pendingInvitations = invitations.filter(
+    (invitation) => !invitation.acceptedAt && !invitation.revokedAt,
+  );
+
   return (
-    <div className="page-container">
-      <div className="flex items-center justify-between mb-6">
+    <div className="page-container space-y-8">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="page-title">Staff</h1>
-          <p className="page-description">Manage your business staff members</p>
+          <p className="page-description">
+            {canAdminister ? "Manage staff access and invitations" : "View your business team"}
+          </p>
         </div>
-        <Button onClick={handleInvite}>
-          <Mail className="h-4 w-4 mr-2" />
-          Invite Staff
-        </Button>
+        {canAdminister && (
+          <Button onClick={handleInvite}>
+            <Mail className="mr-2 h-4 w-4" />
+            Invite staff
+          </Button>
+        )}
       </div>
 
       {staffMembers.length === 0 ? (
-        <div className="text-center py-12 border rounded-lg bg-card">
-          <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-          <p className="text-muted-foreground mb-4">No staff members yet</p>
-          <Button onClick={handleInvite} variant="outline">
-            <Mail className="h-4 w-4 mr-2" />
-            Invite Your First Staff Member
-          </Button>
+        <div className="rounded-lg border bg-card py-12 text-center">
+          <Users className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+          <p className="text-muted-foreground">No staff members found</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {staffMembers.map((staff) => (
-            <div
-              key={staff.id}
-              className="border rounded-lg p-4 bg-card hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {staffMembers.map((member) => (
+            <div key={member.id} className="rounded-lg border bg-card p-4">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
                     <span className="text-sm font-medium">
-                      {(staff.user_name || staff.role).charAt(0).toUpperCase()}
+                      {(member.user_name || member.role).charAt(0).toUpperCase()}
                     </span>
                   </div>
-                  <div>
-                    <h3 className="font-medium">
-                      {staff.user_name || `Staff #${staff.id.slice(0, 8)}`}
+                  <div className="min-w-0">
+                    <h3 className="truncate font-medium">
+                      {member.user_name || `Staff #${member.id.slice(0, 8)}`}
+                      {member.user_id === currentUserId ? " (you)" : ""}
                     </h3>
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-full capitalize ${getRoleBadgeClass(
-                        staff.role
-                      )}`}
-                    >
-                      {staff.role}
+                    <span className={`rounded-full px-2 py-0.5 text-xs capitalize ${roleBadgeClass(member.role)}`}>
+                      {member.role}
                     </span>
                   </div>
                 </div>
-                <div className="flex gap-1">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleEdit(staff)}
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => handleDelete(staff)}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
+                {canManageMember(member) && (
+                  <div className="flex gap-1">
+                    <Button size="icon" variant="outline" aria-label="Edit role" onClick={() => handleEdit(member)}>
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                    <Button size="icon" variant="destructive" aria-label="Remove staff access" onClick={() => setDeletingStaff(member)}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
               </div>
-
               <div className="space-y-1 text-sm text-muted-foreground">
-                {staff.user_email && <div>{staff.user_email}</div>}
-                {staff.user_phone && <div>{staff.user_phone}</div>}
+                {member.user_email && <div className="truncate">{member.user_email}</div>}
+                {member.user_phone && <div>{member.user_phone}</div>}
               </div>
             </div>
           ))}
         </div>
+      )}
+
+      {canAdminister && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-lg font-semibold">Pending invitations</h2>
+            <p className="text-sm text-muted-foreground">Delivery status is shown separately from invitation validity.</p>
+          </div>
+          {pendingInvitations.length === 0 ? (
+            <p className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">No pending invitations.</p>
+          ) : (
+            <div className="space-y-2">
+              {pendingInvitations.map((invitation) => (
+                <div key={invitation.id} className="flex flex-col justify-between gap-3 rounded-lg border bg-card p-4 sm:flex-row sm:items-center">
+                  <div>
+                    <div className="font-medium">{invitation.email}</div>
+                    <div className="text-sm text-muted-foreground">
+                      <span className="capitalize">{invitation.role}</span>
+                      {" · "}
+                      {invitation.deliveryStatus === "sent" ? "Email sent" : "Email delivery failed"}
+                    </div>
+                    {invitation.deliveryError && (
+                      <div className="mt-1 text-sm text-destructive">{invitation.deliveryError}</div>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" disabled={actionInvitationId === invitation.id} onClick={() => handleInvitationAction(invitation, "resend")}>
+                      <RefreshCw className="mr-2 h-3 w-3" />
+                      Resend
+                    </Button>
+                    <Button variant="outline" size="sm" disabled={actionInvitationId === invitation.id} onClick={() => handleInvitationAction(invitation, "revoke")}>
+                      <Ban className="mr-2 h-3 w-3" />
+                      Revoke
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       )}
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => {
@@ -206,76 +297,46 @@ export default function StaffClient({ initialStaff }: StaffClientProps) {
       }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>
-              {editingStaff ? "Edit Staff Member" : "Invite Staff Member"}
-            </DialogTitle>
+            <DialogTitle>{editingStaff ? "Edit staff role" : "Invite staff member"}</DialogTitle>
             <DialogDescription>
               {editingStaff
-                ? "Update this staff member's role"
-                : "Send an invitation email to add a new staff member"}
+                ? "The member will need to sign in again after this change."
+                : "Create a seven-day invitation and attempt email delivery."}
             </DialogDescription>
           </DialogHeader>
-
           <form onSubmit={handleSubmit}>
             <FieldGroup>
-              {editingStaff ? (
+              {!editingStaff && (
                 <Field>
-                  <FieldLabel>Role *</FieldLabel>
-                  <Select value={editRole} onValueChange={(v) => setEditRole(v as typeof editRole)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="owner">Owner</SelectItem>
-                      <SelectItem value="manager">Manager</SelectItem>
-                      <SelectItem value="staff">Staff</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FieldDescription>Role determines access permissions</FieldDescription>
+                  <FieldLabel>Email *</FieldLabel>
+                  <Input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} required />
                 </Field>
-              ) : (
-                <>
-                  <Field>
-                    <FieldLabel>Email *</FieldLabel>
-                    <Input
-                      type="email"
-                      value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
-                      placeholder="staff@example.com"
-                      required
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Role *</FieldLabel>
-                    <Select value={role} onValueChange={(v) => setRole(v as typeof role)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="owner">Owner</SelectItem>
-                        <SelectItem value="manager">Manager</SelectItem>
-                        <SelectItem value="staff">Staff</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FieldDescription>Role determines access permissions</FieldDescription>
-                  </Field>
-                </>
               )}
+              <Field>
+                <FieldLabel>Role *</FieldLabel>
+                <Select
+                  value={editingStaff ? editRole : role}
+                  onValueChange={(value) => {
+                    if (editingStaff) setEditRole(value as StaffRole);
+                    else setRole(value as StaffRole);
+                  }}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {assignableRoles.map((assignableRole) => (
+                      <SelectItem key={assignableRole} value={assignableRole} className="capitalize">
+                        {assignableRole}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FieldDescription>Owners may manage all roles; managers may manage staff only.</FieldDescription>
+              </Field>
             </FieldGroup>
-
             <DialogFooter className="mt-6">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsDialogOpen(false)}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
+              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isSubmitting}>Cancel</Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting
-                  ? editingStaff ? "Saving..." : "Sending..."
-                  : editingStaff ? "Update" : "Send Invitation"}
+                {isSubmitting ? "Saving…" : editingStaff ? "Update role" : "Create invitation"}
               </Button>
             </DialogFooter>
           </form>
@@ -285,9 +346,9 @@ export default function StaffClient({ initialStaff }: StaffClientProps) {
       <ConfirmationDialog
         open={!!deletingStaff}
         onOpenChange={(open) => !open && setDeletingStaff(null)}
-        title="Remove Staff Member"
-        description="Are you sure you want to remove this staff member? They will lose access to the business dashboard."
-        confirmLabel="Remove"
+        title="Remove staff access"
+        description="This immediately disables the account and revokes its active sessions."
+        confirmLabel="Remove access"
         cancelLabel="Cancel"
         onConfirm={handleConfirmDelete}
         variant="destructive"

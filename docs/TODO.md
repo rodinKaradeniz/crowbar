@@ -19,16 +19,366 @@ Status labels:
 - **Blocked:** requires external state or authority.
 - **Deferred:** intentionally not current.
 
-## Active Product Sequence
+## Confirmed MVP Sequence
 
-The current product priority is to complete Crowbar's operational loop before
-starting the broader planned improvements below. Work through these stages in
-order unless the user explicitly reprioritizes them. A 2026-07-25 review of
-operator-oriented product research reinforced this order and added the
-dependency-aware workflow, adoption, workforce, offline, and integration items
-below; it did not promote them ahead of the current availability stage.
+The first release target is a supervised pilot at a single-location bar in
+Germany. Crowbar owns the operational record from reservation through service,
+ordering, inventory, purchasing, and cost control. The venue's separate,
+German-compliant register remains the fiscal and payment authority. Crowbar
+records only that a tab was **settled externally**; it does not take payment,
+operate a cash register, issue a fiscal receipt, or claim fiscal/accounting
+authority in this MVP.
 
-### 1. Authoritative availability and capacity — complete
+Complete these stages in order unless the user explicitly reprioritizes them.
+Stage 8 remains an external deployment action requiring separate user
+authorization even after the local release gate passes.
+
+### 0. Freeze the MVP contract and baseline — complete
+
+- **Complete — confirmed boundary:** MVP covers venue/staff setup;
+  reservations, protection, and the future-reservation waitlist; current-service
+  queue; areas, tables, assignments, and seatings; menus, modifiers, happy hour,
+  availability, staff/QR ordering, fulfillment, tabs, and external settlement;
+  inventory, recipes, receiving, waste, stock counts, suppliers, purchasing,
+  cost control, guest CRM/privacy, and operational reporting.
+- **Complete — fiscal and payment boundary:** The existing compliant register
+  remains the source of truth for taking payment, payment method and tender
+  details, cash, tips, refunds, receipts, invoices, tax reporting, and fiscal
+  exports. Crowbar uses the phrase **settled externally**, never “payment
+  processed” or an equivalent claim. Supplier-invoice payment is also outside
+  Crowbar; purchasing ends at invoice/reference capture and reconciliation.
+- **Complete — initial market boundary:** The first pilot is a single-location
+  German bar using EUR, `de-DE`, `Europe/Berlin`, tenant-country phone handling,
+  and tenant-configured tax profiles. The area-based Floor board is sufficient
+  for the pilot; geometry and drag-and-drop remain later work.
+- **Complete — documentation alignment:** `AGENTS.md` and the owning documents
+  under `docs/` use the same 0–9 order, external-settlement language,
+  Germany/non-fiscal boundary, local-first gate, and post-MVP exclusions.
+- **Complete — authoritative release inventory:**
+  [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md) traces every current public and staff
+  route through a shared API/service/persistence/event/test authority registry
+  and classifies it as core, supporting, optional, redirect, remove/hide, or
+  post-MVP.
+- **Complete — acceptance map and mismatch assignment:**
+  [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md) owns the initial P0/P1/P2 register,
+  assigns every audit finding to a numbered stage, and defines the risk-ranked
+  journey, invariant, failure, test-level, and release-evidence matrix for
+  stages 1–7. Later implementation closes those rows instead of creating a
+  parallel checklist.
+- **Exit gate — met:** The product/fiscal boundary is consistent across
+  canonical documentation and planned contract vocabulary; every currently
+  known code/schema mismatch is assigned to a numbered stage; every visible
+  route has an explicit MVP disposition; and no unresolved decision blocks
+  stage 1.
+
+### 1. Correctness and security foundation — complete
+
+**Completed locally 2026-08-14.** Sections 1A–1E landed together in migrations
+031–036 and their application/frontend counterparts. The completed boundary
+includes a repeatable fresh-database verifier; staff-only auth, revocable
+sessions, secure invitation/recovery lifecycles and role/tenant enforcement;
+server-authoritative order resolution and concurrent idempotency; ledger-safe
+inventory plus discrepancy reconciliation; reservation/CRM idempotency,
+privacy, channel-delivery and service-time integrity; consistent route guards;
+and removal of misleading/dead MVP states. The Stage 1 evidence and closed-risk
+mapping are recorded in [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md).
+
+The full gate passed: frontend lint, 41 Vitest tests, TypeScript, and production
+build; 150 PostgreSQL backend tests; six reproducible ML tests; migrations
+001–036 plus repeat-safe seed on a disposable database; and diff hygiene. The
+remaining `python-jose`, Node test-runtime, and Next.js middleware deprecation
+warnings are dependency/framework maintenance debt, not failed product checks;
+they are retained below under post-stage maintenance.
+
+Do not add later-stage product breadth until these known defects and their
+regression tests are closed. Work in the following dependency order.
+
+#### 1A. Re-establish a trustworthy baseline — complete
+
+- Fix all frontend lint errors and adjudicate material warnings; keep the
+  production build and existing frontend tests green.
+- Fix the `max_concurrent_bookings` schema/default drift so migrations, ORM,
+  response schemas, product rules, and tests agree on the positive default.
+- Re-run the full PostgreSQL suite, remove its current failure, triage the
+  deprecation-warning backlog, and create a reproducible ML test environment.
+- Add a repeatable fresh-database migration-and-seed verification. Expand the
+  canonical demo seed only enough to exercise stage-1 invariants and assert its
+  schema/relationship validity; stage 7 owns the richer scenario. Never use the
+  stale destructive reset path.
+- Capture the initial P0/P1 register in the acceptance map and require a
+  regression test for each closed defect.
+
+#### 1B. Repair tenant isolation, authentication, and staff authority — complete
+
+- Bind staff creation to `get_current_business`; reject any cross-tenant
+  `business_id` or `user_id` association and add route/service isolation tests.
+- Constrain staff roles, enforce a role hierarchy, prevent manager-to-owner
+  escalation, and protect self-removal and the last owner. Ordinary staff must
+  not see privileged controls that will be rejected by the API.
+- Make account disablement and staff removal effective for new authentication
+  and existing sessions. Add token/session revocation for disablement, removal,
+  password change, and other security-sensitive account changes.
+- Hash invitation tokens and add pending-invitation visibility, revoke, resend,
+  expiry, duplicate handling, role validation, and truthful delivery results.
+- Enforce backend password policy and complete safe password recovery with
+  single-use expiring tokens, rate limits, generic responses, and session
+  revocation. Remove customer-account registration/login redirects, the
+  nonexistent customer dashboard destination, and phone-OTP entry points from
+  the MVP; public guests remain account-free.
+- Minimize public business projections and replace unrestricted reservation
+  embedding with an intentional deployment/business allowlist.
+
+#### 1C. Restore server-authoritative ordering — complete
+
+- Resolve every selected modifier from tenant-owned menu data. Reject unknown,
+  wrong-item/wrong-group, unavailable, duplicate, or min/max/required-invalid
+  choices; compute names and deltas on the server and never accept a submitted
+  price delta as authority.
+- Reject unknown, inactive, unavailable, unpublished, or wrong-menu items and
+  empty resolved carts. Validate business, location, table, seating, tab, menu,
+  item, and modifier ownership as one placement invariant.
+- Scope order idempotency by business and make same-key/same-request retries
+  stable while rejecting same-key/different-request reuse. Cover concurrent
+  public QR and staff-tab submission.
+- Preserve authoritative happy-hour, alcohol, line-price, and inventory
+  effects; leave one server-owned extension point for stage 2's tax snapshot
+  rather than inventing tax logic in staff composition.
+- Stop describing uncollected order totals as revenue. Until external
+  settlement lands in stage 4, reports distinguish ordered value, open-tab
+  value, and any legacy simulated closure explicitly.
+
+#### 1D. Repair inventory, CRM, reservation, and time integrity — complete
+
+- Lock inventory rows or use atomic balance updates so concurrent movements
+  cannot diverge from the movement ledger. Add a reconciliation command/check
+  and treat a mismatch as an integrity incident.
+- Archive inventory items instead of deleting their movement history. Validate
+  tenant ownership of every location and related identifier; restore
+  non-negative update constraints and correct absent-versus-null clearing
+  semantics.
+- Reject an entire invalid recipe instead of silently skipping missing,
+  foreign, or duplicate ingredients. Persist and surface automatic-deduction
+  discrepancies while keeping fulfillment non-blocking; deduplicate low-stock
+  alerts to threshold crossings.
+- Align migration 029, ORM, schemas, mappers, and tests for anonymised nullable
+  reservation contact fields. Correct consent withdrawal, suppression and
+  merge behavior; derive retention inactivity from authoritative activity; and
+  ensure tab/order history attaches to the canonical customer.
+- Add public reservation idempotency. Format reminders and all “today” metrics
+  by business timezone/service day, record channel-specific delivery attempts,
+  retry transient failures, and escape user content in HTML email.
+- Cover reservation-management and waitlist tokens, expiry, revision, stale
+  availability, concurrent acceptance, late changes, grace periods, DST, and
+  module-disabled behavior with PostgreSQL tests.
+
+#### 1E. Remove dead or misleading product states — complete
+
+- Enforce onboarding and module guards consistently on every business page,
+  including Orders; make frontend authorization match the server matrix.
+- Complete staff forgot/reset password. Remove or hide customer account/OTP,
+  contact false-success, placeholder reviews, stale QR/table entry, unapproved
+  pricing claims, and any other dead/non-MVP path identified by the stage-0
+  inventory until it has an authoritative workflow.
+- Replace browser `alert()`/`confirm()` and misleading success/error states
+  with the shared accessible interaction patterns.
+- Use one currency/locale/timezone/phone boundary in preparation for stage 2;
+  eliminate hard-coded `$`, `EUR` glyph assumptions, browser-local business
+  times, and US-default phone parsing from retained MVP paths.
+- Add focused frontend and PostgreSQL regression coverage for ordering,
+  inventory, queue, tabs, menu, CRM, roles, module gates, money/time mapping,
+  and HTTP/WebSocket parity instead of relying on the current narrow suites.
+
+- **Stage 1 verification:** frontend lint, focused tests, full frontend test
+  suite, and production build; full PostgreSQL backend suite; ML import/tests;
+  fresh migration plus seed; `git diff --check`; targeted concurrency and
+  tenant-isolation tests. Record anything genuinely blocked rather than
+  weakening the gate.
+- **Exit gate:** zero known P0/P1 security, tenant, pricing, inventory, privacy,
+  reservation, or time defects; no failing repository check; every fixed defect
+  has a regression test; every retained route has working auth, onboarding,
+  entitlement, failure, and empty-state behavior.
+
+### 2. Germany-ready operational configuration — ready
+
+- Add tenant country, `EUR` currency, `de-DE` locale, IANA timezone, and
+  country-aware address/phone defaults. Format money, dates, service days, and
+  phone input from tenant configuration across public and staff surfaces.
+- Add owner/manager-controlled, effective-dated tax profiles assigned to menu
+  items, with inclusive/exclusive pricing policy, audit history, and an
+  immutable line-level tax snapshot at order placement. Seed editable German
+  defaults for food, beverages, and custom/exempt treatment without hard-coding
+  law into old orders.
+- Label tax calculations and exports as operational/non-fiscal for this MVP.
+  They support pricing and margin analysis but do not replace the venue's tax
+  adviser, compliant register, TSE, receipt, or fiscal export.
+- Add tests for tax changes over time, mixed-profile orders, inclusive rounding,
+  locale formatting, DST, and tenant isolation.
+- **Exit gate:** a German tenant can configure and audit operational tax
+  treatment without Crowbar representing itself as a fiscal cash register.
+
+### 3. Complete the guest-to-table workflow — ready after stage 2
+
+- Make the current-service queue explicitly open/closed and schedule/capacity
+  aware. Add staff-created walk-ins, duplicate/idempotency protection,
+  called/left/no-show/removal reasons, and a measured or configured wait
+  estimate; omit the estimate rather than fabricate it.
+- Record notification attempts and delivery state before claiming a guest was
+  reached; add retry, SMS fallback where configured, and staff-visible failure.
+- Complete future-waitlist decline, cancel, expiry, removal, active/history
+  filtering, public availability gating, fallback channels, and staff alerts.
+- Verify the complete book → manage/reconfirm/reschedule → assign → call → seat
+  journey, including table combinations, planning versus occupancy, no-shows,
+  service-day rollover, DST, conflicts, and reconnect behavior.
+- Keep the confirmed area-based responsive host board. Defer geometry,
+  drag-and-drop, automatic server sections, and richer meal stages until pilot
+  evidence shows they are necessary.
+- **Exit gate:** public and staff paths reliably turn a reservation or walk-in
+  into one real seating without bypassing capacity, table, tenant, or delivery
+  rules.
+
+### 4. Complete ordering and external settlement — ready after stage 3
+
+- Add tenant-configurable preparation stations and replace hard-coded
+  `kitchen | bar | any` routing. Support audited order edits/cancellation,
+  station timing, useful all-day counts, and real-time ticket changes.
+- Make item availability one authoritative 86 action across public and staff
+  ordering. Preserve per-surface delivery/reconciliation state if a projection
+  fails.
+- Add real-time tab refresh plus explicit reconnect/stale indicators. Lock down
+  rules for changing a tab after settlement and allow manager reopening only
+  with actor, timestamp, and reason.
+- Replace simulated settlement with `open` / `settled_externally` state,
+  `settled_at`, `settled_by`, immutable total snapshot, optional informational
+  method (`cash | card | mixed | other`), note, and external-register reference.
+  Method is not a tender ledger and cannot represent partial payment.
+- Require external settlement before closing the seating; preserve recipe
+  deduction/reversal and discrepancy behavior through order corrections.
+- Explicitly exclude payment collection, card/cash data, tips, split or partial
+  tenders, change calculations, refunds, receipts, invoices, bank settlement,
+  deposits, and card holds.
+- **Exit gate:** staff and QR rounds share one authoritative tab, stations can
+  fulfill it in real time, stock effects reconcile, and staff can safely record
+  that the external register completed settlement without Crowbar claiming to
+  process payment.
+
+### 5. Finish stock, purchasing, and cost control — ready after stage 4
+
+- Add supplier records, supplier products, lead times, purchase orders,
+  approval/status flow, partial receiving, substitutions, discrepancies,
+  delivery/invoice references, attachment metadata, and purchase-price history.
+  Paying supplier invoices remains outside Crowbar.
+- Add canonical pack and unit conversions across case, each, bottle, keg,
+  kilogram, litre, and millilitre without creating a second inventory unit
+  system. Keep the movement ledger authoritative.
+- Add location transfers with in-transit/reconciliation semantics; stocktake
+  and cycle-count sessions; counted-versus-book variance; bar-native
+  open-bottle/tenthing and keg-level entry; reasoned shrinkage; and safe CSV
+  import/export. Full offline counts remain post-MVP unless the pilot proves a
+  hard need.
+- Add inventory valuation, recipe cost, menu gross margin, pour cost,
+  actual-versus-theoretical consumption, controllable COGS, waste/variance,
+  cost-change alerts, and explainable reorder suggestions using par, forecast,
+  open purchase orders, and lead time.
+- Keep accounting exports provider-neutral and deferred until the first venue's
+  accountant confirms the required German format and authority boundary.
+- **Exit gate:** a manager can order, receive, count, reconcile, and explain
+  stock and margin from one auditable ledger without entering or implying
+  payment data.
+
+### 6. Staff, CRM, and operational reporting — ready after stage 5
+
+- Replace coarse operational access with a secure fixed MVP permission matrix:
+  owner, manager, host/server, bar/kitchen, and inventory operator. Add shared-
+  device PIN unlock/automatic lock only if the pilot hardware/workflow requires
+  it; defer a tenant-custom permission builder.
+- Complete the guest timeline across reservations, queue, tabs, and orders;
+  guest-led data-request/withdrawal intake; consent suppression; privacy contact;
+  scheduled retention; conservative merge; and venue-owned portable export.
+  Defer automated marketing, loyalty, and review campaigns.
+- Provide authoritative reports for reservations/covers/no-shows, queue wait
+  and seating conversion, table utilization/turn time, ordered items/stations,
+  open versus externally settled tabs, inventory movement and variance,
+  purchasing cost, recipe cost, margin, waste, and staff actions/ticket timing.
+  Add CSV/PDF where operationally useful, but not fiscal or accounting reports.
+- Keep ML optional and failure-tolerant. Persist latest results and establish
+  minimum-data, reproducibility, leakage, drift, version, and scheduling rules;
+  do not let ML readiness block the core pilot.
+- **Exit gate:** each pilot role sees only the data/actions it needs, managers
+  can explain service and stock outcomes, and privacy operations are usable
+  without marketing automation.
+
+### 7. Demo environment and local release gate — ready after stage 6
+
+- Expand the canonical demo tenant with areas, tables, combinations, current
+  and future reservations, offer-ready waitlist, active queue, open seating and
+  tab, kitchen/bar orders, externally settled history, recipes, stock risks,
+  suppliers, purchase orders, stock counts, cost/margin examples, guest
+  profiles, role-limited staff, and printable table QR sheets.
+- Automate the critical browser journey: book → assign/seat → QR/staff order →
+  fulfill → deduct/reconcile stock → record waste → settle externally → close
+  seating → inspect guest and cost history.
+- Add repository CI for frontend lint/test/build, PostgreSQL tests, fresh
+  migrations/seed, ML import/tests, documentation links, dependency/secret
+  scanning, and deterministic browser smoke tests. Add accessibility,
+  responsive, failure-mode, and relevant load/concurrency checks.
+- Exercise loss of email, SMS, Redis, WebSocket, ML, and reconnect paths; prove
+  optional-service failures do not corrupt the core operational record.
+- **Exit gate:** no visible placeholder/dead interaction or known P0/P1 defect;
+  every core journey passes locally from a fresh database on the supported
+  device/browser matrix; the demo can be reset reproducibly without destructive
+  production tooling.
+
+### 8. Railway deployment — blocked on stages 0–7 and explicit authorization
+
+- Resume the existing Railway project only after the local release gate passes
+  and the user explicitly authorizes deployment work. Reconcile the preserved
+  migrations 001–022 environment with all local migrations and code first.
+- Deploy public web/API and private PostgreSQL, Redis, optional ML, reminder and
+  retention jobs, and durable object storage. Configure German/EU hosting,
+  domains, TLS, CORS, secrets, rate limiting, and private service networking.
+- Add staging/pilot separation, pre-deploy migrations, release provenance,
+  health/readiness checks, smoke tests, monitoring, job/delivery alerts,
+  backup/restore proof, rollback/recovery, and a manual production gate.
+- Keep a single API replica until shared WebSocket fan-out is designed, or add
+  that design before scaling horizontally.
+- **Exit gate:** the exact locally accepted build runs in a recoverable,
+  observable Railway environment and passes post-deploy critical journeys.
+
+### 9. Supervised pilot rollout — ready after stage 8
+
+- Introduce the venue in controlled steps: configuration/demo data;
+  reservations/queue/floor alongside the incumbent process; ordering and
+  external settlement; observed inventory deductions; then purchasing and
+  stock counts after reconciliation proves accurate.
+- Preserve the existing compliant register as fiscal/payment authority for the
+  whole MVP pilot. Document staff fallback, data correction, support ownership,
+  incident escalation, and rollback for each activated workflow.
+- Measure task completion, error/recovery, latency, stock reconciliation,
+  adoption, and operator feedback by workflow. Resolve pilot defects before
+  expanding dependence or promising new modules.
+- **Exit gate:** the venue can run the agreed operational loop under supervision
+  with reconciled data, trained staff, documented fallback, and no unresolved
+  high-risk defect.
+
+### Post-MVP: German fiscal POS, payments, and broader platform work — deferred
+
+- Treat German cash-register compliance as a separate program: legal/tax
+  review, TSE, DSFinV-K, immutable fiscal transactions, receipt obligation,
+  cash drawer, terminals/processors, tips, split/partial tenders, refunds,
+  deposits/card holds, reconciliation/payouts, audit export, hardware support,
+  and offline fiscal behavior.
+- Evaluate delivery marketplaces, loyalty/marketing, reviews, workforce
+  scheduling/time clock/payroll exports, native apps, multi-location
+  management, full customizable RBAC/audit, accounting integrations, and
+  broader DASH replacement only after pilot evidence reprioritizes them.
+
+## Completed Foundations Carried into the MVP
+
+The following completed local stages remain useful evidence and must not be
+mistaken for the new MVP exit gate. They predate the 2026-08-13 supervised-pilot
+roadmap and feed its stages 1–7.
+
+### Authoritative availability and capacity — complete
 
 - **Complete — local data foundation:** Migration 023 adds one
   business booking schedule plus optional complete service-type overrides,
@@ -37,7 +387,7 @@ below; it did not promote them ahead of the current availability stage.
   and override-audit fields. Existing operating hours seed initial defaults;
   missing hours produce a closed schedule. ORM, Pydantic, seed, and focused
   PostgreSQL tests are aligned. This migration is not deployed while the
-  Railway arc is shelved.
+  Railway rollout is paused.
 - **Complete — availability creation slice:** One server-authoritative
   availability service now powers the public read contract plus public and
   authenticated reservation creation. It resolves business-default or complete
@@ -101,7 +451,7 @@ below; it did not promote them ahead of the current availability stage.
   rescheduling reuse the same resource checks; exact turn-buffer boundaries are
   valid. Onboarding asks how the first service holds capacity.
 
-### 2. Floor plan and table management — complete
+### Floor plan and table management — complete
 
 - **Complete — operational domain contract and backend foundation:** Every
   business has a primary-location lifecycle. Areas own registered tables with
@@ -137,14 +487,16 @@ below; it did not promote them ahead of the current availability stage.
   opaque, revisioned credential for a registered table. The server validates
   the credential, active table, tenant, and active seating; QR and staff rounds
   share the seating's sole open tab. Owners/managers can rotate a table link,
-  while Floor starts/opens tabs and requires settlement before departure.
+  while Floor starts/opens tabs and requires tab closure before departure. The
+  current closure field is simulated and will become the explicit external-
+  settlement record in MVP stage 4.
 - **Deferred within this stage — visual editor and richer service stages:** Add
   drag-and-drop geometry, turn-time assistance, and richer meal stages only
   after the area-based service loop is proven. Crowbar-owned stages must not
   depend on a future POS; orders or integrations may later enrich stages such
-  as ordered, mains, dessert, check requested, and paid.
+  as ordered, mains, dessert, check requested, and externally settled.
 
-### 3. Rich guest CRM
+### Rich guest CRM — complete foundation
 
 - **Complete — business-scoped guest CRM:** Migration 029 expands the existing
   phone-keyed identity with a dedicated staff profile and authoritative
@@ -161,7 +513,7 @@ below; it did not promote them ahead of the current availability stage.
   self-service access/withdrawal flows before marketing automation or external
   data sharing.
 
-### 4. No-show and reservation protection
+### No-show and reservation protection — complete foundation
 
 - **Complete — configurable, non-monetary protection:** Booking schedules own
   business-default and booking-type replacement policies for late changes,
@@ -171,58 +523,11 @@ below; it did not promote them ahead of the current availability stage.
   15-minute offer, and an atomic acceptance recheck. Guests can join from a
   fully booked date with a preferred-time flexibility window; staff can add,
   review, and offer only live slots inside that window.
-- **Deferred within this stage:** Deposits, card holds, fees, blacklists, and
-  automatic punitive action remain deferred to the confirmed POS/payment
-  integration stage.
+- **Deferred beyond MVP:** Deposits, card holds, fees, blacklists, and automatic
+  punitive action remain part of the post-MVP fiscal POS/payment program.
 
-### 5. Purchasing and cost control
-
-- **Needs decision:** Define suppliers, purchase orders, receiving, invoice
-  capture, price history, units/conversions, transfers, cycle counts, and the
-  accounting boundary.
-- **Ready after decision:** Add recipe cost, menu margin, actual-versus-
-  theoretical consumption, controllable COGS, waste/variance analysis, and
-  explainable reorder suggestions.
-- **Needs decision:** Add bar-native counting workflows on top of canonical ml:
-  open-container/tenthing entry, category-level pour cost, keg level and
-  shrinkage signals, fast cycle counts, and an offline-capable cellar/walk-in
-  count flow. Preserve the movement ledger as authority and treat visual
-  fractions as input conveniences, not a second unit system.
-- **Needs decision:** Define accounting exports, initially evaluating
-  QuickBooks and Xero, without turning Crowbar into a general ledger. Keep
-  purchase, inventory, waste, and future settlement identifiers reconcilable.
-- **Ready after decision:** Merge the existing ML V2 candidates for waste/loss,
-  reorder suggestions, richer forecasting, preparation hints, and margin-change
-  alerts into this operational workflow rather than building isolated
-  dashboards.
-
-### 6. POS and payment integrations
-
-- **Needs decision:** Choose initial POS and payment providers based on target
-  customers and geography. Prefer integrating with established POS/payment
-  systems before attempting to build terminal hardware, acquiring, payroll, or
-  a full general-purpose POS.
-- **Ready after decision:** Define authoritative ownership and reconciliation
-  for menus, sales, taxes, tips, tenders, refunds, tabs, deposits/card holds,
-  offline events, webhook retries, and provider outages.
-- **Ready after decision:** Provide a transparent settlement-to-bank breakdown
-  and preserve provider portability. Integration credentials, processor choice,
-  and a venue's historical operational data must not create avoidable payment-
-  processor lock-in.
-- **Ready after decision:** Make item availability a single authoritative
-  action: an "86" in Crowbar must stop sale across Crowbar menus and every
-  connected channel, with per-channel delivery status and reconciliation when
-  an integration is unavailable.
-- **Needs decision:** Reconcile delivery-marketplace orders, commissions,
-  promotions, refunds, and payouts after the core POS contract is proven;
-  importing an order without its fees would produce misleading margin data.
-- **Ready after decision:** Connect imported sales and settlement data to guest
-  history, inventory consumption, margin reporting, and operational insights.
-
-All other product plans remain active below, but their implementation begins
-after this sequence unless explicitly pulled forward. Cross-cutting discovery,
-especially the initial customer profile, may run earlier when it materially
-changes a stage's design.
+All other product plans remain active below, but their implementation follows
+the confirmed sequence unless a stage explicitly pulls the item forward.
 
 ## Documentation Transition
 
@@ -231,9 +536,10 @@ changes a stage's design.
   as features evolve.
 - **Ready:** Reconcile environment examples with every supported mode,
   including frontend mock mode and production CORS configuration.
-- **Ready:** Reconcile or retire `docs/backlog.md`. It still lists implemented
-  work (staff invitations, phone normalization, SMS reminder deduplication) and
-  removed payment columns as if they were current.
+- **In progress:** `docs/backlog.md` is explicitly a legacy ledger; its payment,
+  staff-invitation, phone-normalization, and reminder entries are reconciled
+  with the MVP boundary. Reconcile or retire the remaining historical entries
+  instead of extending the file.
 - **Ready:** Add nested `AGENTS.md` files only when client, server, or ML work
   develops genuinely different recurring instructions. Avoid duplicating the
   root guide.
@@ -246,11 +552,11 @@ changes a stage's design.
   lifecycle states that do not save a bartender, host, or manager time. Record
   which controls are removed, made optional, or retained with an observed
   service rationale.
-- **Needs decision:** Confirm Crowbar's initial ideal customer profile and
-  product wedge before later stages diverge: cocktail/bar-led venues,
-  full-service restaurants, or small multi-venue groups have materially
-  different floor, inventory, labor, and integration priorities. Define the
-  operational outcome and time-to-value that makes the first segment adopt.
+- **Complete — initial customer profile:** The first target is a
+  single-location bar in Germany entering a supervised pilot. The MVP wedge is
+  the non-fiscal operational loop—reservations, queue, tables, orders, stock,
+  purchasing, cost, and guest context—while a separate compliant register
+  remains payment/fiscal authority.
 - **Needs decision:** Design a cross-module shift command center after its
   source workflows are authoritative. Combine today's reservations, queue,
   table state, open tabs, stock risks, no-show risk, demand, and material alerts
@@ -259,37 +565,35 @@ changes a stage's design.
   checklists populated by large parties, guest needs, expected covers,
   preparation risks, staffing gaps, and below-par items. Alerts should explain
   the action and deep-link to its owner workflow.
-- **Ready:** Optimize onboarding for early value through guided setup,
-  opinionated venue templates, safe CSV/import tools, progress recovery, and a
-  measurable path to first bookable service or first live menu. Do not require
-  a venue to model its entire operation before receiving value.
+- **Ready — stages 0–1:** Optimize onboarding for early value through guided
+  setup, opinionated venue templates, safe CSV/import tools, progress recovery,
+  and a measurable path to first bookable service or first live menu. Do not
+  require a venue to model its entire operation before receiving value.
 - **Needs decision:** Add lightweight loyalty and consented retention
   automation only after the CRM contract exists: birthday/regular recognition,
   post-visit thanks, rebook nudges, and simple rewards. Measure incremental
   return visits and opt-outs rather than message volume.
-- **Ready:** Connect `ContactDialog` and `FooterContactForm` to a real,
-  abuse-protected delivery and support-triage path. Include acknowledgement,
-  routing, diagnostic context with consent, status/ownership, and realistic
-  response expectations. Both currently log locally and show a false success
-  state without sending anything.
+- **Complete — stage 1:** `ContactDialog` and `FooterContactForm` were removed from
+  retained MVP surfaces. Reintroduce them only with a real, abuse-protected
+  delivery/support-triage path; they must not keep their false-success state.
 - **Needs decision:** Review and approve the landing FAQ and pricing copy before
   treating it as published product messaging.
 
 ## Testing and Quality
 
-- **Needs decision:** Define the repository-wide testing strategy and risk-based
-  quality gates: which behavior belongs in unit, integration, contract,
-  end-to-end, visual, accessibility, performance, security, and migration
-  tests.
+- **Ready — stages 0, 1, and 7:** Build the risk-based acceptance matrix and
+  use unit, PostgreSQL integration, contract, end-to-end, visual,
+  accessibility, performance, security, concurrency, failure, and migration
+  tests according to blast radius and invariant ownership.
 - **Ready:** Expand frontend tests beyond the current focused Vitest and MSW
   coverage, especially for ordering, reservations, module gates, money/time
   mapping, error states, and HTTP/WebSocket mapper parity.
 - **Ready:** Expand PostgreSQL-backed backend integration coverage for every
   module, tenant isolation, roles, public endpoint abuse cases, idempotency,
   legal state transitions, and inventory ledger effects.
-- **Needs decision:** Select an end-to-end browser framework and a small set of
-  critical user journeys. Evaluate Playwright against the value of
-  browser-level coverage before introducing it.
+- **Ready — stage 7:** Use Playwright for the small critical browser-journey
+  suite unless implementation discovery finds a repository-specific blocker;
+  retain Vitest/Testing Library for component and mapper behavior.
 - **Ready:** Add migration-chain tests against a fresh database in addition to
   ORM-metadata tests, including seed validation and a reliable disposable reset
   path.
@@ -297,6 +601,11 @@ changes a stage's design.
   leakage-regression tests.
 - **Ready:** Establish accessibility checks, responsive/visual regression,
   performance budgets, and failure-mode tests for critical flows.
+- **Ready — maintenance:** Upgrade or replace `python-jose` before Python
+  removes `datetime.utcnow()`, migrate Next.js `middleware` to the supported
+  `proxy` convention, and revisit Node/Vitest runtime deprecation warnings.
+  These warnings are currently dependency/framework-owned and did not fail the
+  Stage 1 gate.
 
 ## CI/CD
 
@@ -317,21 +626,22 @@ changes a stage's design.
 
 ## Deployment
 
-- **Deferred — Railway rollout:** Deployment is intentionally shelved while the
-  user observes Railway and product development continues. In project
+- **Blocked on stages 0–7 and explicit authorization — Railway rollout:**
+  Deployment is intentionally paused while local MVP development and
+  verification continue. In project
   `crowbar`, private PostgreSQL, private Redis, and the public FastAPI service
   are online in EU West. API health, database connectivity, migrations 001–022,
   and the Redis stream consumer were verified. Do not resume external changes
   without an explicit user request.
-- **Deferred — resume point:** Deploy and enable the local FastAPI rate-limit
-  change; then add public Next.js plus private ML, scheduled reminders, and
-  durable object storage. Reconcile reference variables, secrets, the web
-  domain, CORS, private ML connectivity, and end-to-end smoke tests as each
-  service is added.
-- **Deferred — production hardening:** Add backup/restore testing, migration
-  rollout and rollback procedures, secret management, restricted service
-  networking, durable uploads, health checks, monitoring, and release
-  automation when the deployment arc resumes.
+- **Ready after the local gate — resume point:** Deploy and enable the local
+  FastAPI rate-limit change; then add public Next.js plus private ML, scheduled
+  reminders, and durable object storage. Reconcile reference variables,
+  secrets, the web domain, CORS, private ML connectivity, and end-to-end smoke
+  tests as each service is added.
+- **Ready after the local gate — production hardening:** Add backup/restore
+  testing, migration rollout and rollback procedures, secret management,
+  restricted service networking, durable uploads, health checks, monitoring,
+  and release automation when the deployment arc resumes.
 - **Ready:** Repair or remove the documented `python -m db.migrate reset`
   workflow. Its drop list predates many current tables, so it is destructive
   without being a reliable full reset.
@@ -340,15 +650,17 @@ changes a stage's design.
 
 ## Security and Reliability
 
-- **Ready:** Replace `frame-ancestors *` on embeddable reservation pages with an
-  intentional per-business or deployment allowlist.
+- **Complete — stage 1 deployment boundary:** Reservation pages default to
+  `frame-ancestors 'self'`; operators may configure exact HTTP(S) origins with
+  `RESERVATION_FRAME_ANCESTORS`, and wildcard values are rejected. A future
+  per-business allowlist remains optional breadth.
 - **Ready:** Persist tenant-scoped ML result summaries so an ML service restart
   does not empty the Insights dashboard until the next pipeline run.
 - **Ready:** Complete abuse controls for the Next.js docs assistant and
   evaluate whether an edge/WAF layer is warranted. FastAPI now has local,
   Redis-backed rolling-window limits for auth, public reservation, queue,
   ordering, and related public reads. Deploying them and verifying Railway
-  proxy/IP behavior remain part of the shelved deployment arc.
+  proxy/IP behavior remain part of the paused deployment arc.
 - **Ready:** Decide whether Redis event delivery needs a transactional outbox,
   dead-letter handling, replay tools, and metrics. Publishing is currently
   best-effort.
@@ -360,8 +672,8 @@ changes a stage's design.
   the hourly reservation-reminder cron.
 - **Ready:** Add structured tracing, metrics, SLOs, alerting, and request/event
   correlation beyond current request logs.
-- **Ready:** Harden onboarding redirects across all business routes rather than
-  only selected pages.
+- **Complete — stage 1:** A shared business-route guard plus server page guards
+  enforce onboarding across retained business routes.
 
 ## Product Architecture
 
@@ -373,25 +685,25 @@ changes a stage's design.
   lineage, tenant transparency or opt-in, and fairness evaluation before using
   any shared training dataset. Pseudonymized or hashed identifiers alone do
   not make personal data anonymous.
-- **Needs decision:** After the operational loop, replace hard-coded
-  `kitchen | bar | any` routing tags with configurable stations.
-- **Needs decision:** Implement granular permission-based RBAC and a full audit
-  system. Current owner/manager/staff roles are coarse, and the order timeline
-  is not a platform audit log.
+- **Ready — stage 4:** Replace hard-coded `kitchen | bar | any` routing tags
+  with tenant-configurable preparation stations.
+- **Ready — stage 6 / deferred expansion:** Implement the confirmed fixed MVP
+  permission matrix and audit security-sensitive actions in stage 6. A fully
+  tenant-custom permission builder and platform-wide audit explorer remain
+  post-MVP.
 - **Needs decision:** Design active context for dual-role or multi-business
   accounts before changing the one-business tenancy assumption.
 - **Deferred:** Multi-location management and location filtering UI. The
   floor-plan stage stays location-ready but does not pull this scope forward.
 - **Ready:** Replace the sidebar queue-count poll with shared real-time state
   when the queue socket is lifted into a common provider.
-- **Needs decision:** Add real-time tab updates; tab detail is currently
+- **Ready — stage 4:** Add real-time tab updates; tab detail is currently
   refresh-driven.
 - **Deferred:** Public servings/pours display and stronger ID verification.
   Registered tables move into operational-loop stage 2.
-- **Deferred:** Reviews and billing/subscription processing. Stripe packages
-  remain installed, but current payment columns and product flows were removed.
-  Customer payments belong to operational-loop stage 6; Crowbar subscription
-  billing remains a separate product/business decision.
+- **Deferred beyond MVP:** Reviews, customer payment processing, German fiscal
+  register work, and Crowbar subscription billing. Payment packages and current
+  payment product paths are absent from the MVP.
 
 ## Workforce Operations
 
@@ -423,15 +735,17 @@ changes a stage's design.
 - **Needs decision:** Define a shared API, authentication, entitlement,
   observability, release, and design-system strategy across web, mobile, and
   desktop without forcing every client into identical interaction patterns.
-- **Needs decision:** Define an offline survival contract for live service:
+- **Deferred beyond MVP, with graceful degradation required in stage 7:**
+  Define an offline survival contract for live service:
   which queue, table, order, and inventory views remain readable; which writes
   may queue locally; how staff see stale state; and how conflicts reconcile
   after connectivity returns. Do not promise generic "offline mode" without
   per-operation safety rules.
-- **Ready:** Treat mobile-first staff operation as a measurable workflow
-  requirement now, independent of whether a native app is chosen later. Audit
-  host, bartender, server, inventory-count, and manager tasks for taps, latency,
-  one-handed use, interruption recovery, and accessibility during service.
+- **Ready — stage 7:** Treat mobile-first staff operation as a measurable
+  workflow requirement now, independent of whether a native app is chosen
+  later. Audit host, bartender, server, inventory-count, and manager tasks for
+  taps, latency, one-handed use, interruption recovery, and accessibility
+  during service.
 
 ## Conversational AI
 
@@ -460,10 +774,9 @@ changes a stage's design.
 
 ## Data and ML
 
-- **Needs decision:** Define ML V2 outcomes before adding models. Waste/loss
-  analysis, reorder suggestions, and richer operational forecasting move into
-  operational-loop stage 5 so they are attached to purchasing and cost-control
-  actions rather than isolated predictions.
+- **Ready within stages 5–6:** Attach waste/loss analysis, reorder suggestions,
+  and richer operational forecasting to purchasing and cost-control actions
+  rather than building isolated predictions. ML remains optional for the pilot.
 - **Ready:** Establish reproducible training/evaluation artifacts and tests;
   current latest results are process-memory state backed by durable prediction
   tables.

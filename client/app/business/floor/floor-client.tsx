@@ -61,13 +61,14 @@ interface FloorClientProps {
   canManage: boolean;
   hasReservations: boolean;
   hasQueue: boolean;
+  businessTimezone: string;
 }
 
 type SelectionMode = "seat" | "assign";
 
-function formatVenueTime(value?: string) {
+function formatVenueTime(value: string | undefined, businessTimezone: string) {
   if (!value) return null;
-  return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(
+  return new Intl.DateTimeFormat(undefined, { timeZone: businessTimezone, hour: "numeric", minute: "2-digit" }).format(
     new Date(value),
   );
 }
@@ -92,12 +93,14 @@ function PartyCard({
   secondaryLabel,
   onAction,
   onSecondary,
+  businessTimezone,
 }: {
   party: FloorPlanParty;
   actionLabel: string;
   secondaryLabel?: string;
   onAction: () => void;
   onSecondary?: () => void;
+  businessTimezone: string;
 }) {
   return (
     <div className="rounded-xl border bg-card p-3 shadow-sm">
@@ -105,7 +108,7 @@ function PartyCard({
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">{party.name}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            <span className="figures">{party.partySize}</span> guests · {party.sourceType === "queue" ? party.status : formatVenueTime(party.startsAt)}
+            <span className="figures">{party.partySize}</span> guests · {party.sourceType === "queue" ? party.status : formatVenueTime(party.startsAt, businessTimezone)}
           </p>
           {party.guestContext?.dietaryDetails && <p className="mt-2 flex items-center gap-1 text-xs font-medium text-oxblood"><CircleAlert className="size-3" /> {party.guestContext.dietaryDetails}</p>}
           {party.guestContext?.tags.length ? <p className="mt-1 truncate text-xs text-muted-foreground">{party.guestContext.tags.join(" · ")}</p> : null}
@@ -125,7 +128,7 @@ function PartyCard({
   );
 }
 
-function TableCard({ table, onClick }: { table: FloorPlanBoardTable; onClick: () => void }) {
+function TableCard({ table, onClick, businessTimezone }: { table: FloorPlanBoardTable; onClick: () => void; businessTimezone: string }) {
   const detail = table.activeSeating?.source ?? table.activeAssignment ?? table.nextReservation;
   return (
     <button
@@ -147,7 +150,7 @@ function TableCard({ table, onClick }: { table: FloorPlanBoardTable; onClick: ()
         <div className="mt-4 border-t border-foreground/10 pt-2">
           <p className="truncate text-sm font-medium">{detail.name}</p>
           <p className="text-xs text-muted-foreground">
-            {table.activeSeating ? "Seated" : table.activeAssignment ? "At table" : `Next ${formatVenueTime(detail.startsAt)}`}
+            {table.activeSeating ? "Seated" : table.activeAssignment ? "At table" : `Next ${formatVenueTime(detail.startsAt, businessTimezone)}`}
           </p>
         </div>
       ) : table.operationalStateReason ? (
@@ -283,7 +286,7 @@ function SetupPanel({ onChanged }: { onChanged: () => Promise<void> }) {
   );
 }
 
-export default function FloorClient({ businessId, canManage, hasReservations, hasQueue }: FloorClientProps) {
+export default function FloorClient({ businessId, canManage, hasReservations, hasQueue, businessTimezone }: FloorClientProps) {
   const [board, setBoard] = useState<FloorPlanBoard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -446,13 +449,13 @@ export default function FloorClient({ businessId, canManage, hasReservations, ha
                 ) : board.areas.map((area) => (
                   <section key={area.id}>
                     <div className="mb-3 flex items-baseline justify-between"><h2 className="text-lg font-semibold">{area.name}</h2><span className="figures text-xs text-muted-foreground">{area.tables.length} tables</span></div>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{area.tables.map((table) => <TableCard key={table.id} table={table} onClick={() => { setQrUrl(null); setSelectedTable(table); }} />)}</div>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{area.tables.map((table) => <TableCard key={table.id} table={table} businessTimezone={businessTimezone} onClick={() => { setQrUrl(null); setSelectedTable(table); }} />)}</div>
                   </section>
                 ))}
               </div>
               <aside className="space-y-6 xl:sticky xl:top-4 xl:self-start">
-                {hasReservations && <section><div className="mb-2 flex items-center justify-between"><p className="eyebrow">Unassigned arrivals</p><span className="figures text-xs text-muted-foreground">{board.unassignedReservations.length}</span></div><div className="space-y-2">{board.unassignedReservations.length ? board.unassignedReservations.map((party) => <PartyCard key={party.sourceId} party={party} actionLabel="Seat" secondaryLabel="Assign" onAction={() => startSelection(party, "seat")} onSecondary={() => startSelection(party, "assign")} />) : <p className="rounded-lg bg-muted/40 px-3 py-4 text-sm text-muted-foreground">No unassigned arrivals.</p>}</div></section>}
-                {hasQueue && <section><div className="mb-2 flex items-center justify-between"><p className="eyebrow">Walk-ins</p><span className="figures text-xs text-muted-foreground">{board.queueEntries.length}</span></div><div className="space-y-2">{board.queueEntries.length ? board.queueEntries.map((party) => <PartyCard key={party.sourceId} party={party} actionLabel="Seat" secondaryLabel={party.assignedTableIds.length ? "Reassign" : "Assign"} onAction={() => startSelection(party, "seat", party.assignedTableIds)} onSecondary={() => startSelection(party, "assign", party.assignedTableIds)} />) : <p className="rounded-lg bg-muted/40 px-3 py-4 text-sm text-muted-foreground">No active walk-ins.</p>}</div></section>}
+                {hasReservations && <section><div className="mb-2 flex items-center justify-between"><p className="eyebrow">Unassigned arrivals</p><span className="figures text-xs text-muted-foreground">{board.unassignedReservations.length}</span></div><div className="space-y-2">{board.unassignedReservations.length ? board.unassignedReservations.map((party) => <PartyCard key={party.sourceId} party={party} actionLabel="Seat" secondaryLabel="Assign" businessTimezone={businessTimezone} onAction={() => startSelection(party, "seat")} onSecondary={() => startSelection(party, "assign")} />) : <p className="rounded-lg bg-muted/40 px-3 py-4 text-sm text-muted-foreground">No unassigned arrivals.</p>}</div></section>}
+                {hasQueue && <section><div className="mb-2 flex items-center justify-between"><p className="eyebrow">Walk-ins</p><span className="figures text-xs text-muted-foreground">{board.queueEntries.length}</span></div><div className="space-y-2">{board.queueEntries.length ? board.queueEntries.map((party) => <PartyCard key={party.sourceId} party={party} actionLabel="Seat" secondaryLabel={party.assignedTableIds.length ? "Reassign" : "Assign"} businessTimezone={businessTimezone} onAction={() => startSelection(party, "seat", party.assignedTableIds)} onSecondary={() => startSelection(party, "assign", party.assignedTableIds)} />) : <p className="rounded-lg bg-muted/40 px-3 py-4 text-sm text-muted-foreground">No active walk-ins.</p>}</div></section>}
               </aside>
             </div>
           )}

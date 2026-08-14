@@ -10,11 +10,13 @@ interface DashboardLayoutWrapperProps {
   variant: "customer" | "business";
   floatingSidebarContent?: React.ReactNode;
   children: React.ReactNode;
+  docsAssistantEnabled?: boolean;
 }
 
 export function DashboardLayoutWrapper({
   variant,
   children,
+  docsAssistantEnabled = false,
 }: DashboardLayoutWrapperProps) {
   const [searchOpen, setSearchOpen] = React.useState(false);
 
@@ -34,7 +36,7 @@ export function DashboardLayoutWrapper({
             onSearchClick={() => setSearchOpen(true)}
           />
         }
-        trailing={<DashboardHeaderTrailing variant={variant} />}
+        trailing={<DashboardHeaderTrailing variant={variant} docsAssistantEnabled={docsAssistantEnabled} />}
       />
 
       {children}

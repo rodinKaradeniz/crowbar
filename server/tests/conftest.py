@@ -92,13 +92,16 @@ async def client(db_session: AsyncSession) -> AsyncClient:
 
 @pytest_asyncio.fixture
 async def auth_headers(client: AsyncClient) -> dict[str, str]:
-    """Register a default customer and return Authorization headers."""
+    """Register a default business owner and return Authorization headers."""
     resp = await client.post(
-        "/api/auth/register",
+        "/api/auth/register-business",
         json={
             "email": "testuser@example.com",
-            "password": "password123",
+            "password": "password1234",
             "name": "Test User",
+            "phone": "+4915112345678",
+            "business_name": "Test Business",
+            "business_slug": "test-business",
         },
     )
     token = resp.json()["access_token"]

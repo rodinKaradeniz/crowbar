@@ -28,10 +28,9 @@ import {
   toggleModifier,
 } from "@/lib/cart";
 import type { Menu, MenuItem, ModifierGroup, SelectedModifier } from "@/types";
+import { formatMoney } from "@/lib/money";
 
-function money(n: number): string {
-  return `€${n.toFixed(2)}`;
-}
+const money = formatMoney;
 
 function generateIdempotencyKey(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;

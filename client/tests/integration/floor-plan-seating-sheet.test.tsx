@@ -86,7 +86,7 @@ describe("FloorPlanSeatingSheet", () => {
         onOpenChange={vi.fn()}
         party={party}
         mode="assign"
-        tables={[{ ...table("t1", "T1", 4), displayState: "occupied", activeSeating: { seatingId: "seat-1", source: party, openedAt: "2026-01-01T12:00:00Z" } }]}
+        tables={[{ ...table("t1", "T1", 4), displayState: "occupied", activeSeating: { seatingId: "seat-1", source: party, tableIds: ["t1"], openedAt: "2026-01-01T12:00:00Z" } }]}
         canOverride={false}
         onConfirm={onConfirm}
       />,

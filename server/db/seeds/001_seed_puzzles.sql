@@ -445,7 +445,21 @@ INSERT INTO stock_movements (id, business_id, item_id, movement_type, quantity_d
 -- Evening 1: Friday -7 days (7 orders)
 -- Evening 2: Saturday -6 days (8 orders)
 -- Evening 3: Sunday -5 days (5 orders)
-INSERT INTO orders (id, business_id, session_token, table_identifier, status, idempotency_key, total_amount, placed_at) VALUES
+INSERT INTO orders (
+  id, business_id, session_token, table_identifier, status, idempotency_key,
+  request_fingerprint, total_amount, placed_at
+)
+SELECT
+  id::uuid,
+  business_id::uuid,
+  session_token,
+  table_identifier,
+  status,
+  idempotency_key,
+  encode(digest(business_id || ':' || idempotency_key, 'sha256'), 'hex'),
+  total_amount,
+  placed_at
+FROM (VALUES
 -- Friday evening
 ('00000000-0000-0000-0011-000000000001', '00000000-0000-0000-0000-000000000002', 'pzl-s-fri-001', 'T1', 'served', 'puzzles-order-fri-001', 37.00, DATE_TRUNC('day', NOW()) - INTERVAL '7 days' + INTERVAL '20 hours 15 minutes'),
 ('00000000-0000-0000-0011-000000000002', '00000000-0000-0000-0000-000000000002', 'pzl-s-fri-002', 'T2', 'served', 'puzzles-order-fri-002', 26.00, DATE_TRUNC('day', NOW()) - INTERVAL '7 days' + INTERVAL '20 hours 30 minutes'),
@@ -468,7 +482,11 @@ INSERT INTO orders (id, business_id, session_token, table_identifier, status, id
 ('00000000-0000-0000-0011-000000000017', '00000000-0000-0000-0000-000000000002', 'pzl-s-sun-002', 'T2', 'served', 'puzzles-order-sun-002', 36.00, DATE_TRUNC('day', NOW()) - INTERVAL '5 days' + INTERVAL '20 hours 30 minutes'),
 ('00000000-0000-0000-0011-000000000018', '00000000-0000-0000-0000-000000000002', 'pzl-s-sun-003', 'T3', 'served', 'puzzles-order-sun-003', 39.00, DATE_TRUNC('day', NOW()) - INTERVAL '5 days' + INTERVAL '21 hours'),
 ('00000000-0000-0000-0011-000000000019', '00000000-0000-0000-0000-000000000002', 'pzl-s-sun-004', 'T4', 'served', 'puzzles-order-sun-004', 38.00, DATE_TRUNC('day', NOW()) - INTERVAL '5 days' + INTERVAL '21 hours 30 minutes'),
-('00000000-0000-0000-0011-000000000020', '00000000-0000-0000-0000-000000000002', 'pzl-s-sun-005', 'T5', 'served', 'puzzles-order-sun-005', 38.00, DATE_TRUNC('day', NOW()) - INTERVAL '5 days' + INTERVAL '22 hours');
+('00000000-0000-0000-0011-000000000020', '00000000-0000-0000-0000-000000000002', 'pzl-s-sun-005', 'T5', 'served', 'puzzles-order-sun-005', 38.00, DATE_TRUNC('day', NOW()) - INTERVAL '5 days' + INTERVAL '22 hours')
+) AS seeded_orders(
+  id, business_id, session_token, table_identifier, status, idempotency_key,
+  total_amount, placed_at
+);
 
 -- ─── Order Line Items ─────────────────────────────────────────────────────────
 INSERT INTO order_line_items (id, order_id, item_id, item_name, quantity, unit_price, routing_tag) VALUES

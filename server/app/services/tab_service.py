@@ -188,7 +188,7 @@ async def add_order_to_tab(
     business_id: UUID,
     tab_id: UUID,
     request: OrderPlaceRequest,
-) -> Order:
+) -> tuple[Order, bool]:
     """Thin wrapper: create the order via order_service, then stamp tab_id.
 
     Callers must validate that the tab exists and is open (see router).
@@ -197,18 +197,19 @@ async def add_order_to_tab(
     if tab is None or tab.status != "open":
         raise ValueError("Tab is not open")
     # Staff-entered order (in-person) — skip the customer self-service age gate.
-    order = await order_service.place_order(
+    order, created = await order_service.place_order(
         db,
         business_id,
         request,
         require_age_confirmation=False,
         table_id=tab.table_id,
         tab_id=tab_id,
+        customer_id=tab.customer_id,
         channel="staff",
     )
     await db.flush()
     await db.refresh(order, ["line_items", "status_timeline"])
-    return order
+    return order, created
 
 
 async def close_tab(

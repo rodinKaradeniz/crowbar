@@ -22,21 +22,22 @@ Crowbar supports the following roles:
 
 | Role | Permissions |
 |------|-------------|
-| **Owner** | Full access to all business features, including billing and account deletion. Only one owner per business. |
+| **Owner** | Full access to venue configuration, staff authority, and account deletion. Crowbar has no MVP billing workflow. |
 | **Manager** | Can manage reservations, customers, staff, and business settings. Cannot delete the business or change the owner. |
 | **Staff** | Can view and manage reservations and customers. Limited access to business settings. |
 
 ## Adding Staff Members
 
-Staff members are added when they register an account and select your business. As the business owner or manager, you can:
+Staff members join through an invitation from an owner or manager:
 
 1. Go to **Staff** in the sidebar.
-2. View all current team members.
-3. Update roles as needed.
+2. Choose **Invite staff**, enter their email, and assign a role you are
+   authorized to manage.
+3. If delivery fails, retry or revoke the pending invitation from the same page.
 
-<Callout type="info">
-A staff invite-by-email flow is on the roadmap. For now, new team members need to register their own account and associate it with your business during sign-up.
-</Callout>
+The invitation link expires, is stored only as a hash, and can be used once.
+Managers can invite and manage ordinary staff; owner and manager authority stays
+with an owner.
 
 ## Changing a Staff Member's Role
 

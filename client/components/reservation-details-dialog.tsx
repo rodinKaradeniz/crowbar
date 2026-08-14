@@ -1,6 +1,5 @@
 "use client";
 
-import { format, parseISO } from "date-fns";
 import { CalendarClock, Clock, Users, Tag } from "lucide-react";
 import {
   Dialog,
@@ -15,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { isReservationReschedulable } from "@/lib/availability";
 import { ReservationOverrideNotice } from "@/components/reservation-override-notice";
 import type { ReactNode } from "react";
+import { formatBusinessTime } from "@/lib/business-time";
 
 interface ReservationDetailsDialogProps {
   reservation: Reservation | null;
@@ -26,6 +26,7 @@ interface ReservationDetailsDialogProps {
   customers?: CustomerResponse[];
   onReschedule?: (reservation: Reservation) => void;
   currentTime?: string;
+  businessTimezone: string;
   tablePlan?: ReactNode;
 }
 
@@ -39,6 +40,7 @@ export function ReservationDetailsDialog({
   customers = [],
   onReschedule,
   currentTime,
+  businessTimezone,
   tablePlan,
 }: ReservationDetailsDialogProps) {
   if (!reservation) return null;
@@ -75,7 +77,7 @@ export function ReservationDetailsDialog({
           <div className="space-y-3 pt-4 border-t">
             <div className="contact-row">
               <Clock className="contact-icon" />
-              <span>{format(parseISO(reservation.time), "h:mm a")}</span>
+              <span>{formatBusinessTime(reservation.time, businessTimezone)}</span>
             </div>
             <div className="contact-row">
               <Users className="contact-icon" />
@@ -110,7 +112,7 @@ export function ReservationDetailsDialog({
                 <p className="section-subtitle">{reservation.note}</p>
               </div>
             )}
-            <ReservationOverrideNotice reservation={reservation} />
+            <ReservationOverrideNotice reservation={reservation} businessTimezone={businessTimezone} />
             {tablePlan && <div className="pt-2 border-t">{tablePlan}</div>}
           </div>
           {canReschedule && (

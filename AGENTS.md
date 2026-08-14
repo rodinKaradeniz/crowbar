@@ -30,6 +30,8 @@ For focused work, also read:
 - ML service or insight models: `ml/CONTEXT.md`
 - Deployment: `docs/deployment.md` (verified runbook and partial rollout state;
   deployment remains an explicit user-authorized activity)
+- MVP implementation or release verification: `docs/MVP_ACCEPTANCE.md`
+  (surface dispositions, risk register, and stage 1–7 evidence contract)
 - Product UI or visual language: `docs/DESIGN.md`
 - Project-specific agent skills: `docs/SKILLS.md`
 
@@ -91,6 +93,7 @@ docs/                durable project knowledge, by owner
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Present technical system shape and request/data flows |
 | [`docs/HISTORY.md`](docs/HISTORY.md) | Durable decisions, rationale, and meaningful discovered pitfalls |
 | [`docs/TODO.md`](docs/TODO.md) | Deliberately deferred work, known gaps, and delivery order |
+| [`docs/MVP_ACCEPTANCE.md`](docs/MVP_ACCEPTANCE.md) | MVP route inventory, authority trace, risk register, and stage 1–7 acceptance evidence |
 | [`docs/DESIGN.md`](docs/DESIGN.md) | Current visual and interaction system |
 | [`docs/SKILLS.md`](docs/SKILLS.md) | Project-local workflow-module strategy |
 
@@ -100,28 +103,33 @@ wins on working process. `HISTORY.md` explains why an existing behavior exists;
 
 ## Feature snapshot
 
-The operational loop is the confirmed delivery order: authoritative reservation
-availability and capacity; floor plan and tables; guest CRM; no-show
-protection; purchasing and cost control; then POS and payment integrations.
-Availability is complete locally; booking types can retain legacy count-guard
-compatibility or use shared cover capacity / atomic table allocation with a
-turn buffer. Floor plan/table management has its backend foundation,
-responsive Floor host board, manager setup UI, reservation table planning, and
-registered-table tab/QR ordering continuity. Guest CRM now has a dedicated
-profile, authoritative cross-workflow timeline, queue identity linking,
-service-context flags, notes/tags/preferences, public marketing consent
-provenance, manager privacy actions, and a one-shot 24-month retention job.
-Reservation protection now adds schedule-configured late-change, arrival-grace,
-reminder, and reconfirmation policies; signed guest management links; staff
-no-show records; and a future-reservation waitlist. Guests can join it from an
-unavailable date and staff can create, review, and issue one-at-a-time live
-offers from Reservations. The next product stage is purchasing and cost control.
-[docs/TODO.md](docs/TODO.md) owns every stage boundary and deferred item.
+Crowbar's first release target is a supervised pilot at a single-location bar
+in Germany. The MVP owns the non-fiscal operational loop: venue/staff setup;
+reservations and protection; future waitlist and current queue; areas, tables,
+assignments, and seatings; menu, QR/staff orders, fulfillment, and tabs;
+external settlement recording; stock, purchasing, cost control; guest CRM; and
+operational reporting. The venue's separate compliant register remains payment
+and fiscal authority. Crowbar does not take payment or issue receipts/invoices
+in this MVP, and product/code copy must say **settled externally** rather than
+implying payment processing.
 
-Migrations 023–030 are local only. Railway remains at migrations 001–022; its
-partially provisioned rollout is intentionally shelved and must not resume
-without explicit user authorization. [docs/deployment.md](docs/deployment.md)
-owns the verified resume point.
+Stages 0 and 1 are complete locally: the contract and release map are frozen;
+tenant/auth/order/inventory/reservation/CRM/time correctness is repaired;
+retained routes have consistent guards; dead MVP states are removed; and the
+full Stage 1 verification gate passes. Availability, the area-based host board,
+table planning/seating, registered-table tab/QR continuity, reservation
+protection, and the future-reservation waitlist remain the operational
+foundation. The next stage is Germany-ready tenant and operational tax
+configuration, followed by completing guest-to-table, ordering/external
+settlement, purchasing/cost control, staff/CRM/reporting, and the local release
+gate. [docs/TODO.md](docs/TODO.md) owns the exact 0–9 order, exit gates, and
+post-MVP deferrals.
+
+Migrations 023–036 are local only. Railway remains at migrations 001–022; its
+partially provisioned rollout is intentionally paused until stages 0–7 pass
+locally and the user explicitly authorizes deployment. The user plans to use
+Railway, but that intent is not authorization to mutate it.
+[docs/deployment.md](docs/deployment.md) owns the verified resume point.
 
 ## Commands
 
@@ -167,7 +175,9 @@ derivation, module guards, thin router/service/model boundaries, append-only
 migrations, commit-before-publish events, the httpOnly JWT/BFF flow, private
 ML access, snake_case-to-camelCase mapping, canonical money/day/customer
 helpers, milliliter liquid inventory, ledger-backed served reversals, and the
-planning-versus-occupancy distinction for tables.
+planning-versus-occupancy distinction for tables. Preserve the MVP boundary:
+tax profiles are tenant-configured operational estimates, and tab settlement
+is an audited assertion about the external register—not a payment/fiscal path.
 
 ## Definition of Done
 
@@ -192,6 +202,7 @@ accepted location under `.agents/skills/`.
 
 ## Verification status of this document
 
-Last reorganized 2026-07-29 against the repository layout, manifests,
-development launcher, architecture, history, and roadmap. This documentation
-change ran no application runtime checks.
+Last reconciled 2026-08-14 against the confirmed supervised-pilot boundary,
+repository layout, architecture, history, ordered roadmap, and stage-0 release
+inventory/acceptance map. This documentation change ran no application runtime
+checks.

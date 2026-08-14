@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useEffect, useRef } from "react";
+import { motion } from "framer-motion";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 
@@ -20,26 +20,11 @@ export const CardsCarousel = ({
   initialScroll?: number;
 }) => {
   const carouselRef = useRef<HTMLDivElement>(null);
-  const [scrollX, setScrollX] = useState(initialScroll);
 
   useEffect(() => {
-    if (!carouselRef.current) return;
-
-    const updateScrollPosition = () => {
-      if (carouselRef.current) {
-        setScrollX(carouselRef.current.scrollLeft);
-      }
-    };
-
-    updateScrollPosition();
-    carouselRef.current.addEventListener("scroll", updateScrollPosition);
-    window.addEventListener("resize", updateScrollPosition);
-
-    return () => {
-      carouselRef.current?.removeEventListener("scroll", updateScrollPosition);
-      window.removeEventListener("resize", updateScrollPosition);
-    };
-  }, []);
+    const carousel = carouselRef.current;
+    if (carousel) carousel.scrollLeft = initialScroll;
+  }, [initialScroll]);
 
   const scroll = (direction: "left" | "right") => {
     if (!carouselRef.current) return;
@@ -147,7 +132,6 @@ export const BlurImage = ({
 export const BusinessCard = ({
   card,
   index,
-  layout = false,
   onClick,
 }: {
   card: Card;

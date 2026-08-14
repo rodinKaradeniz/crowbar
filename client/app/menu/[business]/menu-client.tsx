@@ -28,6 +28,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ShoppingCart, Plus, Minus, ChefHat } from "lucide-react";
 import Link from "next/link";
 import { NightTheme } from "@/components/night-theme";
+import { formatMoney } from "@/lib/money";
 
 interface MenuClientProps {
   businessId: string;
@@ -174,14 +175,14 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                         {hhActive && item.happyHourPrice != null ? (
                           <span className="shrink-0 text-right">
                             <span className="figures text-sm text-primary">
-                              €{Number(item.happyHourPrice).toFixed(2)}
+                              {formatMoney(item.happyHourPrice)}
                             </span>{" "}
                             <span className="figures text-xs text-muted-foreground line-through">
-                              €{Number(item.price).toFixed(2)}
+                              {formatMoney(item.price)}
                             </span>
                           </span>
                         ) : (
-                          <span className="figures text-sm shrink-0">€{Number(item.price).toFixed(2)}</span>
+                          <span className="figures text-sm shrink-0">{formatMoney(item.price)}</span>
                         )}
                       </div>
                       {item.description && (
@@ -226,7 +227,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                 <Button className="w-full" size="lg">
                   <ShoppingCart className="h-5 w-5 mr-2" />
                   View Cart · {totalItems} item{totalItems !== 1 ? "s" : ""} ·{" "}
-                  <span className="figures">€{totalPrice.toFixed(2)}</span>
+                  <span className="figures">{formatMoney(totalPrice)}</span>
                 </Button>
               </Link>
             ) : (
@@ -252,15 +253,15 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                 {hhActive && selectedItem.happyHourPrice != null ? (
                   <div className="flex items-baseline gap-2">
                     <p className="figures text-base text-primary">
-                      €{Number(selectedItem.happyHourPrice).toFixed(2)}
+                      {formatMoney(selectedItem.happyHourPrice)}
                     </p>
                     <p className="figures text-sm text-muted-foreground line-through">
-                      €{Number(selectedItem.price).toFixed(2)}
+                      {formatMoney(selectedItem.price)}
                     </p>
                     <span className="eyebrow text-primary">Happy Hour</span>
                   </div>
                 ) : (
-                  <p className="figures text-base">€{Number(selectedItem.price).toFixed(2)}</p>
+                  <p className="figures text-base">{formatMoney(selectedItem.price)}</p>
                 )}
               </SheetHeader>
 
@@ -286,7 +287,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                           </Label>
                           {mod.priceDelta > 0 && (
                             <span className="figures text-xs text-muted-foreground">
-                              +€{Number(mod.priceDelta).toFixed(2)}
+                              +{formatMoney(mod.priceDelta)}
                             </span>
                           )}
                         </div>
@@ -328,11 +329,11 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                 <Button className="w-full" onClick={addToCart}>
                   Add to Cart ·{" "}
                   <span className="figures">
-                    €{(
+                    {formatMoney(
                       (effectivePrice(selectedItem, hhActive) +
                         modifierTotal(sheetMods)) *
-                      sheetQty
-                    ).toFixed(2)}
+                      sheetQty,
+                    )}
                   </span>
                 </Button>
               </SheetFooter>

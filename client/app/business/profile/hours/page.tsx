@@ -9,9 +9,11 @@ export default async function BusinessHours() {
   if (!user || user.type !== "staff") {
     redirect("/auth/login");
   }
+  if (user.role === "staff") redirect("/business/overview");
 
   const businessId = user.businessId;
   const business = await fetchBusiness(businessId);
+  if (!business?.onboardingComplete) redirect("/business/onboarding");
 
   return <BusinessHoursClient businessId={businessId} initialBusiness={business ?? undefined} />;
 }

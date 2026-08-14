@@ -29,19 +29,21 @@ Full role switcher requires:
 
 ## Payments
 
-**Stripe integration** — infrastructure is partially in place:
-- `requires_payment`, `payment_amount`, `stripe_payment_intent_id` columns exist on `reservations`
-- `PaymentStep` component scaffolded in `client/components/payment-step.tsx`
-- `send_payment_receipt` placeholder in `server/app/services/email_service.py`
-
-Deferred from Phase 1 to keep the onboarding wizard simple and avoid PCI scope.
+**Historical only:** migration 013 removed the earlier payment data stubs. The
+confirmed MVP records only that a tab was **settled externally** after the
+venue uses its separate compliant register. Payment collection, receipts,
+refunds, deposits/card holds, TSE, and DSFinV-K now belong to the post-MVP
+German fiscal POS/payment program in `docs/TODO.md`. Do not revive these legacy
+stubs as an MVP shortcut. Unused payment-provider packages were removed during
+Stage 1.
 
 ---
 
-## Staff Invitations
+## Staff Invitations — Resolved
 
-**Invite-by-email flow** — currently staff are linked directly to a user account with no invite-token mechanism.
-Business owners cannot invite staff who don't already have an account. A token-based invite email flow is needed.
+Stage 1 added hashed expiring single-use tokens, pending visibility,
+revoke/resend and duplicate handling, role validation, and truthful delivery
+state. `docs/TODO.md` Stage 6 retains only the broader permission/audit matrix.
 
 ---
 
@@ -54,8 +56,8 @@ The `notification_channels` JSONB column on businesses is already multi-channel 
 
 ## Reviews System
 
-A reviews placeholder exists on the public profile page (`/reserve/[slug]`).
-Needs:
+The unauthoritative public placeholder was removed in Stage 1. A future real
+reviews system would need:
 - `reviews` database table (business_id, customer_id, rating, body, created_at)
 - Moderation flag (hidden by default until approved)
 - Backend endpoints: POST, GET (paginated), DELETE (owner)
@@ -65,17 +67,17 @@ Needs:
 
 ## E.164 Phone Number Normalization
 
-SMS delivery via Twilio requires E.164 format (`+1xxxxxxxxxx`).
-Currently `sms_service.send_sms()` returns `False` for any number that doesn't start with `+`, but no normalization is attempted.
-A normalization step at reservation creation time (using a library like `phonenumbers`) would improve reliability.
+**Partially shipped:** Stage 1 removed historical US-default parsing from
+reservation and queue paths. Stage 2 still owns tenant-country-aware parsing,
+validation, display, and E.164 storage/delivery behavior.
 
 ---
 
 ## SMS Reminder Deduplication — Resolved
 
-Migration 011 added `sms_reminder_sent`, and the one-shot reminder job marks
-successful deliveries. This historical item is retained only to explain the
-deduplication field.
+Migration 036 added channel-specific attempt, delivery, error, and retry state.
+The migration-011 `sms_reminder_sent` field remains compatibility aggregate
+state rather than the authoritative deduplication mechanism.
 
 ---
 
@@ -86,21 +88,19 @@ No UI exists yet for creating/managing locations, or for filtering reservations/
 
 ---
 
-## Onboarding Redirect Hardening
+## Onboarding Redirect Hardening — Resolved
 
-The onboarding redirect (`business.onboardingComplete === false → /business/onboarding`) is only enforced on the `/business/overview` page.
-Other authenticated business pages (e.g. `/business/staff`, `/business/schedule`) do not check this flag.
-
-**Partially resolved (Phase 5.5):** Module pages (inventory, queue, menu, reservations, insights) now check `business.enabledModules` server-side and show a `<ModuleDisabled>` fallback — so they fetch the full business already. Adding an `onboardingComplete` check alongside would be trivial for those pages. The remaining gap is non-module pages (`/business/staff`, `/business/schedule`, `/business/customers`, `/business/requests`, `/business/profile`).
-
-Consider a middleware-level check or a shared server component guard for full coverage.
+Stage 1 added a shared business-route guard and explicit server page checks for
+retained module and non-module dashboard routes.
 
 ---
 
-## Widget CSP / frame-ancestors Hardening
+## Widget CSP / frame-ancestors Hardening — Resolved for MVP
 
-Currently `Content-Security-Policy: frame-ancestors *` is set on all `/reserve/*` routes, allowing any site to embed the booking form.
-For production, this should be locked down to a known allowlist of customer domains, or replaced with a per-business allowed-origins configuration.
+Reservation pages default to `frame-ancestors 'self'`. Deployment may provide
+exact HTTP(S) embedding origins through `RESERVATION_FRAME_ANCESTORS`; wildcard
+values are rejected. Per-business origin management remains optional future
+breadth.
 
 ---
 
@@ -133,7 +133,7 @@ Full customization requires:
 
 ---
 
-## Staff Admin Role Cleanup
+## Staff Admin Role Cleanup — Resolved
 
-The `Staff.role` type includes `"staff_admin"` (a legacy value) alongside the current `"owner" | "manager" | "staff"` hierarchy.
-Once all staff records are migrated to the new role scheme, `"staff_admin"` should be removed from the TypeScript type and the backend schema.
+Stage 1 constrains the frontend, backend schema, and database to the
+`owner | manager | staff` hierarchy.

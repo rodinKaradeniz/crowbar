@@ -22,15 +22,11 @@ class TestRegister:
             "/api/auth/register",
             json={
                 "email": "newuser@example.com",
-                "password": "password123",
+                "password": "password1234",
                 "name": "New User",
             },
         )
-        assert resp.status_code == 201
-        data = resp.json()
-        assert "access_token" in data
-        assert data["user_type"] == "customer"
-        assert data["user_id"]
+        assert resp.status_code == 404
 
     @pytest.mark.asyncio
     async def test_register_business_owner(
@@ -42,7 +38,7 @@ class TestRegister:
             "/api/auth/register-business",
             json={
                 "email": "owner@mybiz.com",
-                "password": "password123",
+                "password": "password1234",
                 "name": "Biz Owner",
                 "phone": "+31612345678",
                 "business_name": "My Business",
@@ -84,35 +80,41 @@ class TestRegister:
 class TestLogin:
     @pytest.mark.asyncio
     async def test_login_valid_credentials(self, client: AsyncClient):
-        # Register first
+        # Register a business owner first.
         await client.post(
-            "/api/auth/register",
+            "/api/auth/register-business",
             json={
                 "email": "login@example.com",
-                "password": "password123",
+                "password": "password1234",
                 "name": "Login User",
+                "phone": "+4915112345678",
+                "business_name": "Login Business",
+                "business_slug": "login-business",
             },
         )
 
         # Login
         resp = await client.post(
             "/api/auth/login",
-            json={"email": "login@example.com", "password": "password123"},
+            json={"email": "login@example.com", "password": "password1234"},
         )
         assert resp.status_code == 200
         data = resp.json()
         assert "access_token" in data
-        assert data["user_type"] == "customer"
+        assert data["user_type"] == "staff"
 
     @pytest.mark.asyncio
     async def test_login_invalid_password(self, client: AsyncClient):
         # Register first
         await client.post(
-            "/api/auth/register",
+            "/api/auth/register-business",
             json={
                 "email": "badpass@example.com",
                 "password": "correctpassword",
                 "name": "User",
+                "phone": "+4915112345679",
+                "business_name": "Bad Password Business",
+                "business_slug": "bad-password-business",
             },
         )
 
@@ -149,7 +151,7 @@ class TestGetMe:
         data = resp.json()
         assert data["email"] == "testuser@example.com"
         assert data["name"] == "Test User"
-        assert data["user_type"] == "customer"
+        assert data["user_type"] == "staff"
 
     @pytest.mark.asyncio
     async def test_get_me_staff_includes_business_id(self, client: AsyncClient):
@@ -158,7 +160,7 @@ class TestGetMe:
             "/api/auth/register-business",
             json={
                 "email": "staffme@example.com",
-                "password": "pass123",
+                "password": "password1234",
                 "name": "Staff User",
                 "phone": "+31600000000",
                 "business_name": "Test Biz",
@@ -185,7 +187,7 @@ class TestGetMe:
             "/api/auth/register-business",
             json={
                 "email": "ws-token@example.com",
-                "password": "pass123",
+                "password": "password1234",
                 "name": "Socket Owner",
                 "phone": "+31600000001",
                 "business_name": "Socket Biz",
@@ -231,7 +233,7 @@ class TestProfileUpdate:
             "/api/auth/change-password",
             headers=auth_headers,
             json={
-                "current_password": "password123",
+                "current_password": "password1234",
                 "new_password": "newpassword456",
             },
         )

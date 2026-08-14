@@ -36,7 +36,7 @@ class ServiceType(Base, UUIDMixin, TimestampMixin):
     description: Mapped[str | None] = mapped_column(Text)
     capacity: Mapped[int] = mapped_column(Integer, default=1)
     max_concurrent_bookings: Mapped[int | None] = mapped_column(
-        Integer, nullable=True
+        Integer, default=1, server_default="1", nullable=True
     )
     availability_resource_mode: Mapped[str] = mapped_column(
         String(16), default="legacy", nullable=False

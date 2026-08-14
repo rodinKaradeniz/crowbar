@@ -190,12 +190,22 @@ async def test_customer_cannot_access_business_routes(
         business_name="Biz 6", business_slug="biz-6",
     )
 
-    # Register a plain customer
-    resp = await client.post(
-        "/api/auth/register",
-        json={"email": "customer6@example.com", "password": "password123", "name": "Customer"},
+    # Legacy customer identities may still exist, but cannot self-register or
+    # access staff-only routes.
+    from app.models.user import User
+    from app.services.auth_service import create_access_token, hash_password
+
+    customer = User(
+        email="customer6@example.com",
+        password_hash=hash_password("password1234"),
+        name="Customer",
+        user_type="customer",
     )
-    token = resp.json()["access_token"]
+    db_session.add(customer)
+    await db_session.commit()
+    token = create_access_token(
+        str(customer.id), customer.user_type, customer.session_version
+    )
 
     for path in [
         f"/api/reservations/business/{biz.id}",

@@ -131,6 +131,13 @@ async def _get_guest_reservation(db: AsyncSession, token: str, *, for_update: bo
     )
     if reservation is None or reservation.guest_token_revision != revision:
         raise api_error(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "This reservation link is no longer valid")
+    if "reservations" not in (reservation.business.enabled_modules or []):
+        raise api_error(
+            status.HTTP_403_FORBIDDEN,
+            ErrorCode.MODULE_DISABLED,
+            "The reservations module is not enabled for this business",
+            {"module": "reservations"},
+        )
     return reservation
 
 
@@ -249,41 +256,50 @@ async def create_public_reservation(
 
     try:
         reservation = await reservation_service.create_public_reservation(db, data)
+    except reservation_service.ReservationIdempotencyConflict as exc:
+        raise api_error(
+            status.HTTP_409_CONFLICT,
+            "IDEMPOTENCY_CONFLICT",
+            str(exc),
+        ) from exc
     except AvailabilityError as exc:
         raise _availability_http_error(exc) from exc
+    created = getattr(reservation, "_idempotent_created", True)
     await db.refresh(reservation, ["business", "service_type", "customer"])
-    await notify_after_reservation_create(
-        db, reservation, customer_display_name=data.name
-    )
+    if created:
+        await notify_after_reservation_create(
+            db, reservation, customer_display_name=data.name
+        )
     await db.commit()
-    background_tasks.add_task(
-        _send_reservation_email,
-        to_email=reservation.email,
-        customer_name=data.name,
-        business_name=reservation.business.name if reservation.business else "",
-        service_type_name=reservation.service_type.name if reservation.service_type else "",
-        reservation_time=reservation.time,
-        duration_minutes=_reservation_duration_minutes(reservation),
-        guests=reservation.guests,
-        status=reservation.status,
-        reservation_id=str(reservation.id),
-        business_timezone=reservation.business.timezone if reservation.business else "UTC",
-        calendar_sequence=int(reservation.updated_at.timestamp()),
-        management_url=_reservation_management_url(reservation),
-    )
-    await publish(DomainEvent(
-        event_type="reservation.created",
-        business_id=str(reservation.business_id),
-        payload={
-            "reservation_id": str(reservation.id),
-            "customer_id": str(reservation.customer_id),
-            "service_type_id": str(reservation.service_type_id),
-            "status": reservation.status,
-            "time": reservation.time.isoformat(),
-            "ends_at": reservation.ends_at.isoformat(),
-            "source": "public",
-        },
-    ))
+    if created:
+        background_tasks.add_task(
+            _send_reservation_email,
+            to_email=reservation.email,
+            customer_name=data.name,
+            business_name=reservation.business.name if reservation.business else "",
+            service_type_name=reservation.service_type.name if reservation.service_type else "",
+            reservation_time=reservation.time,
+            duration_minutes=_reservation_duration_minutes(reservation),
+            guests=reservation.guests,
+            status=reservation.status,
+            reservation_id=str(reservation.id),
+            business_timezone=reservation.business.timezone if reservation.business else "UTC",
+            calendar_sequence=int(reservation.updated_at.timestamp()),
+            management_url=_reservation_management_url(reservation),
+        )
+        await publish(DomainEvent(
+            event_type="reservation.created",
+            business_id=str(reservation.business_id),
+            payload={
+                "reservation_id": str(reservation.id),
+                "customer_id": str(reservation.customer_id),
+                "service_type_id": str(reservation.service_type_id),
+                "status": reservation.status,
+                "time": reservation.time.isoformat(),
+                "ends_at": reservation.ends_at.isoformat(),
+                "source": "public",
+            },
+        ))
     return reservation
 
 
@@ -484,6 +500,13 @@ async def accept_public_waitlist_offer(
         business_id, entry_id, revision = parse_offer_token(offer_token)
     except WaitlistOfferTokenError as exc:
         raise api_error(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, str(exc)) from exc
+    business = await db.get(Business, business_id)
+    if business is None or "reservations" not in (business.enabled_modules or []):
+        raise api_error(
+            status.HTTP_404_NOT_FOUND,
+            ErrorCode.NOT_FOUND,
+            "This waitlist offer is no longer valid",
+        )
     entry = await db.scalar(
         select(ReservationWaitlistEntry).where(
             ReservationWaitlistEntry.id == entry_id,

@@ -12,6 +12,7 @@ than Alembic. Run commands from `server/` with `venv/` activated.
 | `python -m db.migrate seed` | Replace the Puzzles demo tenant without running migrations |
 | `docker compose up -d` | Start local PostgreSQL, Redis, and ML |
 | `docker compose down` | Stop local containers while keeping volumes |
+| `../scripts/verify-fresh-db.sh` | Recreate a name-restricted disposable database, run every migration, repeat the canonical seed, and assert stage-1 invariants |
 
 Seeding is a data mutation. The seed deletes and recreates its fixed Puzzles
 tenant and must not be run against shared or production data without explicit

@@ -12,7 +12,9 @@ export const handlers = [
         id: "user-1",
         email: "test@example.com",
         name: "Test User",
-        type: "customer",
+        type: "staff",
+        businessId: "biz-1",
+        role: "owner",
         createdAt: "2026-01-01T00:00:00Z",
       });
     }
@@ -22,6 +24,27 @@ export const handlers = [
   // Session check (BFF route used by AuthContext on mount)
   http.get("/api/auth/session", () => {
     return new HttpResponse(null, { status: 401 });
+  }),
+
+  http.get("/api/proxy/auth/me/context", () => {
+    return HttpResponse.json({
+      user: {
+        id: "user-1",
+        email: "test@example.com",
+        name: "Test User",
+        user_type: "staff",
+      },
+      business: {
+        id: "biz-1",
+        name: "Cool Bar",
+        slug: "cool-bar",
+        enabled_modules: ["reservations"],
+        onboarding_complete: true,
+        notification_channels: ["email"],
+        locations: [],
+      },
+      role: "owner",
+    });
   }),
 
   // Logout

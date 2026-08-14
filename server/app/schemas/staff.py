@@ -1,19 +1,23 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
-from pydantic import EmailStr
+from pydantic import EmailStr, field_validator
 
 from app.schemas.base import AppBaseModel
+from app.services.auth_service import validate_password
+
+
+StaffRole = Literal["owner", "manager", "staff"]
 
 
 class StaffCreate(AppBaseModel):
     user_id: UUID
-    business_id: UUID
-    role: str = "staff"
+    role: StaffRole = "staff"
 
 
 class StaffUpdate(AppBaseModel):
-    role: str | None = None
+    role: StaffRole
 
 
 class StaffResponse(AppBaseModel):
@@ -39,11 +43,19 @@ class StaffWithUserResponse(AppBaseModel):
 
 class StaffInviteRequest(AppBaseModel):
     email: EmailStr
-    role: str = "staff"
+    role: StaffRole = "staff"
 
 
 class StaffInviteResponse(AppBaseModel):
-    message: str
+    id: UUID
+    email: str
+    role: StaffRole
+    expires_at: datetime
+    accepted_at: datetime | None = None
+    revoked_at: datetime | None = None
+    sent_at: datetime | None = None
+    delivery_status: Literal["pending", "sent", "failed"]
+    delivery_error: str | None = None
 
 
 class InviteDetailsResponse(AppBaseModel):
@@ -55,3 +67,5 @@ class InviteDetailsResponse(AppBaseModel):
 class AcceptInviteRequest(AppBaseModel):
     name: str
     password: str
+
+    _valid_password = field_validator("password")(validate_password)

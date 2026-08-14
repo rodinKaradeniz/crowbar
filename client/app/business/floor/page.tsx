@@ -10,6 +10,7 @@ export default async function FloorPage() {
 
   const business = await fetchBusiness(user.businessId);
   if (!business) redirect("/auth/login");
+  if (!business.onboardingComplete) redirect("/business/onboarding");
   const hasOperationalModule = ["reservations", "queue", "ordering"].some((module) =>
     business.enabledModules.includes(module),
   );
@@ -21,6 +22,7 @@ export default async function FloorPage() {
       canManage={user.role === "owner" || user.role === "manager"}
       hasReservations={business.enabledModules.includes("reservations")}
       hasQueue={business.enabledModules.includes("queue")}
+      businessTimezone={business.timezone ?? "UTC"}
     />
   );
 }

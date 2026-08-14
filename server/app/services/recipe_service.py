@@ -59,13 +59,31 @@ async def set_recipe(
     business_id: UUID,
     ingredients: list[RecipeIngredientInput],
 ) -> list[dict] | None:
-    """Replace-all: delete the menu item's existing recipe and insert the new
-    ingredient rows. Ignores ingredients whose inventory item isn't in this
-    business. Returns the resulting recipe, or None if the menu item is unknown."""
+    """Atomically replace a recipe after every submitted ingredient validates."""
     if await _menu_item_in_business(db, menu_item_id, business_id) is None:
         return None
 
-    # Drop existing recipe lines for this menu item.
+    submitted_ids = [ingredient.inventory_item_id for ingredient in ingredients]
+    if len(submitted_ids) != len(set(submitted_ids)):
+        raise ValueError("A recipe cannot contain the same inventory item twice")
+    if submitted_ids:
+        valid_ids = set(
+            (
+                await db.scalars(
+                    select(InventoryItem.id).where(
+                        InventoryItem.id.in_(submitted_ids),
+                        InventoryItem.business_id == business_id,
+                        InventoryItem.is_active.is_(True),
+                    )
+                )
+            ).all()
+        )
+        if valid_ids != set(submitted_ids):
+            raise ValueError(
+                "Every recipe ingredient must be an active inventory item in this business"
+            )
+
+    # Only mutate after the complete replacement has validated.
     existing = await db.execute(
         select(MenuItemIngredient).where(
             MenuItemIngredient.menu_item_id == menu_item_id
@@ -75,15 +93,7 @@ async def set_recipe(
         await db.delete(row)
     await db.flush()
 
-    # Validate the referenced inventory items belong to this business, dedup by id.
-    seen: set[UUID] = set()
     for ing in ingredients:
-        if ing.inventory_item_id in seen:
-            continue
-        inv = await inventory_service.get_item(db, ing.inventory_item_id, business_id)
-        if inv is None:
-            continue
-        seen.add(ing.inventory_item_id)
         db.add(
             MenuItemIngredient(
                 menu_item_id=menu_item_id,
@@ -198,24 +208,28 @@ async def deduct_for_served_order(
         ingredients = result.scalars().all()
         for ing in ingredients:
             try:
-                inv = await inventory_service.get_item(
-                    db, ing.inventory_item_id, business_id
-                )
-                if inv is None:
-                    logger.warning(
-                        "Recipe ingredient %s missing inventory item %s; skipping",
-                        ing.id,
-                        ing.inventory_item_id,
+                async with db.begin_nested():
+                    inv = await inventory_service.get_item(
+                        db, ing.inventory_item_id, business_id
                     )
-                    continue
-                await inventory_service.apply_movement(
-                    db,
-                    inv,
-                    movement_type="sale",
-                    delta=-(ing.quantity * li.quantity),
-                    order_id=order.id,
-                    notes=f"Auto-deduct: {li.item_name} ×{li.quantity}",
-                )
+                    if inv is None:
+                        await inventory_service.record_discrepancy(
+                            db,
+                            business_id=business_id,
+                            order_id=order.id,
+                            item_id=ing.inventory_item_id,
+                            kind="deduction_missing_item",
+                            details=f"Recipe ingredient {ing.id} references an unavailable inventory item",
+                        )
+                        continue
+                    await inventory_service.apply_movement(
+                        db,
+                        inv,
+                        movement_type="sale",
+                        delta=-(ing.quantity * li.quantity),
+                        order_id=order.id,
+                        notes=f"Auto-deduct: {li.item_name} ×{li.quantity}",
+                    )
                 if inv.current_quantity is not None and inv.current_quantity <= 0:
                     depleted.add(inv.id)
             except Exception:  # noqa: BLE001 — never block a status transition
@@ -224,13 +238,40 @@ async def deduct_for_served_order(
                     ing.id,
                     order.id,
                 )
+                try:
+                    await inventory_service.record_discrepancy(
+                        db,
+                        business_id=business_id,
+                        order_id=order.id,
+                        item_id=ing.inventory_item_id,
+                        kind="deduction_failed",
+                        details=f"Automatic deduction failed for recipe ingredient {ing.id}",
+                    )
+                except Exception:  # noqa: BLE001
+                    logger.exception(
+                        "Failed to persist inventory discrepancy for order %s",
+                        order.id,
+                    )
                 continue
 
     if depleted:
         try:
-            await _disable_menu_items_for_ingredients(db, business_id, depleted)
+            async with db.begin_nested():
+                await _disable_menu_items_for_ingredients(db, business_id, depleted)
         except Exception:  # noqa: BLE001
             logger.exception("Auto-disable on depletion failed for order %s", order.id)
+            try:
+                await inventory_service.record_discrepancy(
+                    db,
+                    business_id=business_id,
+                    order_id=order.id,
+                    kind="auto_86_failed",
+                    details="Inventory reached depletion but automatic menu availability update failed",
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception(
+                    "Failed to persist auto-86 discrepancy for order %s", order.id
+                )
 
 
 async def reverse_deduction_for_order(

@@ -12,6 +12,8 @@ import { Trash2, CheckCircle2, Clock } from "lucide-react";
 import Link from "next/link";
 import { NightTheme } from "@/components/night-theme";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import { formatMoney } from "@/lib/money";
 
 const STATUS_LABEL: Record<string, string> = {
   received: "Order received",
@@ -127,7 +129,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
     if (cart.length === 0) return;
     if (cartHasAlcohol && !ageConfirmed) return;
     if (!tableToken) {
-      alert("Scan the QR code on your table to place an order.");
+      toast.error("Scan the QR code on your table to place an order.");
       return;
     }
     setPlacing(true);
@@ -151,7 +153,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
         sessionStorage.removeItem(`cart_${businessSlug}`);
       }
     } catch (e) {
-      alert((e as Error).message);
+      toast.error((e as Error).message);
     } finally {
       setPlacing(false);
     }
@@ -210,7 +212,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
               <div className="flex items-baseline gap-2.5">
                 <span className="eyebrow">Total</span>
                 <span className="leader-dots text-brass" aria-hidden />
-                <span className="figures text-base">€{Number(order.totalAmount).toFixed(2)}</span>
+                <span className="figures text-base">{formatMoney(order.totalAmount)}</span>
               </div>
             </div>
           ))
@@ -273,7 +275,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
                           <span className="figures text-muted-foreground">{ci.quantity}×</span> {ci.item.name}
                         </span>
                         <span className="leader-dots text-brass" aria-hidden />
-                        <span className="figures text-sm shrink-0">€{lineTotal.toFixed(2)}</span>
+                        <span className="figures text-sm shrink-0">{formatMoney(lineTotal)}</span>
                       </div>
                       {ci.selectedModifiers.length > 0 && (
                         <p className="text-xs text-muted-foreground mt-1">
@@ -327,7 +329,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
                 <div className="flex items-baseline gap-2.5 mb-3">
                   <span className="eyebrow">Total</span>
                   <span className="leader-dots text-brass" aria-hidden />
-                  <span className="figures text-base">€{totalPrice.toFixed(2)}</span>
+                  <span className="figures text-base">{formatMoney(totalPrice)}</span>
                 </div>
                 <Button
                   className="w-full"

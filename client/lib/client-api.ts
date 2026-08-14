@@ -205,8 +205,8 @@ function toReservation(r: Record<string, unknown>): Reservation {
     serviceTypeId: r.service_type_id as string,
     time: r.time as string,
     endsAt: r.ends_at as string,
-    phone: r.phone as string,
-    email: r.email as string,
+    phone: (r.phone as string | null) ?? undefined,
+    email: (r.email as string | null) ?? undefined,
     note: (r.note as string) || undefined,
     status: r.status as Reservation["status"],
     guests: r.guests as number,
@@ -372,9 +372,8 @@ export async function clientGetBusinesses(): Promise<Business[]> {
 
 export async function clientGetBusiness(id: string): Promise<Business | null> {
   try {
-    const data = await clientFetch<Record<string, unknown>>(
-      `/businesses/${id}`,
-    );
+    const data = await authFetch<Record<string, unknown>>("/businesses/current");
+    if (data.id !== id) return null;
     return toBusiness(data);
   } catch {
     return null;
@@ -653,6 +652,7 @@ export async function clientCreatePublicReservation(data: {
   guests: number;
   marketingEmailOptIn?: boolean;
   marketingSmsOptIn?: boolean;
+  idempotencyKey: string;
 }): Promise<Reservation> {
   const apiData: Record<string, unknown> = {
     business_id: data.businessId,
@@ -665,6 +665,7 @@ export async function clientCreatePublicReservation(data: {
     guests: data.guests,
     marketing_email_opt_in: data.marketingEmailOptIn ?? false,
     marketing_sms_opt_in: data.marketingSmsOptIn ?? false,
+    idempotency_key: data.idempotencyKey,
   };
 
   const result = await clientFetch<Record<string, unknown>>(
@@ -1096,24 +1097,6 @@ function toStaffMember(s: Record<string, unknown>): StaffMember {
     role: s.role as string,
     createdAt: s.created_at as string,
   };
-}
-
-export async function clientCreateStaff(data: {
-  userId: string;
-  businessId: string;
-  role?: string;
-}): Promise<StaffMember> {
-  const apiData = {
-    user_id: data.userId,
-    business_id: data.businessId,
-    role: data.role || "staff",
-  };
-
-  const result = await authFetch<Record<string, unknown>>("/staff", {
-    method: "POST",
-    body: JSON.stringify(apiData),
-  });
-  return toStaffMember(result);
 }
 
 export async function clientUpdateStaff(
@@ -1742,8 +1725,6 @@ export async function clientPlaceOrder(
       quantity: i.quantity,
       selected_modifiers: (i.selectedModifiers ?? []).map((m) => ({
         modifier_id: m.modifierId,
-        name: m.name,
-        price_delta: m.priceDelta,
       })),
       notes: i.notes,
     })),
@@ -1872,8 +1853,6 @@ export async function clientAddOrderToTab(
       quantity: i.quantity,
       selected_modifiers: (i.selectedModifiers ?? []).map((m) => ({
         modifier_id: m.modifierId,
-        name: m.name,
-        price_delta: m.priceDelta,
       })),
       notes: i.notes,
     })),
@@ -2075,16 +2054,6 @@ export async function clientDeleteMenuItem(
   await authFetch(`/ordering/${businessId}/items/${itemId}`, { method: "DELETE" });
 }
 
-export async function clientGetQrUrl(
-  businessId: string,
-  tableIdentifier: string,
-): Promise<{ url: string; tableIdentifier: string }> {
-  const result = await authFetch<{ url: string; table_identifier: string }>(
-    `/ordering/${businessId}/qr-url/${encodeURIComponent(tableIdentifier)}`,
-  );
-  return { url: result.url, tableIdentifier: result.table_identifier };
-}
-
 // ─── Ordering: Settings ───────────────────────────────────────────────────────
 
 export async function clientGetOrderingSettings(
@@ -2211,6 +2180,8 @@ function toInventoryItem(raw: Record<string, unknown>): InventoryItem {
     parQuantity: parQty,
     costPerUnit: toOptionalMoney(raw.cost_per_unit),
     notes: raw.notes as string | undefined,
+    isActive: raw.is_active as boolean,
+    archivedAt: (raw.archived_at as string) || undefined,
     isLowStock: parQty != null && currentQty < parQty,
     createdAt: raw.created_at as string,
     updatedAt: raw.updated_at as string,
@@ -2285,10 +2256,10 @@ export async function clientUpdateInventoryItem(
     containerVolumeMl?: number | null;
     // null clears default_pour_ml (removes the pours-remaining estimate).
     defaultPourMl?: number | null;
-    parQuantity?: number;
-    costPerUnit?: number;
-    notes?: string;
-    locationId?: string;
+    parQuantity?: number | null;
+    costPerUnit?: number | null;
+    notes?: string | null;
+    locationId?: string | null;
   },
 ): Promise<InventoryItem> {
   const body: Record<string, unknown> = {};
@@ -2325,6 +2296,37 @@ export async function clientGetLowStockItems(
     `/inventory/${businessId}/low-stock`,
   );
   return (result ?? []).map(toInventoryItem);
+}
+
+export interface InventoryDiscrepancy {
+  id: string;
+  businessId: string;
+  orderId?: string;
+  itemId?: string;
+  kind: string;
+  details: string;
+  status: "open" | "resolved";
+  createdAt: string;
+  resolvedAt?: string;
+}
+
+export async function clientGetInventoryDiscrepancies(
+  businessId: string,
+): Promise<InventoryDiscrepancy[]> {
+  const result = await authFetch<Record<string, unknown>[]>(
+    `/inventory/${businessId}/discrepancies`,
+  );
+  return (result ?? []).map((raw) => ({
+    id: raw.id as string,
+    businessId: raw.business_id as string,
+    orderId: (raw.order_id as string) || undefined,
+    itemId: (raw.item_id as string) || undefined,
+    kind: raw.kind as string,
+    details: raw.details as string,
+    status: raw.status as InventoryDiscrepancy["status"],
+    createdAt: raw.created_at as string,
+    resolvedAt: (raw.resolved_at as string) || undefined,
+  }));
 }
 
 export async function clientRecordStockMovement(
@@ -2486,14 +2488,62 @@ export async function clientGetHighRiskReservations(
 
 // ─── Staff Invitations ────────────────────────────────────────────────────────
 
+export interface StaffInvitation {
+  id: string;
+  email: string;
+  role: "owner" | "manager" | "staff";
+  expiresAt: string;
+  acceptedAt?: string;
+  revokedAt?: string;
+  sentAt?: string;
+  deliveryStatus: "pending" | "sent" | "failed";
+  deliveryError?: string;
+}
+
+function toStaffInvitation(value: Record<string, unknown>): StaffInvitation {
+  return {
+    id: value.id as string,
+    email: value.email as string,
+    role: value.role as StaffInvitation["role"],
+    expiresAt: value.expires_at as string,
+    acceptedAt: (value.accepted_at as string) || undefined,
+    revokedAt: (value.revoked_at as string) || undefined,
+    sentAt: (value.sent_at as string) || undefined,
+    deliveryStatus: value.delivery_status as StaffInvitation["deliveryStatus"],
+    deliveryError: (value.delivery_error as string) || undefined,
+  };
+}
+
 export async function clientSendInvite(
   email: string,
   role: string,
-): Promise<{ message: string }> {
-  return authFetch("/staff/invite", {
+): Promise<StaffInvitation> {
+  const result = await authFetch<Record<string, unknown>>("/staff/invite", {
     method: "POST",
     body: JSON.stringify({ email, role }),
   });
+  return toStaffInvitation(result);
+}
+
+export async function clientListInvitations(): Promise<StaffInvitation[]> {
+  const result = await authFetch<Record<string, unknown>[]>("/staff/invitations");
+  return (result ?? []).map(toStaffInvitation);
+}
+
+export async function clientRevokeInvitation(id: string): Promise<StaffInvitation> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/staff/invitations/${id}/revoke`,
+    { method: "POST" },
+  );
+  return toStaffInvitation(result);
+}
+
+export async function clientResendInvitation(id: string): Promise<StaffInvitation> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/staff/invitations/${id}/resend`,
+    { method: "POST" },
+  );
+  return toStaffInvitation(result);
 }
 
 export async function clientGetInvite(token: string): Promise<{

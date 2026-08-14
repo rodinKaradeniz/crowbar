@@ -51,8 +51,8 @@ export function ReservationEditDialog({
 
   useEffect(() => {
     if (!reservation || !open) return;
-    setPhone(reservation.phone);
-    setEmail(reservation.email);
+    setPhone(reservation.phone ?? "");
+    setEmail(reservation.email ?? "");
     setStatus(reservation.status);
     setNote(reservation.note ?? "");
   }, [open, reservation]);

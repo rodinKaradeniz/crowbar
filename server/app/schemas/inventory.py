@@ -26,6 +26,17 @@ class InventoryItemCreate(AppBaseModel):
     notes: str | None = None
     location_id: UUID | None = None
 
+    @model_validator(mode="after")
+    def _validate_unit_policy(self):
+        is_liquid = self.unit_type in {"bottle", "keg"}
+        if is_liquid and self.container_volume_ml is None:
+            raise ValueError("container_volume_ml is required for bottle and keg items")
+        if not is_liquid and (
+            self.container_volume_ml is not None or self.default_pour_ml is not None
+        ):
+            raise ValueError("Container and pour volumes are only valid for liquid items")
+        return self
+
 
 class InventoryItemUpdate(AppBaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
@@ -33,8 +44,8 @@ class InventoryItemUpdate(AppBaseModel):
     unit_type: str | None = Field(default=None, pattern=_UNIT_TYPE_PATTERN)
     container_volume_ml: Decimal | None = Field(default=None, gt=0)
     default_pour_ml: Decimal | None = Field(default=None, gt=0)
-    par_quantity: Decimal | None = None
-    cost_per_unit: Decimal | None = None
+    par_quantity: Decimal | None = Field(default=None, ge=0)
+    cost_per_unit: Decimal | None = Field(default=None, ge=0)
     notes: str | None = None
     location_id: UUID | None = None
 
@@ -52,6 +63,8 @@ class InventoryItemResponse(AppBaseModel):
     par_quantity: Decimal | None = None
     cost_per_unit: Decimal | None = None
     notes: str | None = None
+    is_active: bool
+    archived_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -87,7 +100,24 @@ class StockMovementCreate(AppBaseModel):
             raise ValueError("reason is required for waste movements.")
         if self.movement_type == "receive" and self.reason is not None:
             raise ValueError("reason is not valid for receive movements.")
+        if self.quantity_delta is not None:
+            if self.movement_type == "receive" and self.quantity_delta < 0:
+                raise ValueError("receive movements require a positive quantity_delta.")
+            if self.movement_type == "waste" and self.quantity_delta > 0:
+                raise ValueError("waste movements require a negative quantity_delta.")
         return self
+
+
+class InventoryDiscrepancyResponse(AppBaseModel):
+    id: UUID
+    business_id: UUID
+    order_id: UUID | None = None
+    item_id: UUID | None = None
+    kind: str
+    details: str
+    status: str
+    created_at: datetime
+    resolved_at: datetime | None = None
 
 
 class StockMovementResponse(AppBaseModel):
@@ -102,4 +132,3 @@ class StockMovementResponse(AppBaseModel):
     created_by: UUID | None = None
     alert_triggered: bool
     created_at: datetime
-

@@ -15,7 +15,7 @@ export interface Customer extends User {
 export interface Staff extends User {
   type: "staff";
   businessId: string;
-  role: "owner" | "manager" | "staff" | "staff_admin";
+  role: "owner" | "manager" | "staff";
 }
 
 // Auth
@@ -561,6 +561,8 @@ export interface InventoryItem {
   parQuantity?: number;
   costPerUnit?: number;
   notes?: string;
+  isActive: boolean;
+  archivedAt?: string;
   isLowStock: boolean; // computed in mapper: parQuantity != null && currentQuantity < parQuantity
   createdAt: string;
   updatedAt: string;
@@ -580,13 +582,25 @@ export interface StockMovement {
   businessId: string;
   locationId?: string;
   itemId: string;
-  movementType: "receive" | "adjust" | "waste" | "sale"; // 'sale' = auto recipe deduction
+  movementType: "receive" | "adjust" | "waste" | "sale" | "sale_reversal";
   quantityDelta: number;
   reason?: WasteReason; // structured cause on waste movements
   notes?: string;
   createdBy?: string;
   alertTriggered: boolean;
   createdAt: string;
+}
+
+export interface InventoryDiscrepancy {
+  id: string;
+  businessId: string;
+  orderId?: string;
+  itemId?: string;
+  kind: string;
+  details: string;
+  status: "open" | "resolved";
+  createdAt: string;
+  resolvedAt?: string;
 }
 
 // A recipe line: one inventory item consumed by a menu item. quantity is in the
@@ -617,8 +631,8 @@ export interface Reservation {
   time: string;
   /** Persisted occupied-interval end. Optional only for legacy mock fixtures. */
   endsAt?: string;
-  phone: string;
-  email: string;
+  phone?: string;
+  email?: string;
   note?: string;
   status: "confirmed" | "pending" | "cancelled" | "completed" | "no_show";
   guests: number;

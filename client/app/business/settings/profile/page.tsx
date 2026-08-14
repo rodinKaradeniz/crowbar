@@ -11,7 +11,6 @@ export default async function BusinessProfileSettings() {
 
   return (
     <BusinessProfileSettingsClient
-      userId={user.id}
       initialName={user.name}
       initialPhone={user.phone || ""}
       initialAvatar={user.avatar || ""}

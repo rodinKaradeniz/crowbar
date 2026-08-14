@@ -8,13 +8,15 @@ from app.models.booking_schedule import (
 from app.models.business import Business
 from app.models.customer import Customer, CustomerDataRequest, CustomerMarketingConsent, CustomerMergeAudit, CustomerNote, CustomerTag
 from app.models.happy_hour_window import HappyHourWindow
-from app.models.inventory import InventoryItem, StockMovement
+from app.models.inventory import InventoryDiscrepancy, InventoryItem, StockMovement
 from app.models.location import Location
 from app.models.menu import ItemLibrary, Menu, MenuCategory, MenuItem, Modifier, ModifierGroup
 from app.models.notification import Notification
+from app.models.password_reset_token import PasswordResetToken
 from app.models.order import Order, OrderLineItem, OrderStatusTimeline
 from app.models.recipe import MenuItemIngredient
 from app.models.reservation import Reservation
+from app.models.reservation_delivery_attempt import ReservationDeliveryAttempt
 from app.models.reservation_waitlist import ReservationWaitlistEntry
 from app.models.service_type import ServiceType
 from app.models.staff import Staff
@@ -39,8 +41,10 @@ __all__ = [
     "Staff",
     "ServiceType",
     "Reservation",
+    "ReservationDeliveryAttempt",
     "ReservationWaitlistEntry",
     "Notification",
+    "PasswordResetToken",
     "Menu",
     "MenuCategory",
     "MenuItem",
@@ -52,6 +56,7 @@ __all__ = [
     "OrderStatusTimeline",
     "InventoryItem",
     "StockMovement",
+    "InventoryDiscrepancy",
     "MenuItemIngredient",
     "Table",
     "TableArea",

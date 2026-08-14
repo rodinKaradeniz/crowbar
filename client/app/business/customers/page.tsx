@@ -41,6 +41,7 @@ export default async function BusinessCustomers() {
       visitors={visitors}
       serviceTypes={serviceTypes}
       customerSegments={segmentMap}
+      businessTimezone={business.timezone ?? "UTC"}
     />
   );
 }

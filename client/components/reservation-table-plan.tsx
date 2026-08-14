@@ -37,7 +37,7 @@ export function ReservationTablePlan({
   const party: FloorPlanParty = {
     sourceType: "reservation",
     sourceId: reservation.id,
-    name: guestName || reservation.phone,
+    name: guestName || reservation.phone || "Deleted guest",
     partySize: reservation.guests,
     status: reservation.status,
     startsAt: reservation.time,

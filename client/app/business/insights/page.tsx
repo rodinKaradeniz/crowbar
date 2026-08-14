@@ -22,6 +22,7 @@ export default async function InsightsPage() {
   if (!business) {
     redirect("/auth/login");
   }
+  if (!business.onboardingComplete) redirect("/business/onboarding");
 
   if (!hasModule(business.enabledModules ?? [], MODULE_KEYS.INSIGHTS)) {
     return <ModuleDisabled moduleName="Insights" />;
@@ -45,6 +46,7 @@ export default async function InsightsPage() {
       demandForecast={demandForecast}
       rawKpis={rawKpis}
       rawHighRisk={rawHighRisk}
+      businessTimezone={business.timezone ?? "UTC"}
     />
   );
 }

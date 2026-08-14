@@ -94,6 +94,16 @@ INVITE_ACCEPT_IP_LIMIT = RateLimitPolicy(
     limit=5,
     window_seconds=60 * 60,
 )
+PASSWORD_RESET_IP_LIMIT = RateLimitPolicy(
+    name="auth_password_reset_ip",
+    limit=10,
+    window_seconds=60 * 60,
+)
+PASSWORD_RESET_IDENTITY_LIMIT = RateLimitPolicy(
+    name="auth_password_reset_identity",
+    limit=3,
+    window_seconds=60 * 60,
+)
 
 # Public guest policies. Generous IP ceilings avoid penalizing venue Wi-Fi NAT.
 PUBLIC_IDENTITY_WRITE_LIMIT = RateLimitPolicy(

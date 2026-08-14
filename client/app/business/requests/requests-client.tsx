@@ -66,8 +66,8 @@ export default function RequestsClient({
           customer?.name?.toLowerCase().includes(searchLower) ||
           customer?.email?.toLowerCase().includes(searchLower) ||
           customer?.phone?.toLowerCase().includes(searchLower) ||
-          reservation.phone.toLowerCase().includes(searchLower) ||
-          reservation.email.toLowerCase().includes(searchLower);
+          reservation.phone?.toLowerCase().includes(searchLower) ||
+          reservation.email?.toLowerCase().includes(searchLower);
 
         if (!matchesSearch) return false;
       }
@@ -129,6 +129,7 @@ export default function RequestsClient({
         serviceTypes={serviceTypes}
         customers={customers}
         emptyMessage="No pending requests found."
+        businessTimezone={businessTimezone}
         actionButtons={(reservation) => {
           const segment = customerSegments?.[reservation.customerId];
           const hint = segment ? SEGMENT_HINT[segment] : null;

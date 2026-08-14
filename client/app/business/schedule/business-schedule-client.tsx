@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { addDays, addMinutes, format, isSameDay, isToday, parseISO } from "date-fns";
+import { addDays, addMinutes, format, isSameDay, parseISO } from "date-fns";
 import { Clock, Plus, Users } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Business, Reservation, ServiceType } from "@/types";
@@ -12,6 +12,7 @@ import { StaffReservationDialog } from "@/components/staff-reservation-dialog";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { calendarDateForSlot, formatSlotTime } from "@/lib/availability";
 
 interface BusinessScheduleClientProps {
   business: Business;
@@ -34,7 +35,12 @@ export default function BusinessScheduleClient({
   canOverride,
 }: BusinessScheduleClientProps) {
   const router = useRouter();
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const businessTimezone = business.timezone ?? "UTC";
+  const venueToday = useMemo(
+    () => calendarDateForSlot(currentTime, businessTimezone),
+    [businessTimezone, currentTime],
+  );
+  const [selectedDate, setSelectedDate] = useState<Date>(venueToday);
   const [selectedReservation, setSelectedReservation] =
     useState<Reservation | null>(null);
   const [reschedulingReservation, setReschedulingReservation] =
@@ -62,11 +68,11 @@ export default function BusinessScheduleClient({
       const hours = business.operatingHours[dayName];
       const isClosed = !hours || hours.closed === true;
       const reservations = initialReservations
-        .filter((r) => isSameDay(parseISO(r.time), date))
+        .filter((r) => isSameDay(calendarDateForSlot(r.time, businessTimezone), date))
         .sort((a, b) => parseISO(a.time).getTime() - parseISO(b.time).getTime());
       return { date, isClosed, reservations };
     });
-  }, [initialReservations, selectedDate, business]);
+  }, [initialReservations, selectedDate, business, businessTimezone]);
 
   const handleReservationClick = (reservation: Reservation) => {
     setSelectedReservation(reservation);
@@ -75,13 +81,13 @@ export default function BusinessScheduleClient({
   // End time = start + booked slot length (service-type duration, falling
   // back to the business default booking slot).
   const endTimeOf = (reservation: Reservation) => {
-    if (reservation.endsAt) return parseISO(reservation.endsAt);
+    if (reservation.endsAt) return reservation.endsAt;
     const start = parseISO(reservation.time);
     const duration =
       serviceTypeMap.get(reservation.serviceTypeId)?.duration ??
       business.reservationTime ??
       60;
-    return addMinutes(start, duration);
+    return addMinutes(start, duration).toISOString();
   };
 
   return (
@@ -143,7 +149,7 @@ export default function BusinessScheduleClient({
                   <span
                     className={cn(
                       "figures text-6xl sm:text-8xl font-bold leading-none tracking-tighter",
-                      isToday(date) ? "text-foreground" : "text-foreground/80",
+                      isSameDay(date, venueToday) ? "text-foreground" : "text-foreground/80",
                     )}
                   >
                     {format(date, "dd")}
@@ -151,7 +157,7 @@ export default function BusinessScheduleClient({
                   <span
                     className={cn(
                       "eyebrow mt-2",
-                      isToday(date) ? "text-primary" : "text-muted-foreground",
+                      isSameDay(date, venueToday) ? "text-primary" : "text-muted-foreground",
                     )}
                   >
                     {format(date, "EEE")}
@@ -159,7 +165,7 @@ export default function BusinessScheduleClient({
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
                   {format(date, "MMMM yyyy")}
-                  {isToday(date) && (
+                  {isSameDay(date, venueToday) && (
                     <span className="ml-1.5 inline-block rounded-full bg-lager px-1.5 py-0.5 text-[10px] font-medium text-porter align-middle">
                       Today
                     </span>
@@ -179,7 +185,6 @@ export default function BusinessScheduleClient({
                   </div>
                 ) : (
                   reservations.map((reservation) => {
-                    const start = parseISO(reservation.time);
                     const end = endTimeOf(reservation);
                     const serviceType = serviceTypeMap.get(reservation.serviceTypeId);
                     const customerInfo = customerMap.get(reservation.customerId);
@@ -192,8 +197,8 @@ export default function BusinessScheduleClient({
                         className="w-full text-left rounded-lg bg-card border border-border/40 hover:border-primary/50 transition-colors px-4 py-3 flex items-start gap-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                       >
                         <div className="shrink-0 w-24">
-                          <p className="figures text-sm font-semibold">{format(start, "HH:mm")}</p>
-                          <p className="figures text-xs text-muted-foreground">–{format(end, "HH:mm")}</p>
+                          <p className="figures text-sm font-semibold">{formatSlotTime(reservation.time, businessTimezone)}</p>
+                          <p className="figures text-xs text-muted-foreground">–{formatSlotTime(end, businessTimezone)}</p>
                         </div>
                         <span
                           className="w-0.5 self-stretch rounded-full shrink-0"
@@ -236,6 +241,7 @@ export default function BusinessScheduleClient({
         serviceTypes={serviceTypes}
         customers={customers}
         currentTime={currentTime}
+        businessTimezone={businessTimezone}
         onReschedule={(reservation) => {
           setSelectedReservation(null);
           setReschedulingReservation(reservation);

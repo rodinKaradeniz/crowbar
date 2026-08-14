@@ -85,7 +85,9 @@ async def get_public_menu(
     db: AsyncSession = Depends(get_db),
 ):
     """Returns the active menu with all categories, items, and modifier groups."""
-    await _load_business_or_404(db, business_id)
+    business = await _load_business_or_404(db, business_id)
+    if "ordering" not in (business.enabled_modules or []):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Menu not found")
     menu = await menu_service.get_active_menu(db, business_id)
     if menu is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active menu found")
@@ -118,6 +120,8 @@ async def place_order(
     )
 
     b = await _load_business_or_404(db, business_id)
+    if "ordering" not in (b.enabled_modules or []):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ordering not found")
     if not getattr(b, "is_accepting_orders", True):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -146,29 +150,38 @@ async def place_order(
             table_id=table.id,
             channel="qr",
         )
-        order = await order_service.place_order(
+        order, created = await order_service.place_order(
             db,
             business_id,
             body,
             table_id=table.id,
             tab_id=tab.id,
+            customer_id=tab.customer_id,
             channel="qr",
         )
-    except (order_service.AgeConfirmationRequired, table_qr_service.TableQrError) as e:
+    except order_service.OrderIdempotencyConflict as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except (
+        order_service.AgeConfirmationRequired,
+        order_service.OrderValidationError,
+        table_qr_service.TableQrError,
+        ValueError,
+    ) as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
         )
     await db.commit()
-    await publish(DomainEvent(
-        event_type="order.placed",
-        business_id=str(business_id),
-        payload={"order_id": str(order.id), "tab_id": str(tab.id)},
-    ))
-    await publish(DomainEvent(
-        event_type="floor_plan.tab_updated",
-        business_id=str(business_id),
-        payload={"tab_id": str(tab.id), "seating_id": str(seating.id)},
-    ))
+    if created:
+        await publish(DomainEvent(
+            event_type="order.placed",
+            business_id=str(business_id),
+            payload={"order_id": str(order.id), "tab_id": str(tab.id)},
+        ))
+        await publish(DomainEvent(
+            event_type="floor_plan.tab_updated",
+            business_id=str(business_id),
+            payload={"tab_id": str(tab.id), "seating_id": str(seating.id)},
+        ))
     return order
 
 
@@ -183,6 +196,9 @@ async def get_order_status(
     db: AsyncSession = Depends(get_db),
 ):
     """Customer checks their order(s) by session token."""
+    business = await _load_business_or_404(db, business_id)
+    if "ordering" not in (business.enabled_modules or []):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ordering not found")
     orders = await order_service.get_order_by_session(db, business_id, session_token)
     return orders
 
@@ -520,7 +536,14 @@ async def set_item_recipe(
 ):
     if business.id != business_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    recipe = await recipe_service.set_recipe(db, item_id, business_id, body.ingredients)
+    try:
+        recipe = await recipe_service.set_recipe(
+            db, item_id, business_id, body.ingredients
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
     if recipe is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
     await db.commit()
@@ -613,26 +636,6 @@ async def delete_modifier_group(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Modifier group not found")
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-# ─── Staff: QR URL helper ──────────────────────────────────────────────────────
-
-@router.get(
-    "/api/ordering/{business_id}/qr-url/{table_identifier}",
-    dependencies=[Depends(require_module("ordering"))],
-)
-async def get_qr_url(
-    business_id: UUID,
-    table_identifier: str,
-    current_user: User = Depends(get_current_user),
-    business: Business = Depends(get_current_business),
-):
-    if business.id != business_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    return {
-        "url": f"/menu/{business_id}?table={table_identifier}",
-        "table_identifier": table_identifier,
-    }
 
 
 # ─── WebSocket ─────────────────────────────────────────────────────────────────

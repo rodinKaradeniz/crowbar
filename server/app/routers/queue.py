@@ -44,7 +44,7 @@ def _get_business_id_or_404(business_id_str: str) -> UUID:
 async def _load_business_or_404(db: AsyncSession, business_id: UUID) -> Business:
     result = await db.execute(select(Business).where(Business.id == business_id))
     b = result.scalar_one_or_none()
-    if b is None:
+    if b is None or "queue" not in (b.enabled_modules or []):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Business not found")
     return b
 
@@ -121,6 +121,7 @@ async def leave_queue(
     db: AsyncSession = Depends(get_db),
 ):
     """Customer-initiated removal from the queue using their session token."""
+    await _load_business_or_404(db, business_id)
     await enforce_rate_limits(
         RateLimitCheck(
             policy=PUBLIC_WRITE_IP_LIMIT,
@@ -171,6 +172,7 @@ async def get_queue_status(
     session_token: str = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
+    await _load_business_or_404(db, business_id)
     status_dict = await queue_service.get_status_by_token(db, business_id, session_token)
     if status_dict is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Queue entry not found")

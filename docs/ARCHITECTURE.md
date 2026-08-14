@@ -1,6 +1,6 @@
 # Crowbar Architecture
 
-Last verified against the repository on 2026-07-28.
+Last verified against the repository and confirmed MVP boundary on 2026-08-13.
 
 ## Product Boundary
 
@@ -8,6 +8,15 @@ Crowbar is a modular operations platform for bars and restaurants. A business
 is the tenant and can enable reservations, queue, ordering, inventory, and
 insights independently. Public guests use slug-based reservation, queue, menu,
 and ordering routes; staff use an authenticated business dashboard.
+
+The first release target is a supervised pilot at a single-location German
+bar. Crowbar is the operational system through reservations, queue, floor,
+orders, externally settled tabs, stock, purchasing, costs, guest context, and
+operational reports. A separate compliant register remains payment and fiscal
+authority. The MVP does not implement payment processing, a cash register,
+receipts/invoices, TSE, DSFinV-K, or fiscal/accounting exports. Tenant tax
+profiles planned in the MVP are effective-dated operational estimates, not a
+fiscal subsystem.
 
 The current tenancy model assumes one active business association per staff
 login. Every newly created business receives a primary location, and migration
@@ -44,8 +53,9 @@ PostgreSQL, Redis, and ML. The explicit name prevents Docker from grouping the
 stack with unrelated repositories whose Compose directory is also named
 `server`. `scripts/dev.sh` starts FastAPI and Next.js as host processes after
 running migrations and demo seeds.
-The reservation-reminder job is a separate one-shot command in every
-environment and is scheduled hourly by Railway in production.
+The reservation-reminder job is a separate one-shot command. Its Railway Cron
+configuration declares an hourly production schedule, but that service is not
+deployed while the rollout remains paused.
 
 ## Repository Ownership
 
@@ -141,11 +151,22 @@ Neither the browser nor a request-supplied business ID selects the ML tenant.
 2. A Next.js auth route stores it in the `rk-token` httpOnly cookie.
 3. Browser code calls `/api/proxy/<backend-path>`.
 4. The proxy reads the cookie and attaches `Authorization: Bearer ...`.
-5. FastAPI verifies the token, loads the user, resolves the first staff
-   assignment's business, and applies role/module dependencies.
+5. FastAPI verifies the token, checks the user's current `session_version` and
+   active staff assignment, resolves the assignment's business, and applies
+   role/module dependencies. Password/security changes, staff removal, and
+   account disablement increment the version so existing HTTP and WebSocket
+   credentials stop working immediately.
 
 Do not read the cookie from client JavaScript or treat a browser-supplied
 business ID as authority.
+
+Staff accounts enter through the atomic business-owner registration path or a
+business-scoped invitation. Invitation and password-reset secrets are stored as
+hashes, expire, and are consumed once; request endpoints return generic
+responses, while invitation management records truthful send/failure state for
+authorized owners/managers. Role mutations enforce `owner > manager > staff`,
+prevent self-removal and removal of the last owner, and derive the tenant from
+the authenticated assignment rather than request identifiers.
 
 ### Public guest HTTP
 
@@ -184,8 +205,11 @@ merge audit records, optional profile fields, and anonymisation metadata.
 Public reservation capture records independent email/SMS marketing choices
 only after the reservation has resolved to its canonical customer. The
 one-shot `app.jobs.customer_retention` applies the documented 24-month
-inactivity policy; scheduling it is a deployment concern and is not assumed by
-the API process.
+inactivity policy from authoritative reservation, queue, tab, and order
+activity rather than profile edit time; scheduling it is a deployment concern
+and is not assumed by the API process. Concurrent identity resolution is
+serialized per tenant/contact key, consent merge is conservative, and tab
+orders inherit the canonical customer.
 
 ### Reservation protection
 
@@ -204,7 +228,11 @@ from queue entries. A host-selected offer expires after 15 minutes and its
 acceptance calls the authoritative reservation-creation path, including the
 resource claim. The reminder job resolves the service override or business
 default and sends transactional email with optional SMS; its existing
-`sms_reminder_sent` field remains the cross-channel de-duplication marker.
+legacy `sms_reminder_sent` field remains compatibility state. Migration 036's
+`reservation_delivery_attempts` is authoritative per message/channel: each
+attempt records count, failure or delivery, successful channels are not sent
+twice, and failed channels can be retried independently. Message formatting
+uses the business timezone and HTML email escapes user content.
 
 ### Real-time operational projections
 
@@ -232,11 +260,17 @@ same business board.
 
 ### Reservation reminders
 
-Railway starts `python -m app.jobs.reservation_reminders` at the beginning of
-each UTC hour. The short-lived process selects confirmed reservations 23–25
-hours ahead with `sms_reminder_sent=false`, checks the business SMS channel,
-sends through Twilio, marks successful deliveries, closes its database engine,
-and exits. There is no Celery worker or in-process scheduler.
+The checked-in Railway Cron configuration is designed to start
+`python -m app.jobs.reservation_reminders` at the beginning of each UTC hour
+once deployment resumes. The short-lived process selects confirmed
+reservations in the policy's reminder window, locks work with `SKIP LOCKED`,
+and creates/updates one `reservation_delivery_attempts` row per enabled email
+or SMS channel. Already delivered channels are skipped; failed channels retry
+and retain the last error and attempt count. The job renders the venue-local
+reservation time, updates the legacy aggregate flag only after all configured
+channels succeed, closes its database engine, and exits. There is no Celery
+worker or in-process scheduler, and the Railway reminder service is not
+currently deployed.
 
 ### Reservation availability
 
@@ -395,6 +429,29 @@ a seating locks and rejects an open seating tab, so settlement precedes the
 source visit's completion. QR rotation increments the table revision and
 invalidates earlier credentials without storing a reusable public secret.
 
+The current `tabs.settled_method` closure is simulated: it records a label and
+closes a tab without processing payment. MVP stage 4 replaces this ambiguous
+shape with an audited `settled_externally` assertion and immutable total
+snapshot. It must not grow tender, cash, card, receipt, refund, or fiscal
+semantics; those belong to the separate post-MVP German POS/payment program.
+
+### Authoritative order placement
+
+Public QR rounds and staff tab rounds call the same order service. It resolves
+the active business menu, category, item, modifier group and modifier rows,
+validates required/min/max selections and registered table/tab context, and
+computes item names, happy-hour price and modifier deltas from server-owned
+data. A missing, foreign, inactive, unavailable, unpublished or mixed-invalid
+cart rejects atomically before an order, event, stock movement or tab effect is
+created.
+
+Each order stores a canonical request fingerprint. Idempotency keys are unique
+within a business: exact retries return the existing order without publishing
+another event, different requests using the same key conflict, and concurrent
+public/staff retries converge on one persisted order. The Stage 2 tax snapshot
+will extend this server-owned resolution point rather than adding client tax
+authority.
+
 ### Inventory and order fulfillment
 
 - Countable inventory uses `unit_type=each`.
@@ -407,8 +464,13 @@ invalidates earlier credentials without storing a reusable public secret.
 - Deduction/reversal is best-effort and must not block a service status change.
 - Items depleted to zero are auto-disabled and must be manually re-enabled.
 - `inventory_items.current_quantity` is a maintained balance updated with each
-  movement. `recompute_quantity_from_movements` exists for reconciliation; it
-  is not the normal read path.
+  movement under a row lock. The reconciliation job compares that balance to
+  the movement ledger and persists visible discrepancies; it is not the normal
+  read path.
+- Inventory items archive rather than delete, recipe replacement rejects the
+  whole request when any ingredient is invalid or foreign, low-stock alerts
+  trigger only on threshold crossings, and served-deduction failures persist
+  an order-linked discrepancy without blocking fulfillment.
 - Item-library entries are templates. Adding one to a menu copies its values
   into a new business-owned menu item rather than retaining a live link, so a
   later template edit cannot silently change an active menu.
@@ -427,9 +489,12 @@ Backend integration tests do not run migrations. Their autouse fixture creates
 and drops ORM metadata in a dedicated `crowbar_test` PostgreSQL database. This
 means both migrations and ORM metadata require deliberate validation.
 
-Migrations 023–028 are implemented and validated locally against disposable
-fresh databases (023 also with the canonical seed). Railway remains at
-migrations 001–022 while deployment is shelved.
+Migrations 023–036 are implemented locally. On 2026-08-14 the repeatable
+`scripts/verify-fresh-db.sh` check applied the full 001–036 chain, ran the
+canonical seed twice, asserted its Stage 1 schema/relationship invariants, and
+cleaned the disposable database. The seed still lacks the complete Stage 7
+pilot scenario and therefore does not prove the full MVP demo journey. Railway
+remains at migrations 001–022 while deployment is paused.
 
 Migrations 005 and 006 were renamed early in the project. A database restored
 from an old backup may still contain their former names in `_migrations`; use
@@ -443,20 +508,26 @@ migration chain.
   rolling-window rate limits.
 - Resend: email; configuration is optional and services degrade gracefully.
 - Twilio: SMS; optional and failure-tolerant.
-- OpenAI: optional staff docs assistant in a Next.js server route. It embeds the
-  checked-in MDX chunks in process memory and calls Chat Completions.
+- OpenAI: optional staff docs assistant in a Next.js server route. It is hidden
+  and returns 404 unless both an explicit enable flag and API key are present;
+  authenticated use has bounded history/message/output sizes and a per-process
+  staff rate limit. It embeds checked-in MDX chunks in process memory and calls
+  Chat Completions. Stage 7 still owns distributed production abuse controls.
 - Local file storage: `storage_service.py`; S3 is only an intended extension.
-- Stripe packages remain in the frontend manifest, but payment data paths were
-  removed by migration 013 and settlement is currently simulated.
+- Payment provider packages and payment data paths are absent from the MVP.
+  Tab closure remains a legacy simulated label until Stage 4 replaces it with
+  the external-settlement assertion; it does not authorize payment work.
 
 ## Delivery State
 
 Railway is the confirmed deployment target. Managed PostgreSQL, Redis, and the
-public FastAPI service are online in EU West; the API health check and current
-migration chain have been verified. Next.js, ML, reminders, and durable uploads
-are not deployed yet, and the local rate-limit implementation is not active in
-Railway until its code is deployed with `RATE_LIMIT_ENABLED=true`.
-The rollout is intentionally shelved while product development continues;
-`docs/deployment.md` records the resume point. Production readiness work must
-still account for the web origin and CORS, secret management, storage, private
-ML networking, backups, observability, and multi-replica WebSocket behavior.
+public FastAPI service are online in EU West; API health and migrations 001–022
+were verified there. Next.js, ML, reminders, retention scheduling, and durable
+uploads are not deployed, and the local rate-limit implementation is not
+active in Railway until its code is deployed with `RATE_LIMIT_ENABLED=true`.
+The rollout remains paused until MVP stages 0–7 pass locally and the user
+explicitly authorizes deployment work. `docs/deployment.md` records the resume
+point. Production readiness still requires web origin/CORS, secrets, durable
+storage, private ML networking, backups/restore, observability, job/delivery
+alerts, release recovery, and an explicit single-replica or shared WebSocket
+fan-out decision.

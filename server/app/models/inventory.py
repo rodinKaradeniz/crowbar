@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Text, func
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Numeric, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -11,6 +11,12 @@ from app.models.base import Base, TimestampMixin, UUIDMixin
 
 class InventoryItem(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "inventory_items"
+    __table_args__ = (
+        CheckConstraint("par_quantity IS NULL OR par_quantity >= 0", name="ck_inventory_par_nonnegative"),
+        CheckConstraint("cost_per_unit IS NULL OR cost_per_unit >= 0", name="ck_inventory_cost_nonnegative"),
+        CheckConstraint("container_volume_ml IS NULL OR container_volume_ml > 0", name="ck_inventory_container_positive"),
+        CheckConstraint("default_pour_ml IS NULL OR default_pour_ml > 0", name="ck_inventory_pour_positive"),
+    )
 
     business_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -46,6 +52,10 @@ class InventoryItem(Base, UUIDMixin, TimestampMixin):
     par_quantity: Mapped[Decimal | None] = mapped_column(Numeric(10, 3), nullable=True)
     cost_per_unit: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="true", nullable=False
+    )
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     movements: Mapped[list["StockMovement"]] = relationship(
         back_populates="item",
@@ -102,3 +112,29 @@ class StockMovement(Base, UUIDMixin):
     )
 
     item: Mapped["InventoryItem"] = relationship(back_populates="movements")
+
+
+class InventoryDiscrepancy(Base, UUIDMixin):
+    __tablename__ = "inventory_discrepancies"
+
+    business_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("businesses.id", ondelete="CASCADE"), nullable=False
+    )
+    order_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("orders.id", ondelete="SET NULL")
+    )
+    item_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("inventory_items.id", ondelete="SET NULL")
+    )
+    kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    details: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(20), default="open", server_default="open", nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )

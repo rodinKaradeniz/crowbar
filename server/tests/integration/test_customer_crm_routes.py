@@ -6,13 +6,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.booking_schedule import BookingSchedule, BookingScheduleWindow
-from app.models.customer import Customer
+from app.models.customer import Customer, CustomerMarketingConsent
 from app.models.queue_entry import QueueEntry
 
 
 async def _owner(client: AsyncClient, suffix: str):
     response = await client.post("/api/auth/register-business", json={
-        "email": f"owner-{suffix}@example.com", "password": "pass123", "name": "Owner",
+        "email": f"owner-{suffix}@example.com", "password": "password1234", "name": "Owner",
         "phone": "+4915112345678", "business_name": f"{suffix} Bar", "business_slug": f"{suffix}-bar",
     })
     assert response.status_code == 201
@@ -40,6 +40,7 @@ async def test_public_opt_ins_and_queue_share_the_phone_keyed_guest(client: Asyn
         "business_id": business_id, "service_type_id": service_id, "time": future.isoformat(),
         "name": "Ada Guest", "phone": "+4915112345678", "email": "ada@example.com", "guests": 2,
         "marketing_email_opt_in": True, "marketing_sms_opt_in": False,
+        "idempotency_key": "crm-public-1",
     })
     assert created.status_code == 201, created.text
     guest_id = created.json()["customer_id"]
@@ -90,3 +91,114 @@ async def test_guest_dietary_provenance_and_privacy_actions_are_tenant_scoped(cl
     await db_session.refresh(guest)
     assert guest.anonymized_at is not None
     assert guest.phone is None and guest.dietary_details is None
+
+
+@pytest.mark.asyncio
+async def test_later_public_choice_withdraws_prior_marketing_consent(
+    client: AsyncClient, db_session: AsyncSession
+):
+    token, business_id = await _owner(client, "crm-withdraw")
+    service_id = await _open_schedule_and_service(
+        client, db_session, token, business_id
+    )
+    future = datetime.now(timezone.utc).replace(
+        hour=18, minute=0, second=0, microsecond=0
+    ) + timedelta(days=3)
+    first = await client.post(
+        "/api/reservations/public",
+        json={
+            "business_id": business_id,
+            "service_type_id": service_id,
+            "time": future.isoformat(),
+            "name": "Consent Guest",
+            "phone": "+4915333333333",
+            "email": "consent@example.com",
+            "guests": 2,
+            "marketing_email_opt_in": True,
+            "marketing_sms_opt_in": True,
+            "idempotency_key": "consent-first",
+        },
+    )
+    assert first.status_code == 201, first.text
+    second = await client.post(
+        "/api/reservations/public",
+        json={
+            "business_id": business_id,
+            "service_type_id": service_id,
+            "time": (future + timedelta(days=1)).isoformat(),
+            "name": "Consent Guest",
+            "phone": "+4915333333333",
+            "email": "consent@example.com",
+            "guests": 2,
+            "marketing_email_opt_in": False,
+            "marketing_sms_opt_in": False,
+            "idempotency_key": "consent-withdraw",
+        },
+    )
+    assert second.status_code == 201, second.text
+
+    profile = await client.get(
+        f"/api/customers/{first.json()['customer_id']}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert profile.status_code == 200
+    assert all(not item["is_consented"] for item in profile.json()["consents"])
+    assert all(item["withdrawn_at"] is not None for item in profile.json()["consents"])
+
+
+@pytest.mark.asyncio
+async def test_customer_merge_preserves_suppression_when_profiles_disagree(
+    client: AsyncClient, db_session: AsyncSession
+):
+    token, business_id = await _owner(client, "crm-suppression")
+    target = Customer(
+        business_id=business_id,
+        name="Target",
+        phone="+4915444444444",
+    )
+    source = Customer(
+        business_id=business_id,
+        name="Source",
+        phone="+4915555555555",
+    )
+    db_session.add_all([target, source])
+    await db_session.flush()
+    db_session.add_all(
+        [
+            CustomerMarketingConsent(
+                business_id=business_id,
+                customer_id=target.id,
+                channel="email",
+                is_consented=True,
+                source="public_reservation",
+                notice_version="eu-de-v1",
+            ),
+            CustomerMarketingConsent(
+                business_id=business_id,
+                customer_id=source.id,
+                channel="email",
+                is_consented=False,
+                source="public_reservation",
+                notice_version="eu-de-v1",
+                withdrawn_at=datetime.now(timezone.utc),
+            ),
+        ]
+    )
+    await db_session.commit()
+
+    merged = await client.post(
+        f"/api/customers/{target.id}/merge",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"source_customer_id": str(source.id)},
+    )
+
+    assert merged.status_code == 200, merged.text
+    consent = await db_session.scalar(
+        select(CustomerMarketingConsent).where(
+            CustomerMarketingConsent.customer_id == target.id,
+            CustomerMarketingConsent.channel == "email",
+        )
+    )
+    assert consent is not None
+    assert consent.is_consented is False
+    assert consent.withdrawn_at is not None

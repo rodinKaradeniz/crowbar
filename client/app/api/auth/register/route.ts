@@ -10,47 +10,19 @@ const API_BASE =
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { userType } = body;
-
-    if (!userType) {
-      return NextResponse.json(
-        { error: "User type is required" },
-        { status: 400 }
-      );
-    }
-
-    // Determine which backend endpoint to call
-    const endpoint =
-      userType === "business"
-        ? "/api/auth/register-business"
-        : "/api/auth/register";
-
-    // Build the payload for the backend
-    let payload: Record<string, unknown>;
-
-    if (userType === "business") {
-      payload = {
-        email: body.email,
-        password: body.password,
-        name: body.name,
-        phone: body.phone,
-        business_name: body.businessName,
-        business_slug: body.businessSlug,
-        business_address: body.businessAddress || null,
-        business_description: body.businessDescription || null,
-      };
-    } else {
-      payload = {
-        email: body.email,
-        password: body.password,
-        name: body.name,
-        phone: body.phone || null,
-        user_type: "customer",
-      };
-    }
+    const payload = {
+      email: body.email,
+      password: body.password,
+      name: body.name,
+      phone: body.phone,
+      business_name: body.businessName,
+      business_slug: body.businessSlug,
+      business_address: body.businessAddress || null,
+      business_description: body.businessDescription || null,
+    };
 
     // Call FastAPI registration endpoint
-    const backendResponse = await fetch(`${API_BASE}${endpoint}`, {
+    const backendResponse = await fetch(`${API_BASE}/api/auth/register-business`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -59,7 +31,7 @@ export async function POST(request: NextRequest) {
     if (!backendResponse.ok) {
       const errorBody = await backendResponse.json().catch(() => ({}));
       return NextResponse.json(
-        { error: errorBody.detail || "Registration failed" },
+        { error: typeof errorBody.detail === "string" ? errorBody.detail : "Registration failed" },
         { status: backendResponse.status }
       );
     }
@@ -89,21 +61,12 @@ export async function POST(request: NextRequest) {
       createdAt: user.created_at,
     };
 
-    if (user.user_type === "staff" && user.business_id) {
-      return NextResponse.json(
-        {
-          ...baseUser,
-          type: "staff",
-          businessId: user.business_id,
-          role: user.role || "owner",
-        },
-        { status: 201 }
-      );
+    if (user.user_type !== "staff" || !user.business_id) {
+      return NextResponse.json({ error: "Staff account creation failed" }, { status: 500 });
     }
-
     return NextResponse.json(
-      { ...baseUser, type: "customer" },
-      { status: 201 }
+      { ...baseUser, type: "staff", businessId: user.business_id, role: user.role || "owner" },
+      { status: 201 },
     );
   } catch (error: unknown) {
     if (error instanceof ApiError) {

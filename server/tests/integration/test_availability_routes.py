@@ -269,6 +269,7 @@ async def test_stale_public_slot_returns_nearest_alternatives(
             "email": "new@example.com",
             "name": "New Guest",
             "guests": 2,
+            "idempotency_key": "stale-slot",
         },
     )
 
@@ -368,6 +369,7 @@ async def test_table_backed_public_booking_auto_assigns_and_blocks_the_table(
             "email": "table@example.com",
             "name": "Table Guest",
             "guests": 3,
+            "idempotency_key": "table-allocation",
         },
     )
 

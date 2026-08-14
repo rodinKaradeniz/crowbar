@@ -35,6 +35,8 @@ import {
 } from "@/lib/client-api";
 import type { Tab, TabSettledMethod } from "@/types";
 import { TabOrderCompose } from "./tab-order-compose";
+import { formatMoney } from "@/lib/money";
+import { formatBusinessDateTime } from "@/lib/business-time";
 
 const SETTLED_METHODS: { value: TabSettledMethod; label: string }[] = [
   { value: "cash", label: "Cash" },
@@ -43,11 +45,9 @@ const SETTLED_METHODS: { value: TabSettledMethod; label: string }[] = [
   { value: "other", label: "Other" },
 ];
 
-function money(n: number): string {
-  return `$${n.toFixed(2)}`;
-}
+const money = formatMoney;
 
-export function TabsClient({ businessId }: { businessId: string }) {
+export function TabsClient({ businessId, businessTimezone }: { businessId: string; businessTimezone: string }) {
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -170,7 +170,7 @@ export function TabsClient({ businessId }: { businessId: string }) {
                     Tab #{selected.id.slice(0, 8)}
                   </CardTitle>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Opened {new Date(selected.openedAt).toLocaleString()}
+                    Opened {formatBusinessDateTime(selected.openedAt, businessTimezone)}
                     {selected.seatingId ? " · seating tab" : " · standalone tab"}
                     {selected.settledMethod
                       ? ` · settled by ${selected.settledMethod}`

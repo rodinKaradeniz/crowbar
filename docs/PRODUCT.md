@@ -12,12 +12,14 @@ restaurants. It serves public guests booking, joining a queue, browsing menus,
 and ordering, alongside venue staff managing service. A business is the tenant;
 the current product assumes one active business association per staff login.
 
-The confirmed delivery order is the operational loop: authoritative
-reservation availability and capacity; floor plan and tables; guest CRM;
-no-show protection; purchasing and cost control; then POS and payment
-integrations. The first availability stage and the floor-plan/table-management
-stage are complete locally. See [TODO.md](TODO.md) for
-the acceptance boundary and later work.
+The first release target is a supervised pilot at a single-location bar in
+Germany. Its confirmed delivery order is: freeze the MVP contract and baseline;
+repair correctness and security; add Germany-ready operational configuration;
+complete the guest-to-table loop; complete ordering and external settlement;
+finish stock, purchasing, and cost control; finish staff/CRM/reporting; pass a
+local demo/release gate; deploy to Railway; then run the supervised pilot.
+German fiscal POS and payment processing are a separate post-MVP program. See
+[TODO.md](TODO.md) for stage boundaries and exit gates.
 
 ## Canonical domain vocabulary
 
@@ -47,6 +49,12 @@ the acceptance boundary and later work.
 - **Inventory movement:** the authoritative ledger record of a stock change.
   `bottle` and `keg` use the same canonical milliliter math; `each` is for
   countable inventory.
+- **External settlement:** a staff assertion that the venue's separate,
+  compliant register completed settlement for the tab. It is not a payment,
+  tender, receipt, refund, cash, bank, or fiscal transaction in Crowbar.
+- **Operational tax profile:** an owner/manager-configured, effective-dated
+  menu classification used to snapshot estimated tax and support price/margin
+  analysis. It is not a fiscal record or tax filing authority.
 
 ## Product surfaces and rules
 
@@ -116,8 +124,8 @@ are revision-bound and expire when the reservation is cancelled or no-showed.
 A future-reservation waitlist is distinct from the current-service queue. A
 host makes a single 15-minute offer within the guest's flexible range; accepting
 it atomically rechecks availability and creates a normal reservation. Deposits,
-holds, fees, blacklists, and automatic punitive actions remain excluded until
-the payment integration stage.
+holds, fees, blacklists, and automatic punitive actions remain excluded from
+the MVP and belong to the later fiscal POS/payment program.
 
 ### Guest CRM and privacy
 
@@ -160,9 +168,24 @@ revision; an owner or manager can rotate it to invalidate a lost printed code.
 It resolves only while that table belongs to an active seating. Each seating
 has at most one open tab, so staff and guest rounds share one total even when
 the seating spans a configured table combination. Staff start or open that tab
-from the occupied table on Floor, settle it, then close the seating. A seating
-with an open tab cannot be ended. Legacy free-text table labels remain
+from the occupied table on Floor, record it as settled externally after the
+venue completes payment in its compliant register, then close the seating. A
+seating with an open tab cannot be ended. Legacy free-text table labels remain
 historical display data only and are never accepted for new public orders.
+
+Crowbar may record an informational external method, note, register reference,
+actor, timestamp, and immutable tab-total snapshot. It does not record partial
+tenders, cash received/change, card details, tips, refunds, processor status,
+or bank settlement in the MVP. Reports distinguish ordered value, open-tab
+value, and externally settled value; none is labelled accounting or bank
+revenue without an authoritative fiscal/payment integration.
+
+The initial German tenant uses EUR, `de-DE`, `Europe/Berlin`, and country-aware
+phone handling. Tax profiles belong to menu items rather than one business-wide
+percentage because food, beverages, and other classes can differ. Prices are
+tax-inclusive by default for the pilot, while the tenant can configure rates
+and effective dates with an audit trail. Each placed line snapshots the applied
+profile/rate so later changes cannot rewrite historical operational estimates.
 
 ## Security and visibility boundaries
 
@@ -181,9 +204,13 @@ historical display data only and are never accepted for new public orders.
 
 - Booking availability must not be reconstructed from public operating hours.
 - A table assignment must not be treated as occupancy.
-- Crowbar does not currently provide terminal hardware, acquiring, payroll, a
-  general ledger, or subscription billing. POS/payment work begins with
-  provider integrations after the preceding operational stages.
+- Crowbar does not provide payment collection, terminal hardware, acquiring,
+  a cash register, tips/tenders/refunds, fiscal receipts/invoices, TSE,
+  DSFinV-K, bank settlement, payroll, a general ledger, or subscription billing
+  in the MVP. The venue's separate compliant register remains authoritative;
+  German fiscal POS/payment work is a distinct post-MVP program.
+- Purchasing may capture supplier invoice/reference data, but Crowbar does not
+  pay supplier invoices in the MVP.
 - Multi-location management UI, a full permission/audit system, and generic
   offline mode remain later decisions; location-ready storage is not a promise
   of those product surfaces.

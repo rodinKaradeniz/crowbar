@@ -1,6 +1,7 @@
 """Email service using Resend for reservation confirmations and notifications."""
 
 import base64
+from html import escape
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -113,17 +114,17 @@ def send_reservation_confirmation(
         status_line = "Your reservation has been confirmed."
 
     html = "\n".join([
-        f"<p>Hi {customer_name},</p>",
-        f"<p>{status_line}</p>",
+        f"<p>Hi {escape(customer_name)},</p>",
+        f"<p>{escape(status_line)}</p>",
         "<p><strong>Reservation details:</strong></p>",
         "<ul>",
-        f"<li><strong>Business:</strong> {business_name}</li>",
-        f"<li><strong>Service:</strong> {service_type_name}</li>",
-        f"<li><strong>Date & time:</strong> {time_str}</li>",
+        f"<li><strong>Business:</strong> {escape(business_name)}</li>",
+        f"<li><strong>Service:</strong> {escape(service_type_name)}</li>",
+        f"<li><strong>Date & time:</strong> {escape(time_str)}</li>",
         f"<li><strong>Guests:</strong> {guests}</li>",
         "</ul>",
         (
-            f'<p><a href="{management_url}">Manage this reservation</a></p>'
+            f'<p><a href="{escape(management_url, quote=True)}">Manage this reservation</a></p>'
             if management_url
             else ""
         ),
@@ -165,8 +166,8 @@ def send_waitlist_offer(*, to_email: str, business_name: str, offer_url: str) ->
             "to": [to_email],
             "subject": f"A table is available – {business_name}",
             "html": "\n".join([
-                f"<p>{business_name} has a table available for you.</p>",
-                f'<p><a href="{offer_url}">Accept this offer</a></p>',
+                f"<p>{escape(business_name)} has a table available for you.</p>",
+                f'<p><a href="{escape(offer_url, quote=True)}">Accept this offer</a></p>',
                 "<p>This offer expires in 15 minutes.</p>",
             ]),
         })
@@ -185,8 +186,8 @@ def send_reservation_reminder(*, to_email: str, business_name: str, management_u
             "to": [to_email],
             "subject": f"Reservation reminder – {business_name}",
             "html": "\n".join([
-                f"<p>This is a reminder about your reservation at {business_name}.</p>",
-                f'<p><a href="{management_url}">Manage or reconfirm your reservation</a></p>',
+                f"<p>This is a reminder about your reservation at {escape(business_name)}.</p>",
+                f'<p><a href="{escape(management_url, quote=True)}">Manage or reconfirm your reservation</a></p>',
             ]),
         })
         return True
@@ -208,9 +209,9 @@ def send_staff_invitation(
     role_display = role.replace("_", " ").title()
 
     html = "\n".join([
-        f"<p>You've been invited to join <strong>{business_name}</strong> on Crowbar as a <strong>{role_display}</strong>.</p>",
+        f"<p>You've been invited to join <strong>{escape(business_name)}</strong> on Crowbar as a <strong>{escape(role_display)}</strong>.</p>",
         "<p>Click the link below to accept your invitation and set up your account:</p>",
-        f'<p><a href="{invite_url}" style="background:#111;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;">Accept Invitation</a></p>',
+        f'<p><a href="{escape(invite_url, quote=True)}" style="background:#111;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;">Accept Invitation</a></p>',
         "<p>This invitation expires in 7 days. If you did not expect this invitation, you can safely ignore this email.</p>",
     ])
 
@@ -223,6 +224,26 @@ def send_staff_invitation(
 
     try:
         resend.Emails.send(params)
+        return True
+    except Exception:
+        return False
+
+
+def send_password_reset(*, to_email: str, reset_url: str) -> bool:
+    if not _ensure_resend_configured():
+        return False
+    resend.api_key = settings.resend_api_key
+    try:
+        resend.Emails.send({
+            "from": f"{settings.email_from_name} <{settings.email_from_address}>",
+            "to": [to_email],
+            "subject": "Reset your Crowbar password",
+            "html": "\n".join([
+                "<p>A password reset was requested for your Crowbar staff account.</p>",
+                f'<p><a href="{escape(reset_url, quote=True)}">Reset password</a></p>',
+                "<p>This single-use link expires in 30 minutes. If you did not request it, you can ignore this email.</p>",
+            ]),
+        })
         return True
     except Exception:
         return False

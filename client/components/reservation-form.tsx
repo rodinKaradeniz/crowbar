@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { format, startOfDay } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
@@ -92,6 +92,7 @@ export function ReservationForm({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [waitlistTime, setWaitlistTime] = useState("19:00");
   const [waitlistFlexMinutes, setWaitlistFlexMinutes] = useState("60");
+  const submissionIdentity = useRef<{ fingerprint: string; key: string } | null>(null);
 
   const selectedServiceType = serviceTypeId
     ? serviceTypes.find((serviceType) => serviceType.id === serviceTypeId) ?? null
@@ -196,7 +197,7 @@ export function ReservationForm({
     setSubmitError(null);
 
     try {
-      await clientCreatePublicReservation({
+      const submission = {
         businessId,
         serviceTypeId,
         time: selectedSlot.startsAt,
@@ -207,6 +208,17 @@ export function ReservationForm({
         note: note || undefined,
         marketingEmailOptIn,
         marketingSmsOptIn,
+      };
+      const fingerprint = JSON.stringify(submission);
+      if (submissionIdentity.current?.fingerprint !== fingerprint) {
+        submissionIdentity.current = {
+          fingerprint,
+          key: crypto.randomUUID(),
+        };
+      }
+      await clientCreatePublicReservation({
+        ...submission,
+        idempotencyKey: submissionIdentity.current.key,
       });
       toast.success("Reservation submitted successfully!");
       setStep("success");

@@ -18,7 +18,7 @@ class QueueJoinRequest(AppBaseModel):
         if not value:
             return value
         try:
-            parsed = phonenumbers.parse(value, "US")
+            parsed = phonenumbers.parse(value, None)
             return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
         except phonenumbers.NumberParseException:
             return value.strip() or None
@@ -43,4 +43,4 @@ class QueueEntryResponse(AppBaseModel):
 class QueueStatusResponse(AppBaseModel):
     entry: QueueEntryResponse
     total_waiting: int
-    estimated_wait_minutes: int | None = None  # position * 5 min heuristic
+    estimated_wait_minutes: int | None = None

@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { GalleryVerticalEnd } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { PricingModal } from "@/components/pricing-modal";
 import { cn } from "@/lib/utils";
 
 export function LandingNavbar() {
@@ -55,11 +54,6 @@ export function LandingNavbar() {
         </Link>
 
         <div className="flex items-center gap-4">
-          <PricingModal>
-            <button className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-              Pricing
-            </button>
-          </PricingModal>
           <Link
             href="/auth/login"
             className="text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -67,7 +61,7 @@ export function LandingNavbar() {
             Login
           </Link>
           <Button asChild size="sm">
-            <Link href="/auth/register">Get Started</Link>
+            <Link href="/auth/register">Create workspace</Link>
           </Button>
         </div>
       </div>
