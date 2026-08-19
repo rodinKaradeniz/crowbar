@@ -14,7 +14,7 @@ from app.core.rate_limit import (
     get_client_ip,
 )
 from app.database import get_db
-from app.dependencies import get_current_business, get_current_user, require_module
+from app.dependencies import get_current_business, get_current_user, require_module, require_roles
 from app.models.business import Business
 from app.models.user import User
 from app.schemas.menu import (
@@ -26,6 +26,7 @@ from app.schemas.menu import (
     MenuCategoryUpdate,
     MenuCreate,
     MenuItemCreate,
+    MenuItemAvailabilityUpdate,
     MenuItemResponse,
     MenuItemUpdate,
     MenuResponse,
@@ -35,8 +36,15 @@ from app.schemas.menu import (
     ModifierGroupResponse,
     ModifierResponse,
     OrderingSettingsUpdate,
+    PreparationStationCreate,
+    PreparationStationResponse,
+    PreparationStationUpdate,
 )
 from app.schemas.order import (
+    OrderAllDayCount,
+    OrderCancellationRequest,
+    OrderCorrectionRequest,
+    OrderLineStatusUpdateRequest,
     OrderPlaceRequest,
     OrderResponse,
     OrderStatusUpdateRequest,
@@ -50,6 +58,7 @@ from app.services import (
     happy_hour_service,
     menu_service,
     order_service,
+    preparation_station_service,
     recipe_service,
     tab_service,
     table_qr_service,
@@ -266,6 +275,237 @@ async def update_order_status(
     return order
 
 
+@router.patch(
+    "/api/ordering/{business_id}/orders/{order_id}/lines/{line_id}/status",
+    response_model=OrderResponse,
+    dependencies=[Depends(require_module("ordering"))],
+)
+async def update_order_line_status(
+    business_id: UUID,
+    order_id: UUID,
+    line_id: UUID,
+    body: OrderLineStatusUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    business: Business = Depends(get_current_business),
+):
+    if business.id != business_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order line not found")
+    try:
+        order = await order_service.advance_order_line_status(
+            db,
+            business_id=business.id,
+            order_id=order_id,
+            line_id=line_id,
+            request=body,
+            changed_by=current_user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if order is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order line not found")
+    await db.commit()
+    await publish(DomainEvent(
+        event_type="order.line_status_changed",
+        business_id=str(business.id),
+        payload={"order_id": str(order.id), "line_id": str(line_id), "status": body.status},
+    ))
+    return order
+
+
+@router.post(
+    "/api/ordering/{business_id}/orders/{order_id}/correct",
+    response_model=OrderResponse,
+    dependencies=[Depends(require_module("ordering"))],
+)
+async def correct_order(
+    business_id: UUID,
+    order_id: UUID,
+    body: OrderCorrectionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    business: Business = Depends(get_current_business),
+):
+    if business.id != business_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+    try:
+        order, changed = await order_service.correct_order(
+            db,
+            business_id=business.id,
+            order_id=order_id,
+            request=body,
+            actor_id=current_user.id,
+        )
+    except order_service.OrderIdempotencyConflict as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except order_service.OrderValidationError as exc:
+        code = 409 if "corrected" in str(exc) or "preparation" in str(exc) or "Settled" in str(exc) else 422
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
+    if order is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+    await db.commit()
+    if changed:
+        await publish(DomainEvent(
+            event_type="order.corrected",
+            business_id=str(business.id),
+            payload={"order_id": str(order.id), "tab_id": str(order.tab_id) if order.tab_id else None},
+        ))
+    return order
+
+
+@router.post(
+    "/api/ordering/{business_id}/orders/{order_id}/cancel",
+    response_model=OrderResponse,
+    dependencies=[Depends(require_module("ordering"))],
+)
+async def cancel_order(
+    business_id: UUID,
+    order_id: UUID,
+    body: OrderCancellationRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    business: Business = Depends(get_current_business),
+):
+    if business.id != business_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+    try:
+        order, changed = await order_service.cancel_order(
+            db,
+            business_id=business.id,
+            order_id=order_id,
+            request=body,
+            actor_id=current_user.id,
+        )
+    except (order_service.OrderIdempotencyConflict, order_service.OrderValidationError) as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if order is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+    await db.commit()
+    if changed:
+        await publish(DomainEvent(
+            event_type="order.cancelled",
+            business_id=str(business.id),
+            payload={"order_id": str(order.id), "tab_id": str(order.tab_id) if order.tab_id else None},
+        ))
+    return order
+
+
+@router.get(
+    "/api/ordering/all-day-counts",
+    response_model=list[OrderAllDayCount],
+    dependencies=[Depends(require_module("ordering"))],
+)
+async def get_all_day_counts(
+    db: AsyncSession = Depends(get_db),
+    business: Business = Depends(get_current_business),
+):
+    return await order_service.get_all_day_counts(db, business.id)
+
+
+# ─── Staff: Preparation stations ──────────────────────────────────────────────
+
+@router.get(
+    "/api/ordering/stations",
+    response_model=list[PreparationStationResponse],
+    dependencies=[Depends(require_module("ordering"))],
+)
+async def list_preparation_stations(
+    db: AsyncSession = Depends(get_db),
+    business: Business = Depends(get_current_business),
+):
+    return await preparation_station_service.list_stations(db, business.id)
+
+
+@router.post(
+    "/api/ordering/stations",
+    response_model=PreparationStationResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[
+        Depends(require_module("ordering")),
+        Depends(require_roles("owner", "manager")),
+    ],
+)
+async def create_preparation_station(
+    body: PreparationStationCreate,
+    db: AsyncSession = Depends(get_db),
+    business: Business = Depends(get_current_business),
+):
+    try:
+        station = await preparation_station_service.create_station(
+            db, business.id, name=body.name, sort_order=body.sort_order
+        )
+    except preparation_station_service.PreparationStationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    await db.commit()
+    await publish(DomainEvent(
+        event_type="order.station_changed",
+        business_id=str(business.id),
+        payload={"station_id": str(station.id), "action": "created"},
+    ))
+    return station
+
+
+@router.patch(
+    "/api/ordering/stations/{station_id}",
+    response_model=PreparationStationResponse,
+    dependencies=[
+        Depends(require_module("ordering")),
+        Depends(require_roles("owner", "manager")),
+    ],
+)
+async def update_preparation_station(
+    station_id: UUID,
+    body: PreparationStationUpdate,
+    db: AsyncSession = Depends(get_db),
+    business: Business = Depends(get_current_business),
+):
+    try:
+        station = await preparation_station_service.update_station(
+            db,
+            business.id,
+            station_id,
+            changes=body.model_dump(exclude_unset=True),
+        )
+    except preparation_station_service.PreparationStationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    await db.commit()
+    await publish(DomainEvent(
+        event_type="order.station_changed",
+        business_id=str(business.id),
+        payload={"station_id": str(station.id), "action": "updated"},
+    ))
+    return station
+
+
+@router.post(
+    "/api/ordering/stations/{station_id}/archive",
+    response_model=PreparationStationResponse,
+    dependencies=[
+        Depends(require_module("ordering")),
+        Depends(require_roles("owner", "manager")),
+    ],
+)
+async def archive_preparation_station(
+    station_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    business: Business = Depends(get_current_business),
+):
+    try:
+        station = await preparation_station_service.archive_station(
+            db, business.id, station_id, actor_id=current_user.id
+        )
+    except preparation_station_service.PreparationStationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    await db.commit()
+    await publish(DomainEvent(
+        event_type="order.station_changed",
+        business_id=str(business.id),
+        payload={"station_id": str(station.id), "action": "archived"},
+    ))
+    return station
+
+
 # ─── Staff: Menu Management ────────────────────────────────────────────────────
 
 @router.get(
@@ -304,6 +544,10 @@ async def create_menu(
     try:
         menu = await menu_service.create_menu(db, business_id, body)
     except tax_service.TaxProfileError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except preparation_station_service.PreparationStationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     await db.commit()
     await db.refresh(menu, ["categories"])
@@ -376,6 +620,10 @@ async def create_category(
     try:
         cat = await menu_service.create_category(db, menu_id, business_id, body)
     except tax_service.TaxProfileError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except preparation_station_service.PreparationStationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     if cat is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Menu not found")
@@ -451,6 +699,10 @@ async def create_item(
         item = await menu_service.create_item(db, category_id, business_id, body)
     except tax_service.TaxProfileError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    except preparation_station_service.PreparationStationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
     await db.commit()
@@ -478,30 +730,45 @@ async def update_item(
         item = await menu_service.update_item(db, item_id, business_id, body)
     except tax_service.TaxProfileError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    except preparation_station_service.PreparationStationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
     await db.commit()
     return item
 
 
-@router.post(
-    "/api/ordering/{business_id}/items/{item_id}/toggle-availability",
+@router.put(
+    "/api/ordering/items/{item_id}/availability",
     response_model=MenuItemResponse,
     dependencies=[Depends(require_module("ordering"))],
 )
-async def toggle_item_availability(
-    business_id: UUID,
+async def update_item_availability(
     item_id: UUID,
+    body: MenuItemAvailabilityUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     business: Business = Depends(get_current_business),
 ):
-    if business.id != business_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    item = await menu_service.toggle_item_availability(db, item_id, business_id)
+    item = await menu_service.set_item_availability(
+        db,
+        item_id,
+        business.id,
+        is_available=body.is_available,
+        source="manual",
+        actor_id=current_user.id,
+        reason=body.reason,
+    )
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
     await db.commit()
+    await publish(DomainEvent(
+        event_type="menu.item_availability_changed",
+        business_id=str(business.id),
+        payload={"item_id": str(item.id), "is_available": item.is_available},
+    ))
     return item
 
 
@@ -780,6 +1047,10 @@ async def create_library_item(
         item = await menu_service.create_library_item(db, business_id, body)
     except tax_service.TaxProfileError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    except preparation_station_service.PreparationStationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     await db.commit()
     return item
 
@@ -805,6 +1076,10 @@ async def update_library_item(
         item = await menu_service.update_library_item(db, item_id, business_id, body)
     except tax_service.TaxProfileError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    except preparation_station_service.PreparationStationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Library item not found")
     await db.commit()

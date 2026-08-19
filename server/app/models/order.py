@@ -69,6 +69,11 @@ class Order(Base, UUIDMixin, TimestampMixin):
     placed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    cancelled_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancellation_reason: Mapped[str | None] = mapped_column(Text)
 
     line_items: Mapped[list["OrderLineItem"]] = relationship(
         back_populates="order",
@@ -114,6 +119,12 @@ class OrderLineItem(Base, UUIDMixin, TimestampMixin):
     total_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
     selected_modifiers: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
     routing_tag: Mapped[str] = mapped_column(String(20), default="kitchen", nullable=False)
+    preparation_station_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("preparation_stations.id", ondelete="SET NULL")
+    )
+    preparation_station_name: Mapped[str | None] = mapped_column(String(120))
+    routes_to_all_stations: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    line_status: Mapped[str] = mapped_column(String(20), default="received", nullable=False)
     # Snapshot of the menu item's is_alcoholic at placement (like routing_tag),
     # so the staff badge is stable even if the menu item is later edited/deleted.
     is_alcoholic: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -145,3 +156,49 @@ class OrderStatusTimeline(Base, UUIDMixin):
     )
 
     order: Mapped["Order"] = relationship(back_populates="status_timeline")
+
+
+class OrderLineStatusTimeline(Base, UUIDMixin):
+    __tablename__ = "order_line_status_timeline"
+
+    business_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("businesses.id", ondelete="RESTRICT"), nullable=False
+    )
+    order_line_item_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("order_line_items.id", ondelete="RESTRICT"), nullable=False
+    )
+    from_status: Mapped[str | None] = mapped_column(String(20))
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    changed_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class OrderRevision(Base, UUIDMixin):
+    __tablename__ = "order_revisions"
+    __table_args__ = (
+        UniqueConstraint(
+            "business_id", "idempotency_key", name="uq_order_revisions_business_idempotency"
+        ),
+    )
+
+    business_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("businesses.id", ondelete="RESTRICT"), nullable=False
+    )
+    order_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("orders.id", ondelete="RESTRICT"), nullable=False
+    )
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    command_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    before_snapshot: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    after_snapshot: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

@@ -1,11 +1,14 @@
 ---
 title: Menu & Ordering
-description: Set up your menu, manage items with the item library, and run a live kitchen/bar ticket board.
+description: Configure preparation stations, manage menu availability, and fulfill line-level tickets before recording external settlement.
 ---
 
 # Menu & Ordering
 
-The Ordering module lets you run a digital menu and a real-time ticket board for your kitchen and bar. Customers scan a QR code (or follow a link) to browse your menu, add items to a cart, and place an order — no app download required.
+The Ordering module lets you run a digital menu and a real-time ticket board
+across tenant-configured preparation stations. Customers scan a QR code (or
+follow a link) to browse your menu, add items to a cart, and place an order — no
+app download required.
 
 <Callout type="info">
 The Ordering module must be enabled for your business before the Menu and Orders pages appear in your sidebar.
@@ -54,7 +57,8 @@ The item library is a business-wide collection of reusable item templates. Use i
 
 ### Saving an Item to the Library
 
-On any item row, click the **bookmark icon**. This copies the item's name, description, price, and routing tag into the library.
+On any item row, click the **bookmark icon**. This copies the item's name,
+description, price, and station routing into the library.
 
 ### Opening the Library
 
@@ -77,15 +81,17 @@ Adding from the library creates an independent copy. Editing a library template 
 
 ## Routing
 
-Every menu item has a **routing tag**: `kitchen`, `bar`, or `any`. This controls which column the item appears in on the staff ticket board.
+Every menu item routes to one active preparation station or to the shared queue.
+Kitchen and Bar are editable defaults for existing venues, not fixed system
+columns.
 
-| Routing tag | Ticket board column |
-|-------------|---------------------|
-| `kitchen` | Kitchen only |
-| `bar` | Bar only |
-| `any` | Both Kitchen and Bar |
+| Routing choice | Ticket board visibility |
+|----------------|-------------------------|
+| One station | That station only |
+| Shared | Every active station |
 
-Set the routing tag when creating or editing an item. For example, food dishes → `kitchen`; cocktails and drinks → `bar`; bottled water → `any`.
+Owners and managers can add, rename, order, and archive stations. A station that
+is still assigned to a menu or library item cannot be archived.
 
 ---
 
@@ -95,7 +101,8 @@ Navigate to **Orders** in the sidebar to see the live ticket board.
 
 ### Board Layout
 
-The board is split into two columns — **Kitchen** and **Bar** — each showing only the orders relevant to that station based on the items' routing tags.
+The board builds its station filters dynamically. Each station sees its own
+lines plus shared lines, with elapsed time and service-day all-day counts.
 
 Each ticket shows:
 - Table number (if provided)
@@ -105,7 +112,7 @@ Each ticket shows:
 
 ### Status Transitions
 
-Orders move through the following statuses:
+Order lines move independently through the following statuses:
 
 | Status | Meaning | Next action |
 |--------|---------|-------------|
@@ -115,7 +122,25 @@ Orders move through the following statuses:
 | **Served** | Delivered to the customer | — |
 | **Cancelled** | Order was cancelled | — |
 
-Click the action button on each ticket to advance it to the next status. The board updates in real time across all open browser tabs — no refresh needed.
+Click a line action to advance it or correct it to the previous step. The order
+status is recomputed from its lines. The board updates in real time and replaces
+local state from the authoritative server snapshot after reconnecting.
+
+Before any line starts preparation, staff can correct the full cart with a
+required reason. A whole order can be cancelled with a reason until its tab is
+settled externally; Crowbar reverses only the inventory movements still in
+effect. Item availability uses an explicit **Available / 86** state, and
+inventory depletion may disable an item but stock recovery never enables it
+automatically.
+
+## External settlement
+
+The **Tabs** page records that a tab was **settled externally** in the venue's
+separate register. The optional method, note, and external-register reference
+are informational; Crowbar does not process payment or create a fiscal record.
+The settlement freezes an immutable currency and total snapshot. Owners and
+managers may reopen an eligible tab with a reason, while preserving its prior
+settlement history.
 
 ### New Order Toasts
 

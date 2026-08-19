@@ -13,7 +13,7 @@ need to load one large, mixed-lifecycle file.
 | [`HISTORY.md`](HISTORY.md) | Durable decisions and meaningful project events | Before revisiting established behavior |
 | [`TODO.md`](TODO.md) | Canonical stages 0–9 supervised-MVP sequence, gaps, exit gates, and post-MVP work | Planning and scoping |
 | [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md) | Current route disposition, workflow authority trace, risk register, and stage 1–7 evidence contract | MVP implementation and release verification |
-| [`SKILLS.md`](SKILLS.md) | Skill strategy and proposed project-local workflows | Agent tooling work |
+| [`SKILLS.md`](SKILLS.md) | Skill strategy, the installed `.claude/skills/` set, and planned project-local workflows | Agent tooling work |
 | [`PORTABLE_AGENT_SETUP.md`](PORTABLE_AGENT_SETUP.md) | Adapted governance setup and document ownership map | Governance changes |
 
 Specialized references remain close to their owners:

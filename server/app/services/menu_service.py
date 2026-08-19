@@ -5,7 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.menu import ItemLibrary, Menu, MenuCategory, MenuItem, Modifier, ModifierGroup
+from app.models.menu import ItemLibrary, Menu, MenuCategory, MenuItem, MenuItemAvailabilityEvent, Modifier, ModifierGroup
+from app.services import preparation_station_service
 from app.models.tax import TaxProfile
 from app.schemas.menu import (
     LibraryItemCreate,
@@ -251,6 +252,13 @@ async def _create_item_for_category(
     db: AsyncSession, category_id: UUID, business_id: UUID, data: MenuItemCreate
 ) -> MenuItem:
     tax_profile_id = await _resolve_tax_profile_id(db, business_id, data.tax_profile_id)
+    station = None
+    if not data.routes_to_all_stations:
+        if data.preparation_station_id is None:
+            raise ValueError("Choose one preparation station or route to all stations")
+        station = await preparation_station_service.get_active_station(
+            db, business_id, data.preparation_station_id
+        )
     item = MenuItem(
         category_id=category_id,
         business_id=business_id,
@@ -261,7 +269,11 @@ async def _create_item_for_category(
         happy_hour_price=data.happy_hour_price,
         is_alcoholic=data.is_alcoholic,
         is_available=data.is_available,
-        routing_tag=data.routing_tag,
+        routing_tag=("any" if data.routes_to_all_stations else (
+            station.name.lower() if station and station.name.lower() in {"kitchen", "bar"} else "any"
+        )),
+        preparation_station_id=station.id if station else None,
+        routes_to_all_stations=data.routes_to_all_stations,
         prep_time_minutes=data.prep_time_minutes,
         display_order=data.display_order,
         image=data.image,
@@ -308,8 +320,28 @@ async def update_item(
         item.is_alcoholic = data.is_alcoholic
     if data.is_available is not None:
         item.is_available = data.is_available
-    if data.routing_tag is not None:
-        item.routing_tag = data.routing_tag
+    if "routes_to_all_stations" in data.model_fields_set or "preparation_station_id" in data.model_fields_set:
+        routes_to_all = (
+            data.routes_to_all_stations
+            if data.routes_to_all_stations is not None
+            else item.routes_to_all_stations
+        )
+        if routes_to_all:
+            item.routes_to_all_stations = True
+            item.preparation_station_id = None
+            item.routing_tag = "any"
+        else:
+            station_id = data.preparation_station_id or item.preparation_station_id
+            if station_id is None:
+                raise ValueError("Choose one preparation station or route to all stations")
+            station = await preparation_station_service.get_active_station(
+                db, business_id, station_id
+            )
+            item.routes_to_all_stations = False
+            item.preparation_station_id = station.id
+            item.routing_tag = (
+                station.name.lower() if station.name.lower() in {"kitchen", "bar"} else "any"
+            )
     if data.prep_time_minutes is not None:
         item.prep_time_minutes = data.prep_time_minutes
     if data.display_order is not None:
@@ -324,13 +356,34 @@ async def update_item(
     return await _load_item(db, item.id, business_id)
 
 
-async def toggle_item_availability(
-    db: AsyncSession, item_id: UUID, business_id: UUID
+async def set_item_availability(
+    db: AsyncSession,
+    item_id: UUID,
+    business_id: UUID,
+    *,
+    is_available: bool,
+    source: str,
+    actor_id: UUID | None,
+    reason: str | None,
 ) -> MenuItem | None:
-    item = await _load_item(db, item_id, business_id)
+    item = await db.scalar(
+        select(MenuItem).where(
+            MenuItem.id == item_id, MenuItem.business_id == business_id
+        ).with_for_update()
+    )
     if item is None:
         return None
-    item.is_available = not item.is_available
+    if item.is_available == is_available:
+        return await _load_item(db, item.id, business_id)
+    item.is_available = is_available
+    db.add(MenuItemAvailabilityEvent(
+        business_id=business_id,
+        menu_item_id=item.id,
+        source=source,
+        is_available=is_available,
+        actor_id=actor_id,
+        reason=reason,
+    ))
     await db.flush()
     return await _load_item(db, item.id, business_id)
 
@@ -448,13 +501,24 @@ async def create_library_item(
     db: AsyncSession, business_id: UUID, data: LibraryItemCreate
 ) -> ItemLibrary:
     tax_profile_id = await _resolve_tax_profile_id(db, business_id, data.tax_profile_id)
+    station = None
+    if not data.routes_to_all_stations:
+        if data.preparation_station_id is None:
+            raise ValueError("Choose one preparation station or route to all stations")
+        station = await preparation_station_service.get_active_station(
+            db, business_id, data.preparation_station_id
+        )
     item = ItemLibrary(
         business_id=business_id,
         tax_profile_id=tax_profile_id,
         name=data.name,
         description=data.description,
         price=data.price,
-        routing_tag=data.routing_tag,
+        routing_tag=("any" if data.routes_to_all_stations else (
+            station.name.lower() if station and station.name.lower() in {"kitchen", "bar"} else "any"
+        )),
+        preparation_station_id=station.id if station else None,
+        routes_to_all_stations=data.routes_to_all_stations,
         prep_time_minutes=data.prep_time_minutes,
     )
     db.add(item)
@@ -480,8 +544,28 @@ async def update_library_item(
         item.description = data.description
     if data.price is not None:
         item.price = data.price
-    if data.routing_tag is not None:
-        item.routing_tag = data.routing_tag
+    if "routes_to_all_stations" in data.model_fields_set or "preparation_station_id" in data.model_fields_set:
+        routes_to_all = (
+            data.routes_to_all_stations
+            if data.routes_to_all_stations is not None
+            else item.routes_to_all_stations
+        )
+        if routes_to_all:
+            item.routes_to_all_stations = True
+            item.preparation_station_id = None
+            item.routing_tag = "any"
+        else:
+            station_id = data.preparation_station_id or item.preparation_station_id
+            if station_id is None:
+                raise ValueError("Choose one preparation station or route to all stations")
+            station = await preparation_station_service.get_active_station(
+                db, business_id, station_id
+            )
+            item.routes_to_all_stations = False
+            item.preparation_station_id = station.id
+            item.routing_tag = (
+                station.name.lower() if station.name.lower() in {"kitchen", "bar"} else "any"
+            )
     if data.prep_time_minutes is not None:
         item.prep_time_minutes = data.prep_time_minutes
     if data.tax_profile_id is not None:
@@ -526,6 +610,8 @@ async def save_item_to_library(
         description=source.description,
         price=source.price,
         routing_tag=source.routing_tag,
+        preparation_station_id=source.preparation_station_id,
+        routes_to_all_stations=source.routes_to_all_stations,
         prep_time_minutes=source.prep_time_minutes,
     )
     db.add(lib_item)
@@ -563,6 +649,8 @@ async def add_library_item_to_category(
         description=lib_item.description,
         price=lib_item.price,
         routing_tag=lib_item.routing_tag,
+        preparation_station_id=lib_item.preparation_station_id,
+        routes_to_all_stations=lib_item.routes_to_all_stations,
         prep_time_minutes=lib_item.prep_time_minutes,
         is_available=True,
         display_order=0,

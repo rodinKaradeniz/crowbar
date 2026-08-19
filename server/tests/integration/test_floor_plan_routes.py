@@ -439,7 +439,12 @@ async def test_qr_orders_use_one_active_seating_tab_and_require_settlement_befor
     )
     assert blocked_close.status_code == 409
     settled = await client.post(
-        f"/api/tabs/{tab_id}/close", headers=headers, json={"settled_method": "card"}
+        f"/api/tabs/{tab_id}/settle-externally",
+        headers=headers,
+        json={
+            "idempotency_key": "settle-qr-tab-1",
+            "informational_method": "card",
+        },
     )
     assert settled.status_code == 200, settled.text
     closed = await client.post(

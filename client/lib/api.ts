@@ -221,6 +221,12 @@ function toReservationWaitlistEntry(entry: ReservationWaitlistResponse): Reserva
     offeredReservationTime: entry.offered_reservation_time || undefined,
     offerExpiresAt: entry.offer_expires_at || undefined,
     acceptedAt: entry.accepted_at || undefined,
+    acceptedReservationId: entry.accepted_reservation_id || undefined,
+    terminalAt: entry.terminal_at || undefined,
+    terminalReasonCode: entry.terminal_reason_code || undefined,
+    terminalReasonNote: entry.terminal_reason_note || undefined,
+    managementToken: entry.management_token || undefined,
+    deliveryState: entry.delivery_state || undefined,
     createdAt: entry.created_at, updatedAt: entry.updated_at,
   };
 }

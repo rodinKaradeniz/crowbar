@@ -1,12 +1,12 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, Query, Request, Response, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.errors import api_error
 from app.core.events import DomainEvent, publish
-from app.core.regional import RegionalValidationError, normalize_phone
 from app.core.rate_limit import (
     PUBLIC_IDENTITY_WRITE_LIMIT,
     PUBLIC_WRITE_IP_LIMIT,
@@ -15,48 +15,68 @@ from app.core.rate_limit import (
     enforce_rate_limits,
     get_client_ip,
 )
+from app.core.regional import RegionalValidationError, normalize_phone
 from app.database import get_db
-from app.dependencies import get_current_user, get_current_business, require_module
+from app.dependencies import get_current_business, get_current_user, require_module
 from app.models.business import Business
 from app.models.user import User
-from app.schemas.queue_entry import QueueEntryResponse, QueueJoinRequest, QueueStatusResponse
+from app.schemas.queue_entry import (
+    QueueEntryResponse,
+    QueueJoinRequest,
+    QueueRemovalRequest,
+    QueueServiceDayResponse,
+    QueueServiceDayUpdate,
+    QueueStatusResponse,
+)
 from app.services import notification_service, queue_service
 from app.services.queue_ws_manager import manager
 from app.services.websocket_auth import authorize_staff_websocket
 
 logger = logging.getLogger(__name__)
-
 router = APIRouter(tags=["queue"])
 
 
-# ─── helpers ──────────────────────────────────────────────────────────────────
-
-def _build_entry_response(entry_dict: dict) -> QueueEntryResponse:
-    return QueueEntryResponse(**entry_dict)
-
-
-def _get_business_id_or_404(business_id_str: str) -> UUID:
-    try:
-        return UUID(business_id_str)
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Business not found")
+def _queue_error(exc: queue_service.QueuePolicyError):
+    return api_error(exc.status_code, exc.code, exc.message)
 
 
 async def _load_business_or_404(db: AsyncSession, business_id: UUID) -> Business:
-    result = await db.execute(select(Business).where(Business.id == business_id))
-    b = result.scalar_one_or_none()
-    if b is None or "queue" not in (b.enabled_modules or []):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Business not found")
-    return b
+    business = await db.scalar(select(Business).where(Business.id == business_id))
+    if business is None or "queue" not in (business.enabled_modules or []):
+        raise api_error(404, "NOT_FOUND", "Business not found")
+    return business
 
 
-# ─── public endpoints ──────────────────────────────────────────────────────────
+async def _entry_response(db: AsyncSession, entry, position: int | None = None):
+    return QueueEntryResponse(**(await queue_service.entry_to_dict(db, entry, position)))
 
-@router.post("/api/queue/{business_id}/join", response_model=QueueStatusResponse)
+
+@router.get(
+    "/api/queue/{business_id}/service",
+    response_model=QueueServiceDayResponse,
+    dependencies=[Depends(enforce_public_read_limit)],
+)
+async def get_public_queue_service(
+    business_id: UUID, db: AsyncSession = Depends(get_db)
+):
+    await _load_business_or_404(db, business_id)
+    try:
+        state = await queue_service.get_service_day(db, business_id)
+    except queue_service.QueuePolicyError as exc:
+        raise _queue_error(exc) from exc
+    return QueueServiceDayResponse(**queue_service.service_day_to_dict(state))
+
+
+@router.post(
+    "/api/queue/{business_id}/join",
+    response_model=QueueStatusResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def join_queue(
     business_id: UUID,
     body: QueueJoinRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     client_ip = get_client_ip(request)
@@ -64,59 +84,54 @@ async def join_queue(
         RateLimitCheck(
             policy=PUBLIC_WRITE_IP_LIMIT,
             key_parts=("queue_join", str(business_id), client_ip),
-        ),
+        )
     ]
     if body.phone:
         checks.append(
             RateLimitCheck(
                 policy=PUBLIC_IDENTITY_WRITE_LIMIT,
-                key_parts=(
-                    "queue_join",
-                    str(business_id),
-                    body.phone.strip(),
-                ),
+                key_parts=("queue_join", str(business_id), body.phone.strip()),
             )
         )
     await enforce_rate_limits(*checks)
-
-    # Verify business exists and normalize national or international input using
-    # the tenant's selected country rather than a server-global default.
     business = await _load_business_or_404(db, business_id)
     try:
         phone = normalize_phone(body.phone, business.country_code)
+        state, created = await queue_service.join_queue(
+            db,
+            business_id,
+            body.name,
+            body.party_size,
+            phone,
+            body.idempotency_key,
+            channel="web",
+        )
     except RegionalValidationError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+        raise api_error(422, "VALIDATION_ERROR", str(exc)) from exc
+    except queue_service.QueuePolicyError as exc:
+        raise _queue_error(exc) from exc
 
-    status_dict = await queue_service.join_queue(
-        db, business_id, body.name, body.party_size, phone
-    )
-
-    party_label = f"party of {body.party_size}" if body.party_size > 1 else "1 guest"
-    await notification_service.notify_business_staff(
-        db,
-        business_id=business_id,
-        kind="queue_join",
-        title=f"{body.name} joined the queue",
-        body=f"{body.name} ({party_label}) is waiting.",
-        payload={"entry_id": str(status_dict["entry"]["id"])},
-    )
-
+    if created:
+        await notification_service.notify_business_staff(
+            db,
+            business_id=business_id,
+            kind="queue_join",
+            title=f"{body.name} joined the queue",
+            body=f"Party of {body.party_size} is waiting.",
+            payload={"entry_id": str(state["entry"]["id"])},
+        )
     await db.commit()
-
-    await publish(DomainEvent(
-        event_type="queue.party_joined",
-        business_id=str(business_id),
-        payload={
-            "entry_id": str(status_dict["entry"]["id"]),
-            "party_size": body.party_size,
-        },
-    ))
-
-    return QueueStatusResponse(
-        entry=QueueEntryResponse(**status_dict["entry"]),
-        total_waiting=status_dict["total_waiting"],
-        estimated_wait_minutes=status_dict["estimated_wait_minutes"],
-    )
+    if created:
+        await publish(
+            DomainEvent(
+                event_type="queue.party_joined",
+                business_id=str(business_id),
+                payload={"entry_id": str(state["entry"]["id"]), "party_size": body.party_size},
+            )
+        )
+    else:
+        response.status_code = status.HTTP_200_OK
+    return QueueStatusResponse(**state)
 
 
 @router.post("/api/queue/{business_id}/leave", status_code=status.HTTP_204_NO_CONTENT)
@@ -126,45 +141,36 @@ async def leave_queue(
     session_token: str = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
-    """Customer-initiated removal from the queue using their session token."""
     await _load_business_or_404(db, business_id)
     await enforce_rate_limits(
         RateLimitCheck(
             policy=PUBLIC_WRITE_IP_LIMIT,
-            key_parts=(
-                "queue_leave",
-                str(business_id),
-                get_client_ip(request),
-            ),
+            key_parts=("queue_leave", str(business_id), get_client_ip(request)),
         ),
         RateLimitCheck(
             policy=PUBLIC_IDENTITY_WRITE_LIMIT,
             key_parts=("queue_leave", str(business_id), session_token),
         ),
     )
-
     entry = await queue_service.remove_by_token(db, business_id, session_token)
     if entry is None:
-        # Entry not found or already inactive — treat as success (idempotent)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
-
     await notification_service.notify_business_staff(
         db,
         business_id=business_id,
         kind="queue_leave",
         title=f"{entry.name} left the queue",
-        body=f"{entry.name} (party of {entry.party_size}) removed themselves from the queue.",
+        body=f"Party of {entry.party_size} left the queue.",
         payload={"entry_id": str(entry.id)},
     )
-
     await db.commit()
-
-    await publish(DomainEvent(
-        event_type="queue.party_removed",
-        business_id=str(business_id),
-        payload={"entry_id": str(entry.id)},
-    ))
-
+    await publish(
+        DomainEvent(
+            event_type="queue.party_removed",
+            business_id=str(business_id),
+            payload={"entry_id": str(entry.id), "reason_code": "guest_left"},
+        )
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -179,115 +185,250 @@ async def get_queue_status(
     db: AsyncSession = Depends(get_db),
 ):
     await _load_business_or_404(db, business_id)
-    status_dict = await queue_service.get_status_by_token(db, business_id, session_token)
-    if status_dict is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Queue entry not found")
-    return QueueStatusResponse(
-        entry=QueueEntryResponse(**status_dict["entry"]),
-        total_waiting=status_dict["total_waiting"],
-        estimated_wait_minutes=status_dict["estimated_wait_minutes"],
-    )
+    state = await queue_service.get_status_by_token(db, business_id, session_token)
+    if state is None:
+        raise api_error(404, "NOT_FOUND", "Queue entry not found")
+    return QueueStatusResponse(**state)
 
 
-# ─── staff endpoints ───────────────────────────────────────────────────────────
+@router.get(
+    "/api/queue/service-day",
+    response_model=QueueServiceDayResponse,
+    dependencies=[Depends(require_module("queue"))],
+)
+async def get_staff_queue_service_day(
+    db: AsyncSession = Depends(get_db),
+    business: Business = Depends(get_current_business),
+):
+    try:
+        state = await queue_service.get_service_day(db, business.id)
+    except queue_service.QueuePolicyError as exc:
+        raise _queue_error(exc) from exc
+    return QueueServiceDayResponse(**queue_service.service_day_to_dict(state))
 
+
+@router.put(
+    "/api/queue/service-day",
+    response_model=QueueServiceDayResponse,
+    dependencies=[Depends(require_module("queue"))],
+)
+async def update_staff_queue_service_day(
+    body: QueueServiceDayUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    business: Business = Depends(get_current_business),
+):
+    try:
+        _, changed = await queue_service.set_service_day(
+            db,
+            business.id,
+            status=body.status,
+            max_waiting_covers=body.max_waiting_covers,
+            actor_id=current_user.id,
+        )
+        state = await queue_service.get_service_day(db, business.id)
+    except queue_service.QueuePolicyError as exc:
+        raise _queue_error(exc) from exc
+    await db.commit()
+    if changed:
+        await publish(
+            DomainEvent(
+                event_type=f"queue.service_{'opened' if body.status == 'open' else 'closed'}",
+                business_id=str(business.id),
+                payload={"service_date": str(state["service_date"])},
+                location_id=str(state["location"].id),
+            )
+        )
+    return QueueServiceDayResponse(**queue_service.service_day_to_dict(state))
+
+
+@router.get(
+    "/api/queue/entries",
+    response_model=list[QueueEntryResponse],
+    dependencies=[Depends(require_module("queue"))],
+)
 @router.get(
     "/api/queue/{business_id}/entries",
     response_model=list[QueueEntryResponse],
     dependencies=[Depends(require_module("queue"))],
+    include_in_schema=False,
 )
 async def list_queue_entries(
-    business_id: UUID,
+    business_id: UUID | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
     business: Business = Depends(get_current_business),
 ):
-    if business.id != business_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-
-    entries = await queue_service.get_active_entries(db, business_id)
-    waiting_pos = 1
+    if business_id is not None and business_id != business.id:
+        raise api_error(404, "NOT_FOUND", "Queue not found")
+    entries = await queue_service.get_active_entries(db, business.id)
+    waiting_position = 1
     result = []
-    for e in entries:
-        pos = waiting_pos if e.status == "waiting" else None
-        if e.status == "waiting":
-            waiting_pos += 1
-        result.append(QueueEntryResponse(**queue_service.entry_to_dict(e, pos)))
+    for entry in entries:
+        position = waiting_position if entry.status == "waiting" else None
+        if entry.status == "waiting":
+            waiting_position += 1
+        result.append(await _entry_response(db, entry, position))
     return result
 
 
 @router.post(
-    "/api/queue/{business_id}/entries/{entry_id}/notify",
+    "/api/queue/entries",
+    response_model=QueueStatusResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_module("queue"))],
+)
+async def create_staff_walk_in(
+    body: QueueJoinRequest,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    business: Business = Depends(get_current_business),
+):
+    try:
+        phone = normalize_phone(body.phone, business.country_code)
+        state, created = await queue_service.join_queue(
+            db,
+            business.id,
+            body.name,
+            body.party_size,
+            phone,
+            body.idempotency_key,
+            actor_id=current_user.id,
+            channel="staff",
+        )
+    except RegionalValidationError as exc:
+        raise api_error(422, "VALIDATION_ERROR", str(exc)) from exc
+    except queue_service.QueuePolicyError as exc:
+        raise _queue_error(exc) from exc
+    await db.commit()
+    if created:
+        await publish(
+            DomainEvent(
+                event_type="queue.party_joined",
+                business_id=str(business.id),
+                payload={"entry_id": str(state["entry"]["id"]), "source": "staff"},
+            )
+        )
+    else:
+        response.status_code = status.HTTP_200_OK
+    return QueueStatusResponse(**state)
+
+
+@router.post(
+    "/api/queue/entries/{entry_id}/call",
     response_model=QueueEntryResponse,
     dependencies=[Depends(require_module("queue"))],
 )
-async def notify_queue_entry(
-    business_id: UUID,
+@router.post(
+    "/api/queue/{business_id}/entries/{entry_id}/notify",
+    response_model=QueueEntryResponse,
+    dependencies=[Depends(require_module("queue"))],
+    include_in_schema=False,
+)
+async def call_queue_entry(
     entry_id: UUID,
+    business_id: UUID | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     business: Business = Depends(get_current_business),
 ):
-    """Notify the party (SMS if phone provided) and move them to 'called' status."""
-    if business.id != business_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-
-    entry = await queue_service.call_entry(db, business_id, entry_id)
+    if business_id is not None and business_id != business.id:
+        raise api_error(404, "NOT_FOUND", "Queue entry not found")
+    entry = await queue_service.call_entry(db, business.id, entry_id, current_user.id)
     if entry is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entry not found or not in waiting status")
-
+        raise api_error(404, "NOT_FOUND", "Queue entry not found or not waiting")
     await notification_service.notify_business_staff(
         db,
-        business_id=business_id,
+        business_id=business.id,
         kind="queue_called",
-        title=f"{entry.name} has been notified",
-        body=f"{entry.name} (party of {entry.party_size}) was called — waiting for arrival.",
+        title=f"{entry.name} was called",
+        body="The party is marked called. Delivery status is tracked separately.",
         payload={"entry_id": str(entry.id)},
         exclude_user_id=current_user.id,
     )
-
     await db.commit()
+    await publish(
+        DomainEvent(
+            event_type="queue.party_called",
+            business_id=str(business.id),
+            payload={"entry_id": str(entry.id)},
+        )
+    )
+    attempt = await queue_service.deliver_queue_call(db, business.id, entry.id)
+    if attempt is not None:
+        await db.commit()
+        await publish(
+            DomainEvent(
+                event_type="queue.delivery_updated",
+                business_id=str(business.id),
+                payload={"entry_id": str(entry.id), "state": attempt.status},
+            )
+        )
+    return await _entry_response(db, entry)
 
-    await publish(DomainEvent(
-        event_type="queue.party_called",
-        business_id=str(business_id),
-        payload={"entry_id": str(entry.id)},
-    ))
 
-    return QueueEntryResponse(**queue_service.entry_to_dict(entry))
+@router.post(
+    "/api/queue/entries/{entry_id}/delivery/retry",
+    response_model=QueueEntryResponse,
+    dependencies=[Depends(require_module("queue"))],
+)
+async def retry_queue_delivery(
+    entry_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    business: Business = Depends(get_current_business),
+):
+    attempt = await queue_service.deliver_queue_call(db, business.id, entry_id)
+    if attempt is None:
+        raise api_error(409, "DELIVERY_UNAVAILABLE", "No configured delivery channel is available")
+    await db.commit()
+    await publish(
+        DomainEvent(
+            event_type="queue.delivery_updated",
+            business_id=str(business.id),
+            payload={"entry_id": str(entry_id), "state": attempt.status},
+        )
+    )
+    entry = await db.scalar(
+        select(queue_service.QueueEntry).where(
+            queue_service.QueueEntry.id == entry_id,
+            queue_service.QueueEntry.business_id == business.id,
+        )
+    )
+    return await _entry_response(db, entry)
 
 
-@router.delete(
-    "/api/queue/{business_id}/entries/{entry_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
+@router.post(
+    "/api/queue/entries/{entry_id}/remove",
+    response_model=QueueEntryResponse,
     dependencies=[Depends(require_module("queue"))],
 )
 async def remove_queue_entry(
-    business_id: UUID,
     entry_id: UUID,
+    body: QueueRemovalRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     business: Business = Depends(get_current_business),
 ):
-    if business.id != business_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-
-    removed = await queue_service.remove_entry(db, business_id, entry_id)
-    if not removed:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entry not found or already inactive")
-
+    entry = await queue_service.remove_entry(
+        db,
+        business.id,
+        entry_id,
+        actor_id=current_user.id,
+        reason_code=body.reason_code,
+        note=body.note,
+    )
+    if entry is None:
+        raise api_error(404, "NOT_FOUND", "Queue entry not found or already inactive")
     await db.commit()
+    await publish(
+        DomainEvent(
+            event_type="queue.party_removed",
+            business_id=str(business.id),
+            payload={"entry_id": str(entry.id), "reason_code": body.reason_code},
+        )
+    )
+    return await _entry_response(db, entry)
 
-    await publish(DomainEvent(
-        event_type="queue.party_removed",
-        business_id=str(business_id),
-        payload={"entry_id": str(entry_id)},
-    ))
-
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-# ─── WebSocket ─────────────────────────────────────────────────────────────────
 
 @router.websocket("/ws/queue/{business_id}")
 async def queue_websocket(
@@ -296,33 +437,24 @@ async def queue_websocket(
     token: str = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
-    """Staff WebSocket authenticated by a short-lived, scoped credential."""
     if not await authorize_staff_websocket(
-        db,
-        ws,
-        token=token,
-        business_id=business_id,
-        required_modules=("queue",),
+        db, ws, token=token, business_id=business_id, required_modules=("queue",)
     ):
         return
-
     bid = str(business_id)
     await manager.connect(bid, ws)
-
-    # Send current queue state immediately on connect
     entries = await queue_service.get_active_entries(db, business_id)
-    waiting_pos = 1
-    payload_entries = []
-    for e in entries:
-        pos = waiting_pos if e.status == "waiting" else None
-        if e.status == "waiting":
-            waiting_pos += 1
-        payload_entries.append(queue_service.entry_to_dict(e, pos))
-
+    waiting_position = 1
+    payload = []
+    for entry in entries:
+        position = waiting_position if entry.status == "waiting" else None
+        if entry.status == "waiting":
+            waiting_position += 1
+        payload.append(await queue_service.entry_to_dict(db, entry, position))
     try:
-        await ws.send_json({"type": "queue_updated", "entries": payload_entries})
+        await ws.send_json({"type": "queue_updated", "entries": payload})
         async for _ in ws.iter_text():
-            pass  # keep connection alive; clients only receive, not send
+            pass
     except WebSocketDisconnect:
         pass
     finally:

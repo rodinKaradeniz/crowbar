@@ -166,9 +166,9 @@ cd server
 venv/bin/python -m app.jobs.reservation_reminders
 ```
 
-Do not run `python -m db.migrate reset`, delete Docker volumes, seed shared
-databases, or use destructive Git commands unless the user explicitly requests
-it.
+Do not run `python -m db.migrate reset`, delete Docker volumes, or seed shared
+databases unless the user explicitly requests it. Repository state belongs to
+the user; [docs/RULES.md](docs/RULES.md) owns the Git restriction.
 
 ## Canonical conventions
 
@@ -198,14 +198,24 @@ A change is complete when:
 
 ## Workflow modules
 
-No project-local workflow module is installed yet. Read
-[docs/SKILLS.md](docs/SKILLS.md) before creating one; it requires a repeated,
-project-specific workflow rather than a generic checklist and records the
-accepted location under `.agents/skills/`.
+Project-local workflow modules are installed under `.claude/skills/`. Ten are
+Crowbar-specific — `run-crowbar-service-loop`, `guard-crowbar-tenancy`,
+`change-crowbar-money-and-tax`, `change-crowbar-schema`,
+`write-crowbar-operational-copy`, `security`, `testing`, `superpowers`,
+`frontend-design`, and `full-stack-architect` — and three are generic craft
+skills. They load on a matching task; they add process
+and cannot weaken [docs/RULES.md](docs/RULES.md) or
+[docs/PRODUCT.md](docs/PRODUCT.md).
+
+[docs/SKILLS.md](docs/SKILLS.md) owns the strategy: the accepted location, the
+installed set and its division of labor, the skills planned but not yet
+written, and the quality bar for adding one. Read it before creating or
+editing a skill.
 
 ## Verification status of this document
 
-Last reconciled 2026-08-14 against the confirmed supervised-pilot boundary,
-repository layout, architecture, history, ordered roadmap, and stage-0 release
-inventory/acceptance map. This documentation change ran no application runtime
-checks.
+Last reconciled 2026-08-18 against the installed `.claude/skills/` set; before
+that, on 2026-08-14 against the confirmed supervised-pilot boundary, repository
+layout, architecture, history, ordered roadmap, and stage-0 release
+inventory/acceptance map. These documentation changes ran no application
+runtime checks.

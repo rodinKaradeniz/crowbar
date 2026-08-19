@@ -23,7 +23,7 @@ from app.models.customer import (
 from app.models.order import Order
 from app.models.queue_entry import QueueEntry
 from app.models.reservation import Reservation
-from app.models.tab import Tab
+from app.models.tab import Tab, TabSettlementEvent
 from app.schemas.customer import CustomerProfileUpdate, GuestTimelineEntry
 
 
@@ -164,11 +164,26 @@ async def _timeline(
         Tab.business_id == business_id, Tab.customer_id == customer_id
     ))).scalars().all())
     for tab in tabs:
-        total = await db.scalar(select(func.coalesce(func.sum(Order.total_amount), 0)).where(
-            Order.tab_id == tab.id, Order.status != "cancelled"
+        settlement = None
+        if tab.current_settlement_event_id is not None:
+            settlement = await db.scalar(select(TabSettlementEvent).where(
+                TabSettlementEvent.id == tab.current_settlement_event_id,
+                TabSettlementEvent.business_id == business_id,
+                TabSettlementEvent.tab_id == tab.id,
+                TabSettlementEvent.event_type == "settled_externally",
+            ))
+        total = settlement.total_snapshot if settlement is not None else await db.scalar(
+            select(func.coalesce(func.sum(Order.total_amount), 0)).where(
+                Order.tab_id == tab.id, Order.status != "cancelled"
+            )
+        )
+        entries.append(GuestTimelineEntry(
+            id=f"tab:{tab.id}", kind="tab",
+            occurred_at=settlement.occurred_at if settlement is not None else tab.opened_at,
+            title="Settled externally" if settlement is not None else "Open tab",
+            detail=settlement.informational_method if settlement is not None else None,
+            amount=total, status=tab.status,
         ))
-        entries.append(GuestTimelineEntry(id=f"tab:{tab.id}", kind="tab", occurred_at=tab.closed_at or tab.opened_at,
-            title="Settled tab" if tab.closed_at else "Open tab", detail=tab.settled_method, amount=total, status=tab.status))
     orders = list((await db.execute(select(Order).where(
         Order.business_id == business_id, Order.customer_id == customer_id
     ))).scalars().all())
@@ -409,7 +424,16 @@ async def anonymize_inactive_customers(db: AsyncSession, *, business_id: UUID | 
             )
         )
         tab_activity = await db.scalar(
-            select(func.max(func.coalesce(Tab.closed_at, Tab.opened_at))).where(
+            select(func.max(Tab.opened_at)).where(
+                Tab.business_id == customer.business_id,
+                Tab.customer_id == customer.id,
+            )
+        )
+        settlement_activity = await db.scalar(
+            select(func.max(TabSettlementEvent.occurred_at))
+            .join(Tab, Tab.id == TabSettlementEvent.tab_id)
+            .where(
+                TabSettlementEvent.business_id == customer.business_id,
                 Tab.business_id == customer.business_id,
                 Tab.customer_id == customer.id,
             )
@@ -428,6 +452,7 @@ async def anonymize_inactive_customers(db: AsyncSession, *, business_id: UUID | 
                     reservation_activity,
                     queue_activity,
                     tab_activity,
+                    settlement_activity,
                     order_activity,
                 )
                 if activity is not None

@@ -911,6 +911,97 @@ its own authoritative state and abuse/failure handling. Operators must set
 **References:** `client/components/business-route-guard.tsx`,
 `client/next.config.ts`, `client/app/page.tsx`, `docs/deployment.md`
 
+## 2026-08-17 — Imported agent skills were retargeted to Crowbar's real stack
+
+**Context:** Eight skills were installed under `.claude/skills/`. Five of them
+had been copied from an unrelated project and described a stack this repository
+does not have: database row-level security and service-role keys, a different
+package manager and command set, a different UI primitive library and type
+system, an LLM retrieval pipeline, and test files that do not exist here. An
+agent following them would apply the wrong security model, run commands that
+fail, and cite paths that cannot be opened. `docs/SKILLS.md` compounded the
+problem by mandating `.agents/skills/` and stating that no workflow module was
+installed, and `AGENTS.md` repeated that claim.
+
+**Decision:** Name `.claude/skills/` the accepted location, keeping `.agents/`
+documented only as the Codex-compatible mirror. Rewrite `security`, `testing`,
+`superpowers`, `frontend-design`, and `full-stack-architect` against verified
+source, and replace the foreign examples in `skill-creator` and
+`sequential-thinking`. Add four Crowbar-specific skills:
+`run-crowbar-service-loop`, `guard-crowbar-tenancy`,
+`change-crowbar-money-and-tax`, and `write-crowbar-operational-copy`. Record the
+remaining six as planned rather than writing thin versions of them. Require
+that every path, command, and filename in a skill be opened before it is cited.
+
+**Consequences:** A skill that describes the wrong stack is worse than no
+skill — it is confidently wrong at exactly the moment an agent stops checking.
+Imported skills are therefore treated as drafts to be retargeted, never as
+installable content. `docs/SKILLS.md` now owns the installed set and the
+division of labor between overlapping skills, so a new skill must show it does
+not duplicate an existing one. The absence of row-level security is now stated
+explicitly in the security and tenancy skills, because the imported text had
+taught the opposite.
+
+**References:** `.claude/skills/`, `docs/SKILLS.md`, `AGENTS.md`,
+`docs/TODO.md`
+
+## 2026-08-19 — Queue and future waitlist share durable delivery truth
+
+**Context:** A walk-in queue state and a message-delivery result are different
+facts. The old lifecycle had no explicit per-service-day capacity policy,
+fabricated wait estimates, weak retry protection, and synchronous notification
+copy that could claim a guest was reached after a provider failure. Future
+waitlist offers had the same delivery problem and an incomplete terminal
+lifecycle.
+
+**Decision:** Make queue availability an explicit location/service-day row with
+a cover cap, and treat a missing row as closed. Serialize joins on that row,
+scope idempotency by tenant/request fingerprint, reject a second active phone,
+and derive estimates only from a minimum measured sample. Record queue and
+waitlist transitions append-only. Generalize reservation delivery attempts so
+queue and waitlist messages commit as pending before provider work, then record
+the result separately. Calling remains authoritative even when delivery fails;
+only Floor seating occupies registered tables.
+
+**Consequences:** UI copy must distinguish “called” from “message delivered,”
+and reconnect must replace projections from authoritative HTTP state. A future
+delivery channel can extend the shared target model but cannot infer delivery
+from operational status. Queue scheduling automation, richer Floor geometry and
+generic offline operation remain separate work.
+
+**References:** `server/db/migrations/038_stage3_guest_to_table_lifecycle.sql`,
+`server/app/services/queue_service.py`,
+`server/app/services/reservation_waitlist_service.py`,
+`server/app/services/floor_plan_service.py`
+
+## 2026-08-19 — Fulfillment is line-based; settlement is an external assertion
+
+**Context:** Fixed Kitchen/Bar routing could not represent a tenant's real
+stations, order-level fulfillment could not safely reconcile mixed preparation
+or exact inventory reversals, and legacy tab closure mixed an operational state
+with payment-like language. Corrections and served cancellation also needed a
+durable economic audit boundary.
+
+**Decision:** Give each tenant editable preparation stations and route every
+catalogue item to one station or the shared queue, snapshotting that route on
+placed lines. Make line transitions authoritative and link serve/reversal stock
+movements to the exact line. Allow full-cart correction only before preparation
+and reasoned whole-order cancellation until settlement. Serialize every
+economic tab mutation on the tab row. Represent completion only as an
+append-only `settled_externally` event with immutable currency/total snapshot
+and optional informational method/reference; reopening appends a manager/owner
+reason without changing prior history.
+
+**Consequences:** Placed tax/price snapshots stay immutable, operational
+fulfillment may finish after settlement, and no settled tab accepts an economic
+mutation until an eligible audited reopen. Informational methods cannot become
+partial tenders or amounts by method. The venue's separate compliant register
+remains payment and fiscal authority.
+
+**References:** `server/db/migrations/039_stage4_ordering_stations_and_corrections.sql`,
+`server/db/migrations/040_stage4_external_settlement.sql`,
+`server/app/services/order_service.py`, `server/app/services/tab_service.py`
+
 ## Entry Template
 
 ```markdown

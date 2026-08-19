@@ -1,18 +1,20 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events import DomainEvent, publish
 from app.database import get_db
-from app.dependencies import get_current_business, get_current_user, require_module
+from app.dependencies import get_current_business, get_current_user, require_module, require_roles
 from app.models.business import Business
 from app.models.tab import Tab
 from app.models.user import User
 from app.schemas.order import OrderPlaceRequest, OrderResponse
-from app.schemas.tab import TabCloseRequest, TabOpenRequest, TabResponse
+from app.schemas.tab import TabOpenRequest, TabReopenRequest, TabResponse, TabSettleExternallyRequest
 from app.services import order_service, tab_service
+from app.services.tab_ws_manager import manager as tab_ws_manager
+from app.services.websocket_auth import authorize_staff_websocket
 
 logger = logging.getLogger(__name__)
 
@@ -22,12 +24,14 @@ router = APIRouter(
     tags=["tabs"],
     dependencies=[Depends(require_module("ordering"))],
 )
+ws_router = APIRouter(tags=["tabs"])
 
 
 async def _tab_response(db: AsyncSession, tab: Tab) -> TabResponse:
     """Assemble a TabResponse with the on-demand total and associated orders."""
     orders = await tab_service.get_tab_orders(db, tab.id)
     total = await tab_service.get_tab_total(db, tab.id)
+    events = await tab_service.get_settlement_events(db, tab.business_id, tab.id)
     return TabResponse(
         id=tab.id,
         business_id=tab.business_id,
@@ -41,6 +45,8 @@ async def _tab_response(db: AsyncSession, tab: Tab) -> TabResponse:
         closed_by=tab.closed_by,
         closed_at=tab.closed_at,
         settled_method=tab.settled_method,
+        current_settlement_event_id=tab.current_settlement_event_id,
+        settlement_events=events,
         total=total,
         orders=orders,
     )
@@ -131,7 +137,7 @@ async def list_tabs(
     current_user: User = Depends(get_current_user),
     business: Business = Depends(get_current_business),
 ):
-    """List the business's tabs (optionally filter by ?status=open|closed)."""
+    """List the business's tabs (optionally filter by open or settled_externally)."""
     tabs = await tab_service.list_tabs(db, business.id, status)
     return [await _tab_response(db, tab) for tab in tabs]
 
@@ -166,7 +172,7 @@ async def add_order_to_tab(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tab not found")
     if tab.status != "open":
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Tab is closed"
+            status_code=status.HTTP_409_CONFLICT, detail="Tab is settled externally"
         )
     try:
         order, created = await tab_service.add_order_to_tab(
@@ -200,27 +206,92 @@ async def add_order_to_tab(
     return order
 
 
-@router.post("/{tab_id}/close", response_model=TabResponse)
-async def close_tab(
+@router.post("/{tab_id}/settle-externally", response_model=TabResponse)
+async def settle_tab_externally(
     tab_id: UUID,
-    body: TabCloseRequest,
+    body: TabSettleExternallyRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     business: Business = Depends(get_current_business),
 ):
-    tab = await tab_service.get_tab(db, business.id, tab_id)
+    try:
+        tab, changed = await tab_service.settle_externally(
+            db,
+            business_id=business.id,
+            tab_id=tab_id,
+            actor_id=current_user.id,
+            request=body,
+        )
+    except tab_service.TabCommandError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if tab is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tab not found")
-    if tab.status != "open":
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Tab is already closed"
-        )
-    tab = await tab_service.close_tab(db, tab, current_user.id, body.settled_method)
     await db.commit()
-    if tab.seating_id:
+    if changed:
         await publish(DomainEvent(
-            event_type="floor_plan.tab_closed",
+            event_type="tab.settled_externally",
             business_id=str(business.id),
             payload={"tab_id": str(tab.id), "seating_id": str(tab.seating_id)},
         ))
     return await _tab_response(db, tab)
+
+
+@router.post(
+    "/{tab_id}/reopen",
+    response_model=TabResponse,
+    dependencies=[Depends(require_roles("owner", "manager"))],
+)
+async def reopen_tab(
+    tab_id: UUID,
+    body: TabReopenRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    business: Business = Depends(get_current_business),
+):
+    try:
+        tab, changed = await tab_service.reopen_tab(
+            db,
+            business_id=business.id,
+            tab_id=tab_id,
+            actor_id=current_user.id,
+            request=body,
+        )
+    except tab_service.TabCommandError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if tab is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tab not found")
+    await db.commit()
+    if changed:
+        await publish(DomainEvent(
+            event_type="tab.reopened",
+            business_id=str(business.id),
+            payload={"tab_id": str(tab.id), "seating_id": str(tab.seating_id)},
+        ))
+    return await _tab_response(db, tab)
+
+
+@ws_router.websocket("/ws/tabs/{business_id}")
+async def tabs_websocket(
+    business_id: UUID,
+    ws: WebSocket,
+    token: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+):
+    if not await authorize_staff_websocket(
+        db,
+        ws,
+        token=token,
+        business_id=business_id,
+        required_modules=("ordering",),
+    ):
+        return
+    bid = str(business_id)
+    await tab_ws_manager.connect(bid, ws)
+    try:
+        await ws.send_json({"type": "tabs_invalidated"})
+        async for _ in ws.iter_text():
+            pass
+    except WebSocketDisconnect:
+        pass
+    finally:
+        tab_ws_manager.disconnect(bid, ws)

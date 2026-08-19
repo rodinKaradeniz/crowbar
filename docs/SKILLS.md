@@ -2,237 +2,135 @@
 
 ## What Skills Are For
 
-Codex uses skills. A skill is a folder containing `SKILL.md` and optional
-scripts, references, and assets. It can trigger explicitly by name or
-implicitly when its description matches a task.
+A skill is a folder containing `SKILL.md` and optional scripts, references, and
+assets. It can trigger explicitly by name or implicitly when its description
+matches a task.
 
 Use `AGENTS.md` for durable repository facts and rules. Use a skill for a
 repeatable workflow that should load only for a matching task. Use a script or
 hook for mechanical enforcement, and an MCP server or connector for live
 external systems.
 
-For this repository, check shared skills into:
+## Accepted Location
+
+Shared skills live in `.claude/skills/`:
 
 ```text
-.agents/
+.claude/
 └── skills/
     └── <skill-name>/
         ├── SKILL.md
-        ├── agents/openai.yaml    # optional UI metadata
         ├── scripts/              # optional deterministic helpers
         └── references/           # optional on-demand detail
 ```
 
-Codex scans `.agents/skills` from the working directory up to the repository
-root. Personal cross-project skills belong in `$HOME/.agents/skills`; broadly
-distributed skill/tool bundles are better packaged as plugins.
+`.claude/skills/` is the primary and only populated location, because the
+skills installed here are authored for and loaded by Claude Code. `.agents/`
+remains documented as the Codex-compatible mirror: Codex scans `.agents/skills`
+from the working directory up to the repository root, so a skill that must also
+serve Codex belongs there as well. Do not maintain two divergent copies of the
+same skill — if a skill needs to serve both tools, mirror it deliberately and
+say so in the skill body. Personal cross-project skills belong in a user-level
+directory, not in this repository; broadly distributed skill/tool bundles are
+better packaged as plugins.
 
 Keep each skill narrow. Its frontmatter description should state both when it
 triggers and when it does not. Keep detailed architecture in the canonical
 project docs and link to it from the skill rather than duplicating it.
 
-## Recommended Crowbar Skills
+## Installed Skills
 
-Create these only as the workflow becomes frequent enough to validate with real
-examples. The first five offer the highest project-specific value.
+Thirteen skills are installed under `.claude/skills/`. Ten are
+Crowbar-specific; three are generic craft skills. This list and the planned
+list below are the single source of truth — a skill name appears in exactly one
+of them.
 
-1. **`shape-crowbar-product-change`** — Turn a goal or suggested UI/architecture
-   pattern into clarified user needs, constraints, acceptance criteria, and
-   two or three credible solution shapes. Recommend one with tradeoffs and stop
-   for confirmation before implementation.
-2. **`change-crowbar-feature`** — Trace and implement a vertical slice across
-   page/component, browser/server API facades, router, schema, service, model,
-   migration, events, mocks, and tests. Trigger on a feature that crosses more
-   than one runtime layer.
-3. **`change-crowbar-schema`** — Design forward SQL migrations, model/schema
-   alignment, data backfills, constraints/indexes, migration-chain checks, and
-   PostgreSQL integration tests. Trigger on any persistent data-model change.
-4. **`change-crowbar-realtime`** — Preserve commit-before-publish ordering,
-   Redis event contracts, projection re-querying, WebSocket auth, HTTP/WS
-   mapper parity, retry behavior, and multi-process caveats.
-5. **`review-crowbar-tenancy`** — Threat-model auth, resource ownership,
-   business scoping, module entitlement, IDOR risk, public endpoints, and test
-   coverage. Trigger on auth, staff, business, public write, or cross-tenant
-   changes.
-6. **`test-crowbar-change`** — Select tests from risk rather than file type:
-   unit, PostgreSQL integration, contract, browser journey, accessibility,
-   visual, failure, concurrency, and migration-chain checks. Produce a
-   verification matrix and report gaps explicitly.
-7. **`build-crowbar-ui`** — Apply the existing SRM design tokens, staff/guest
-   theme boundaries, shared primitives, responsive behavior, accessibility,
-   reduced motion, visual-regression checks, and confirmation of interaction
-   shape before coding.
-8. **`change-crowbar-inventory`** — Guard native-unit semantics, ml conversion,
-   recipe relationships, order-linked movement ledgers, best-effort served
-   transitions, and manual re-enable policy.
-9. **`experiment-crowbar-ml`** — Define baselines, leakage-safe splits,
-   minimum-data behavior, reproducibility, metrics, persistence, and graceful
-   frontend failure.
-10. **`build-crowbar-conversation`** — Design AI-assisted WhatsApp or future
-    channel flows around server-authoritative tools, explicit write
-    confirmation, webhook idempotency, human handoff, transcript/privacy
-    policy, prompt-injection resistance, simulations, and evaluation.
-11. **`plan-crowbar-client-app`** — Decide whether a mobile or desktop client
-    has enough device-specific value to justify a new platform, then plan
-    offline state, sync conflicts, push, hardware access, auth, releases,
-    observability, and shared-versus-native UX.
-12. **`release-crowbar`** — Run a risk-based release checklist covering builds,
-   tests, migrations, scheduled jobs, event delivery, environment variables,
-   health checks, rollback, backup, and smoke tests once deployment exists.
-13. **`record-crowbar-decision`** — Turn a resolved design choice or incident
-   into a concise `HISTORY.md` entry and update rules/TODO only when warranted.
+### Crowbar-specific
 
-## Skills for a Fully Equipped Developer
+| Skill | Owns | Triggers on |
+| --- | --- | --- |
+| `run-crowbar-service-loop` | The pilot journey as the definition of "verified", plus what is not yet implemented | Cross-module operational change; demo or smoke-test requests |
+| `guard-crowbar-tenancy` | Per-change checklist: business derivation, module gate, roles, public abuse, token scopes, idempotency, rate limits | Writing a router, service query, or staff page |
+| `change-crowbar-money-and-tax` | Currency precision, the currency lock, effective-dated tax versions, inclusive/exclusive policy, immutable line snapshots, the `money.ts` boundary | Pricing, order placement, tax profiles, regional settings, monetary columns |
+| `change-crowbar-schema` | Append-only numbered migrations under the custom migrator, the ORM/Pydantic/mapper alignment surface, migration design checklist, the two verification paths | Any table, column, constraint, index, or backfill change |
+| `write-crowbar-operational-copy` | Compliance guardrail: "settled externally", no payment or fiscal claims, no "revenue" for uncollected totals, honest empty/failure states | Any user-visible string |
+| `security` | The invariants themselves: threat model, why each holds, what breaks without it, what to prove with a test | Auth, public endpoints, credentials, jobs, ML boundary, review requests |
+| `testing` | Test selection and the real command matrix; named coverage gaps | Adding tests; verifying behavior |
+| `superpowers` | TDD/verification execution loop and evidence-backed completion claims | Feature work; circular debugging; before claiming done |
+| `frontend-design` | Applying `DESIGN.md` while writing components, plus the mid-service usage context | Pages, components, dialogs, visual states |
+| `full-stack-architect` | Cross-stack design workflow and Crowbar's layering, migration, event, and domain invariants | Work spanning UI, API, and schema together |
 
-Most normal frontend/backend work does not need a skill; the agent already
-knows the technologies. Skills are most valuable where the workflow is
-specialized, fragile, or organization-specific.
+### Generic
 
-### Product framing and interaction design
+`sequential-thinking` (reasoning structure for hard decisions),
+`andrej-karpathy-skills` (per-edit behavioral guardrails), `skill-creator`
+(authoring format, now pointing at this document as the quality bar).
 
-- **`frame-product-change`** — Identify the user, job, context, desired
-  outcome, constraints, non-goals, and success evidence before choosing a
-  solution.
-- **`compare-solution-shapes`** — Compare modal, sheet, popover, inline flow,
-  navigation, automation, notification, and “do nothing” options against
-  frequency, complexity, interruption cost, mobile behavior, and
-  accessibility.
-- **`map-service-journey`** — Model the whole human journey across customer,
-  staff, support, operations, notifications, and recovery—not only the primary
-  screen.
-- **`design-progressive-disclosure`** — Reveal complexity when needed without
-  hiding critical state or turning every feature into permanent navigation.
-- **`instrument-product-learning`** — Define events, funnels, qualitative
-  feedback, guardrail metrics, and a decision date before shipping an
-  experiment.
+### Division of labor to preserve
 
-### Domain and architecture reasoning
+- `security` is the **authority on each shared invariant** — why it exists,
+  what breaks without it, the threat it answers, and how to prove it with a
+  test. `guard-crowbar-tenancy` is the **per-change checklist** — what to check
+  on this router, service, or page right now, in what order, with the concrete
+  question to ask. Where the checklist touches an invariant it states the rule
+  and points at the owning `security` section instead of restating the
+  rationale. Both stand alone for their own trigger; run both on a public write
+  path.
+- `full-stack-architect` designs the change, `superpowers` executes and
+  verifies it, `testing` chooses the tests, `run-crowbar-service-loop` proves
+  the operational claim.
+- `change-crowbar-schema` owns the migration and its alignment chain;
+  `change-crowbar-money-and-tax` owns what a monetary column is allowed to mean.
+  A money column change runs both.
+- `frontend-design` owns how a surface looks and behaves;
+  `write-crowbar-operational-copy` owns what its strings may claim.
+- `docs/RULES.md` wins over every skill on process conflicts;
+  `docs/PRODUCT.md` wins on product conflicts.
 
-- **`model-domain-invariants`** — Write what must always remain true, legal
-  state transitions, ownership boundaries, and behavior under duplicate or
-  reordered operations before writing handlers.
-- **`design-reversible-change`** — Prefer additive schemas, compatibility
-  windows, feature flags, staged backfills, kill switches, and rollback paths
-  that preserve option value.
-- **`review-temporal-correctness`** — Examine timezones, clocks, ordering,
-  retries, expiry, scheduling, stale reads, race conditions, and eventual
-  consistency as one problem.
-- **`evolve-architecture-with-evidence`** — Set extraction or scaling triggers,
-  fitness functions, and decision checkpoints instead of adopting distributed
-  complexity speculatively.
-- **`simplify-or-delete`** — Search for an existing abstraction, removal,
-  consolidation, or policy change that solves the problem with less permanent
-  system surface.
+### Retargeting record
 
-### Implementation and verification
+The initial set was imported from another project and described a stack Crowbar
+does not have. On 2026-08-17, `security`, `testing`, `superpowers`,
+`frontend-design`, and `full-stack-architect` were rewritten against verified
+Crowbar source; `skill-creator` and `sequential-thinking` had their foreign
+examples replaced. See `docs/HISTORY.md` (2026-08-17). The rule that came out
+of it: **a skill citing a file that does not exist is worse than no skill.**
+Verify every path, command, and filename by opening it before you cite it.
 
-- **`change-api-contract`** — Evolve API contracts with compatibility,
-  consumer mapping, error semantics, versioning, and contract tests.
-- **`change-database-safely`** — Plan expand/migrate/contract steps, backfills,
-  constraints, indexes, lock duration, recovery, and mixed-version operation.
-- **`test-properties-and-models`** — Test invariants and state machines with
-  property, model-based, mutation, fuzz, and metamorphic techniques where
-  example tests are weak.
-- **`debug-from-evidence`** — Separate observations, hypotheses, experiments,
-  and conclusions; minimize reproduction cases and stop changing multiple
-  variables at once.
-- **`review-change-by-risk`** — Scale review depth to blast radius, data
-  irreversibility, privilege, novelty, concurrency, and observability rather
-  than lines changed.
-- **`upgrade-dependencies-safely`** — Review compatibility, transitive risk,
-  provenance, licenses, advisories, lockfiles, behavior changes, and rollback.
+## Planned, not yet written
 
-### Human quality and inclusive design
+Listed so the next agent extends the set deliberately rather than inventing an
+overlapping skill. Tracked in `docs/TODO.md`. The trigger for writing one is
+repeated real friction in that workflow, not completeness of this list.
 
-- **`audit-accessibility`** — Verify semantics, focus, keyboard, screen-reader,
-  contrast, motion, zoom, touch targets, errors, and cognitive load with manual
-  and automated checks.
-- **`review-human-factors`** — Analyze fatigue, time pressure, accidental
-  activation, confirmation bias, alert overload, recoverability, and how the
-  UI behaves during a real shift rather than a clean demo.
-- **`review-international-readiness`** — Cover language expansion, locale,
-  Unicode, names, addresses, phone numbers, timezones, currencies, units,
-  calendars, and legal differences.
-- **`design-graceful-degradation`** — Preserve a useful core experience under
-  slow networks, partial data, unavailable optional services, old clients, and
-  constrained devices.
-- **`write-operational-ux`** — Treat errors, empty states, audit history,
-  explanations, support diagnostics, and recovery controls as product
-  features.
+- **`change-crowbar-service-time`** — Service-day cutoff, business timezone vs
+  UTC, DST, "today" metrics, grace and reminder windows.
+- **`change-crowbar-inventory-ledger`** — Milliliter units, ledger authority,
+  atomic balance updates, reversal, discrepancies, archive-not-delete, the
+  reconciliation job.
+- **`change-crowbar-realtime`** — Commit-before-publish ordering, Redis Stream
+  contracts, WebSocket auth, HTTP-as-authoritative-fallback parity, mapper
+  parity, single-process fan-out caveats.
+- **`verify-crowbar-change`** — Risk-based test selection across the real
+  command matrix, producing a verification matrix and explicit gaps.
+- **`review-crowbar-shift-usability`** — Taps, latency, one-handed use,
+  interruption recovery, and accessibility during live service.
+- **`shape-crowbar-product-change`** — Turn a goal or a suggested UI pattern
+  into clarified needs, constraints, acceptance criteria, and two or three
+  credible solution shapes; recommend one and stop for confirmation.
+- **`experiment-crowbar-ml`** — Baselines, leakage-safe splits, minimum-data
+  behavior, reproducibility, metrics, persistence, graceful frontend failure.
+- **`release-crowbar`** — Risk-based release checklist over builds, tests,
+  migrations, jobs, environment variables, health checks, rollback, and smoke
+  tests. Blocked until the deployment arc resumes.
+- **`record-crowbar-decision`** — Turn a resolved design choice or incident
+  into a concise `HISTORY.md` entry, updating rules or TODO only when
+  warranted.
 
-### Security, privacy, and reliability
-
-- **`threat-model-abuse-cases`** — Model assets, actors, trust boundaries,
-  privilege escalation, IDOR, automation abuse, economic attacks, and insider
-  misuse before selecting controls.
-- **`minimize-data-and-privilege`** — Challenge whether data should be
-  collected, how long it lives, who can access it, and whether every service
-  needs its current privileges.
-- **`design-for-operability`** — Define logs, traces, metrics, SLOs, alerts,
-  runbooks, health checks, support tools, and correlation before production.
-- **`simulate-failure`** — Exercise retries, duplicates, reordering, partial
-  commits, provider outages, queue lag, clock skew, disk pressure, restore,
-  regional failure, and operator mistakes.
-- **`practice-incident-learning`** — Preserve timelines and evidence, reduce
-  impact, identify system contributors without blame, assign durable
-  follow-ups, and verify they worked.
-- **`test-disaster-recovery`** — Prove backup integrity, restoration time,
-  recovery point, credentials, dependency order, and operational ownership.
-
-### Data, ML, and AI systems
-
-- **`define-data-contracts`** — Establish ownership, meaning, quality
-  thresholds, lineage, freshness, compatibility, and drift handling for data
-  consumed by multiple systems.
-- **`evaluate-ml-system`** — Guard against leakage, weak baselines, unstable
-  splits, subgroup harm, calibration errors, drift, irreproducibility, and
-  offline metrics disconnected from product outcomes.
-- **`evaluate-agentic-ai`** — Build task suites, adversarial cases, tool-call
-  assertions, hallucination checks, confirmation requirements, human handoff,
-  cost/latency budgets, and production feedback loops.
-- **`secure-ai-tool-use`** — Treat prompts and retrieved content as untrusted,
-  constrain tools by identity and tenant, validate arguments server-side, make
-  writes explicit, and audit consequential actions.
-- **`govern-data-lifecycle`** — Plan consent, purpose limitation, retention,
-  deletion, export, residency, provenance, and model-training boundaries.
-
-### Delivery, economics, and stewardship
-
-- **`design-ci-cd-gates`** — Create fast, diagnostic quality gates and a
-  promotion/rollback model without turning CI into a slow, ignored dashboard.
-- **`plan-release-and-deprecation`** — Stage rollout, compatibility,
-  telemetry, communication, rollback, data migration, and final removal.
-- **`model-cost-and-capacity`** — Estimate unit economics, load shape,
-  bottlenecks, provider limits, headroom, and the cost of graceful failure
-  before scale arrives.
-- **`review-build-versus-buy`** — Include integration, lock-in, exit cost,
-  compliance, operability, and team attention—not only license price.
-- **`preserve-institutional-memory`** — Record why, rejected alternatives,
-  validity conditions, incidents, and reversal triggers so future teams do not
-  rediscover the same constraints.
-- **`assess-socio-technical-impact`** — Ask who operates, supports, moderates,
-  is measured by, can be harmed by, or can exploit a system; technical
-  correctness alone is not sufficient.
-
-## Questions Exceptional Engineers Keep Asking
-
-These questions are useful ingredients for skills and review checklists:
-
-- What problem are we solving, for whom, and how will we know it improved?
-- Is the proposed interface the best interaction shape, or merely the first one
-  named?
-- What must always be true, including during retries and partial failure?
-- What happens when the same command arrives twice, late, or out of order?
-- Can this change be rolled back after data has changed?
-- What will an operator see at 03:00 when this fails?
-- Who pays the complexity cost: customer, staff, support, operations, or the
-  next developer?
-- Which optional dependency can fail without taking down the core workflow?
-- What data are we keeping that we do not need?
-- What is the simplest thing we could delete instead of adding?
-- Which assumption has the weakest evidence, and what experiment could test it?
-- What would make this architectural decision stop being valid?
-- How will a future agent discover why this behavior exists?
+Skills for a conversational channel or a separate mobile/desktop client are
+deliberately absent: the underlying product decisions are unresolved and
+`docs/TODO.md` owns them. Do not write a skill for a surface that does not
+exist yet.
 
 ## Skill Quality Bar
 
@@ -246,6 +144,10 @@ Every authored skill should:
 - Use deterministic scripts for repeated mechanical checks and test those
   scripts.
 - Include failure and recovery behavior, not only the success path.
+- Say what must always be true, including under retries and partial failure,
+  and what happens when the same command arrives twice, late, or out of order.
+- Say whether the change can be rolled back after data has changed, and what an
+  operator sees when it fails mid-shift.
 - Protect validation integrity: evaluate with realistic raw artifacts and avoid
   leaking the expected answer into the test.
 - Stay narrow enough that implicit activation is predictable.
@@ -255,6 +157,10 @@ Every authored skill should:
 Skills should guide judgment; they should not pretend judgment can replace
 evidence. CI, tests, hooks, type systems, database constraints, observability,
 and production feedback remain the enforcement and learning mechanisms.
+
+Do not add a skill for generic knowledge the agent already has. Most normal
+frontend and backend work needs no skill; skills earn their context cost where
+the workflow is specialized, fragile, or specific to this project.
 
 ## Adoption Order
 

@@ -355,6 +355,61 @@ already recorded in `TODO.md`; no check was weakened.
 Railway remains intentionally paused at migrations 001–022. No local stage
 completion authorizes deployment or other external mutation.
 
+## Stages 3 and 4 closure evidence — 2026-08-19
+
+Stages 3 and 4 are complete locally. This evidence supersedes the original
+defect wording for `QUEUE-01` through `QUEUE-03`, `WAIT-01`, the Stage 3 portion
+of `RES-02`, the Stage 4 portions of `ORDER-04`, `ORDER-05` and `INV-05`, and
+the Stage 3–4 portions of `REALTIME-01`; it closes `SETTLE-01`.
+
+- Migration 038 adds location/service-day queue policy, service-date indexing,
+  tenant-scoped idempotency, append-only queue history, generalized delivery
+  attempts and the complete waitlist terminal/audit contract. Public and staff
+  queue creation share the locked cover-cap path; the measured median is absent
+  below five samples. PostgreSQL coverage proves closed/full behavior, exact
+  retries, duplicate-phone denial, reason requirements, unavailable delivery,
+  tenant isolation and the final-capacity race in which exactly one join wins.
+- Future-waitlist creation reuses authoritative availability, management tokens
+  bind the mutable revision, acceptance creates one normal reservation, and
+  decline/cancel/remove/history/expiry and email-to-SMS fallback use durable
+  delivery state. The expiry job is lock-safe and every read treats elapsed
+  offers as expired.
+- Queue and reservation sources still converge through
+  `POST /api/floor-plan/seatings`; planned assignments do not occupy tables,
+  queue state alone cannot seat a party, and reconnect refetches the HTTP Floor
+  board. Existing and extended Floor/reservation PostgreSQL tests retain the
+  combination, overlap, rollover, Berlin DST, no-show and module-denial proof.
+- Migration 039 replaces fixed routing with tenant stations and shared lines,
+  snapshots routing on order lines, adds independent line fulfillment and
+  exact line-linked stock movements, and records append-only correction,
+  cancellation and availability history. Order authority tests cover mixed
+  progression, correction-after-preparation denial, exact serve/reversal and
+  cancellation behavior without weakening placed tax snapshots.
+- Migration 040 replaces simulated closure with `open` and
+  `settled_externally`, append-only settlement/reopen events and immutable
+  currency/total snapshots. The shared tab lock serializes order mutations and
+  settlement; tests prove retry-safe settlement, blocked economic mutation,
+  coherent settlement-versus-add races and audited reopen. The frontend uses
+  only “Settle externally” language and treats method/reference as optional
+  information, never tender or payment state.
+- Queue, order and tab projections publish after commit and use WebSocket
+  messages as invalidations. Public/staff queue states, dynamic station tickets,
+  reasoned correction/cancellation, waitlist terminal states and tab audit/
+  reconnect states have mapper and component coverage; a failed optional
+  delivery never changes the committed operational result into a success claim.
+
+Final combined verification: 170 PostgreSQL backend tests and 48 frontend tests
+passed; frontend lint, TypeScript and Next.js production build passed; the
+disposable verifier applied migrations 001–040, seeded twice and passed its
+new lifecycle assertions; Python compilation and `git diff --check` passed.
+The retained `python-jose`, Node test-runtime and Next.js middleware warnings
+remain documented dependency/framework maintenance debt and do not conceal a
+failed check. Stage 7 still owns automated cross-browser E2E, the full seeded
+pilot scenario and its accessibility/load/failure matrix.
+
+Railway remains intentionally paused at migrations 001–022. No stage completion
+authorizes deployment or any other external mutation.
+
 Stage implementations replace these observations with dated command output,
 test names, screenshots or recordings where useful, and links to any durable
 runbook or CI artifact. Do not mark a risk closed by editing this document

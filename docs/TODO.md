@@ -244,7 +244,14 @@ runtime legal rules engine.
 - **Exit gate — met:** A German tenant can configure and audit operational tax
   treatment without Crowbar representing itself as a fiscal cash register.
 
-### 3. Complete the guest-to-table workflow — ready
+### 3. Complete the guest-to-table workflow — complete
+
+**Completed locally 2026-08-19 in migration 038.** Queue policy, capacity,
+idempotency, reasoned transitions and delivery truth now share one service-day
+lifecycle for public and staff walk-ins. The future waitlist has complete
+management, delivery, expiry and reservation-acceptance paths, while Floor
+remains the sole authority that creates real seating. Closure evidence is in
+[`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md).
 
 - Make the current-service queue explicitly open/closed and schedule/capacity
   aware. Add staff-created walk-ins, duplicate/idempotency protection,
@@ -260,11 +267,17 @@ runtime legal rules engine.
 - Keep the confirmed area-based responsive host board. Defer geometry,
   drag-and-drop, automatic server sections, and richer meal stages until pilot
   evidence shows they are necessary.
-- **Exit gate:** public and staff paths reliably turn a reservation or walk-in
+- **Exit gate — met:** public and staff paths reliably turn a reservation or walk-in
   into one real seating without bypassing capacity, table, tenant, or delivery
   rules.
 
-### 4. Complete ordering and external settlement — ready after stage 3
+### 4. Complete ordering and external settlement — complete
+
+**Completed locally 2026-08-19 in migrations 039–040.** Preparation stations,
+line-level fulfillment, exact movement linkage, audited correction/cancellation,
+authoritative item availability, external-settlement history, controlled reopen
+and tab invalidation/reconciliation now form one shared-tab lifecycle. Crowbar
+records only the venue register's external-settlement assertion.
 
 - Add tenant-configurable preparation stations and replace hard-coded
   `kitchen | bar | any` routing. Support audited order edits/cancellation,
@@ -284,7 +297,7 @@ runtime legal rules engine.
 - Explicitly exclude payment collection, card/cash data, tips, split or partial
   tenders, change calculations, refunds, receipts, invoices, bank settlement,
   deposits, and card holds.
-- **Exit gate:** staff and QR rounds share one authoritative tab, stations can
+- **Exit gate — met:** staff and QR rounds share one authoritative tab, stations can
   fulfill it in real time, stock effects reconcile, and staff can safely record
   that the external register completed settlement without Crowbar claiming to
   process payment.
@@ -581,6 +594,18 @@ the confirmed sequence unless a stage explicitly pulls the item forward.
 - **Ready:** Add nested `AGENTS.md` files only when client, server, or ML work
   develops genuinely different recurring instructions. Avoid duplicating the
   root guide.
+- **Ready — deferred agent skills:** Nine skills are specified in
+  [`SKILLS.md`](SKILLS.md) but not written: `change-crowbar-service-time`,
+  `change-crowbar-inventory-ledger`, `change-crowbar-realtime`,
+  `verify-crowbar-change`, `review-crowbar-shift-usability`,
+  `shape-crowbar-product-change`, `experiment-crowbar-ml`, `release-crowbar`,
+  and `record-crowbar-decision`. The first five were deferred on 2026-08-17
+  rather than shipped thin; the last four were folded in on 2026-08-18 when
+  `SKILLS.md` retired its overlapping candidate catalogue. `release-crowbar`
+  additionally waits on the deployment arc resuming. The trigger for writing
+  one is repeated real friction in that workflow, not completeness of the list.
+  Each must be grounded in verified source paths, and must not duplicate an
+  installed skill — check the division of labor in `SKILLS.md` first.
 
 ## Product and UX
 

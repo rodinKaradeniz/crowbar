@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle2, XCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { AlertCircle, CheckCircle2, XCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { clientJoinQueue, clientGetQueueStatus, clientLeaveQueue } from "@/lib/client-api";
-import type { Business, QueueStatus } from "@/types";
+import { clientGetPublicQueueService, clientJoinQueue, clientGetQueueStatus, clientLeaveQueue } from "@/lib/client-api";
+import type { Business, QueueServiceDay, QueueStatus } from "@/types";
 import { NightTheme } from "@/components/night-theme";
 
 const POLL_INTERVAL = 30_000;
@@ -36,7 +36,7 @@ function clearSession(businessId: string) {
 }
 
 function formatWait(minutes?: number): string {
-  if (!minutes) return "A few minutes";
+  if (minutes === undefined) return "Not enough history yet";
   if (minutes < 60) return `~${minutes} min`;
   return `~${Math.round(minutes / 60)}h ${minutes % 60}m`;
 }
@@ -87,7 +87,12 @@ export function QueueJoinClient({ business }: { business: Business }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [queueStatus, setQueueStatus] = useState<QueueStatus | null>(null);
+  const [service, setService] = useState<QueueServiceDay | null>(null);
+  const [serviceLoading, setServiceLoading] = useState(true);
+  const [serviceError, setServiceError] = useState(false);
+  const [stale, setStale] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const joinKeyRef = useRef<string | null>(null);
 
   const stopPolling = () => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -98,15 +103,33 @@ export function QueueJoinClient({ business }: { business: Business }) {
       try {
         const s = await clientGetQueueStatus(business.id, sessionToken);
         setQueueStatus(s);
+        setStale(false);
         if (s.entry.status === "seated" || s.entry.status === "removed") {
           stopPolling();
         }
       } catch {
-        // silently ignore polling errors
+        setStale(true);
       }
     },
     [business.id],
   );
+
+  const refreshService = useCallback(async () => {
+    try {
+      setService(await clientGetPublicQueueService(business.id));
+      setServiceError(false);
+    } catch {
+      setServiceError(true);
+    } finally {
+      setServiceLoading(false);
+    }
+  }, [business.id]);
+
+  useEffect(() => {
+    void refreshService();
+    const id = setInterval(() => void refreshService(), POLL_INTERVAL);
+    return () => clearInterval(id);
+  }, [refreshService]);
 
   // Check for existing session on mount
   useEffect(() => {
@@ -126,15 +149,18 @@ export function QueueJoinClient({ business }: { business: Business }) {
     }
     setLoading(true);
     setError(null);
+    joinKeyRef.current ??= crypto.randomUUID();
     try {
       const status = await clientJoinQueue(business.id, {
         name: name.trim(),
         partySize,
         phone: phone.trim() || undefined,
+        idempotencyKey: joinKeyRef.current,
       });
       saveSession(business.id, status.entry.sessionToken);
       setQueueStatus(status);
       setStep("status");
+      joinKeyRef.current = null;
       pollRef.current = setInterval(
         () => fetchStatus(status.entry.sessionToken),
         POLL_INTERVAL,
@@ -160,6 +186,7 @@ export function QueueJoinClient({ business }: { business: Business }) {
     setName("");
     setPhone("");
     setPartySize(1);
+    joinKeyRef.current = null;
     stopPolling();
     setStep("form");
   };
@@ -271,6 +298,44 @@ export function QueueJoinClient({ business }: { business: Business }) {
               Leave queue
             </Button>
           )}
+          {stale && (
+            <p className="flex items-center justify-center gap-2 text-xs text-amber-700" role="status">
+              <AlertCircle className="h-3.5 w-3.5" /> Updates are delayed. We&apos;ll keep retrying.
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (serviceLoading) {
+    return <div className="flex min-h-screen items-center justify-center bg-background"><p className="text-sm text-muted-foreground">Checking today&apos;s queue…</p></div>;
+  }
+
+  if (serviceError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-6">
+        <div className="max-w-sm space-y-4 text-center">
+          <AlertCircle className="mx-auto h-8 w-8 text-muted-foreground" />
+          <h1 className="font-display text-2xl">Queue status unavailable</h1>
+          <p className="text-sm text-muted-foreground">We couldn&apos;t confirm whether the queue is open. Please try again.</p>
+          <Button onClick={() => void refreshService()}>Try again</Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!service?.isOpen || service.isFull) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-6">
+        <NightTheme />
+        <div className="max-w-sm space-y-4 text-center">
+          <p className="eyebrow text-brass">{business.name}</p>
+          <h1 className="font-display text-3xl">{service?.isFull ? "The queue is full" : "The queue is closed"}</h1>
+          <p className="text-sm text-muted-foreground">
+            {service?.isFull ? "The waiting-cover limit has been reached. Please check again later." : "Walk-in queue entries are not being accepted for this service day."}
+          </p>
+          <Button variant="outline" onClick={() => void refreshService()}>Check again</Button>
         </div>
       </div>
     );
@@ -287,6 +352,11 @@ export function QueueJoinClient({ business }: { business: Business }) {
           <p className="eyebrow text-brass mb-2">Walk-in queue</p>
           <h1 className="font-display text-3xl tracking-tight">{business.name}</h1>
           <div className="rule-double mt-5 mx-auto max-w-36" />
+          <p className="mt-4 text-sm text-muted-foreground">
+            {service.estimatedWaitMinutes === undefined
+              ? "The queue is open. A wait estimate will appear once enough recent seating history is available."
+              : `Current measured wait: ${formatWait(service.estimatedWaitMinutes)}`}
+          </p>
         </div>
 
         <form onSubmit={(e) => void handleJoin(e)} className="space-y-5 fade-rise" style={{ animationDelay: "100ms" }}>

@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit(/.claude/skills/guard-crowbar-tenancy/**)",
+      "Bash(grep -n \"^#\\\\|security\\\\`\\\\|see \\\\`security\\\\|§\" .claude/skills/guard-crowbar-tenancy/SKILL.md)",
+      "Bash(echo \"=== SKILLS.md structure ===\" && grep -n \"^#\\\\|^##\\\\|^###\" docs/SKILLS.md && echo \"=== AGENTS workflow modules ===\" && sed -n '/## Workflow modules/,/## Verification/p' AGENTS.md)"
+    ],
+    "additionalDirectories": [
+      "/Users/rodinkaradeniz/projects/crowbar"
+    ]
+  }
+}

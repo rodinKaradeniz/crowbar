@@ -205,6 +205,7 @@ async def apply_movement(
     created_by_id: UUID | None = None,
     location_id: UUID | None = None,
     order_id: UUID | None = None,
+    order_line_item_id: UUID | None = None,
 ) -> StockMovement:
     """Schema-free core: mutate current_quantity, write the movement audit row,
     and fire a low-stock notification on a par breach. Shared by the API-driven
@@ -239,6 +240,7 @@ async def apply_movement(
         location_id=location_id,
         item_id=locked_item.id,
         order_id=order_id,
+        order_line_item_id=order_line_item_id,
         movement_type=movement_type,
         quantity_delta=delta,
         reason=reason,

@@ -7,11 +7,22 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models.business import Business
+from app.models.inventory import InventoryItem, StockMovement
 from app.models.menu import Menu, MenuCategory, MenuItem, Modifier, ModifierGroup
-from app.models.order import Order
-from app.schemas.order import OrderPlaceRequest
+from app.models.order import Order, OrderRevision
+from app.models.preparation_station import PreparationStation
+from app.models.recipe import MenuItemIngredient
+from app.models.tab import TabSettlementEvent
+from app.models.user import User
+from app.schemas.order import (
+    OrderCancellationRequest,
+    OrderCorrectionRequest,
+    OrderLineStatusUpdateRequest,
+    OrderPlaceRequest,
+)
+from app.schemas.tab import TabReopenRequest, TabSettleExternallyRequest
 from app.schemas.tax import TaxProfileVersionCreate
-from app.services import order_service, tax_service
+from app.services import order_service, tab_service, tax_service
 
 
 async def _menu_context(
@@ -244,6 +255,286 @@ async def test_invalid_cart_is_rejected_without_partial_order(
         )
 
     assert await db_session.scalar(select(func.count(Order.id))) == 0
+
+
+@pytest.mark.asyncio
+async def test_station_snapshot_line_transition_and_correction_boundary(
+    db_session: AsyncSession,
+):
+    business, item, modifier = await _menu_context(db_session, "station-lines")
+    actor = User(
+        email="station-lines@example.com",
+        name="Station Manager",
+        password_hash="test-only",
+        user_type="staff",
+    )
+    station = PreparationStation(
+        business_id=business.id,
+        name="Cold Bar",
+        sort_order=30,
+        is_active=True,
+    )
+    db_session.add_all([actor, station])
+    await db_session.flush()
+    item.preparation_station_id = station.id
+    item.routes_to_all_stations = False
+
+    order, _ = await order_service.place_order(
+        db_session,
+        business.id,
+        _request(item, modifier, key="station-line-order", quantity=1),
+        require_age_confirmation=False,
+        channel="staff",
+    )
+    line = order.line_items[0]
+    assert line.preparation_station_id == station.id
+    assert line.preparation_station_name == "Cold Bar"
+    assert line.routes_to_all_stations is False
+    assert line.line_status == "received"
+
+    transitioned = await order_service.advance_order_line_status(
+        db_session,
+        business_id=business.id,
+        order_id=order.id,
+        line_id=line.id,
+        request=OrderLineStatusUpdateRequest(status="preparing"),
+        changed_by=actor.id,
+    )
+    assert transitioned is not None
+    assert transitioned.status == "preparing"
+    assert transitioned.line_items[0].line_status == "preparing"
+
+    before_total = transitioned.total_amount
+    with pytest.raises(order_service.OrderValidationError, match="before preparation"):
+        await order_service.correct_order(
+            db_session,
+            business_id=business.id,
+            order_id=order.id,
+            request=OrderCorrectionRequest(
+                items=_request(item, modifier, key="unused", quantity=2).items,
+                reason="Guest requested a larger round",
+                idempotency_key="correction-after-prep",
+            ),
+            actor_id=actor.id,
+        )
+    assert transitioned.total_amount == before_total
+    assert await db_session.scalar(select(func.count(OrderRevision.id))) == 0
+
+
+@pytest.mark.asyncio
+async def test_line_serving_and_previous_step_correction_have_exact_linked_inventory(
+    db_session: AsyncSession,
+):
+    business, item, modifier = await _menu_context(db_session, "line-ledger")
+    actor = User(
+        email="line-ledger@example.com",
+        name="Line Ledger Manager",
+        password_hash="test-only",
+        user_type="staff",
+    )
+    inventory = InventoryItem(
+        business_id=business.id,
+        name="Soda syrup",
+        unit="each",
+        unit_type="each",
+        current_quantity=Decimal("10"),
+        is_active=True,
+    )
+    db_session.add_all([actor, inventory])
+    await db_session.flush()
+    db_session.add(MenuItemIngredient(
+        menu_item_id=item.id,
+        inventory_item_id=inventory.id,
+        quantity=Decimal("2"),
+    ))
+    await db_session.flush()
+    order, _ = await order_service.place_order(
+        db_session,
+        business.id,
+        _request(item, modifier, key="line-ledger-order", quantity=3),
+        require_age_confirmation=False,
+        channel="staff",
+    )
+    line_id = order.line_items[0].id
+
+    for status in ("preparing", "ready", "served"):
+        order = await order_service.advance_order_line_status(
+            db_session,
+            business_id=business.id,
+            order_id=order.id,
+            line_id=line_id,
+            request=OrderLineStatusUpdateRequest(status=status),
+            changed_by=actor.id,
+        )
+        assert order is not None
+    await db_session.refresh(inventory)
+    assert inventory.current_quantity == Decimal("4")
+    sale = await db_session.scalar(select(StockMovement).where(
+        StockMovement.order_line_item_id == line_id,
+        StockMovement.movement_type == "sale",
+    ))
+    assert sale is not None and sale.quantity_delta == Decimal("-6")
+
+    order = await order_service.advance_order_line_status(
+        db_session,
+        business_id=business.id,
+        order_id=order.id,
+        line_id=line_id,
+        request=OrderLineStatusUpdateRequest(status="ready"),
+        changed_by=actor.id,
+    )
+    await db_session.refresh(inventory)
+    assert order is not None and order.status == "ready"
+    assert inventory.current_quantity == Decimal("10")
+    reversal = await db_session.scalar(select(StockMovement).where(
+        StockMovement.order_line_item_id == line_id,
+        StockMovement.movement_type == "sale_reversal",
+    ))
+    assert reversal is not None and reversal.quantity_delta == Decimal("6")
+
+
+@pytest.mark.asyncio
+async def test_external_settlement_is_idempotent_freezes_total_and_blocks_economic_mutation(
+    db_session: AsyncSession,
+):
+    business, item, modifier = await _menu_context(db_session, "settlement")
+    actor = User(
+        email="settlement-manager@example.com",
+        name="Settlement Manager",
+        password_hash="test-only",
+        user_type="staff",
+    )
+    db_session.add(actor)
+    await db_session.flush()
+    tab = await tab_service.open_tab(db_session, business.id, actor.id)
+    order, _ = await order_service.place_order(
+        db_session,
+        business.id,
+        _request(item, modifier, key="settlement-order", quantity=1),
+        require_age_confirmation=False,
+        tab_id=tab.id,
+        channel="staff",
+    )
+
+    command = TabSettleExternallyRequest(
+        idempotency_key="settlement-command-1",
+        informational_method="card",
+        note="Recorded from the external register",
+        external_register_reference="REGISTER-42",
+    )
+    settled, changed = await tab_service.settle_externally(
+        db_session,
+        business_id=business.id,
+        tab_id=tab.id,
+        actor_id=actor.id,
+        request=command,
+    )
+    retried, retry_changed = await tab_service.settle_externally(
+        db_session,
+        business_id=business.id,
+        tab_id=tab.id,
+        actor_id=actor.id,
+        request=command,
+    )
+    assert settled is not None and retried is not None
+    assert changed is True and retry_changed is False
+    assert settled.status == "settled_externally"
+    event = await db_session.get(TabSettlementEvent, settled.current_settlement_event_id)
+    assert event is not None
+    assert event.total_snapshot == order.total_amount
+    assert event.informational_method == "card"
+    assert event.external_register_reference == "REGISTER-42"
+    assert await db_session.scalar(select(func.count(TabSettlementEvent.id))) == 1
+
+    with pytest.raises(order_service.OrderValidationError, match="external settlement"):
+        await order_service.cancel_order(
+            db_session,
+            business_id=business.id,
+            order_id=order.id,
+            request=OrderCancellationRequest(
+                reason="Incorrect round",
+                idempotency_key="cancel-after-settlement",
+            ),
+            actor_id=actor.id,
+        )
+
+    reopened, reopened_changed = await tab_service.reopen_tab(
+        db_session,
+        business_id=business.id,
+        tab_id=tab.id,
+        actor_id=actor.id,
+        request=TabReopenRequest(
+            idempotency_key="reopen-command-1",
+            reason="External register entry was voided",
+        ),
+    )
+    assert reopened is not None and reopened.status == "open"
+    assert reopened_changed is True
+    events = list((await db_session.scalars(select(TabSettlementEvent))).all())
+    assert [entry.event_type for entry in events] == ["settled_externally", "reopened"]
+    assert events[1].related_settlement_event_id == events[0].id
+
+
+@pytest.mark.asyncio
+async def test_settlement_and_order_addition_share_one_tab_lock(
+    db_session: AsyncSession,
+):
+    business, item, modifier = await _menu_context(db_session, "settlement-race")
+    actor = User(
+        email="settlement-race@example.com",
+        name="Settlement Race Manager",
+        password_hash="test-only",
+        user_type="staff",
+    )
+    db_session.add(actor)
+    await db_session.flush()
+    tab = await tab_service.open_tab(db_session, business.id, actor.id)
+    await db_session.commit()
+
+    sessions = async_sessionmaker(
+        bind=db_session.bind, class_=AsyncSession, expire_on_commit=False
+    )
+
+    async def add_order():
+        async with sessions() as session:
+            try:
+                await tab_service.add_order_to_tab(
+                    session,
+                    business.id,
+                    tab.id,
+                    _request(item, modifier, key="settlement-race-order", quantity=1),
+                )
+                await session.commit()
+                return "order_added"
+            except ValueError:
+                await session.rollback()
+                return "order_blocked"
+
+    async def settle():
+        async with sessions() as session:
+            await tab_service.settle_externally(
+                session,
+                business_id=business.id,
+                tab_id=tab.id,
+                actor_id=actor.id,
+                request=TabSettleExternallyRequest(
+                    idempotency_key="settlement-race-command",
+                ),
+            )
+            await session.commit()
+            return "settled"
+
+    outcomes = await asyncio.gather(add_order(), settle())
+    assert "settled" in outcomes
+
+    async with sessions() as session:
+        orders = await tab_service.get_tab_orders(session, tab.id)
+        events = await tab_service.get_settlement_events(session, business.id, tab.id)
+        assert len(events) == 1
+        assert len(orders) in {0, 1}
+        expected = Decimal("0") if not orders else orders[0].total_amount
+        assert events[0].total_snapshot == expected
+        assert ("order_added" in outcomes) is bool(orders)
 
 
 @pytest.mark.asyncio

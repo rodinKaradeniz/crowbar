@@ -14,9 +14,23 @@ from sqlalchemy.orm import selectinload
 
 from app.models.business import Business
 from app.models.menu import Menu, MenuCategory, MenuItem, Modifier, ModifierGroup
-from app.models.order import Order, OrderLineItem, OrderStatusTimeline
+from app.models.order import (
+    Order,
+    OrderLineItem,
+    OrderLineStatusTimeline,
+    OrderRevision,
+    OrderStatusTimeline,
+)
+from app.models.preparation_station import PreparationStation
+from app.models.tab import Tab
 from app.models.table import Table
-from app.schemas.order import OrderPlaceRequest, OrderStatusUpdateRequest
+from app.schemas.order import (
+    OrderCancellationRequest,
+    OrderCorrectionRequest,
+    OrderLineStatusUpdateRequest,
+    OrderPlaceRequest,
+    OrderStatusUpdateRequest,
+)
 from app.services import happy_hour_service, recipe_service, tax_service
 from app.services.floor_plan_service import resolve_service_window
 
@@ -28,9 +42,9 @@ logger = logging.getLogger(__name__)
 # every other backward step has no inventory side effect. 'cancelled' is a terminal
 # side-exit (no un-cancel in this pass).
 _TRANSITIONS: dict[str, list[str]] = {
-    "received": ["preparing", "cancelled"],
-    "preparing": ["received", "ready", "cancelled"],
-    "ready": ["preparing", "served", "cancelled"],
+    "received": ["preparing"],
+    "preparing": ["received", "ready"],
+    "ready": ["preparing", "served"],
     "served": ["ready"],
     "cancelled": [],
 }
@@ -158,6 +172,20 @@ async def _resolve_cart(
         raise OrderValidationError(
             "One or more menu items are unavailable for this table"
         )
+    for item in items_by_id.values():
+        if item.routes_to_all_stations:
+            continue
+        station_exists = await db.scalar(
+            select(PreparationStation.id).where(
+                PreparationStation.id == item.preparation_station_id,
+                PreparationStation.business_id == business_id,
+                PreparationStation.is_active.is_(True),
+            )
+        )
+        if station_exists is None:
+            raise OrderValidationError(
+                f"The preparation station for {item.name} is unavailable"
+            )
 
     resolved = []
     for item_request in request.items:
@@ -208,8 +236,10 @@ async def _resolve_cart(
     return resolved
 
 
-async def _load_order(db: AsyncSession, order_id: UUID, business_id: UUID) -> Order | None:
-    result = await db.execute(
+async def _load_order(
+    db: AsyncSession, order_id: UUID, business_id: UUID, *, lock: bool = False
+) -> Order | None:
+    query = (
         select(Order)
         .where(Order.id == order_id, Order.business_id == business_id)
         .options(
@@ -217,6 +247,9 @@ async def _load_order(db: AsyncSession, order_id: UUID, business_id: UUID) -> Or
             selectinload(Order.status_timeline),
         )
     )
+    if lock:
+        query = query.with_for_update()
+    result = await db.execute(query)
     return result.scalar_one_or_none()
 
 
@@ -237,6 +270,9 @@ def order_to_dict(order: Order) -> dict:
         "total_amount": float(order.total_amount),
         "notes": order.notes,
         "placed_at": order.placed_at.isoformat() if order.placed_at else None,
+        "cancelled_by": str(order.cancelled_by) if order.cancelled_by else None,
+        "cancelled_at": order.cancelled_at.isoformat() if order.cancelled_at else None,
+        "cancellation_reason": order.cancellation_reason,
         "line_items": [
             {
                 "id": str(li.id),
@@ -257,6 +293,12 @@ def order_to_dict(order: Order) -> dict:
                 "total_amount": float(li.total_amount),
                 "selected_modifiers": li.selected_modifiers or [],
                 "routing_tag": li.routing_tag,
+                "preparation_station_id": (
+                    str(li.preparation_station_id) if li.preparation_station_id else None
+                ),
+                "preparation_station_name": li.preparation_station_name,
+                "routes_to_all_stations": li.routes_to_all_stations,
+                "line_status": li.line_status,
                 "is_alcoholic": li.is_alcoholic,
                 "notes": li.notes,
             }
@@ -445,6 +487,20 @@ async def place_order(
             total_amount=line_total,
             selected_modifiers=selected_mods,
             routing_tag=item.routing_tag,
+            preparation_station_id=item.preparation_station_id,
+            preparation_station_name=(
+                None
+                if item.routes_to_all_stations
+                else await db.scalar(
+                    select(PreparationStation.name).where(
+                        PreparationStation.id == item.preparation_station_id,
+                        PreparationStation.business_id == business_id,
+                        PreparationStation.is_active.is_(True),
+                    )
+                )
+            ),
+            routes_to_all_stations=item.routes_to_all_stations,
+            line_status="received",
             is_alcoholic=item.is_alcoholic,
             notes=item_req.notes,
         )
@@ -563,43 +619,436 @@ async def advance_order_status(
     request: OrderStatusUpdateRequest,
     changed_by: UUID | None = None,
 ) -> Order | None:
-    order = await _load_order(db, order_id, business_id)
+    order = await _load_order(db, order_id, business_id, lock=True)
     if order is None:
         return None
 
-    allowed = _TRANSITIONS.get(order.status, [])
-    if request.status not in allowed:
-        raise ValueError(
-            f"Cannot transition from '{order.status}' to '{request.status}'. "
-            f"Allowed: {allowed}"
-        )
-
     from_status = order.status
-    order.status = request.status
-    # Audit row: records from → to for every transition (forward or backward),
-    # appended from this one handler (the audit log for the ticket board).
+    transitioned = False
+    for line in sorted(order.line_items, key=lambda item: str(item.id)):
+        if line.line_status == "cancelled" or request.status not in _TRANSITIONS.get(line.line_status, []):
+            continue
+        await _transition_line(db, order, line, request.status, changed_by)
+        transitioned = True
+    if not transitioned:
+        raise ValueError(f"No order lines can transition to '{request.status}'")
+    _recompute_order_status(order)
     db.add(
         OrderStatusTimeline(
             order_id=order.id,
             from_status=from_status,
-            status=request.status,
+            status=order.status,
             changed_by=changed_by,
             changed_at=datetime.now(timezone.utc),
         )
     )
     await db.flush()
 
-    # Inventory side effects at the 'served' boundary only (consistent with how
-    # deduction was originally scoped). Both are best-effort / non-blocking.
-    if from_status != "served" and request.status == "served":
-        # Forward into served: auto-deduct recipe ingredients from inventory.
-        await recipe_service.deduct_for_served_order(db, order, business_id)
-    elif from_status == "served" and request.status != "served":
-        # Backward out of served: credit back exactly what this order deducted.
-        await recipe_service.reverse_deduction_for_order(db, order, business_id)
-
     await db.refresh(order, ["line_items", "status_timeline"])
     return order
+
+
+def _recompute_order_status(order: Order) -> None:
+    statuses = [line.line_status for line in order.line_items]
+    active = [value for value in statuses if value != "cancelled"]
+    if not active:
+        order.status = "cancelled"
+        return
+    rank = {"received": 0, "preparing": 1, "ready": 2, "served": 3}
+    order.status = min(active, key=lambda value: rank[value])
+
+
+async def _transition_line(
+    db: AsyncSession,
+    order: Order,
+    line: OrderLineItem,
+    target: str,
+    changed_by: UUID | None,
+) -> None:
+    source = line.line_status
+    if target not in _TRANSITIONS.get(source, []):
+        raise ValueError(
+            f"Cannot transition line from '{source}' to '{target}'"
+        )
+    line.line_status = target
+    db.add(
+        OrderLineStatusTimeline(
+            business_id=order.business_id,
+            order_line_item_id=line.id,
+            from_status=source,
+            status=target,
+            changed_by=changed_by,
+        )
+    )
+    if source != "served" and target == "served":
+        await recipe_service.deduct_for_served_line(
+            db, order, line, order.business_id
+        )
+    elif source == "served" and target != "served":
+        await recipe_service.reverse_deduction_for_line(
+            db, order, line, order.business_id
+        )
+
+
+async def advance_order_line_status(
+    db: AsyncSession,
+    *,
+    business_id: UUID,
+    order_id: UUID,
+    line_id: UUID,
+    request: OrderLineStatusUpdateRequest,
+    changed_by: UUID,
+) -> Order | None:
+    order = await _load_order(db, order_id, business_id, lock=True)
+    if order is None:
+        return None
+    line = next((item for item in order.line_items if item.id == line_id), None)
+    if line is None:
+        return None
+    from_order_status = order.status
+    await _transition_line(db, order, line, request.status, changed_by)
+    _recompute_order_status(order)
+    if order.status != from_order_status:
+        db.add(OrderStatusTimeline(
+            order_id=order.id,
+            from_status=from_order_status,
+            status=order.status,
+            changed_by=changed_by,
+        ))
+    await db.flush()
+    await db.refresh(order, ["line_items", "status_timeline"])
+    return order
+
+
+def _command_fingerprint(payload: dict) -> str:
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+async def _existing_revision(
+    db: AsyncSession,
+    *,
+    business_id: UUID,
+    idempotency_key: str,
+    fingerprint: str,
+) -> OrderRevision | None:
+    revision = await db.scalar(
+        select(OrderRevision).where(
+            OrderRevision.business_id == business_id,
+            OrderRevision.idempotency_key == idempotency_key,
+        )
+    )
+    if revision is not None and revision.command_fingerprint != fingerprint:
+        raise OrderIdempotencyConflict(
+            "This idempotency key was already used for a different order command"
+        )
+    return revision
+
+
+async def _lock_economic_order(
+    db: AsyncSession, business_id: UUID, order_id: UUID
+) -> tuple[Order | None, Tab | None]:
+    order = await _load_order(db, order_id, business_id, lock=True)
+    if order is None:
+        return None, None
+    tab = None
+    if order.tab_id is not None:
+        tab = await db.scalar(
+            select(Tab)
+            .where(Tab.id == order.tab_id, Tab.business_id == business_id)
+            .with_for_update()
+        )
+        if tab is None:
+            raise OrderValidationError("The linked tab is unavailable")
+    return order, tab
+
+
+async def _build_corrected_lines(
+    db: AsyncSession,
+    *,
+    order: Order,
+    request: OrderCorrectionRequest,
+) -> tuple[list[OrderLineItem], Decimal, Decimal, Decimal]:
+    placement_shape = OrderPlaceRequest(
+        items=request.items,
+        notes=request.notes,
+        idempotency_key="correction-resolution",
+        age_confirmed=True,
+    )
+    resolved = await _resolve_cart(
+        db,
+        business_id=order.business_id,
+        request=placement_shape,
+        location_id=order.location_id,
+    )
+    business = await db.get(Business, order.business_id)
+    if business is None:
+        raise OrderValidationError("Business not found")
+    now = datetime.now(timezone.utc)
+    happy_hour_active = await happy_hour_service.is_happy_hour_active(
+        db, order.business_id
+    )
+    lines: list[OrderLineItem] = []
+    subtotal = Decimal("0")
+    tax_total = Decimal("0")
+    total = Decimal("0")
+    for item_request, item, modifiers in resolved:
+        unit_price = (
+            item.happy_hour_price
+            if happy_hour_active and item.happy_hour_price is not None
+            else item.price
+        )
+        selected_modifiers = []
+        for modifier in modifiers:
+            unit_price += modifier.price_delta
+            selected_modifiers.append({
+                "modifier_id": str(modifier.id),
+                "name": modifier.name,
+                "price_delta": float(modifier.price_delta),
+            })
+        profile, version = await tax_service.resolve_profile_version(
+            db, order.business_id, item.tax_profile_id, now
+        )
+        line_subtotal, line_tax, line_total = tax_service.calculate_line_tax(
+            unit_price * item_request.quantity,
+            version.rate,
+            version.price_includes_tax,
+            business.currency_code,
+        )
+        station_name = None
+        if not item.routes_to_all_stations:
+            station_name = await db.scalar(
+                select(PreparationStation.name).where(
+                    PreparationStation.id == item.preparation_station_id,
+                    PreparationStation.business_id == order.business_id,
+                    PreparationStation.is_active.is_(True),
+                )
+            )
+            if station_name is None:
+                raise OrderValidationError(
+                    f"The preparation station for {item.name} is unavailable"
+                )
+        lines.append(OrderLineItem(
+            order_id=order.id,
+            item_id=item.id,
+            item_name=item.name,
+            quantity=item_request.quantity,
+            unit_price=unit_price,
+            currency_code=business.currency_code,
+            tax_profile_id=profile.id,
+            tax_profile_version_id=version.id,
+            tax_profile_name=version.name,
+            tax_profile_code=profile.code,
+            tax_rate=version.rate,
+            price_includes_tax=version.price_includes_tax,
+            subtotal_amount=line_subtotal,
+            tax_amount=line_tax,
+            total_amount=line_total,
+            selected_modifiers=selected_modifiers,
+            routing_tag=item.routing_tag,
+            preparation_station_id=item.preparation_station_id,
+            preparation_station_name=station_name,
+            routes_to_all_stations=item.routes_to_all_stations,
+            line_status="received",
+            is_alcoholic=item.is_alcoholic,
+            notes=item_request.notes,
+        ))
+        subtotal += line_subtotal
+        tax_total += line_tax
+        total += line_total
+    return lines, subtotal, tax_total, total
+
+
+async def correct_order(
+    db: AsyncSession,
+    *,
+    business_id: UUID,
+    order_id: UUID,
+    request: OrderCorrectionRequest,
+    actor_id: UUID,
+) -> tuple[Order | None, bool]:
+    fingerprint = _command_fingerprint({
+        "command": "correct",
+        "order_id": str(order_id),
+        "reason": request.reason,
+        "notes": request.notes,
+        "items": [
+            {
+                "item_id": str(item.item_id),
+                "quantity": item.quantity,
+                "modifier_ids": sorted(str(value.modifier_id) for value in item.selected_modifiers),
+                "notes": item.notes,
+            }
+            for item in request.items
+        ],
+    })
+    existing = await _existing_revision(
+        db,
+        business_id=business_id,
+        idempotency_key=request.idempotency_key,
+        fingerprint=fingerprint,
+    )
+    if existing is not None:
+        return await _load_order(db, order_id, business_id), False
+    order, tab = await _lock_economic_order(db, business_id, order_id)
+    if order is None:
+        return None, False
+    if tab is not None and tab.status != "open":
+        raise OrderValidationError("Settled tabs cannot be corrected")
+    if order.status == "cancelled" or any(
+        line.line_status != "received" for line in order.line_items
+    ):
+        raise OrderValidationError(
+            "An order can only be corrected before preparation starts"
+        )
+    before = order_to_dict(order)
+    new_lines, subtotal, tax_total, total = await _build_corrected_lines(
+        db, order=order, request=request
+    )
+    for line in list(order.line_items):
+        await db.delete(line)
+    await db.flush()
+    for line in new_lines:
+        db.add(line)
+    order.notes = request.notes
+    order.subtotal_amount = subtotal
+    order.tax_amount = tax_total
+    order.total_amount = total
+    await db.flush()
+    await db.refresh(order, ["line_items", "status_timeline"])
+    after = order_to_dict(order)
+    db.add(OrderRevision(
+        business_id=business_id,
+        order_id=order.id,
+        actor_id=actor_id,
+        reason=request.reason,
+        idempotency_key=request.idempotency_key,
+        command_fingerprint=fingerprint,
+        before_snapshot=before,
+        after_snapshot=after,
+    ))
+    await db.flush()
+    return order, True
+
+
+async def cancel_order(
+    db: AsyncSession,
+    *,
+    business_id: UUID,
+    order_id: UUID,
+    request: OrderCancellationRequest,
+    actor_id: UUID,
+) -> tuple[Order | None, bool]:
+    fingerprint = _command_fingerprint({
+        "command": "cancel",
+        "order_id": str(order_id),
+        "reason": request.reason,
+    })
+    existing = await _existing_revision(
+        db,
+        business_id=business_id,
+        idempotency_key=request.idempotency_key,
+        fingerprint=fingerprint,
+    )
+    if existing is not None:
+        return await _load_order(db, order_id, business_id), False
+    order, tab = await _lock_economic_order(db, business_id, order_id)
+    if order is None:
+        return None, False
+    if tab is not None and tab.status != "open":
+        raise OrderValidationError("Orders cannot be cancelled after external settlement")
+    if order.status == "cancelled":
+        raise OrderValidationError("This order is already cancelled")
+    before = order_to_dict(order)
+    now = datetime.now(timezone.utc)
+    for line in order.line_items:
+        await recipe_service.reverse_deduction_for_line(
+            db, order, line, business_id
+        )
+        if line.line_status != "cancelled":
+            db.add(OrderLineStatusTimeline(
+                business_id=business_id,
+                order_line_item_id=line.id,
+                from_status=line.line_status,
+                status="cancelled",
+                changed_by=actor_id,
+                changed_at=now,
+            ))
+            line.line_status = "cancelled"
+    # Migration-020 movements have no line link and retain exact order-level reversal.
+    await recipe_service.reverse_deduction_for_order(db, order, business_id)
+    from_status = order.status
+    order.status = "cancelled"
+    order.cancelled_by = actor_id
+    order.cancelled_at = now
+    order.cancellation_reason = request.reason
+    db.add(OrderStatusTimeline(
+        order_id=order.id,
+        from_status=from_status,
+        status="cancelled",
+        changed_by=actor_id,
+        changed_at=now,
+    ))
+    await db.flush()
+    await db.refresh(order, ["line_items", "status_timeline"])
+    after = order_to_dict(order)
+    db.add(OrderRevision(
+        business_id=business_id,
+        order_id=order.id,
+        actor_id=actor_id,
+        reason=request.reason,
+        idempotency_key=request.idempotency_key,
+        command_fingerprint=fingerprint,
+        before_snapshot=before,
+        after_snapshot=after,
+    ))
+    await db.flush()
+    return order, True
+
+
+async def get_all_day_counts(
+    db: AsyncSession, business_id: UUID
+) -> list[dict]:
+    start = await _business_day_start_utc(db, business_id)
+    rows = await db.execute(
+        select(
+            OrderLineItem.preparation_station_id,
+            OrderLineItem.preparation_station_name,
+            OrderLineItem.routes_to_all_stations,
+            OrderLineItem.item_name,
+            OrderLineItem.line_status,
+            func.sum(OrderLineItem.quantity),
+        )
+        .join(Order, Order.id == OrderLineItem.order_id)
+        .where(
+            Order.business_id == business_id,
+            Order.placed_at >= start,
+            OrderLineItem.line_status != "cancelled",
+        )
+        .group_by(
+            OrderLineItem.preparation_station_id,
+            OrderLineItem.preparation_station_name,
+            OrderLineItem.routes_to_all_stations,
+            OrderLineItem.item_name,
+            OrderLineItem.line_status,
+        )
+        .order_by(
+            OrderLineItem.preparation_station_name,
+            OrderLineItem.item_name,
+            OrderLineItem.line_status,
+        )
+    )
+    return [
+        {
+            "preparation_station_id": station_id,
+            "preparation_station_name": station_name,
+            "routes_to_all_stations": shared,
+            "item_name": item_name,
+            "line_status": line_status,
+            "quantity": int(quantity),
+        }
+        for station_id, station_name, shared, item_name, line_status, quantity in rows.all()
+    ]
 
 
 async def get_order_by_session(

@@ -23,6 +23,7 @@ from app.core.ws_projections import (
     broadcast_floor_plan_invalidation,
     broadcast_order_board,
     broadcast_queue_state,
+    broadcast_tab_invalidation,
 )
 from app.database import async_session
 
@@ -90,6 +91,10 @@ async def _dispatch(fields: dict) -> bool:
                 await broadcast_floor_plan_invalidation(business_id)
             elif event_type.startswith("order."):
                 await broadcast_order_board(db, business_id)
+                await broadcast_tab_invalidation(business_id)
+            elif event_type.startswith("tab."):
+                await broadcast_tab_invalidation(business_id)
+                await broadcast_floor_plan_invalidation(business_id)
             # inventory.* events do not currently drive a WebSocket projection.
         return True
     except Exception:

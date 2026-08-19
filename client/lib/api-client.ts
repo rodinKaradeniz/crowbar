@@ -256,6 +256,12 @@ export interface ReservationWaitlistResponse {
   offered_reservation_time: string | null;
   offer_expires_at: string | null;
   accepted_at: string | null;
+  accepted_reservation_id: string | null;
+  terminal_at: string | null;
+  terminal_reason_code: string | null;
+  terminal_reason_note: string | null;
+  management_token: string | null;
+  delivery_state: string | null;
   created_at: string;
   updated_at: string;
 }

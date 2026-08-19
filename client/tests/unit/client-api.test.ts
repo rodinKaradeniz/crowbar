@@ -15,6 +15,10 @@ import {
   clientCreateStaffReservation,
   clientRescheduleReservation,
   clientUpdateBusiness,
+  clientGetOrders,
+  clientGetPublicQueueService,
+  clientJoinQueue,
+  clientSettleTabExternally,
 } from "@/lib/client-api";
 
 // Start MSW server for network-level mocking
@@ -46,6 +50,77 @@ describe("clientGetBusinesses", () => {
     expect(biz).not.toHaveProperty("advance_booking_days");
     expect(biz).not.toHaveProperty("reservation_time");
     expect(biz).not.toHaveProperty("created_at");
+  });
+});
+
+describe("stage 3 queue contracts", () => {
+  it("maps service policy and sends retry-safe join payloads", async () => {
+    let joinBody: unknown;
+    server.use(
+      http.get("/api/backend/queue/biz-1/service", () => HttpResponse.json({
+        service_date: "2026-08-19", status: "open", is_open: true, is_full: false,
+        max_waiting_covers: 20, waiting_covers: 4, estimated_wait_minutes: null,
+      })),
+      http.post("/api/backend/queue/biz-1/join", async ({ request }) => {
+        joinBody = await request.json();
+        return HttpResponse.json({
+          entry: {
+            id: "queue-1", business_id: "biz-1", session_token: "secret", name: "Ada",
+            party_size: 2, status: "waiting", position: 1,
+            joined_at: "2026-08-19T10:00:00Z", service_date: "2026-08-19",
+            delivery: { state: "unavailable", retryable: false, attempt_count: 0 },
+          }, total_waiting: 1, estimated_wait_minutes: null,
+        }, { status: 201 });
+      }),
+    );
+    const service = await clientGetPublicQueueService("biz-1");
+    const joined = await clientJoinQueue("biz-1", { name: "Ada", partySize: 2, idempotencyKey: "queue-retry-key" });
+    expect(service).toMatchObject({ isOpen: true, isFull: false, waitingCovers: 4, estimatedWaitMinutes: undefined });
+    expect(joinBody).toEqual({ name: "Ada", party_size: 2, idempotency_key: "queue-retry-key" });
+    expect(joined.entry).toMatchObject({ serviceDate: "2026-08-19", delivery: { state: "unavailable" } });
+  });
+});
+
+describe("stage 4 order and settlement projections", () => {
+  it("maps line station state and sends external-settlement audit fields", async () => {
+    let settlementBody: unknown;
+    const order = {
+      id: "order-1", business_id: "biz-1", session_token: "session", status: "preparing",
+      idempotency_key: "place-1", currency_code: "EUR", subtotal_amount: "10", tax_amount: "1.9",
+      total_amount: "11.9", placed_at: "2026-08-19T10:00:00Z",
+      line_items: [{
+        id: "line-1", order_id: "order-1", item_name: "Spritz", quantity: 1,
+        unit_price: "11.9", currency_code: "EUR", tax_profile_name: "Standard",
+        tax_profile_code: "STANDARD", tax_rate: "19", price_includes_tax: true,
+        subtotal_amount: "10", tax_amount: "1.9", total_amount: "11.9",
+        selected_modifiers: [], routing_tag: "bar", preparation_station_id: "station-1",
+        preparation_station_name: "Bar", routes_to_all_stations: false, line_status: "preparing",
+      }], status_timeline: [],
+    };
+    server.use(
+      http.get("/api/proxy/ordering/biz-1/orders", () => HttpResponse.json([order])),
+      http.post("/api/proxy/tabs/tab-1/settle-externally", async ({ request }) => {
+        settlementBody = await request.json();
+        return HttpResponse.json({
+          id: "tab-1", business_id: "biz-1", status: "settled_externally", channel: "staff",
+          opened_at: "2026-08-19T09:00:00Z", total: "11.9", orders: [order],
+          current_settlement_event_id: "settlement-1",
+          settlement_events: [{
+            id: "settlement-1", event_type: "settled_externally", occurred_at: "2026-08-19T11:00:00Z",
+            currency_code: "EUR", total_snapshot: "11.9", informational_method: "card",
+            external_register_reference: "REG-42",
+          }],
+        });
+      }),
+    );
+    const orders = await clientGetOrders("biz-1");
+    const tab = await clientSettleTabExternally("tab-1", {
+      idempotencyKey: "settlement-key", informationalMethod: "card", externalRegisterReference: "REG-42",
+    });
+    expect(orders[0].lineItems[0]).toMatchObject({ preparationStationName: "Bar", lineStatus: "preparing", routesToAllStations: false });
+    expect(settlementBody).toEqual({ idempotency_key: "settlement-key", informational_method: "card", external_register_reference: "REG-42" });
+    expect(tab.status).toBe("settled_externally");
+    expect(tab.settlementEvents[0]).toMatchObject({ totalSnapshot: 11.9, externalRegisterReference: "REG-42" });
   });
 });
 

@@ -41,6 +41,10 @@ class OrderLineItemResponse(AppBaseModel):
     total_amount: Decimal
     selected_modifiers: list[dict] = []
     routing_tag: str
+    preparation_station_id: UUID | None = None
+    preparation_station_name: str | None = None
+    routes_to_all_stations: bool
+    line_status: str
     is_alcoholic: bool = False
     notes: str | None = None
 
@@ -63,7 +67,23 @@ class OrderPlaceRequest(AppBaseModel):
 
 
 class OrderStatusUpdateRequest(AppBaseModel):
-    status: str = Field(..., pattern="^(received|preparing|ready|served|cancelled)$")
+    status: str = Field(..., pattern="^(received|preparing|ready|served)$")
+
+
+class OrderLineStatusUpdateRequest(AppBaseModel):
+    status: str = Field(..., pattern="^(received|preparing|ready|served)$")
+
+
+class OrderCorrectionRequest(AppBaseModel):
+    items: list[OrderLineItemRequest] = Field(..., min_length=1, max_length=100)
+    notes: str | None = Field(None, max_length=2000)
+    reason: str = Field(..., min_length=1, max_length=1000)
+    idempotency_key: str = Field(..., min_length=8, max_length=100)
+
+
+class OrderCancellationRequest(AppBaseModel):
+    reason: str = Field(..., min_length=1, max_length=1000)
+    idempotency_key: str = Field(..., min_length=8, max_length=100)
 
 
 class OrderStatusTimelineResponse(AppBaseModel):
@@ -91,5 +111,17 @@ class OrderResponse(AppBaseModel):
     total_amount: Decimal
     notes: str | None = None
     placed_at: datetime
+    cancelled_by: UUID | None = None
+    cancelled_at: datetime | None = None
+    cancellation_reason: str | None = None
     line_items: list[OrderLineItemResponse] = []
     status_timeline: list[OrderStatusTimelineResponse] = []
+
+
+class OrderAllDayCount(AppBaseModel):
+    preparation_station_id: UUID | None = None
+    preparation_station_name: str | None = None
+    routes_to_all_stations: bool
+    item_name: str
+    line_status: str
+    quantity: int

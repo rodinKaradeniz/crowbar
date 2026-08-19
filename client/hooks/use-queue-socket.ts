@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { QueueEntry } from "@/types";
 
 function toQueueEntryFromWS(e: Record<string, unknown>): QueueEntry {
+  const delivery = e.delivery as Record<string, unknown> | null | undefined;
   return {
     id: e.id as string,
     businessId: e.business_id as string,
@@ -16,6 +17,18 @@ function toQueueEntryFromWS(e: Record<string, unknown>): QueueEntry {
     joinedAt: e.joined_at as string,
     calledAt: (e.called_at as string) || undefined,
     seatedAt: (e.seated_at as string) || undefined,
+    completedAt: (e.completed_at as string) || undefined,
+    removedAt: (e.removed_at as string) || undefined,
+    serviceDate: e.service_date as string,
+    terminalReasonCode: (e.terminal_reason_code as string) || undefined,
+    terminalReasonNote: (e.terminal_reason_note as string) || undefined,
+    delivery: delivery ? {
+      state: delivery.state as string,
+      channel: (delivery.channel as string) || undefined,
+      retryable: (delivery.retryable as boolean) ?? false,
+      attemptCount: Number(delivery.attempt_count ?? 0),
+      lastError: (delivery.last_error as string) || undefined,
+    } : undefined,
   };
 }
 

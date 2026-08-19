@@ -86,6 +86,7 @@ export function ReservationForm({
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [note, setNote] = useState("");
+  const [waitlistManagementToken, setWaitlistManagementToken] = useState<string | null>(null);
   const [marketingEmailOptIn, setMarketingEmailOptIn] = useState(false);
   const [marketingSmsOptIn, setMarketingSmsOptIn] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -255,7 +256,7 @@ export function ReservationForm({
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      await clientCreatePublicReservationWaitlist({
+      const waitlistEntry = await clientCreatePublicReservationWaitlist({
         businessId,
         serviceTypeId,
         requestedStartsAt,
@@ -264,7 +265,12 @@ export function ReservationForm({
         name: `${firstName} ${lastName}`.trim(),
         phone,
         email,
+        idempotencyKey: crypto.randomUUID(),
       });
+      if (waitlistEntry.managementToken) {
+        localStorage.setItem(`reservation-waitlist-${waitlistEntry.id}`, waitlistEntry.managementToken);
+        setWaitlistManagementToken(waitlistEntry.managementToken);
+      }
       setStep("waitlist-success");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not join the waitlist";
@@ -302,6 +308,7 @@ export function ReservationForm({
             If a suitable table opens, we&apos;ll email you a 15-minute offer to confirm it.
           </p>
         </div>
+        {waitlistManagementToken && <Button asChild variant="outline" className="w-full"><a href={`/reserve/waitlist/manage/${encodeURIComponent(waitlistManagementToken)}`}>Manage or cancel request</a></Button>}
         <Button onClick={() => window.location.reload()} className="w-full">Make another request</Button>
       </div>
     );

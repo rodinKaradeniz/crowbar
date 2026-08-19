@@ -397,6 +397,14 @@ UPDATE menu_items
 SET tax_profile_id = '00000000-0000-0000-0037-000000000002'
 WHERE routing_tag = 'kitchen';
 
+UPDATE menu_items mi
+SET preparation_station_id = ps.id,
+    routes_to_all_stations = FALSE
+FROM preparation_stations ps
+WHERE ps.business_id = mi.business_id
+  AND ps.name = CASE mi.routing_tag WHEN 'bar' THEN 'Bar' ELSE 'Kitchen' END
+  AND mi.routing_tag <> 'any';
+
 -- ─── Item Library (mirror of all menu items) ──────────────────────────────────
 INSERT INTO item_library (id, business_id, name, description, price, routing_tag, prep_time_minutes) VALUES
 ('00000000-0000-0000-0009-000000000001', '00000000-0000-0000-0000-000000000002', 'Happy Hour Mojito',  'Fresh mint, lime, white rum, soda. House special.',            9.00, 'bar',     5),
@@ -424,6 +432,14 @@ INSERT INTO item_library (id, business_id, name, description, price, routing_tag
 UPDATE item_library
 SET tax_profile_id = '00000000-0000-0000-0037-000000000002'
 WHERE routing_tag = 'kitchen';
+
+UPDATE item_library il
+SET preparation_station_id = ps.id,
+    routes_to_all_stations = FALSE
+FROM preparation_stations ps
+WHERE ps.business_id = il.business_id
+  AND ps.name = CASE il.routing_tag WHEN 'bar' THEN 'Bar' ELSE 'Kitchen' END
+  AND il.routing_tag <> 'any';
 
 ALTER TABLE menu_items ALTER COLUMN tax_profile_id DROP DEFAULT;
 ALTER TABLE item_library ALTER COLUMN tax_profile_id DROP DEFAULT;
@@ -598,6 +614,16 @@ INSERT INTO order_line_items (id, order_id, item_id, item_name, quantity, unit_p
 (gen_random_uuid(), '00000000-0000-0000-0011-000000000020', '00000000-0000-0000-0008-000000000004', 'Draft Lager',        2,  6.00, 'bar');
 
 UPDATE order_line_items li
+SET preparation_station_id = ps.id,
+    preparation_station_name = ps.name,
+    routes_to_all_stations = FALSE
+FROM orders o, preparation_stations ps
+WHERE o.id = li.order_id
+  AND ps.business_id = o.business_id
+  AND ps.name = CASE li.routing_tag WHEN 'bar' THEN 'Bar' ELSE 'Kitchen' END
+  AND li.routing_tag <> 'any';
+
+UPDATE order_line_items li
 SET currency_code = 'EUR',
     tax_profile_id = tp.id,
     tax_profile_version_id = tv.id,
@@ -662,6 +688,9 @@ WHERE o.business_id = '00000000-0000-0000-0000-000000000002';
 -- ─── Queue Entries (12 across 2 evenings) ─────────────────────────────────────
 -- Friday -7 days: 5 entries (4 seated, 1 removed)
 -- Saturday -6 days: 7 entries (4 seated, 3 removed)
+-- The seed runs after all migrations. Give the legacy-shaped insert a temporary
+-- value, then derive the authoritative venue-local service date and location.
+ALTER TABLE queue_entries ALTER COLUMN service_date SET DEFAULT CURRENT_DATE;
 INSERT INTO queue_entries (id, business_id, session_token, name, party_size, phone, status, joined_at, called_at, seated_at, removed_at) VALUES
 -- Friday
 ('00000000-0000-0000-0013-000000000001', '00000000-0000-0000-0000-000000000002', 'pzl-q-fri-001', 'Mike Johnson',   3, '+14155552001', 'seated',
@@ -713,6 +742,18 @@ INSERT INTO queue_entries (id, business_id, session_token, name, party_size, pho
   DATE_TRUNC('day', NOW()) - INTERVAL '6 days' + INTERVAL '22 hours',
   NULL, NULL,
   DATE_TRUNC('day', NOW()) - INTERVAL '6 days' + INTERVAL '22 hours 15 minutes');
+
+UPDATE queue_entries qe
+SET location_id = location.id,
+    service_date = (
+      qe.joined_at AT TIME ZONE business.timezone
+      - (business.service_day_cutoff - TIME '00:00')
+    )::date
+FROM businesses business
+JOIN locations location
+  ON location.business_id = business.id AND location.is_primary = TRUE
+WHERE qe.business_id = business.id;
+ALTER TABLE queue_entries ALTER COLUMN service_date DROP DEFAULT;
 
 -- ─── ML Predictions: Cancellation Risk ────────────────────────────────────────
 -- Pre-seeded so high-risk reservations appear in Insights without running ML.

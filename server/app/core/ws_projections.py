@@ -18,6 +18,7 @@ from app.services import order_service, queue_service
 from app.services.floor_plan_ws_manager import manager as floor_plan_manager
 from app.services.order_ws_manager import manager as order_manager
 from app.services.queue_ws_manager import manager as queue_manager
+from app.services.tab_ws_manager import manager as tab_manager
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,10 @@ async def broadcast_floor_plan_invalidation(business_id: str) -> None:
     )
 
 
+async def broadcast_tab_invalidation(business_id: str) -> None:
+    await tab_manager.broadcast(business_id, {"type": "tabs_invalidated"})
+
+
 async def broadcast_queue_state(db: AsyncSession, business_id: str) -> None:
     """Re-fetch all active queue entries and broadcast the current state."""
     biz_uuid = UUID(business_id)
@@ -40,7 +45,7 @@ async def broadcast_queue_state(db: AsyncSession, business_id: str) -> None:
         pos = waiting_pos if e.status == "waiting" else None
         if e.status == "waiting":
             waiting_pos += 1
-        payload_entries.append(queue_service.entry_to_dict(e, pos))
+        payload_entries.append(await queue_service.entry_to_dict(db, e, pos))
     await queue_manager.broadcast(
         business_id, {"type": "queue_updated", "entries": payload_entries}
     )

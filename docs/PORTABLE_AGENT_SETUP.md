@@ -20,9 +20,9 @@ second set of agent instructions: [`../AGENTS.md`](../AGENTS.md) and
 | On-demand workflow-module strategy | [`SKILLS.md`](SKILLS.md) |
 
 The repository uses `CLAUDE.md` only as a compatibility pointer to `AGENTS.md`.
-It intentionally has no local workflow modules yet: [`SKILLS.md`](SKILLS.md)
-requires evidence of a repeated, project-specific workflow before adding one
-under `.agents/skills/`.
+Local workflow modules are installed under `.claude/skills/`;
+[`SKILLS.md`](SKILLS.md) owns the accepted location, the installed set, and the
+evidence required before adding another.
 
 ## Operating principles
 

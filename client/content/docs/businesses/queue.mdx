@@ -1,11 +1,14 @@
 ---
 title: Walk-in Queue
-description: Manage walk-in customers with a live digital queue, SMS notifications, and table-backed seating.
+description: Manage walk-in customers with a capacity-safe live queue, truthful delivery state, and table-backed seating.
 ---
 
 # Walk-in Queue
 
-The **Queue** module lets you manage walk-in customers without a reservation. Customers join a digital queue and receive an SMS when their table is ready.
+The **Queue** module lets you manage walk-in customers without a reservation.
+Each service day must be opened explicitly with a waiting-cover limit before
+guests or staff can add parties. Calling a party is separate from whether an
+SMS was delivered.
 
 ## Enabling the Queue Module
 
@@ -20,6 +23,11 @@ Each entry shows:
 - **Name** and **party size**
 - **Wait time** since joining
 - **Status**: Waiting → Called → Seated (or Removed)
+- **Delivery state**: delivered, failed and retryable, or no configured channel
+
+The public queue shows a measured wait estimate only after at least five recent
+completed seatings. If there is not enough evidence, Crowbar says so instead of
+inventing an estimate.
 
 The sidebar badge next to Queue reflects the current number of waiting parties, refreshed every 30 seconds.
 
@@ -27,19 +35,22 @@ The sidebar badge next to Queue reflects the current number of waiting parties, 
 
 | Action | What it does |
 |--------|-------------|
-| **Call** | Marks the party as called and sends them an SMS: "Your table is ready!" |
+| **Call** | Marks the party as called, then attempts an SMS when a channel and phone number are available |
 | **Seat at table** | Opens the table selector and creates the actual seating; a party is not seated until registered tables are chosen |
-| **Remove** | Removes the party from the queue (e.g. they left without being seated) |
+| **Remove** | Requires an operational reason: guest left, no-show, or staff removal |
 
-> **Staff tip:** Calling a party sends the configured SMS notification. Seating
-> them changes real table occupancy; closing that seating later marks its tables
-> as cleaning until staff return them to ready.
+> **Staff tip:** A called state means staff made the operational call; the
+> delivery badge is the evidence for whether a message arrived. Seating changes
+> real table occupancy; closing that seating later marks its tables as cleaning
+> until staff return them to ready.
 
 ## Customer Flow
 
 Customers join the queue by scanning a QR code or visiting your queue URL directly. They enter their name, party size, and phone number — no account required.
 
-Once called, they receive an SMS with your business name. They confirm by tapping "On my way" or simply walk in.
+Once called, the public status page shows that the table is ready even if an
+optional SMS fails. Joining retries safely, and the same active phone number
+cannot create duplicate queue parties.
 
 ## Next Steps
 

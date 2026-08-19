@@ -1,15 +1,15 @@
 import logging
 from uuid import UUID
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.inventory import InventoryItem, StockMovement
 from app.models.menu import MenuItem
-from app.models.order import Order
+from app.models.order import Order, OrderLineItem
 from app.models.recipe import MenuItemIngredient
 from app.schemas.recipe import RecipeIngredientInput
-from app.services import inventory_service
+from app.services import inventory_service, menu_service
 
 logger = logging.getLogger(__name__)
 
@@ -174,15 +174,16 @@ async def _disable_menu_items_for_ingredients(
     menu_item_ids = list(result.scalars().all())
     if not menu_item_ids:
         return
-    await db.execute(
-        update(MenuItem)
-        .where(
-            MenuItem.id.in_(menu_item_ids),
-            MenuItem.business_id == business_id,
-            MenuItem.is_available.is_(True),
+    for menu_item_id in menu_item_ids:
+        await menu_service.set_item_availability(
+            db,
+            menu_item_id,
+            business_id,
+            is_available=False,
+            source="inventory_depletion",
+            actor_id=None,
+            reason="A recipe ingredient reached zero stock",
         )
-        .values(is_available=False)
-    )
 
 
 async def deduct_for_served_order(
@@ -274,6 +275,80 @@ async def deduct_for_served_order(
                 )
 
 
+async def deduct_for_served_line(
+    db: AsyncSession, order: Order, line: OrderLineItem, business_id: UUID
+) -> None:
+    """Deduct one line and link every movement to that immutable line snapshot."""
+    if line.item_id is None:
+        return
+    ingredients = list(
+        (
+            await db.scalars(
+                select(MenuItemIngredient).where(
+                    MenuItemIngredient.menu_item_id == line.item_id
+                )
+            )
+        ).all()
+    )
+    depleted: set[UUID] = set()
+    for ingredient in ingredients:
+        try:
+            inventory_item = await inventory_service.get_item(
+                db, ingredient.inventory_item_id, business_id
+            )
+            if inventory_item is None:
+                continue
+            await inventory_service.apply_movement(
+                db,
+                inventory_item,
+                movement_type="sale",
+                delta=-(ingredient.quantity * line.quantity),
+                order_id=order.id,
+                order_line_item_id=line.id,
+                notes=f"Auto-deduct: {line.item_name} ×{line.quantity}",
+            )
+            if inventory_item.current_quantity <= 0:
+                depleted.add(inventory_item.id)
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Recipe deduction failed for line %s ingredient %s",
+                line.id,
+                ingredient.id,
+            )
+    if depleted:
+        await _disable_menu_items_for_ingredients(db, business_id, depleted)
+
+
+async def reverse_deduction_for_line(
+    db: AsyncSession, order: Order, line: OrderLineItem, business_id: UUID
+) -> None:
+    """Reverse only the outstanding recorded movements for one order line."""
+    rows = await db.execute(
+        select(
+            StockMovement.item_id,
+            func.coalesce(func.sum(StockMovement.quantity_delta), 0),
+        )
+        .where(
+            StockMovement.order_line_item_id == line.id,
+            StockMovement.movement_type.in_(("sale", "sale_reversal")),
+        )
+        .group_by(StockMovement.item_id)
+    )
+    for item_id, net in rows.all():
+        if net is None or net >= 0:
+            continue
+        inventory_item = await inventory_service.get_item(db, item_id, business_id)
+        if inventory_item is None:
+            continue
+        await inventory_service.apply_movement(
+            db,
+            inventory_item,
+            movement_type="sale_reversal",
+            delta=-net,
+            order_id=order.id,
+            order_line_item_id=line.id,
+            notes=f"Reversal: line {line.id} left served",
+        )
 async def reverse_deduction_for_order(
     db: AsyncSession, order: Order, business_id: UUID
 ) -> None:
@@ -300,6 +375,7 @@ async def reverse_deduction_for_order(
         )
         .where(
             StockMovement.order_id == order.id,
+            StockMovement.order_line_item_id.is_(None),
             StockMovement.movement_type.in_(("sale", "sale_reversal")),
         )
         .group_by(StockMovement.item_id)

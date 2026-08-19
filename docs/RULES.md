@@ -83,8 +83,11 @@ of this order and specialized references.
 ## Do Not
 
 - Do not discard, rewrite, or reformat unrelated worktree changes.
-- Do not run Git mutations without explicit authorization; read-only status and
-  inspection are allowed.
+- Do not mutate repository state. The agent never stages, commits, branches,
+  checks out, stashes, restores, resets, or rewrites history — the user owns
+  that step and performs it separately, so do not perform it, offer it, or
+  treat unstaged or untracked files as a problem to solve. Read-only inspection
+  (`git status`, `git diff`, `git log`) is always allowed.
 - Do not present inferred requirements as confirmed requirements.
 - Do not implement a proposed UI or architecture pattern before considering
   relevant alternatives and receiving confirmation when the choice is open.
@@ -103,8 +106,9 @@ of this order and specialized references.
 - Do not denormalize a total or estimate without a measured need and an explicit
   consistency design.
 - Do not edit, reorder, or rename an applied SQL migration.
-- Do not run database reset, shared seeding, volume deletion, destructive Git
-  commands, deployment, or external writes without explicit authorization.
+- Do not run database reset, shared seeding, volume deletion, deployment, or
+  external writes without explicit authorization. Git is covered above: it is
+  never authorized by a task.
 - Do not claim that `docs/deployment.md` is implemented.
 - Do not describe Crowbar MVP as a German cash register, payment processor,
   fiscal record, receipt system, or tax authority. “Settled externally” means

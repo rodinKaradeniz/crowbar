@@ -304,6 +304,15 @@ class TestPublicReservation:
         await _open_default_schedule(db_session, business_id)
         service_type_id = await _create_service_type(client, owner_token, business_id)
         requested_time = _future_time(3)
+        schedule = await db_session.scalar(
+            select(BookingSchedule).where(
+                BookingSchedule.business_id == business_id,
+                BookingSchedule.service_type_id.is_(None),
+            )
+        )
+        assert schedule is not None
+        schedule.windows = []
+        await db_session.commit()
         joined = await client.post(
             "/api/reservations/waitlist/public",
             json={
@@ -315,9 +324,11 @@ class TestPublicReservation:
                 "name": "Waitlisted guest",
                 "phone": "+31600000002",
                 "email": "waitlist@example.com",
+                "idempotency_key": "waitlist-offer-accept-1",
             },
         )
         assert joined.status_code == 201, joined.text
+        await _open_default_schedule(db_session, business_id)
         offered = await client.post(
             f"/api/reservations/waitlist/{joined.json()['id']}/offer",
             headers={"Authorization": f"Bearer {owner_token}"},
@@ -333,6 +344,65 @@ class TestPublicReservation:
         accepted = await client.post(f"/api/reservations/waitlist/offers/{token}/accept")
         assert accepted.status_code == 200, accepted.text
         assert accepted.json()["status"] == "pending"
+
+    @pytest.mark.asyncio
+    async def test_waitlist_requires_unavailable_slot_and_supports_retry_safe_guest_cancel(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        owner_token, business_id = await _create_business_owner(client)
+        await _open_default_schedule(db_session, business_id)
+        service_type_id = await _create_service_type(client, owner_token, business_id)
+        requested_time = _future_time(4)
+        request = {
+            "business_id": business_id,
+            "service_type_id": service_type_id,
+            "requested_starts_at": requested_time,
+            "flexible_until": requested_time,
+            "guests": 2,
+            "name": "Waitlist manager",
+            "phone": "+31600000003",
+            "email": "waitlist-manage@example.com",
+            "idempotency_key": "waitlist-manage-1",
+        }
+
+        live_slot = await client.post("/api/reservations/waitlist/public", json=request)
+        assert live_slot.status_code == 409
+        assert live_slot.json()["details"]["reason"] == "LIVE_SLOT_AVAILABLE"
+
+        schedule = await db_session.scalar(select(BookingSchedule).where(
+            BookingSchedule.business_id == business_id,
+            BookingSchedule.service_type_id.is_(None),
+        ))
+        assert schedule is not None
+        schedule.windows = []
+        await db_session.commit()
+
+        created = await client.post("/api/reservations/waitlist/public", json=request)
+        retried = await client.post("/api/reservations/waitlist/public", json=request)
+        assert created.status_code == 201, created.text
+        assert retried.status_code == 200, retried.text
+        assert retried.json()["id"] == created.json()["id"]
+        token = created.json()["management_token"]
+        assert token
+
+        conflict = await client.post("/api/reservations/waitlist/public", json={
+            **request, "guests": 3,
+        })
+        assert conflict.status_code == 409
+
+        managed = await client.get(f"/api/reservations/waitlist/manage/{token}")
+        assert managed.status_code == 200
+        cancelled = await client.post(f"/api/reservations/waitlist/manage/{token}/cancel")
+        assert cancelled.status_code == 200, cancelled.text
+        assert cancelled.json()["status"] == "cancelled"
+        assert cancelled.json()["terminal_reason_code"] == "guest_cancelled"
+
+        history = await client.get(
+            "/api/reservations/waitlist?view=history",
+            headers={"Authorization": f"Bearer {owner_token}"},
+        )
+        assert history.status_code == 200
+        assert [entry["status"] for entry in history.json()] == ["cancelled"]
 
 
 # --------------------------------------------------------------------------- #

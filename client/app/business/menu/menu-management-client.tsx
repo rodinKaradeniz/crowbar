@@ -11,7 +11,10 @@ import {
   clientDeleteCategory,
   clientCreateMenuItem,
   clientUpdateMenuItem,
-  clientToggleItemAvailability,
+  clientSetItemAvailability,
+  clientGetPreparationStations,
+  clientCreatePreparationStation,
+  clientArchivePreparationStation,
   clientDeleteMenuItem,
   clientSaveItemToLibrary,
   clientGetLibrary,
@@ -32,6 +35,7 @@ import type {
   MenuCategory,
   MenuItem,
   MenuItemStockInfo,
+  PreparationStation,
   RecipeIngredient,
   TaxProfile,
 } from "@/types";
@@ -68,7 +72,6 @@ import {
   Pencil,
   Trash2,
   ChefHat,
-  Wine,
   Package,
   BookMarked,
   PlusCircle,
@@ -85,12 +88,6 @@ import { EmptyState } from "@/components/empty-state";
 import { formatMoney } from "@/lib/money";
 import { useRegionalSettings } from "@/contexts/regional-context";
 
-const ROUTING_ICONS: Record<string, React.ReactNode> = {
-  kitchen: <ChefHat className="h-3 w-3" />,
-  bar: <Wine className="h-3 w-3" />,
-  any: <Package className="h-3 w-3" />,
-};
-
 interface Props {
   businessId: string;
   businessSlug: string;
@@ -104,6 +101,8 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
   const [selectedMenuId, setSelectedMenuId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [taxProfiles, setTaxProfiles] = useState<TaxProfile[]>([]);
+  const [stations, setStations] = useState<PreparationStation[]>([]);
+  const [newStationName, setNewStationName] = useState("");
 
   // ── Public QR-menu link (share/copy) ─────────────────────────────────────────
   // The public menu route is keyed by slug (/menu/[slug]); build the absolute URL
@@ -164,7 +163,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
     price: "",
     happyHourPrice: "",
     isAlcoholic: false,
-    routingTag: "kitchen",
+    routingDestination: "shared",
     prepTime: "",
     taxProfileId: "",
   });
@@ -185,7 +184,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
     price: "",
     happyHourPrice: "",
     isAlcoholic: false,
-    routingTag: "kitchen",
+    routingDestination: "shared",
     prepTime: "",
     taxProfileId: "",
   });
@@ -202,6 +201,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
     void loadMenus();
     void loadStockFlags();
     void clientGetTaxProfiles().then(setTaxProfiles).catch(() => {});
+    void clientGetPreparationStations().then(setStations).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [businessId]);
 
@@ -226,6 +226,28 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
       toast.error("Failed to load menus");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function addStation() {
+    if (!newStationName.trim()) return;
+    try {
+      const station = await clientCreatePreparationStation(newStationName.trim(), stations.length);
+      setStations((current) => [...current, station]);
+      setNewStationName("");
+      toast.success("Preparation station created.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not create the station.");
+    }
+  }
+
+  async function archiveStation(station: PreparationStation) {
+    try {
+      await clientArchivePreparationStation(station.id);
+      setStations((current) => current.map((item) => item.id === station.id ? { ...item, isActive: false } : item));
+      toast.success(`${station.name} archived.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not archive the station.");
     }
   }
 
@@ -378,7 +400,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
       price: "",
       happyHourPrice: "",
       isAlcoholic: false,
-      routingTag: "kitchen",
+      routingDestination: stations[0]?.id ?? "shared",
       prepTime: "",
       taxProfileId: taxProfiles.find((profile) => profile.isActive && profile.code === "STANDARD")?.id ?? taxProfiles.find((profile) => profile.isActive)?.id ?? "",
     });
@@ -397,7 +419,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
           ? String(item.happyHourPrice)
           : "",
       isAlcoholic: item.isAlcoholic ?? false,
-      routingTag: item.routingTag,
+      routingDestination: item.routesToAllStations ? "shared" : (item.preparationStationId ?? "shared"),
       prepTime: item.prepTimeMinutes ? String(item.prepTimeMinutes) : "",
       taxProfileId: item.taxProfileId,
     });
@@ -430,7 +452,8 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
           price,
           happyHourPrice,
           isAlcoholic: itemForm.isAlcoholic,
-          routingTag: itemForm.routingTag,
+          preparationStationId: itemForm.routingDestination === "shared" ? null : itemForm.routingDestination,
+          routesToAllStations: itemForm.routingDestination === "shared",
           prepTimeMinutes: itemForm.prepTime
             ? parseInt(itemForm.prepTime)
             : undefined,
@@ -447,7 +470,8 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
             price,
             happyHourPrice,
             isAlcoholic: itemForm.isAlcoholic,
-            routingTag: itemForm.routingTag,
+            preparationStationId: itemForm.routingDestination === "shared" ? undefined : itemForm.routingDestination,
+            routesToAllStations: itemForm.routingDestination === "shared",
             prepTimeMinutes: itemForm.prepTime
               ? parseInt(itemForm.prepTime)
               : undefined,
@@ -464,7 +488,12 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
 
   async function toggleAvailability(item: MenuItem, categoryId: string) {
     try {
-      const updated = await clientToggleItemAvailability(businessId, item.id);
+      const updated = await clientSetItemAvailability(
+        businessId,
+        item.id,
+        !item.isAvailable,
+        item.isAvailable ? "Manually marked 86" : "Manually restored by staff",
+      );
       updateItemInState(updated, categoryId);
     } catch (e) {
       toast.error((e as Error).message);
@@ -570,7 +599,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
       price: "",
       happyHourPrice: "",
       isAlcoholic: false,
-      routingTag: "kitchen",
+      routingDestination: stations[0]?.id ?? "shared",
       prepTime: "",
       taxProfileId: taxProfiles.find((profile) => profile.isActive && profile.code === "STANDARD")?.id ?? taxProfiles.find((profile) => profile.isActive)?.id ?? "",
     });
@@ -585,7 +614,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
       price: String(item.price),
       happyHourPrice: "",
       isAlcoholic: false,
-      routingTag: item.routingTag,
+      routingDestination: item.routesToAllStations ? "shared" : (item.preparationStationId ?? "shared"),
       prepTime: item.prepTimeMinutes ? String(item.prepTimeMinutes) : "",
       taxProfileId: item.taxProfileId,
     });
@@ -608,7 +637,8 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
             name: libraryItemForm.name.trim(),
             description: libraryItemForm.description.trim() || undefined,
             price,
-            routingTag: libraryItemForm.routingTag,
+            preparationStationId: libraryItemForm.routingDestination === "shared" ? null : libraryItemForm.routingDestination,
+            routesToAllStations: libraryItemForm.routingDestination === "shared",
             prepTimeMinutes: libraryItemForm.prepTime
               ? parseInt(libraryItemForm.prepTime)
               : undefined,
@@ -623,7 +653,8 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
           name: libraryItemForm.name.trim(),
           description: libraryItemForm.description.trim() || undefined,
           price,
-          routingTag: libraryItemForm.routingTag,
+          preparationStationId: libraryItemForm.routingDestination === "shared" ? undefined : libraryItemForm.routingDestination,
+          routesToAllStations: libraryItemForm.routingDestination === "shared",
           prepTimeMinutes: libraryItemForm.prepTime
             ? parseInt(libraryItemForm.prepTime)
             : undefined,
@@ -709,6 +740,20 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
           </Link>
         </div>
       </div>
+
+      <section className="rounded-lg border bg-card p-4 space-y-3">
+        <div><p className="font-medium">Preparation stations</p><p className="text-xs text-muted-foreground">Items route to one station or the shared queue.</p></div>
+        <div className="flex flex-wrap gap-2">
+          {stations.filter((station) => station.isActive).map((station) => (
+            <div key={station.id} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+              <span>{station.name}</span>
+              {canManageTax && <button type="button" className="text-xs text-muted-foreground hover:text-destructive" onClick={() => void archiveStation(station)}>Archive</button>}
+            </div>
+          ))}
+          {stations.filter((station) => station.isActive).length === 0 && <p className="text-sm text-muted-foreground">No active station. Items can still use the shared queue.</p>}
+        </div>
+        {canManageTax && <div className="flex max-w-sm gap-2"><Input placeholder="New station name" value={newStationName} onChange={(event) => setNewStationName(event.target.value)} /><Button variant="outline" onClick={() => void addStation()} disabled={!newStationName.trim()}>Add station</Button></div>}
+      </section>
 
       {menus.length === 0 ? (
         <EmptyState
@@ -804,6 +849,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
                     menu={selectedMenu}
                     category={cat}
                     stockInfo={stockInfo}
+                    stations={stations}
                     onAddItem={openCreateItem}
                     onAddFromLibrary={openLibraryForCategory}
                     onEditItem={openEditItem}
@@ -896,7 +942,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
           <DialogHeader>
             <DialogTitle>{editingItem ? "Edit Item" : "New Item"}</DialogTitle>
           </DialogHeader>
-          <ItemFormFields form={itemForm} onChange={setItemForm} showHappyHour showAlcohol taxProfiles={taxProfiles} canManageTax={canManageTax} currencyCode={currencyCode} taxLabel={taxLabel} />
+          <ItemFormFields form={itemForm} onChange={setItemForm} showHappyHour showAlcohol taxProfiles={taxProfiles} canManageTax={canManageTax} currencyCode={currencyCode} taxLabel={taxLabel} stations={stations} />
           <DialogFooter>
             <Button variant="outline" onClick={() => setItemDialog(false)}>
               Cancel
@@ -968,8 +1014,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
                         variant="outline"
                         className="text-xs flex items-center gap-1 h-4 shrink-0"
                       >
-                        {ROUTING_ICONS[item.routingTag]}
-                        {item.routingTag}
+                        {item.routesToAllStations ? "Shared" : (stations.find((station) => station.id === item.preparationStationId)?.name ?? "Archived station")}
                       </Badge>
                     </div>
                     {item.description && (
@@ -1038,6 +1083,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
             canManageTax={canManageTax}
             currencyCode={currencyCode}
             taxLabel={taxLabel}
+            stations={stations}
           />
           <DialogFooter>
             <Button
@@ -1117,7 +1163,7 @@ type ItemFormState = {
   price: string;
   happyHourPrice: string;
   isAlcoholic: boolean;
-  routingTag: string;
+  routingDestination: string;
   prepTime: string;
   taxProfileId: string;
 };
@@ -1131,6 +1177,7 @@ function ItemFormFields({
   canManageTax,
   currencyCode,
   taxLabel,
+  stations,
 }: {
   form: ItemFormState;
   onChange: React.Dispatch<React.SetStateAction<ItemFormState>>;
@@ -1142,6 +1189,7 @@ function ItemFormFields({
   canManageTax: boolean;
   currencyCode: string;
   taxLabel: string;
+  stations: PreparationStation[];
 }) {
   return (
     <div className="space-y-3 py-2">
@@ -1215,18 +1263,19 @@ function ItemFormFields({
         </div>
       )}
       <div className="space-y-1.5">
-        <Label>Routing</Label>
+        <Label>Preparation station</Label>
         <Select
-          value={form.routingTag}
-          onValueChange={(v) => onChange((f) => ({ ...f, routingTag: v }))}
+          value={form.routingDestination}
+          onValueChange={(v) => onChange((f) => ({ ...f, routingDestination: v }))}
         >
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="kitchen">Kitchen</SelectItem>
-            <SelectItem value="bar">Bar</SelectItem>
-            <SelectItem value="any">Any</SelectItem>
+            <SelectItem value="shared">Shared — visible at every station</SelectItem>
+            {stations.filter((station) => station.isActive).map((station) => (
+              <SelectItem key={station.id} value={station.id}>{station.name}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -1269,6 +1318,7 @@ function CategorySection({
   menu,
   category,
   stockInfo,
+  stations,
   onAddItem,
   onAddFromLibrary,
   onEditItem,
@@ -1282,6 +1332,7 @@ function CategorySection({
   menu: Menu;
   category: MenuCategory;
   stockInfo: Map<string, MenuItemStockInfo>;
+  stations: PreparationStation[];
   onAddItem: (categoryId: string) => void;
   onAddFromLibrary: (categoryId: string) => void;
   onEditItem: (item: MenuItem, categoryId: string) => void;
@@ -1345,8 +1396,7 @@ function CategorySection({
                     variant="outline"
                     className="text-xs flex items-center gap-1 h-4"
                   >
-                    {ROUTING_ICONS[item.routingTag]}
-                    {item.routingTag}
+                    {item.routesToAllStations ? "Shared" : (stations.find((station) => station.id === item.preparationStationId)?.name ?? "Archived station")}
                   </Badge>
                   {!item.isAvailable && (
                     <Badge variant="secondary" className="text-xs h-4">

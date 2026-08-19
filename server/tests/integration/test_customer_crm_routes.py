@@ -45,8 +45,22 @@ async def test_public_opt_ins_and_queue_share_the_phone_keyed_guest(client: Asyn
     assert created.status_code == 201, created.text
     guest_id = created.json()["customer_id"]
 
-    joined = await client.post(f"/api/queue/{business_id}/join", json={"name": "Ada Guest", "party_size": 2, "phone": "+4915112345678"})
-    assert joined.status_code == 200
+    queue_opened = await client.put(
+        "/api/queue/service-day",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"status": "open", "max_waiting_covers": 20},
+    )
+    assert queue_opened.status_code == 200, queue_opened.text
+    joined = await client.post(
+        f"/api/queue/{business_id}/join",
+        json={
+            "name": "Ada Guest",
+            "party_size": 2,
+            "phone": "+4915112345678",
+            "idempotency_key": "crm-queue-join-1",
+        },
+    )
+    assert joined.status_code == 201, joined.text
     entry = await db_session.get(QueueEntry, joined.json()["entry"]["id"])
     assert entry is not None and str(entry.customer_id) == guest_id
 

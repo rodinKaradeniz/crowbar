@@ -90,6 +90,11 @@ class StockMovement(Base, UUIDMixin):
         ForeignKey("orders.id", ondelete="SET NULL"),
         nullable=True,
     )
+    order_line_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("order_line_items.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     movement_type: Mapped[str] = mapped_column(String(20), nullable=False)
     # movement_type: receive | adjust | waste | sale | sale_reversal
     # 'sale'          = automatic deduction from recipe on order fulfillment.

@@ -22,5 +22,5 @@ export default async function TabsPage() {
     return <ModuleDisabled moduleName="Ordering" />;
   }
 
-  return <TabsClient businessId={business.id} businessTimezone={business.timezone ?? "UTC"} />;
+  return <TabsClient businessId={business.id} businessTimezone={business.timezone ?? "UTC"} canReopen={user.role === "owner" || user.role === "manager"} />;
 }

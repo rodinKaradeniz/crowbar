@@ -10,17 +10,19 @@ from app.models.customer import Customer, CustomerDataRequest, CustomerMarketing
 from app.models.happy_hour_window import HappyHourWindow
 from app.models.inventory import InventoryDiscrepancy, InventoryItem, StockMovement
 from app.models.location import Location
-from app.models.menu import ItemLibrary, Menu, MenuCategory, MenuItem, Modifier, ModifierGroup
+from app.models.menu import ItemLibrary, Menu, MenuCategory, MenuItem, MenuItemAvailabilityEvent, Modifier, ModifierGroup
 from app.models.notification import Notification
 from app.models.password_reset_token import PasswordResetToken
-from app.models.order import Order, OrderLineItem, OrderStatusTimeline
+from app.models.queue_entry import QueueEntry, QueueEntryEvent, QueueServiceDay
+from app.models.order import Order, OrderLineItem, OrderLineStatusTimeline, OrderRevision, OrderStatusTimeline
+from app.models.preparation_station import PreparationStation
 from app.models.recipe import MenuItemIngredient
 from app.models.reservation import Reservation
-from app.models.reservation_delivery_attempt import ReservationDeliveryAttempt
+from app.models.reservation_delivery_attempt import DeliveryAttempt, ReservationDeliveryAttempt
 from app.models.reservation_waitlist import ReservationWaitlistEntry
 from app.models.service_type import ServiceType
 from app.models.staff import Staff
-from app.models.tab import Tab
+from app.models.tab import Tab, TabSettlementEvent
 from app.models.table import Table
 from app.models.table_area import TableArea
 from app.models.table_assignment import QueueTableAssignment, ReservationTableAssignment
@@ -43,18 +45,26 @@ __all__ = [
     "ServiceType",
     "Reservation",
     "ReservationDeliveryAttempt",
+    "DeliveryAttempt",
     "ReservationWaitlistEntry",
     "Notification",
+    "QueueEntry",
+    "QueueEntryEvent",
+    "QueueServiceDay",
     "PasswordResetToken",
     "Menu",
     "MenuCategory",
     "MenuItem",
+    "MenuItemAvailabilityEvent",
     "ModifierGroup",
     "Modifier",
     "ItemLibrary",
     "Order",
     "OrderLineItem",
     "OrderStatusTimeline",
+    "OrderLineStatusTimeline",
+    "OrderRevision",
+    "PreparationStation",
     "InventoryItem",
     "StockMovement",
     "InventoryDiscrepancy",
@@ -73,6 +83,7 @@ __all__ = [
     "BookingScheduleException",
     "BookingScheduleExceptionWindow",
     "Tab",
+    "TabSettlementEvent",
     "HappyHourWindow",
     "BusinessRegionalAudit",
     "TaxProfile",

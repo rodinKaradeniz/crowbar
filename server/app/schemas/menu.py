@@ -12,7 +12,8 @@ class LibraryItemCreate(AppBaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
     price: Decimal = Field(default=Decimal("0.00"), ge=0)
-    routing_tag: str = Field(default="kitchen", pattern="^(kitchen|bar|any)$")
+    preparation_station_id: UUID | None = None
+    routes_to_all_stations: bool = True
     prep_time_minutes: int | None = Field(None, ge=1)
     tax_profile_id: UUID | None = None
 
@@ -21,7 +22,8 @@ class LibraryItemUpdate(AppBaseModel):
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = None
     price: Decimal | None = Field(None, ge=0)
-    routing_tag: str | None = Field(None, pattern="^(kitchen|bar|any)$")
+    preparation_station_id: UUID | None = None
+    routes_to_all_stations: bool | None = None
     prep_time_minutes: int | None = None
     tax_profile_id: UUID | None = None
 
@@ -33,6 +35,8 @@ class LibraryItemResponse(AppBaseModel):
     description: str | None = None
     price: Decimal
     routing_tag: str
+    preparation_station_id: UUID | None = None
+    routes_to_all_stations: bool
     prep_time_minutes: int | None = None
     tax_profile_id: UUID
 
@@ -99,7 +103,8 @@ class MenuItemCreate(AppBaseModel):
     happy_hour_price: Decimal | None = Field(default=None, ge=0)
     is_alcoholic: bool = False
     is_available: bool = True
-    routing_tag: str = Field(default="kitchen", pattern="^(kitchen|bar|any)$")
+    preparation_station_id: UUID | None = None
+    routes_to_all_stations: bool = True
     prep_time_minutes: int | None = Field(None, ge=1)
     display_order: int = 0
     image: str | None = None
@@ -116,7 +121,8 @@ class MenuItemUpdate(AppBaseModel):
     happy_hour_price: Decimal | None = Field(default=None, ge=0)
     is_alcoholic: bool | None = None
     is_available: bool | None = None
-    routing_tag: str | None = Field(None, pattern="^(kitchen|bar|any)$")
+    preparation_station_id: UUID | None = None
+    routes_to_all_stations: bool | None = None
     prep_time_minutes: int | None = None
     display_order: int | None = None
     image: str | None = None
@@ -136,6 +142,8 @@ class MenuItemResponse(AppBaseModel):
     is_alcoholic: bool = False
     is_available: bool
     routing_tag: str
+    preparation_station_id: UUID | None = None
+    routes_to_all_stations: bool
     prep_time_minutes: int | None = None
     display_order: int
     image: str | None = None
@@ -200,3 +208,26 @@ class MenuResponse(AppBaseModel):
     # The client must trust this flag rather than computing from local time.
     happy_hour_active: bool = False
     categories: list[MenuCategoryResponse] = []
+
+
+class PreparationStationCreate(AppBaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+    sort_order: int = 0
+
+
+class PreparationStationUpdate(AppBaseModel):
+    name: str | None = Field(None, min_length=1, max_length=120)
+    sort_order: int | None = None
+
+
+class PreparationStationResponse(AppBaseModel):
+    id: UUID
+    business_id: UUID
+    name: str
+    sort_order: int
+    is_active: bool
+
+
+class MenuItemAvailabilityUpdate(AppBaseModel):
+    is_available: bool
+    reason: str | None = Field(None, max_length=1000)

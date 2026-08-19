@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
-import { Clock, Loader2, Plus, Send } from "lucide-react";
+import { Clock, Loader2, Plus, RefreshCw, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -18,7 +19,8 @@ import {
 } from "@/lib/availability";
 import {
   clientCreateReservationWaitlist, clientGetStaffReservationAvailability,
-  clientOfferReservationWaitlist,
+  clientGetReservationWaitlist, clientOfferReservationWaitlist,
+  clientRemoveReservationWaitlist, clientRetryReservationWaitlistDelivery,
 } from "@/lib/client-api";
 import type { CustomerResponse } from "@/lib/api-client";
 import type { AvailabilitySlot, ReservationWaitlistEntry, ServiceType } from "@/types";
@@ -46,6 +48,10 @@ export function ReservationWaitlistPanel({
   const [createOpen, setCreateOpen] = useState(false);
   const [offeringEntry, setOfferingEntry] = useState<ReservationWaitlistEntry | null>(null);
   const [saving, setSaving] = useState(false);
+  const [view, setView] = useState<"active" | "history">("active");
+  const [removeTarget, setRemoveTarget] = useState<ReservationWaitlistEntry | null>(null);
+  const [removeReason, setRemoveReason] = useState("staff_removed");
+  const [removeNote, setRemoveNote] = useState("");
   const [serviceTypeId, setServiceTypeId] = useState(serviceTypes[0]?.id ?? "");
   const venueToday = useMemo(
     () => calendarDateForSlot(new Date().toISOString(), businessTimezone),
@@ -73,6 +79,13 @@ export function ReservationWaitlistPanel({
   const selectedService = serviceById.get(serviceTypeId);
   const maxGuests = Math.min(businessMaxGuests, selectedService?.capacity ?? businessMaxGuests);
   const activeEntries = entries.filter((entry) => entry.status === "waiting" || entry.status === "offered");
+  const visibleEntries = view === "active" ? activeEntries : entries.filter((entry) => entry.status !== "waiting" && entry.status !== "offered");
+
+  const switchView = async (nextView: "active" | "history") => {
+    setView(nextView);
+    try { setEntries(await clientGetReservationWaitlist(nextView)); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Could not load waitlist history"); }
+  };
 
   useEffect(() => {
     if (!offeringEntry) return;
@@ -126,6 +139,7 @@ export function ReservationWaitlistPanel({
         businessId, serviceTypeId, requestedStartsAt,
         flexibleUntil: new Date(new Date(requestedStartsAt).getTime() + Number(flexibility) * 60_000).toISOString(),
         guests: guestCount, name: name.trim(), phone: phone.trim(), email: email.trim(),
+        idempotencyKey: crypto.randomUUID(),
       });
       setEntries((current) => [...current, entry]);
       setCreateOpen(false);
@@ -143,25 +157,47 @@ export function ReservationWaitlistPanel({
       const updated = await clientOfferReservationWaitlist(offeringEntry.id, selectedSlot);
       setEntries((current) => current.map((entry) => entry.id === updated.id ? updated : entry));
       setOfferingEntry(null);
-      toast.success("15-minute offer sent to the guest");
+      if (updated.deliveryState === "delivered") toast.success("15-minute offer delivered to the guest");
+      else if (updated.deliveryState === "failed") toast.warning("Offer created, but delivery failed. Retry from the active list.");
+      else toast.info("Offer created. No configured delivery channel was available.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not send the offer");
     } finally { setSaving(false); }
+  };
+
+  const retryDelivery = async (entry: ReservationWaitlistEntry) => {
+    try {
+      const updated = await clientRetryReservationWaitlistDelivery(entry.id);
+      setEntries((current) => current.map((item) => item.id === updated.id ? updated : item));
+      if (updated.deliveryState === "delivered") toast.success("Offer delivered.");
+      else toast.warning("Delivery still failed; the offer remains active.");
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Could not retry delivery"); }
+  };
+
+  const removeEntry = async () => {
+    if (!removeTarget || !removeReason.trim()) return;
+    setSaving(true);
+    try {
+      const updated = await clientRemoveReservationWaitlist(removeTarget.id, removeReason.trim(), removeNote.trim() || undefined);
+      setEntries((current) => current.map((entry) => entry.id === updated.id ? updated : entry));
+      setRemoveTarget(null); toast.success("Waitlist request moved to history.");
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Could not remove the request"); }
+    finally { setSaving(false); }
   };
 
   return (
     <section className="mt-8 rounded-lg border bg-card p-4 sm:p-6" aria-labelledby="waitlist-heading">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div><h2 id="waitlist-heading" className="font-display text-xl">Waitlist</h2><p className="mt-1 text-sm text-muted-foreground">Offer a live, matching slot one guest at a time. Offers expire after 15 minutes.</p></div>
-        <Button type="button" size="sm" onClick={() => { resetCreateForm(); setCreateOpen(true); }}><Plus /> Add guest</Button>
+        <div className="flex gap-2"><Button type="button" size="sm" variant={view === "active" ? "default" : "outline"} onClick={() => void switchView("active")}>Active</Button><Button type="button" size="sm" variant={view === "history" ? "default" : "outline"} onClick={() => void switchView("history")}>History</Button><Button type="button" size="sm" onClick={() => { resetCreateForm(); setCreateOpen(true); }}><Plus /> Add guest</Button></div>
       </div>
       <div className="mt-5 divide-y rounded-md border">
-        {activeEntries.length === 0 ? <p className="p-5 text-sm text-muted-foreground">No active waitlist requests.</p> : activeEntries.map((entry) => (
+        {visibleEntries.length === 0 ? <p className="p-5 text-sm text-muted-foreground">{view === "active" ? "No active waitlist requests." : "No waitlist history yet."}</p> : visibleEntries.map((entry) => (
           <div key={entry.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
             <div className="min-w-0"><p className="font-medium">{customerNames.get(entry.customerId) || "Guest"} <span className="ml-1 text-sm font-normal text-muted-foreground">· {entry.guests} {entry.guests === 1 ? "guest" : "guests"}</span></p>
               <p className="mt-1 text-sm text-muted-foreground">{serviceById.get(entry.serviceTypeId)?.name || "Booking type"} · {formatSlotDate(entry.requestedStartsAt, businessTimezone)} · {formatSlotTime(entry.requestedStartsAt, businessTimezone)}–{formatSlotTime(entry.flexibleUntil, businessTimezone)}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{displayEntryStatus(entry, businessTimezone)}</p></div>
-            {entry.status === "waiting" && <Button type="button" size="sm" variant="outline" onClick={() => setOfferingEntry(entry)}><Send /> Offer slot</Button>}
+              <p className="mt-1 text-xs text-muted-foreground">{displayEntryStatus(entry, businessTimezone)}{entry.deliveryState ? ` · delivery ${entry.deliveryState}` : ""}{entry.terminalReasonCode ? ` · ${entry.terminalReasonCode.replaceAll("_", " ")}` : ""}</p></div>
+            <div className="flex gap-2">{entry.status === "waiting" && <Button type="button" size="sm" variant="outline" onClick={() => setOfferingEntry(entry)}><Send /> Offer slot</Button>}{entry.status === "offered" && entry.deliveryState !== "delivered" && <Button type="button" size="sm" variant="outline" onClick={() => void retryDelivery(entry)}><RefreshCw /> Retry delivery</Button>}{(entry.status === "waiting" || entry.status === "offered") && <Button type="button" size="sm" variant="ghost" className="text-destructive" onClick={() => { setRemoveTarget(entry); setRemoveReason("staff_removed"); setRemoveNote(""); }}><Trash2 /> Remove</Button>}</div>
           </div>
         ))}
       </div>
@@ -173,6 +209,8 @@ export function ReservationWaitlistPanel({
           <div className="space-y-2 sm:col-span-2"><Label>Can accept up to</Label><Select value={flexibility} onValueChange={setFlexibility}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="30">30 minutes later</SelectItem><SelectItem value="60">1 hour later</SelectItem><SelectItem value="90">90 minutes later</SelectItem></SelectContent></Select></div></div>
         <DialogFooter><Button type="button" variant="outline" onClick={() => setCreateOpen(false)} disabled={saving}>Cancel</Button><Button type="button" onClick={() => void createEntry()} disabled={saving}>{saving ? <><Loader2 className="animate-spin" />Saving…</> : "Add guest"}</Button></DialogFooter>
       </DialogContent></Dialog>
+
+      <Dialog open={removeTarget !== null} onOpenChange={(open) => !open && setRemoveTarget(null)}><DialogContent><DialogHeader><DialogTitle>Remove waitlist request</DialogTitle><DialogDescription>This terminal action is retained in history.</DialogDescription></DialogHeader><div className="space-y-3"><Input placeholder="Required reason code" value={removeReason} onChange={(event) => setRemoveReason(event.target.value)} /><Textarea placeholder="Optional note" value={removeNote} onChange={(event) => setRemoveNote(event.target.value)} /></div><DialogFooter><Button variant="outline" onClick={() => setRemoveTarget(null)}>Keep request</Button><Button variant="destructive" onClick={() => void removeEntry()} disabled={saving || !removeReason.trim()}>Remove</Button></DialogFooter></DialogContent></Dialog>
 
       <Dialog open={offeringEntry !== null} onOpenChange={(open) => !open && setOfferingEntry(null)}><DialogContent><DialogHeader><DialogTitle>Offer a matching slot</DialogTitle><DialogDescription>{offeringEntry && `Only times from ${formatSlotTime(offeringEntry.requestedStartsAt, businessTimezone)} to ${formatSlotTime(offeringEntry.flexibleUntil, businessTimezone)} are eligible. The guest receives a 15-minute confirmation link.`}</DialogDescription></DialogHeader>
         {loadingSlots ? <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground"><Loader2 className="animate-spin" />Checking live availability…</div> : slots.length === 0 ? <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">No live slots remain in this guest&apos;s requested window.</p> : <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{slots.map((slot) => <Button key={slot.startsAt} type="button" variant={selectedSlot === slot.startsAt ? "default" : "outline"} onClick={() => setSelectedSlot(slot.startsAt)} className="figures"><Clock />{formatSlotTime(slot.startsAt, slotsTimezone)}</Button>)}</div>}

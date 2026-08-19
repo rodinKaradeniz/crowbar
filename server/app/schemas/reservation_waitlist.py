@@ -15,6 +15,7 @@ class ReservationWaitlistCreate(AppBaseModel):
     name: str = Field(min_length=1, max_length=255)
     phone: str = Field(min_length=3, max_length=50)
     email: EmailStr
+    idempotency_key: str = Field(..., min_length=8, max_length=100)
 
 
 class ReservationWaitlistStaffCreate(ReservationWaitlistCreate):
@@ -23,6 +24,11 @@ class ReservationWaitlistStaffCreate(ReservationWaitlistCreate):
 
 class ReservationWaitlistOffer(AppBaseModel):
     reservation_time: datetime
+
+
+class ReservationWaitlistTerminalCommand(AppBaseModel):
+    reason_code: str = Field(..., min_length=1, max_length=32)
+    note: str | None = Field(None, max_length=1000)
 
 
 class ReservationWaitlistResponse(AppBaseModel):
@@ -38,5 +44,11 @@ class ReservationWaitlistResponse(AppBaseModel):
     offered_reservation_time: datetime | None = None
     offer_expires_at: datetime | None = None
     accepted_at: datetime | None = None
+    accepted_reservation_id: UUID | None = None
+    terminal_at: datetime | None = None
+    terminal_reason_code: str | None = None
+    terminal_reason_note: str | None = None
+    management_token: str | None = None
+    delivery_state: str | None = None
     created_at: datetime
     updated_at: datetime

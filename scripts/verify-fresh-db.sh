@@ -89,11 +89,39 @@ BEGIN
     RAISE EXCEPTION 'order tax totals do not reconcile to lines';
   END IF;
   IF to_regclass('public.inventory_discrepancies') IS NULL
-     OR to_regclass('public.reservation_delivery_attempts') IS NULL
+     OR to_regclass('public.delivery_attempts') IS NULL
      OR to_regclass('public.password_reset_tokens') IS NULL
      OR to_regclass('public.business_regional_audits') IS NULL
-     OR to_regclass('public.tax_profile_versions') IS NULL THEN
+     OR to_regclass('public.tax_profile_versions') IS NULL
+     OR to_regclass('public.queue_service_days') IS NULL
+     OR to_regclass('public.queue_entry_events') IS NULL
+     OR to_regclass('public.preparation_stations') IS NULL
+     OR to_regclass('public.order_line_status_timeline') IS NULL
+     OR to_regclass('public.order_revisions') IS NULL
+     OR to_regclass('public.menu_item_availability_events') IS NULL
+     OR to_regclass('public.tab_settlement_events') IS NULL THEN
     RAISE EXCEPTION 'current integrity tables are missing';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM menu_items
+    WHERE routes_to_all_stations = (preparation_station_id IS NOT NULL)
+  ) OR EXISTS (
+    SELECT 1 FROM item_library
+    WHERE routes_to_all_stations = (preparation_station_id IS NOT NULL)
+  ) OR EXISTS (
+    SELECT 1 FROM order_line_items
+    WHERE routes_to_all_stations = (preparation_station_name IS NOT NULL)
+  ) THEN
+    RAISE EXCEPTION 'preparation station routing invariant failed';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM order_line_items
+    WHERE line_status NOT IN ('received', 'preparing', 'ready', 'served', 'cancelled')
+  ) THEN
+    RAISE EXCEPTION 'order line status backfill invariant failed';
+  END IF;
+  IF EXISTS (SELECT 1 FROM tabs WHERE status NOT IN ('open', 'settled_externally')) THEN
+    RAISE EXCEPTION 'external settlement status migration failed';
   END IF;
 END $$;
 SQL

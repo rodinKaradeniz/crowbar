@@ -2,7 +2,8 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, Numeric, String, Text, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -60,6 +61,13 @@ class MenuCategory(Base, UUIDMixin, TimestampMixin):
 
 class MenuItem(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "menu_items"
+    __table_args__ = (
+        CheckConstraint(
+            "(routes_to_all_stations AND preparation_station_id IS NULL) OR "
+            "(NOT routes_to_all_stations AND preparation_station_id IS NOT NULL)",
+            name="ck_menu_item_station_routing",
+        ),
+    )
 
     category_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -88,6 +96,12 @@ class MenuItem(Base, UUIDMixin, TimestampMixin):
     is_available: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     routing_tag: Mapped[str] = mapped_column(String(20), default="kitchen", nullable=False)
     # routing_tag: kitchen | bar | any
+    preparation_station_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("preparation_stations.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    routes_to_all_stations: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     prep_time_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     display_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     image: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -177,6 +191,13 @@ class ItemLibrary(Base, UUIDMixin, TimestampMixin):
     """Business-scoped reusable item templates. Copied into categories on demand."""
 
     __tablename__ = "item_library"
+    __table_args__ = (
+        CheckConstraint(
+            "(routes_to_all_stations AND preparation_station_id IS NULL) OR "
+            "(NOT routes_to_all_stations AND preparation_station_id IS NOT NULL)",
+            name="ck_library_item_station_routing",
+        ),
+    )
 
     business_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -192,7 +213,33 @@ class ItemLibrary(Base, UUIDMixin, TimestampMixin):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     price: Mapped[Decimal] = mapped_column(Numeric(18, 4), default=0, nullable=False)
     routing_tag: Mapped[str] = mapped_column(String(20), default="kitchen", nullable=False)
+    preparation_station_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("preparation_stations.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    routes_to_all_stations: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     prep_time_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class MenuItemAvailabilityEvent(Base, UUIDMixin):
+    __tablename__ = "menu_item_availability_events"
+
+    business_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("businesses.id", ondelete="RESTRICT"), nullable=False
+    )
+    menu_item_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("menu_items.id", ondelete="RESTRICT"), nullable=False
+    )
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    is_available: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    reason: Mapped[str | None] = mapped_column(Text)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
 
 from app.models.tax import TaxProfile  # noqa: E402

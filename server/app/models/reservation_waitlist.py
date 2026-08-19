@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -25,10 +25,22 @@ class ReservationWaitlistEntry(Base, UUIDMixin, TimestampMixin):
     guests: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(16), default="waiting", nullable=False)
     offer_token_revision: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    management_token_revision: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    idempotency_key: Mapped[str | None] = mapped_column(String(100))
+    request_fingerprint: Mapped[str | None] = mapped_column(String(64))
     offered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     offered_reservation_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     offer_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    accepted_reservation_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("reservations.id", ondelete="SET NULL")
+    )
+    terminal_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    terminal_actor_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    terminal_reason_code: Mapped[str | None] = mapped_column(String(32))
+    terminal_reason_note: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
     )

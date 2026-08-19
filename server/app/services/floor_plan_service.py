@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 from app.core.errors import ErrorCode
 from app.models.business import Business
 from app.models.location import Location
-from app.models.queue_entry import QueueEntry
+from app.models.queue_entry import QueueEntry, QueueEntryEvent
 from app.models.reservation import Reservation
 from app.models.service_type import ServiceType
 from app.models.table import Table
@@ -670,6 +670,13 @@ async def open_seating(
         party_size = source.party_size
         source.status = "seated"
         source.seated_at = datetime.now(timezone.utc)
+        db.add(QueueEntryEvent(
+            business_id=business_id,
+            queue_entry_id=source.id,
+            event_type="seated",
+            actor_id=actor_id,
+            occurred_at=source.seated_at,
+        ))
         reservation_id, queue_entry_id = None, source.id
     for table in tables:
         if table.operational_state != "ready":
@@ -734,6 +741,13 @@ async def close_seating(db, business_id: UUID, seating_id: UUID, actor_id: UUID)
         entry = await db.get(QueueEntry, seating.queue_entry_id)
         entry.status = "completed"
         entry.completed_at = now
+        db.add(QueueEntryEvent(
+            business_id=business_id,
+            queue_entry_id=entry.id,
+            event_type="completed",
+            actor_id=actor_id,
+            occurred_at=now,
+        ))
     await db.flush()
     return seating
 
@@ -961,6 +975,7 @@ async def get_board(
                 .where(
                     QueueEntry.business_id == business.id,
                     QueueEntry.status.in_(("waiting", "called")),
+                    QueueEntry.service_date == resolved_date,
                     queue_location_filter,
                 )
                 .order_by(QueueEntry.joined_at)

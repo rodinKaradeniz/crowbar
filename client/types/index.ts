@@ -195,17 +195,42 @@ export interface QueueEntry {
   name: string;
   partySize: number;
   phone?: string;
-  status: "waiting" | "called" | "seated" | "removed";
+  status: "waiting" | "called" | "seated" | "completed" | "removed";
   position?: number;
   joinedAt: string;
   calledAt?: string;
   seatedAt?: string;
+  completedAt?: string;
+  removedAt?: string;
+  serviceDate: string;
+  terminalReasonCode?: string;
+  terminalReasonNote?: string;
+  delivery?: DeliverySummary;
 }
 
 export interface QueueStatus {
   entry: QueueEntry;
   totalWaiting: number;
   estimatedWaitMinutes?: number;
+}
+
+export interface DeliverySummary {
+  state: "pending" | "delivered" | "failed" | "unavailable" | string;
+  channel?: string;
+  retryable: boolean;
+  attemptCount: number;
+  lastError?: string;
+}
+
+export interface QueueServiceDay {
+  serviceDate: string;
+  status: "open" | "closed";
+  isOpen: boolean;
+  isFull: boolean;
+  maxWaitingCovers?: number;
+  waitingCovers: number;
+  estimatedWaitMinutes?: number;
+  updatedAt?: string;
 }
 
 // ─── Guest CRM ──────────────────────────────────────────────────────────────
@@ -436,6 +461,8 @@ export interface MenuItem {
   isAlcoholic?: boolean; // age-verification flag; drives the checkout attestation + staff badge
   isAvailable: boolean;
   routingTag: "kitchen" | "bar" | "any";
+  preparationStationId?: string;
+  routesToAllStations: boolean;
   prepTimeMinutes?: number;
   displayOrder: number;
   image?: string;
@@ -503,6 +530,10 @@ export interface OrderLineItem {
   totalAmount: number;
   selectedModifiers: SelectedModifier[];
   routingTag: string;
+  preparationStationId?: string;
+  preparationStationName?: string;
+  routesToAllStations: boolean;
+  lineStatus: "received" | "preparing" | "ready" | "served" | "cancelled";
   isAlcoholic?: boolean; // snapshot from the menu item at placement
   notes?: string;
 }
@@ -531,6 +562,9 @@ export interface Order {
   totalAmount: number;
   notes?: string;
   placedAt: string;
+  cancelledBy?: string;
+  cancelledAt?: string;
+  cancellationReason?: string;
   lineItems: OrderLineItem[];
   statusTimeline: OrderStatusEvent[];
 }
@@ -542,6 +576,8 @@ export interface LibraryItem {
   description?: string;
   price: number;
   routingTag: string;
+  preparationStationId?: string;
+  routesToAllStations: boolean;
   prepTimeMinutes?: number;
   taxProfileId: string;
 }
@@ -587,7 +623,20 @@ export interface RegionalOption {
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 
-export type TabSettledMethod = "cash" | "card" | "comp" | "other";
+export type TabSettledMethod = "cash" | "card" | "mixed" | "other";
+
+export interface TabSettlementEvent {
+  id: string;
+  eventType: "settled_externally" | "reopened" | string;
+  actorId?: string;
+  occurredAt: string;
+  currencyCode: string;
+  totalSnapshot: number;
+  informationalMethod?: TabSettledMethod;
+  note?: string;
+  externalRegisterReference?: string;
+  relatedSettlementEventId?: string;
+}
 
 export interface Tab {
   id: string;
@@ -595,13 +644,15 @@ export interface Tab {
   tableId?: string;
   seatingId?: string;
   customerId?: string;
-  status: "open" | "closed";
+  status: "open" | "settled_externally";
   channel: string;
   openedBy: string;
   openedAt: string;
   closedBy?: string;
   closedAt?: string;
   settledMethod?: TabSettledMethod;
+  currentSettlementEventId?: string;
+  settlementEvents: TabSettlementEvent[];
   total: number; // computed live over associated orders
   orders: Order[];
 }
@@ -720,13 +771,36 @@ export interface ReservationWaitlistEntry {
   requestedStartsAt: string;
   flexibleUntil: string;
   guests: number;
-  status: "waiting" | "offered" | "accepted" | "expired" | "removed";
+  status: "waiting" | "offered" | "accepted" | "declined" | "cancelled" | "expired" | "removed";
   offeredAt?: string;
   offeredReservationTime?: string;
   offerExpiresAt?: string;
   acceptedAt?: string;
+  acceptedReservationId?: string;
+  terminalAt?: string;
+  terminalReasonCode?: string;
+  terminalReasonNote?: string;
+  managementToken?: string;
+  deliveryState?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PreparationStation {
+  id: string;
+  businessId: string;
+  name: string;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface OrderAllDayCount {
+  preparationStationId?: string;
+  preparationStationName?: string;
+  routesToAllStations: boolean;
+  itemName: string;
+  lineStatus: string;
+  quantity: number;
 }
 
 export interface AvailabilitySlot {

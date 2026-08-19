@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Users,
   Clock,
@@ -11,20 +11,27 @@ import {
   Check,
   Wifi,
   WifiOff,
+  Plus,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
+  clientCreateStaffWalkIn,
   clientGetQueueEntries,
+  clientGetQueueServiceDay,
   clientGetFloorPlanBoard,
   clientNotifyQueueEntry,
   clientOpenFloorPlanSeating,
   clientRemoveQueueEntry,
+  clientRetryQueueDelivery,
+  clientSetQueueServiceDay,
 } from "@/lib/client-api";
 import { useQueueSocket } from "@/hooks/use-queue-socket";
-import type { FloorPlanBoardTable, FloorPlanParty, QueueEntry } from "@/types";
+import type { FloorPlanBoardTable, FloorPlanParty, QueueEntry, QueueServiceDay } from "@/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { FloorPlanSeatingSheet } from "@/components/floor-plan-seating-sheet";
 
 function timeAgo(iso: string): string {
@@ -72,7 +79,7 @@ function WaitingEntryCard({
       <div className="flex gap-2">
         <Button size="sm" variant="outline" className="flex-1 gap-1.5" onClick={onNotify}>
           <Bell className="h-3.5 w-3.5" />
-          Notify
+          Call party
         </Button>
         <Button
           size="sm"
@@ -91,10 +98,12 @@ function CalledEntryCard({
   entry,
   onSeat,
   onRemove,
+  onRetry,
 }: {
   entry: QueueEntry;
   onSeat: () => void;
   onRemove: () => void;
+  onRetry: () => void;
 }) {
   return (
     <div className="rounded-xl border bg-card p-4 shadow-sm space-y-3">
@@ -111,9 +120,25 @@ function CalledEntryCard({
         </span>
       </div>
 
-      <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+      <div className="space-y-1 text-xs">
+        <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
         <Bell className="h-3 w-3 shrink-0" />
-        <span>Notified · waiting for arrival</span>
+          <span>Called · waiting for arrival</span>
+        </div>
+        <p className={cn(
+          entry.delivery?.state === "delivered" ? "text-emerald-600" :
+          entry.delivery?.state === "failed" ? "text-destructive" : "text-muted-foreground",
+        )}>
+          {entry.delivery?.state === "delivered" && `${entry.delivery.channel?.toUpperCase() ?? "Message"} delivered`}
+          {entry.delivery?.state === "pending" && "Message delivery pending"}
+          {entry.delivery?.state === "failed" && "Message failed — the party is still called"}
+          {(!entry.delivery || entry.delivery.state === "unavailable") && "No configured delivery channel"}
+        </p>
+        {entry.delivery?.retryable && (
+          <Button size="sm" variant="ghost" className="h-6 px-2" onClick={onRetry}>
+            <RefreshCw className="mr-1 h-3 w-3" /> Retry message
+          </Button>
+        )}
       </div>
 
       <div className="flex gap-2">
@@ -189,8 +214,17 @@ export function QueueBoardClient({
 }) {
   const [entries, setEntries] = useState<QueueEntry[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [service, setService] = useState<QueueServiceDay | null>(null);
+  const [coverCap, setCoverCap] = useState(40);
+  const [policySaving, setPolicySaving] = useState(false);
+  const [walkInName, setWalkInName] = useState("");
+  const [walkInPartySize, setWalkInPartySize] = useState(2);
+  const [walkInPhone, setWalkInPhone] = useState("");
+  const [walkInSaving, setWalkInSaving] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [noShowTarget, setNoShowTarget] = useState<QueueEntry | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<QueueEntry | null>(null);
+  const [removeReason, setRemoveReason] = useState<"guest_left" | "no_show" | "staff_removed">("no_show");
+  const [removeNote, setRemoveNote] = useState("");
   const [seatingTarget, setSeatingTarget] = useState<QueueEntry | null>(null);
   const [floorTables, setFloorTables] = useState<FloorPlanBoardTable[]>([]);
   const [seatingLoading, setSeatingLoading] = useState(false);
@@ -199,28 +233,36 @@ export function QueueBoardClient({
     setEntries(updated);
   });
 
-  useEffect(() => {
-    clientGetQueueEntries(businessId)
-      .then(setEntries)
-      .catch((e) =>
-        setLoadError(e instanceof Error ? e.message : "Could not load queue."),
-      );
+  const refresh = useCallback(async () => {
+    try {
+      const [nextEntries, nextService] = await Promise.all([
+        clientGetQueueEntries(businessId),
+        clientGetQueueServiceDay(),
+      ]);
+      setEntries(nextEntries);
+      setService(nextService);
+      setCoverCap(nextService.maxWaitingCovers ?? 40);
+      setLoadError(null);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Could not load queue.");
+    }
   }, [businessId]);
+
+  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => { if (connected) void refresh(); }, [connected, refresh]);
 
   const waiting = entries.filter((e) => e.status === "waiting");
   const called = entries.filter((e) => e.status === "called");
 
   const handleNotify = async (entry: QueueEntry) => {
-    setEntries((prev) =>
-      prev.map((e) => e.id === entry.id ? { ...e, status: "called" as const } : e),
-    );
     try {
-      await clientNotifyQueueEntry(businessId, entry.id);
-    } catch {
-      setEntries((prev) =>
-        prev.map((e) => e.id === entry.id ? { ...e, status: "waiting" as const } : e),
-      );
-      toast.error("Could not notify this party.");
+      const updated = await clientNotifyQueueEntry(businessId, entry.id);
+      setEntries((prev) => prev.map((current) => current.id === updated.id ? updated : current));
+      if (updated.delivery?.state === "delivered") toast.success("Party called and message delivered.");
+      else if (updated.delivery?.state === "failed") toast.warning("Party called, but the message failed.");
+      else toast.info("Party called. No delivery channel was available.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not call this party.");
     }
   };
 
@@ -266,16 +308,59 @@ export function QueueBoardClient({
     : null;
 
   const handleRemove = (entry: QueueEntry) => {
-    setNoShowTarget(entry);
+    setRemoveTarget(entry);
+    setRemoveReason(entry.status === "called" ? "no_show" : "staff_removed");
+    setRemoveNote("");
   };
 
   const confirmRemove = async (entry: QueueEntry) => {
     setEntries((prev) => prev.filter((e) => e.id !== entry.id));
     try {
-      await clientRemoveQueueEntry(businessId, entry.id);
+      await clientRemoveQueueEntry(businessId, entry.id, removeReason, removeNote.trim() || undefined);
     } catch {
       setEntries((prev) => [...prev, entry]);
       toast.error("Could not remove this party.");
+    }
+  };
+
+  const updatePolicy = async (status: "open" | "closed") => {
+    setPolicySaving(true);
+    try {
+      const next = await clientSetQueueServiceDay(status, coverCap);
+      setService(next);
+      toast.success(status === "open" ? "Queue opened for this service day." : "Queue closed to new parties.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update the queue policy.");
+    } finally { setPolicySaving(false); }
+  };
+
+  const addWalkIn = async () => {
+    if (!walkInName.trim() || walkInPartySize < 1) return;
+    setWalkInSaving(true);
+    try {
+      const result = await clientCreateStaffWalkIn({
+        name: walkInName.trim(),
+        partySize: walkInPartySize,
+        phone: walkInPhone.trim() || undefined,
+        idempotencyKey: crypto.randomUUID(),
+      });
+      setEntries((current) => [...current.filter((entry) => entry.id !== result.entry.id), result.entry]);
+      setWalkInName(""); setWalkInPhone(""); setWalkInPartySize(2);
+      setService(await clientGetQueueServiceDay());
+      toast.success("Walk-in added to the queue.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not add the walk-in.");
+    } finally { setWalkInSaving(false); }
+  };
+
+  const retryDelivery = async (entry: QueueEntry) => {
+    try {
+      const updated = await clientRetryQueueDelivery(entry.id);
+      setEntries((current) => current.map((item) => item.id === updated.id ? updated : item));
+      if (updated.delivery?.state === "delivered") toast.success("Message delivered.");
+      else toast.warning("Message delivery failed again. The party remains called.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not retry delivery.");
     }
   };
 
@@ -343,6 +428,37 @@ export function QueueBoardClient({
 
       {loadError && <p className="text-sm text-destructive">{loadError}</p>}
 
+      <section className="grid gap-4 rounded-xl border bg-card p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+        <div className="space-y-3">
+          <div>
+            <p className="font-medium">Current service queue</p>
+            <p className="text-xs text-muted-foreground">{service?.serviceDate ?? "Loading…"} · {service?.waitingCovers ?? 0} waiting covers</p>
+          </div>
+          <div className="flex items-end gap-2">
+            <div className="space-y-1">
+              <Label htmlFor="queue-cover-cap">Waiting-cover cap</Label>
+              <Input id="queue-cover-cap" type="number" min={1} max={1000} value={coverCap} onChange={(event) => setCoverCap(Number(event.target.value))} />
+            </div>
+            <Button disabled={policySaving || coverCap < 1} onClick={() => void updatePolicy(service?.isOpen ? "closed" : "open")}>
+              {service?.isOpen ? "Close queue" : "Open queue"}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {service?.isOpen ? (service.isFull ? "Open, but currently full." : "Open to new walk-ins.") : "Closed to new walk-ins; current parties remain operable."}
+            {service?.estimatedWaitMinutes !== undefined ? ` Measured estimate: ${service.estimatedWaitMinutes} min.` : " No measured estimate yet."}
+          </p>
+        </div>
+        <div className="space-y-3 border-t pt-4 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
+          <p className="font-medium">Add staff walk-in</p>
+          <div className="grid gap-2 sm:grid-cols-[1fr_100px_1fr_auto]">
+            <Input aria-label="Guest name" placeholder="Guest name" value={walkInName} onChange={(event) => setWalkInName(event.target.value)} />
+            <Input aria-label="Party size" type="number" min={1} max={20} value={walkInPartySize} onChange={(event) => setWalkInPartySize(Number(event.target.value))} />
+            <Input aria-label="Phone, optional" placeholder="Phone (optional)" value={walkInPhone} onChange={(event) => setWalkInPhone(event.target.value)} />
+            <Button disabled={walkInSaving || !service?.isOpen || service?.isFull || !walkInName.trim()} onClick={() => void addWalkIn()}><Plus className="mr-1 h-4 w-4" />Add</Button>
+          </div>
+        </div>
+      </section>
+
       {/* Empty state */}
       {!loadError && waiting.length === 0 && called.length === 0 && (
         <div className="flex flex-1 flex-col items-center justify-center py-20 text-center">
@@ -377,30 +493,29 @@ export function QueueBoardClient({
             )}
           </QueueColumn>
 
-          <QueueColumn title="Notified" entries={called} emptyText="No parties notified yet">
+          <QueueColumn title="Called" entries={called} emptyText="No parties called yet">
             {(entry) => (
               <CalledEntryCard
                 entry={entry}
                 onSeat={() => void openSeating(entry)}
                 onRemove={() => handleRemove(entry)}
+                onRetry={() => void retryDelivery(entry)}
               />
             )}
           </QueueColumn>
         </div>
       )}
 
-      <ConfirmationDialog
-        open={noShowTarget !== null}
-        onOpenChange={(open) => !open && setNoShowTarget(null)}
-        title="Mark as No-show"
-        description={`This will remove ${noShowTarget?.name ?? "this party"}'s party of ${noShowTarget?.partySize ?? 1} from the queue.`}
-        confirmLabel="Mark No-show"
-        variant="destructive"
-        onConfirm={() => {
-          if (noShowTarget) void confirmRemove(noShowTarget);
-          setNoShowTarget(null);
-        }}
-      />
+      {removeTarget && (
+        <section className="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-lg space-y-3 rounded-xl border bg-background p-5 shadow-xl" role="dialog" aria-modal="true" aria-label="Remove queue party">
+          <div><p className="font-semibold">Remove {removeTarget.name}</p><p className="text-sm text-muted-foreground">Choose the operational reason. This is retained in queue history.</p></div>
+          <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={removeReason} onChange={(event) => setRemoveReason(event.target.value as typeof removeReason)}>
+            <option value="guest_left">Guest left</option><option value="no_show">No-show</option><option value="staff_removed">Staff removed</option>
+          </select>
+          <Input placeholder="Optional note" value={removeNote} onChange={(event) => setRemoveNote(event.target.value)} />
+          <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setRemoveTarget(null)}>Keep party</Button><Button variant="destructive" onClick={() => { void confirmRemove(removeTarget); setRemoveTarget(null); }}>Remove party</Button></div>
+        </section>
+      )}
       <FloorPlanSeatingSheet
         key={seatingTarget?.id ?? "no-queue-party"}
         open={seatingTarget !== null}

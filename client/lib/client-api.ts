@@ -27,7 +27,11 @@ import {
   Notification,
   OperationalKpis,
   Order,
+  OrderLineItem,
+  OrderAllDayCount,
+  PreparationStation,
   QueueEntry,
+  QueueServiceDay,
   QueueStatus,
   MenuItemStockInfo,
   RecipeIngredient,
@@ -247,6 +251,12 @@ function toReservationWaitlistEntry(entry: Record<string, unknown>): Reservation
     offeredReservationTime: (entry.offered_reservation_time as string) || undefined,
     offerExpiresAt: (entry.offer_expires_at as string) || undefined,
     acceptedAt: (entry.accepted_at as string) || undefined,
+    acceptedReservationId: (entry.accepted_reservation_id as string) || undefined,
+    terminalAt: (entry.terminal_at as string) || undefined,
+    terminalReasonCode: (entry.terminal_reason_code as string) || undefined,
+    terminalReasonNote: (entry.terminal_reason_note as string) || undefined,
+    managementToken: (entry.management_token as string) || undefined,
+    deliveryState: (entry.delivery_state as string) || undefined,
     createdAt: entry.created_at as string, updatedAt: entry.updated_at as string,
   };
 }
@@ -847,15 +857,24 @@ export async function clientAcceptWaitlistOffer(token: string): Promise<Reservat
   return toReservation(await clientFetch<Record<string, unknown>>(`/reservations/waitlist/offers/${encodeURIComponent(token)}/accept`, { method: "POST" }));
 }
 
+export async function clientGetWaitlistOffer(token: string): Promise<ReservationWaitlistEntry> {
+  return toReservationWaitlistEntry(await clientFetch<Record<string, unknown>>(`/reservations/waitlist/offers/${encodeURIComponent(token)}`));
+}
+
+export async function clientDeclineWaitlistOffer(token: string): Promise<ReservationWaitlistEntry> {
+  return toReservationWaitlistEntry(await clientFetch<Record<string, unknown>>(`/reservations/waitlist/offers/${encodeURIComponent(token)}/decline`, { method: "POST" }));
+}
+
 export interface ReservationWaitlistCreateInput {
   businessId: string; serviceTypeId: string; requestedStartsAt: string; flexibleUntil: string;
-  guests: number; name: string; phone: string; email: string;
+  guests: number; name: string; phone: string; email: string; idempotencyKey: string;
 }
 
 function waitlistPayload(data: ReservationWaitlistCreateInput) {
   return { business_id: data.businessId, service_type_id: data.serviceTypeId,
     requested_starts_at: data.requestedStartsAt, flexible_until: data.flexibleUntil,
-    guests: data.guests, name: data.name, phone: data.phone, email: data.email };
+    guests: data.guests, name: data.name, phone: data.phone, email: data.email,
+    idempotency_key: data.idempotencyKey };
 }
 
 export async function clientCreatePublicReservationWaitlist(data: ReservationWaitlistCreateInput): Promise<ReservationWaitlistEntry> {
@@ -868,6 +887,27 @@ export async function clientCreateReservationWaitlist(data: ReservationWaitlistC
 
 export async function clientOfferReservationWaitlist(entryId: string, reservationTime: string): Promise<ReservationWaitlistEntry> {
   return toReservationWaitlistEntry(await authFetch<Record<string, unknown>>( `/reservations/waitlist/${entryId}/offer`, { method: "POST", body: JSON.stringify({ reservation_time: reservationTime }) }));
+}
+
+export async function clientGetReservationWaitlist(view: "active" | "history" = "active"): Promise<ReservationWaitlistEntry[]> {
+  const result = await authFetch<Record<string, unknown>[]>(`/reservations/waitlist?view=${view}`);
+  return result.map(toReservationWaitlistEntry);
+}
+
+export async function clientGetManagedWaitlist(token: string): Promise<ReservationWaitlistEntry> {
+  return toReservationWaitlistEntry(await clientFetch<Record<string, unknown>>(`/reservations/waitlist/manage/${encodeURIComponent(token)}`));
+}
+
+export async function clientCancelManagedWaitlist(token: string): Promise<ReservationWaitlistEntry> {
+  return toReservationWaitlistEntry(await clientFetch<Record<string, unknown>>(`/reservations/waitlist/manage/${encodeURIComponent(token)}/cancel`, { method: "POST" }));
+}
+
+export async function clientRemoveReservationWaitlist(entryId: string, reasonCode: string, note?: string): Promise<ReservationWaitlistEntry> {
+  return toReservationWaitlistEntry(await authFetch<Record<string, unknown>>(`/reservations/waitlist/${entryId}/remove`, { method: "POST", body: JSON.stringify({ reason_code: reasonCode, note }) }));
+}
+
+export async function clientRetryReservationWaitlistDelivery(entryId: string): Promise<ReservationWaitlistEntry> {
+  return toReservationWaitlistEntry(await authFetch<Record<string, unknown>>(`/reservations/waitlist/${entryId}/delivery/retry`, { method: "POST" }));
 }
 
 // ─── Guest CRM ──────────────────────────────────────────────────────────────
@@ -1261,6 +1301,7 @@ export async function clientDeleteStaff(id: string): Promise<void> {
 // ─── Queue ────────────────────────────────────────────────────────────────────
 
 function toQueueEntry(e: Record<string, unknown>): QueueEntry {
+  const delivery = e.delivery as Record<string, unknown> | null | undefined;
   return {
     id: e.id as string,
     businessId: e.business_id as string,
@@ -1273,6 +1314,31 @@ function toQueueEntry(e: Record<string, unknown>): QueueEntry {
     joinedAt: e.joined_at as string,
     calledAt: (e.called_at as string) || undefined,
     seatedAt: (e.seated_at as string) || undefined,
+    completedAt: (e.completed_at as string) || undefined,
+    removedAt: (e.removed_at as string) || undefined,
+    serviceDate: e.service_date as string,
+    terminalReasonCode: (e.terminal_reason_code as string) || undefined,
+    terminalReasonNote: (e.terminal_reason_note as string) || undefined,
+    delivery: delivery ? {
+      state: delivery.state as string,
+      channel: (delivery.channel as string) || undefined,
+      retryable: (delivery.retryable as boolean) ?? false,
+      attemptCount: Number(delivery.attempt_count ?? 0),
+      lastError: (delivery.last_error as string) || undefined,
+    } : undefined,
+  };
+}
+
+function toQueueServiceDay(s: Record<string, unknown>): QueueServiceDay {
+  return {
+    serviceDate: s.service_date as string,
+    status: s.status as QueueServiceDay["status"],
+    isOpen: s.is_open as boolean,
+    isFull: s.is_full as boolean,
+    maxWaitingCovers: (s.max_waiting_covers as number | null) ?? undefined,
+    waitingCovers: Number(s.waiting_covers ?? 0),
+    estimatedWaitMinutes: (s.estimated_wait_minutes as number | null) ?? undefined,
+    updatedAt: (s.updated_at as string) || undefined,
   };
 }
 
@@ -1296,13 +1362,13 @@ export async function clientLeaveQueue(
 
 export async function clientJoinQueue(
   businessId: string,
-  data: { name: string; partySize: number; phone?: string },
+  data: { name: string; partySize: number; phone?: string; idempotencyKey: string },
 ): Promise<QueueStatus> {
   const result = await clientFetch<Record<string, unknown>>(
     `/queue/${businessId}/join`,
     {
       method: "POST",
-      body: JSON.stringify({ name: data.name, party_size: data.partySize, phone: data.phone }),
+      body: JSON.stringify({ name: data.name, party_size: data.partySize, phone: data.phone, idempotency_key: data.idempotencyKey }),
     },
   );
   return toQueueStatus(result);
@@ -1323,8 +1389,24 @@ export async function clientGetQueueActiveCount(businessId: string): Promise<num
   return result.filter((e) => e.status === "waiting" || e.status === "called").length;
 }
 
+export async function clientGetPublicQueueService(businessId: string): Promise<QueueServiceDay> {
+  return toQueueServiceDay(await clientFetch<Record<string, unknown>>(`/queue/${businessId}/service`));
+}
+
+export async function clientGetQueueServiceDay(): Promise<QueueServiceDay> {
+  return toQueueServiceDay(await authFetch<Record<string, unknown>>(`/queue/service-day`));
+}
+
+export async function clientSetQueueServiceDay(status: "open" | "closed", maxWaitingCovers: number): Promise<QueueServiceDay> {
+  return toQueueServiceDay(await authFetch<Record<string, unknown>>(`/queue/service-day`, {
+    method: "PUT",
+    body: JSON.stringify({ status, max_waiting_covers: maxWaitingCovers }),
+  }));
+}
+
 export async function clientGetQueueEntries(businessId: string): Promise<QueueEntry[]> {
-  const result = await authFetch<Record<string, unknown>[]>(`/queue/${businessId}/entries`);
+  void businessId;
+  const result = await authFetch<Record<string, unknown>[]>(`/queue/entries`);
   return result.map(toQueueEntry);
 }
 
@@ -1332,18 +1414,36 @@ export async function clientNotifyQueueEntry(
   businessId: string,
   entryId: string,
 ): Promise<QueueEntry> {
+  void businessId;
   const result = await authFetch<Record<string, unknown>>(
-    `/queue/${businessId}/entries/${entryId}/notify`,
+    `/queue/entries/${entryId}/call`,
     { method: "POST" },
   );
   return toQueueEntry(result);
 }
 
+export async function clientRetryQueueDelivery(entryId: string): Promise<QueueEntry> {
+  return toQueueEntry(await authFetch<Record<string, unknown>>(`/queue/entries/${entryId}/delivery/retry`, { method: "POST" }));
+}
+
+export async function clientCreateStaffWalkIn(data: { name: string; partySize: number; phone?: string; idempotencyKey: string }): Promise<QueueStatus> {
+  return toQueueStatus(await authFetch<Record<string, unknown>>(`/queue/entries`, {
+    method: "POST",
+    body: JSON.stringify({ name: data.name, party_size: data.partySize, phone: data.phone, idempotency_key: data.idempotencyKey }),
+  }));
+}
+
 export async function clientRemoveQueueEntry(
   businessId: string,
   entryId: string,
-): Promise<void> {
-  await authFetch(`/queue/${businessId}/entries/${entryId}`, { method: "DELETE" });
+  reasonCode: "guest_left" | "no_show" | "staff_removed",
+  note?: string,
+): Promise<QueueEntry> {
+  void businessId;
+  return toQueueEntry(await authFetch<Record<string, unknown>>(`/queue/entries/${entryId}/remove`, {
+    method: "POST",
+    body: JSON.stringify({ reason_code: reasonCode, note }),
+  }));
 }
 
 // ─── Floor plan ──────────────────────────────────────────────────────────────
@@ -1758,6 +1858,8 @@ function toMenuItem(i: Record<string, unknown>): MenuItem {
     isAlcoholic: (i.is_alcoholic as boolean) ?? false,
     isAvailable: i.is_available as boolean,
     routingTag: i.routing_tag as MenuItem["routingTag"],
+    preparationStationId: (i.preparation_station_id as string) || undefined,
+    routesToAllStations: (i.routes_to_all_stations as boolean) ?? false,
     prepTimeMinutes: (i.prep_time_minutes as number) || undefined,
     displayOrder: i.display_order as number,
     image: (i.image as string) || undefined,
@@ -1816,6 +1918,9 @@ function toOrder(o: Record<string, unknown>): Order {
     totalAmount: toMoney(o.total_amount),
     notes: (o.notes as string) || undefined,
     placedAt: o.placed_at as string,
+    cancelledBy: (o.cancelled_by as string) || undefined,
+    cancelledAt: (o.cancelled_at as string) || undefined,
+    cancellationReason: (o.cancellation_reason as string) || undefined,
     lineItems: lineItems.map((li) => ({
       id: li.id as string,
       orderId: li.order_id as string,
@@ -1839,6 +1944,10 @@ function toOrder(o: Record<string, unknown>): Order {
         priceDelta: toMoney(s.price_delta),
       })),
       routingTag: li.routing_tag as string,
+      preparationStationId: (li.preparation_station_id as string) || undefined,
+      preparationStationName: (li.preparation_station_name as string) || undefined,
+      routesToAllStations: (li.routes_to_all_stations as boolean) ?? false,
+      lineStatus: li.line_status as OrderLineItem["lineStatus"],
       isAlcoholic: (li.is_alcoholic as boolean) ?? false,
       notes: (li.notes as string) || undefined,
     })),
@@ -1940,6 +2049,111 @@ export async function clientAdvanceOrderStatus(
   return toOrder(result);
 }
 
+export async function clientAdvanceOrderLineStatus(
+  businessId: string,
+  orderId: string,
+  lineId: string,
+  status: OrderLineItem["lineStatus"],
+): Promise<Order> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/ordering/${businessId}/orders/${orderId}/lines/${lineId}/status`,
+    { method: "PATCH", body: JSON.stringify({ status }) },
+  );
+  return toOrder(result);
+}
+
+export async function clientCorrectOrder(
+  businessId: string,
+  orderId: string,
+  data: {
+    items: Array<{ itemId: string; quantity: number; selectedModifiers?: Array<{ modifierId: string }>; notes?: string }>;
+    notes?: string;
+    reason: string;
+    idempotencyKey: string;
+  },
+): Promise<Order> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/ordering/${businessId}/orders/${orderId}/correct`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        items: data.items.map((item) => ({
+          item_id: item.itemId,
+          quantity: item.quantity,
+          selected_modifiers: (item.selectedModifiers ?? []).map((modifier) => ({ modifier_id: modifier.modifierId })),
+          notes: item.notes,
+        })),
+        notes: data.notes,
+        reason: data.reason,
+        idempotency_key: data.idempotencyKey,
+      }),
+    },
+  );
+  return toOrder(result);
+}
+
+export async function clientCancelOrder(
+  businessId: string,
+  orderId: string,
+  reason: string,
+  idempotencyKey: string,
+): Promise<Order> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/ordering/${businessId}/orders/${orderId}/cancel`,
+    { method: "POST", body: JSON.stringify({ reason, idempotency_key: idempotencyKey }) },
+  );
+  return toOrder(result);
+}
+
+export async function clientGetOrderAllDayCounts(): Promise<OrderAllDayCount[]> {
+  const result = await authFetch<Record<string, unknown>[]>("/ordering/all-day-counts");
+  return result.map((row) => ({
+    preparationStationId: (row.preparation_station_id as string) || undefined,
+    preparationStationName: (row.preparation_station_name as string) || undefined,
+    routesToAllStations: (row.routes_to_all_stations as boolean) ?? false,
+    itemName: row.item_name as string,
+    lineStatus: row.line_status as string,
+    quantity: Number(row.quantity),
+  }));
+}
+
+function toPreparationStation(row: Record<string, unknown>): PreparationStation {
+  return {
+    id: row.id as string,
+    businessId: row.business_id as string,
+    name: row.name as string,
+    sortOrder: Number(row.sort_order),
+    isActive: row.is_active as boolean,
+  };
+}
+
+export async function clientGetPreparationStations(): Promise<PreparationStation[]> {
+  return (await authFetch<Record<string, unknown>[]>("/ordering/stations")).map(toPreparationStation);
+}
+
+export async function clientCreatePreparationStation(name: string, sortOrder = 0): Promise<PreparationStation> {
+  const result = await authFetch<Record<string, unknown>>("/ordering/stations", {
+    method: "POST",
+    body: JSON.stringify({ name, sort_order: sortOrder }),
+  });
+  return toPreparationStation(result);
+}
+
+export async function clientUpdatePreparationStation(
+  stationId: string,
+  data: { name?: string; sortOrder?: number },
+): Promise<PreparationStation> {
+  const result = await authFetch<Record<string, unknown>>(`/ordering/stations/${stationId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name: data.name, sort_order: data.sortOrder }),
+  });
+  return toPreparationStation(result);
+}
+
+export async function clientArchivePreparationStation(stationId: string): Promise<void> {
+  await authFetch(`/ordering/stations/${stationId}/archive`, { method: "POST" });
+}
+
 // ─── Tabs (feature of the ordering module) ─────────────────────────────────────
 
 function toTab(t: Record<string, unknown>): Tab {
@@ -1956,13 +2170,26 @@ function toTab(t: Record<string, unknown>): Tab {
     closedBy: (t.closed_by as string) || undefined,
     closedAt: (t.closed_at as string) || undefined,
     settledMethod: (t.settled_method as TabSettledMethod) || undefined,
+    currentSettlementEventId: (t.current_settlement_event_id as string) || undefined,
+    settlementEvents: ((t.settlement_events as Record<string, unknown>[]) ?? []).map((event) => ({
+      id: event.id as string,
+      eventType: event.event_type as string,
+      actorId: (event.actor_id as string) || undefined,
+      occurredAt: event.occurred_at as string,
+      currencyCode: event.currency_code as string,
+      totalSnapshot: toMoney(event.total_snapshot),
+      informationalMethod: (event.informational_method as TabSettledMethod) || undefined,
+      note: (event.note as string) || undefined,
+      externalRegisterReference: (event.external_register_reference as string) || undefined,
+      relatedSettlementEventId: (event.related_settlement_event_id as string) || undefined,
+    })),
     total: toMoney(t.total),
     orders: ((t.orders as Record<string, unknown>[]) ?? []).map(toOrder),
   };
 }
 
 export async function clientListTabs(
-  status?: "open" | "closed",
+  status?: "open" | "settled_externally",
 ): Promise<Tab[]> {
   const q = status ? `?status=${status}` : "";
   const result = await authFetch<Record<string, unknown>[]>(`/tabs${q}`);
@@ -2028,14 +2255,39 @@ export async function clientAddOrderToTab(
   return toOrder(result);
 }
 
-export async function clientCloseTab(
+export async function clientSettleTabExternally(
   tabId: string,
-  settledMethod: TabSettledMethod,
+  data: {
+    idempotencyKey: string;
+    informationalMethod?: TabSettledMethod;
+    note?: string;
+    externalRegisterReference?: string;
+  },
 ): Promise<Tab> {
   const result = await authFetch<Record<string, unknown>>(
-    `/tabs/${tabId}/close`,
-    { method: "POST", body: JSON.stringify({ settled_method: settledMethod }) },
+    `/tabs/${tabId}/settle-externally`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        idempotency_key: data.idempotencyKey,
+        informational_method: data.informationalMethod,
+        note: data.note,
+        external_register_reference: data.externalRegisterReference,
+      }),
+    },
   );
+  return toTab(result);
+}
+
+export async function clientReopenTab(
+  tabId: string,
+  reason: string,
+  idempotencyKey: string,
+): Promise<Tab> {
+  const result = await authFetch<Record<string, unknown>>(`/tabs/${tabId}/reopen`, {
+    method: "POST",
+    body: JSON.stringify({ reason, idempotency_key: idempotencyKey }),
+  });
   return toTab(result);
 }
 
@@ -2135,7 +2387,8 @@ export async function clientCreateMenuItem(
     happyHourPrice?: number | null;
     isAlcoholic?: boolean;
     isAvailable?: boolean;
-    routingTag?: string;
+    preparationStationId?: string;
+    routesToAllStations?: boolean;
     prepTimeMinutes?: number;
     displayOrder?: number;
     image?: string;
@@ -2153,7 +2406,8 @@ export async function clientCreateMenuItem(
         happy_hour_price: data.happyHourPrice ?? null,
         is_alcoholic: data.isAlcoholic ?? false,
         is_available: data.isAvailable ?? true,
-        routing_tag: data.routingTag ?? "kitchen",
+        preparation_station_id: data.preparationStationId,
+        routes_to_all_stations: data.routesToAllStations ?? !data.preparationStationId,
         prep_time_minutes: data.prepTimeMinutes,
         display_order: data.displayOrder ?? 0,
         image: data.image,
@@ -2174,7 +2428,8 @@ export async function clientUpdateMenuItem(
     happyHourPrice?: number | null;
     isAlcoholic?: boolean;
     isAvailable?: boolean;
-    routingTag?: string;
+    preparationStationId?: string | null;
+    routesToAllStations?: boolean;
     prepTimeMinutes?: number;
     displayOrder?: number;
     image?: string;
@@ -2190,7 +2445,8 @@ export async function clientUpdateMenuItem(
   if (data.happyHourPrice !== undefined) body.happy_hour_price = data.happyHourPrice;
   if (data.isAlcoholic !== undefined) body.is_alcoholic = data.isAlcoholic;
   if (data.isAvailable !== undefined) body.is_available = data.isAvailable;
-  if (data.routingTag !== undefined) body.routing_tag = data.routingTag;
+  if (data.preparationStationId !== undefined) body.preparation_station_id = data.preparationStationId;
+  if (data.routesToAllStations !== undefined) body.routes_to_all_stations = data.routesToAllStations;
   if (data.prepTimeMinutes !== undefined) body.prep_time_minutes = data.prepTimeMinutes;
   if (data.displayOrder !== undefined) body.display_order = data.displayOrder;
   if (data.image !== undefined) body.image = data.image;
@@ -2202,13 +2458,15 @@ export async function clientUpdateMenuItem(
   return toMenuItem(result);
 }
 
-export async function clientToggleItemAvailability(
+export async function clientSetItemAvailability(
   businessId: string,
   itemId: string,
+  isAvailable: boolean,
+  reason?: string,
 ): Promise<MenuItem> {
   const result = await authFetch<Record<string, unknown>>(
-    `/ordering/${businessId}/items/${itemId}/toggle-availability`,
-    { method: "POST" },
+    `/ordering/items/${itemId}/availability`,
+    { method: "PUT", body: JSON.stringify({ is_available: isAvailable, reason }) },
   );
   return toMenuItem(result);
 }
@@ -2252,6 +2510,8 @@ function toLibraryItem(d: Record<string, unknown>): LibraryItem {
     description: d.description as string | undefined,
     price: toMoney(d.price),
     routingTag: d.routing_tag as string,
+    preparationStationId: (d.preparation_station_id as string) || undefined,
+    routesToAllStations: (d.routes_to_all_stations as boolean) ?? false,
     prepTimeMinutes: d.prep_time_minutes as number | undefined,
     taxProfileId: d.tax_profile_id as string,
   };
@@ -2266,7 +2526,7 @@ export async function clientGetLibrary(businessId: string): Promise<LibraryItem[
 
 export async function clientCreateLibraryItem(
   businessId: string,
-  data: { name: string; description?: string; price: number; routingTag?: string; prepTimeMinutes?: number; taxProfileId?: string },
+  data: { name: string; description?: string; price: number; preparationStationId?: string; routesToAllStations?: boolean; prepTimeMinutes?: number; taxProfileId?: string },
 ): Promise<LibraryItem> {
   const result = await authFetch<Record<string, unknown>>(
     `/ordering/${businessId}/library`,
@@ -2276,7 +2536,8 @@ export async function clientCreateLibraryItem(
         name: data.name,
         description: data.description,
         price: data.price,
-        routing_tag: data.routingTag ?? "kitchen",
+        preparation_station_id: data.preparationStationId,
+        routes_to_all_stations: data.routesToAllStations ?? !data.preparationStationId,
         prep_time_minutes: data.prepTimeMinutes,
         tax_profile_id: data.taxProfileId,
       }),
@@ -2288,13 +2549,14 @@ export async function clientCreateLibraryItem(
 export async function clientUpdateLibraryItem(
   businessId: string,
   itemId: string,
-  data: { name?: string; description?: string; price?: number; routingTag?: string; prepTimeMinutes?: number; taxProfileId?: string },
+  data: { name?: string; description?: string; price?: number; preparationStationId?: string | null; routesToAllStations?: boolean; prepTimeMinutes?: number; taxProfileId?: string },
 ): Promise<LibraryItem> {
   const body: Record<string, unknown> = {};
   if (data.name !== undefined) body.name = data.name;
   if (data.description !== undefined) body.description = data.description;
   if (data.price !== undefined) body.price = data.price;
-  if (data.routingTag !== undefined) body.routing_tag = data.routingTag;
+  if (data.preparationStationId !== undefined) body.preparation_station_id = data.preparationStationId;
+  if (data.routesToAllStations !== undefined) body.routes_to_all_stations = data.routesToAllStations;
   if (data.prepTimeMinutes !== undefined) body.prep_time_minutes = data.prepTimeMinutes;
   if (data.taxProfileId !== undefined) body.tax_profile_id = data.taxProfileId;
   const result = await authFetch<Record<string, unknown>>(
