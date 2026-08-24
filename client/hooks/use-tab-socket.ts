@@ -29,9 +29,10 @@ export function useTabSocket(businessId: string, onInvalidate: () => void): { co
   const connect = useCallback(async () => {
     const token = await fetchToken();
     if (!token || stoppedRef.current || (socketRef.current && socketRef.current.readyState <= WebSocket.OPEN)) return;
-    const socket = new WebSocket(`${wsBase()}/ws/tabs/${businessId}?token=${encodeURIComponent(token)}`);
+    const socket = new WebSocket(`${wsBase()}/ws/tabs/${businessId}`);
     socketRef.current = socket;
     socket.onopen = () => {
+      socket.send(JSON.stringify({ type: "authenticate", token }));
       setConnected(true);
       delayRef.current = 1000;
       callbackRef.current();

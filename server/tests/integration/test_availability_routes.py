@@ -374,9 +374,16 @@ async def test_table_backed_public_booking_auto_assigns_and_blocks_the_table(
     )
 
     assert created.status_code == 201, created.text
+    reservation = await db_session.scalar(
+        select(Reservation).where(
+            Reservation.business_id == business.id,
+            Reservation.idempotency_key == "table-allocation",
+        )
+    )
+    assert reservation is not None
     assignment = await db_session.scalar(
         select(ReservationTableAssignment).where(
-            ReservationTableAssignment.reservation_id == created.json()["id"]
+            ReservationTableAssignment.reservation_id == reservation.id
         )
     )
     assert assignment is not None

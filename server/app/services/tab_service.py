@@ -167,10 +167,12 @@ async def list_tabs(
     return list(rows.all())
 
 
-async def get_tab_orders(db: AsyncSession, tab_id: UUID) -> list[Order]:
+async def get_tab_orders(
+    db: AsyncSession, business_id: UUID, tab_id: UUID
+) -> list[Order]:
     rows = await db.scalars(
         select(Order)
-        .where(Order.tab_id == tab_id)
+        .where(Order.business_id == business_id, Order.tab_id == tab_id)
         .options(
             selectinload(Order.line_items),
             selectinload(Order.status_timeline),
@@ -180,9 +182,10 @@ async def get_tab_orders(db: AsyncSession, tab_id: UUID) -> list[Order]:
     return list(rows.unique().all())
 
 
-async def get_tab_total(db: AsyncSession, tab_id: UUID) -> Decimal:
+async def get_tab_total(db: AsyncSession, business_id: UUID, tab_id: UUID) -> Decimal:
     value = await db.scalar(
         select(func.coalesce(func.sum(Order.total_amount), 0)).where(
+            Order.business_id == business_id,
             Order.tab_id == tab_id,
             Order.status != "cancelled",
         )
@@ -276,7 +279,7 @@ async def settle_externally(
         return None, False
     if tab.status != "open":
         raise TabCommandError("This tab is already settled externally")
-    orders = await get_tab_orders(db, tab.id)
+    orders = await get_tab_orders(db, business_id, tab.id)
     currencies = {order.currency_code for order in orders if order.status != "cancelled"}
     business = await db.get(Business, business_id)
     if business is None:
@@ -290,7 +293,7 @@ async def settle_externally(
         event_type="settled_externally",
         actor_id=actor_id,
         currency_code=currency,
-        total_snapshot=await get_tab_total(db, tab.id),
+        total_snapshot=await get_tab_total(db, business_id, tab.id),
         informational_method=request.informational_method,
         note=request.note,
         external_register_reference=request.external_register_reference,
@@ -342,7 +345,13 @@ async def reopen_tab(
         )
         if seating is None or seating.status != "open":
             raise TabCommandError("A tab cannot be reopened after its seating has ended")
-    settlement = await db.get(TabSettlementEvent, tab.current_settlement_event_id)
+    settlement = await db.scalar(
+        select(TabSettlementEvent).where(
+            TabSettlementEvent.id == tab.current_settlement_event_id,
+            TabSettlementEvent.business_id == business_id,
+            TabSettlementEvent.tab_id == tab.id,
+        )
+    )
     if settlement is None:
         raise TabCommandError("The settlement audit is unavailable")
     event = TabSettlementEvent(

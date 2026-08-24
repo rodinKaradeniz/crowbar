@@ -1,18 +1,18 @@
--- ─── Seed: Puzzles Bar ────────────────────────────────────────────────────────
--- A craft cocktail bar used as a rich demo data source showcasing all platform
+-- ─── Seed: Example Lantern ───────────────────────────────────────────────────
+-- A wholly synthetic bar used as a rich demo data source showcasing all platform
 -- modules: reservations, queue, ordering, inventory, insights.
 --
--- Staff : Jamie Cole (owner), Sam Rivers (manager), Alex Torres (staff)
+-- Staff : Demo Owner, Demo Manager, Demo Staff
 -- Customers : 12 with diverse RFM profiles (champion/loyal/promising/at-risk/lost/new)
--- Password for all accounts: password123
--- bcrypt: $2b$12$pW/3qXilEy10Dn.jG4ymteWBBwUvvserWRoGHNiDs07taImefGwwK
+-- Staff passwords are injected by the local-only seed runner from the required
+-- DEMO_ADMIN_PASSWORD environment variable. No reusable credential is stored.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- ─── Cleanup (idempotent re-run) ──────────────────────────────────────────────
 -- Deleting the business cascades to every child table (staff, menus, orders,
 -- inventory, queue, reservations, ml_predictions, daily_metrics, etc.)
 DELETE FROM businesses WHERE id = '00000000-0000-0000-0000-000000000002';
--- Remove Puzzles users (safe after cascade removed all FK references)
+-- Remove synthetic demo users (safe after cascade removed all FK references)
 DELETE FROM users WHERE id IN (
   '00000000-0000-0000-0002-000000000010',
   '00000000-0000-0000-0002-000000000011',
@@ -39,13 +39,13 @@ INSERT INTO businesses (
   is_accepting_orders, timezone, country_code, currency_code, locale, tax_label
 ) VALUES (
   '00000000-0000-0000-0000-000000000002',
-  'Puzzles',
-  'puzzles',
-  'hello@puzzlesbar.com',
-  '+49305550200',
-  'Rätselstraße 42, 10999 Berlin, Germany',
-  'A neighbourhood craft cocktail bar. Inventive drinks, bar food worth staying for, and a vibe that''s more puzzle than pretence.',
-  '/business-bar.jpg',
+  'Example Lantern',
+  'example-lantern',
+  'venue@example.invalid',
+  '+12025550100',
+  'Musterstraße 1, 10115 Berlin, Germany',
+  'A wholly synthetic venue used only for local demonstration data.',
+  NULL,
   '',
   ARRAY['Bar', 'Cocktails', 'Craft Beer', 'Bar Food', 'Nightlife'],
   8, 90, 30, 14,
@@ -80,9 +80,9 @@ ALTER TABLE item_library ALTER COLUMN tax_profile_id
 
 -- ─── Staff Users ──────────────────────────────────────────────────────────────
 INSERT INTO users (id, email, name, phone, password_hash, user_type, created_at) VALUES
-('00000000-0000-0000-0002-000000000010', 'jamie@puzzlesbar.com', 'Jamie Cole',  '+49305550210', '$2b$12$pW/3qXilEy10Dn.jG4ymteWBBwUvvserWRoGHNiDs07taImefGwwK', 'staff', NOW() - INTERVAL '45 days'),
-('00000000-0000-0000-0002-000000000011', 'sam@puzzlesbar.com',   'Sam Rivers',  '+49305550211', '$2b$12$pW/3qXilEy10Dn.jG4ymteWBBwUvvserWRoGHNiDs07taImefGwwK', 'staff', NOW() - INTERVAL '44 days'),
-('00000000-0000-0000-0002-000000000012', 'alex@puzzlesbar.com',  'Alex Torres', '+49305550212', '$2b$12$pW/3qXilEy10Dn.jG4ymteWBBwUvvserWRoGHNiDs07taImefGwwK', 'staff', NOW() - INTERVAL '43 days');
+('00000000-0000-0000-0002-000000000010', 'owner@example.invalid',   'Demo Owner',   '+12025550101', '__DEMO_PASSWORD_HASH__', 'staff', NOW() - INTERVAL '45 days'),
+('00000000-0000-0000-0002-000000000011', 'manager@example.invalid', 'Demo Manager', '+12025550102', '__DEMO_PASSWORD_HASH__', 'staff', NOW() - INTERVAL '44 days'),
+('00000000-0000-0000-0002-000000000012', 'staff@example.invalid',   'Demo Staff',   '+12025550103', '__DEMO_PASSWORD_HASH__', 'staff', NOW() - INTERVAL '43 days');
 
 INSERT INTO staff (id, user_id, business_id, role, created_at) VALUES
 ('00000000-0000-0000-0003-000000000010', '00000000-0000-0000-0002-000000000010', '00000000-0000-0000-0000-000000000002', 'owner',   NOW() - INTERVAL '45 days'),
@@ -94,24 +94,24 @@ INSERT INTO staff (id, user_id, business_id, role, created_at) VALUES
 -- Diverse RFM profiles: champions / loyal / promising / at-risk / lost / new
 INSERT INTO customers (id, business_id, name, phone, email, created_at) VALUES
 -- Champions (high recency, high frequency, regular in last 2 weeks)
-('00000000-0000-0000-0001-000000000010', '00000000-0000-0000-0000-000000000002', 'Alex Morgan',   '+14155551010', 'alex.morgan@example.com',   NOW() - INTERVAL '42 days'),
-('00000000-0000-0000-0001-000000000011', '00000000-0000-0000-0000-000000000002', 'Maria Santos',  '+14155551011', 'maria.santos@example.com',  NOW() - INTERVAL '38 days'),
-('00000000-0000-0000-0001-000000000012', '00000000-0000-0000-0000-000000000002', 'Chris Patel',   '+14155551012', 'chris.patel@example.com',   NOW() - INTERVAL '35 days'),
+('00000000-0000-0000-0001-000000000010', '00000000-0000-0000-0000-000000000002', 'Alex Morgan',   '+12025550110', 'alex.morgan@example.invalid',   NOW() - INTERVAL '42 days'),
+('00000000-0000-0000-0001-000000000011', '00000000-0000-0000-0000-000000000002', 'Maria Santos',  '+12025550111', 'maria.santos@example.invalid',  NOW() - INTERVAL '38 days'),
+('00000000-0000-0000-0001-000000000012', '00000000-0000-0000-0000-000000000002', 'Chris Patel',   '+12025550112', 'chris.patel@example.invalid',   NOW() - INTERVAL '35 days'),
 -- Loyal (3-4 visits, last visit within 10 days)
-('00000000-0000-0000-0001-000000000013', '00000000-0000-0000-0000-000000000002', 'Pat Kim',       '+14155551013', 'pat.kim@example.com',       NOW() - INTERVAL '30 days'),
-('00000000-0000-0000-0001-000000000014', '00000000-0000-0000-0000-000000000002', 'Sam Lee',       '+14155551014', 'sam.lee@example.com',       NOW() - INTERVAL '25 days'),
+('00000000-0000-0000-0001-000000000013', '00000000-0000-0000-0000-000000000002', 'Pat Kim',       '+12025550113', 'pat.kim@example.invalid',       NOW() - INTERVAL '30 days'),
+('00000000-0000-0000-0001-000000000014', '00000000-0000-0000-0000-000000000002', 'Sam Lee',       '+12025550114', 'sam.lee@example.invalid',       NOW() - INTERVAL '25 days'),
 -- Promising (1-2 visits, very recent)
-('00000000-0000-0000-0001-000000000015', '00000000-0000-0000-0000-000000000002', 'Jordan Rivera', '+14155551015', 'jordan.rivera@example.com', NOW() - INTERVAL '12 days'),
-('00000000-0000-0000-0001-000000000016', '00000000-0000-0000-0000-000000000002', 'Casey Chen',    '+14155551016', 'casey.chen@example.com',    NOW() - INTERVAL '9 days'),
+('00000000-0000-0000-0001-000000000015', '00000000-0000-0000-0000-000000000002', 'Jordan Rivera', '+12025550115', 'jordan.rivera@example.invalid', NOW() - INTERVAL '12 days'),
+('00000000-0000-0000-0001-000000000016', '00000000-0000-0000-0000-000000000002', 'Casey Chen',    '+12025550116', 'casey.chen@example.invalid',    NOW() - INTERVAL '9 days'),
 -- At Risk (multiple visits, none in last 17+ days)
-('00000000-0000-0000-0001-000000000017', '00000000-0000-0000-0000-000000000002', 'Taylor Brooks', '+14155551017', 'taylor.brooks@example.com', NOW() - INTERVAL '40 days'),
-('00000000-0000-0000-0001-000000000018', '00000000-0000-0000-0000-000000000002', 'Morgan Davis',  '+14155551018', 'morgan.davis@example.com',  NOW() - INTERVAL '38 days'),
+('00000000-0000-0000-0001-000000000017', '00000000-0000-0000-0000-000000000002', 'Taylor Brooks', '+12025550117', 'taylor.brooks@example.invalid', NOW() - INTERVAL '40 days'),
+('00000000-0000-0000-0001-000000000018', '00000000-0000-0000-0000-000000000002', 'Morgan Davis',  '+12025550118', 'morgan.davis@example.invalid',  NOW() - INTERVAL '38 days'),
 -- Needs Attention (was frequent, dormant 4+ weeks)
-('00000000-0000-0000-0001-000000000019', '00000000-0000-0000-0000-000000000002', 'Riley Wilson',  '+14155551019', 'riley.wilson@example.com',  NOW() - INTERVAL '44 days'),
+('00000000-0000-0000-0001-000000000019', '00000000-0000-0000-0000-000000000002', 'Riley Wilson',  '+12025550119', 'riley.wilson@example.invalid',  NOW() - INTERVAL '44 days'),
 -- Lost (single visit 6 weeks ago, never returned)
-('00000000-0000-0000-0001-000000000020', '00000000-0000-0000-0000-000000000002', 'Quinn Foster',  '+14155551020', 'quinn.foster@example.com',  NOW() - INTERVAL '44 days'),
+('00000000-0000-0000-0001-000000000020', '00000000-0000-0000-0000-000000000002', 'Quinn Foster',  '+12025550120', 'quinn.foster@example.invalid',  NOW() - INTERVAL '44 days'),
 -- New (first reservation is tomorrow)
-('00000000-0000-0000-0001-000000000021', '00000000-0000-0000-0000-000000000002', 'Drew Nakamura', '+14155551021', 'drew.nakamura@example.com', NOW() - INTERVAL '1 day');
+('00000000-0000-0000-0001-000000000021', '00000000-0000-0000-0000-000000000002', 'Drew Nakamura', '+12025550121', 'drew.nakamura@example.invalid', NOW() - INTERVAL '1 day');
 
 -- ─── Service Types ────────────────────────────────────────────────────────────
 INSERT INTO service_types (
@@ -173,140 +173,140 @@ INSERT INTO reservations (id, business_id, customer_id, service_type_id, time, p
 -- Alex Morgan — Champion (3 completed, 1 upcoming confirmed HIGH RISK)
 ('00000000-0000-0000-0005-000000000001', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000010', '00000000-0000-0000-0004-000000000010',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '35 days' + INTERVAL '20 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551010', 'alex.morgan@example.com', NULL, 'completed', 2, NOW() - INTERVAL '36 days'),
+  '+12025550110', 'alex.morgan@example.invalid', NULL, 'completed', 2, NOW() - INTERVAL '36 days'),
 ('00000000-0000-0000-0005-000000000002', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000010', '00000000-0000-0000-0004-000000000011',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '21 days' + INTERVAL '19 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551010', 'alex.morgan@example.com', 'Birthday drinks for 4', 'completed', 4, NOW() - INTERVAL '22 days'),
+  '+12025550110', 'alex.morgan@example.invalid', 'Birthday drinks for 4', 'completed', 4, NOW() - INTERVAL '22 days'),
 ('00000000-0000-0000-0005-000000000003', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000010', '00000000-0000-0000-0004-000000000010',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '7 days' + INTERVAL '21 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551010', 'alex.morgan@example.com', NULL, 'completed', 2, NOW() - INTERVAL '8 days'),
+  '+12025550110', 'alex.morgan@example.invalid', NULL, 'completed', 2, NOW() - INTERVAL '8 days'),
 ('00000000-0000-0000-0005-000000000004', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000010', '00000000-0000-0000-0004-000000000010',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') + INTERVAL '3 days' + INTERVAL '20 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551010', 'alex.morgan@example.com', NULL, 'confirmed', 2, NOW() - INTERVAL '1 day'),
+  '+12025550110', 'alex.morgan@example.invalid', NULL, 'confirmed', 2, NOW() - INTERVAL '1 day'),
 
 -- Maria Santos — Champion (4 completed visits)
 ('00000000-0000-0000-0005-000000000005', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000011', '00000000-0000-0000-0004-000000000011',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '28 days' + INTERVAL '19 hours 30 minutes') AT TIME ZONE 'Europe/Berlin',
-  '+14155551011', 'maria.santos@example.com', 'Table for 3', 'completed', 3, NOW() - INTERVAL '29 days'),
+  '+12025550111', 'maria.santos@example.invalid', 'Table for 3', 'completed', 3, NOW() - INTERVAL '29 days'),
 ('00000000-0000-0000-0005-000000000006', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000011', '00000000-0000-0000-0004-000000000010',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '14 days' + INTERVAL '20 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551011', 'maria.santos@example.com', NULL, 'completed', 2, NOW() - INTERVAL '15 days'),
+  '+12025550111', 'maria.santos@example.invalid', NULL, 'completed', 2, NOW() - INTERVAL '15 days'),
 ('00000000-0000-0000-0005-000000000007', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000011', '00000000-0000-0000-0004-000000000011',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '5 days' + INTERVAL '21 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551011', 'maria.santos@example.com', 'Special occasion', 'completed', 4, NOW() - INTERVAL '6 days'),
+  '+12025550111', 'maria.santos@example.invalid', 'Special occasion', 'completed', 4, NOW() - INTERVAL '6 days'),
 ('00000000-0000-0000-0005-000000000008', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000011', '00000000-0000-0000-0004-000000000010',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '1 day' + INTERVAL '22 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551011', 'maria.santos@example.com', NULL, 'completed', 2, NOW() - INTERVAL '2 days'),
+  '+12025550111', 'maria.santos@example.invalid', NULL, 'completed', 2, NOW() - INTERVAL '2 days'),
 
 -- Chris Patel — Champion (3 completed, 1 upcoming confirmed HIGH RISK)
 ('00000000-0000-0000-0005-000000000009', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000012', '00000000-0000-0000-0004-000000000010',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '24 days' + INTERVAL '20 hours 30 minutes') AT TIME ZONE 'Europe/Berlin',
-  '+14155551012', 'chris.patel@example.com', NULL, 'completed', 2, NOW() - INTERVAL '25 days'),
+  '+12025550112', 'chris.patel@example.invalid', NULL, 'completed', 2, NOW() - INTERVAL '25 days'),
 ('00000000-0000-0000-0005-000000000010', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000012', '00000000-0000-0000-0004-000000000011',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '14 days' + INTERVAL '19 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551012', 'chris.patel@example.com', 'Work team drinks', 'completed', 6, NOW() - INTERVAL '15 days'),
+  '+12025550112', 'chris.patel@example.invalid', 'Work team drinks', 'completed', 6, NOW() - INTERVAL '15 days'),
 ('00000000-0000-0000-0005-000000000011', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000012', '00000000-0000-0000-0004-000000000010',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '7 days' + INTERVAL '20 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551012', 'chris.patel@example.com', NULL, 'completed', 2, NOW() - INTERVAL '8 days'),
+  '+12025550112', 'chris.patel@example.invalid', NULL, 'completed', 2, NOW() - INTERVAL '8 days'),
 ('00000000-0000-0000-0005-000000000012', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000012', '00000000-0000-0000-0004-000000000011',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') + INTERVAL '5 days' + INTERVAL '19 hours 30 minutes') AT TIME ZONE 'Europe/Berlin',
-  '+14155551012', 'chris.patel@example.com', 'Table for 5', 'confirmed', 5, NOW() - INTERVAL '1 day'),
+  '+12025550112', 'chris.patel@example.invalid', 'Table for 5', 'confirmed', 5, NOW() - INTERVAL '1 day'),
 
 -- Pat Kim — Loyal (2 completed, 1 upcoming confirmed)
 ('00000000-0000-0000-0005-000000000013', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000013', '00000000-0000-0000-0004-000000000011',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '21 days' + INTERVAL '19 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551013', 'pat.kim@example.com', NULL, 'completed', 3, NOW() - INTERVAL '22 days'),
+  '+12025550113', 'pat.kim@example.invalid', NULL, 'completed', 3, NOW() - INTERVAL '22 days'),
 ('00000000-0000-0000-0005-000000000014', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000013', '00000000-0000-0000-0004-000000000010',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '10 days' + INTERVAL '21 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551013', 'pat.kim@example.com', NULL, 'completed', 2, NOW() - INTERVAL '11 days'),
+  '+12025550113', 'pat.kim@example.invalid', NULL, 'completed', 2, NOW() - INTERVAL '11 days'),
 ('00000000-0000-0000-0005-000000000015', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000013', '00000000-0000-0000-0004-000000000011',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') + INTERVAL '3 days' + INTERVAL '20 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551013', 'pat.kim@example.com', NULL, 'confirmed', 4, NOW() - INTERVAL '1 day'),
+  '+12025550113', 'pat.kim@example.invalid', NULL, 'confirmed', 4, NOW() - INTERVAL '1 day'),
 
 -- Sam Lee — Loyal (2 completed, 1 upcoming confirmed HIGH RISK)
 ('00000000-0000-0000-0005-000000000016', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000014', '00000000-0000-0000-0004-000000000010',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '18 days' + INTERVAL '20 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551014', 'sam.lee@example.com', NULL, 'completed', 2, NOW() - INTERVAL '19 days'),
+  '+12025550114', 'sam.lee@example.invalid', NULL, 'completed', 2, NOW() - INTERVAL '19 days'),
 ('00000000-0000-0000-0005-000000000017', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000014', '00000000-0000-0000-0004-000000000011',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '7 days' + INTERVAL '19 hours 30 minutes') AT TIME ZONE 'Europe/Berlin',
-  '+14155551014', 'sam.lee@example.com', NULL, 'completed', 3, NOW() - INTERVAL '8 days'),
+  '+12025550114', 'sam.lee@example.invalid', NULL, 'completed', 3, NOW() - INTERVAL '8 days'),
 ('00000000-0000-0000-0005-000000000018', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000014', '00000000-0000-0000-0004-000000000010',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') + INTERVAL '7 days' + INTERVAL '21 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551014', 'sam.lee@example.com', NULL, 'confirmed', 2, NOW()),
+  '+12025550114', 'sam.lee@example.invalid', NULL, 'confirmed', 2, NOW()),
 
 -- Jordan Rivera — Promising (2 completed, 1 upcoming confirmed)
 ('00000000-0000-0000-0005-000000000019', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000015', '00000000-0000-0000-0004-000000000010',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '10 days' + INTERVAL '21 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551015', 'jordan.rivera@example.com', NULL, 'completed', 2, NOW() - INTERVAL '11 days'),
+  '+12025550115', 'jordan.rivera@example.invalid', NULL, 'completed', 2, NOW() - INTERVAL '11 days'),
 ('00000000-0000-0000-0005-000000000020', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000015', '00000000-0000-0000-0004-000000000011',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '2 days' + INTERVAL '20 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551015', 'jordan.rivera@example.com', NULL, 'completed', 3, NOW() - INTERVAL '3 days'),
+  '+12025550115', 'jordan.rivera@example.invalid', NULL, 'completed', 3, NOW() - INTERVAL '3 days'),
 ('00000000-0000-0000-0005-000000000035', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000015', '00000000-0000-0000-0004-000000000010',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') + INTERVAL '2 days' + INTERVAL '19 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551015', 'jordan.rivera@example.com', NULL, 'confirmed', 2, NOW()),
+  '+12025550115', 'jordan.rivera@example.invalid', NULL, 'confirmed', 2, NOW()),
 
 -- Casey Chen — Promising (1 completed, 1 upcoming confirmed)
 ('00000000-0000-0000-0005-000000000021', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000016', '00000000-0000-0000-0004-000000000010',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '8 days' + INTERVAL '22 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551016', 'casey.chen@example.com', NULL, 'completed', 2, NOW() - INTERVAL '9 days'),
+  '+12025550116', 'casey.chen@example.invalid', NULL, 'completed', 2, NOW() - INTERVAL '9 days'),
 ('00000000-0000-0000-0005-000000000022', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000016', '00000000-0000-0000-0004-000000000011',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') + INTERVAL '2 days' + INTERVAL '20 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551016', 'casey.chen@example.com', 'Table for 4', 'confirmed', 4, NOW()),
+  '+12025550116', 'casey.chen@example.invalid', 'Table for 4', 'confirmed', 4, NOW()),
 
 -- Taylor Brooks — At Risk (3 completed, 1 cancelled, 1 upcoming confirmed)
 ('00000000-0000-0000-0005-000000000023', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000017', '00000000-0000-0000-0004-000000000011',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '36 days' + INTERVAL '20 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551017', 'taylor.brooks@example.com', NULL, 'cancelled', 3, NOW() - INTERVAL '37 days'),
+  '+12025550117', 'taylor.brooks@example.invalid', NULL, 'cancelled', 3, NOW() - INTERVAL '37 days'),
 ('00000000-0000-0000-0005-000000000024', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000017', '00000000-0000-0000-0004-000000000010',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '28 days' + INTERVAL '21 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551017', 'taylor.brooks@example.com', NULL, 'completed', 2, NOW() - INTERVAL '29 days'),
+  '+12025550117', 'taylor.brooks@example.invalid', NULL, 'completed', 2, NOW() - INTERVAL '29 days'),
 ('00000000-0000-0000-0005-000000000025', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000017', '00000000-0000-0000-0004-000000000011',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '22 days' + INTERVAL '20 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551017', 'taylor.brooks@example.com', NULL, 'completed', 4, NOW() - INTERVAL '23 days'),
+  '+12025550117', 'taylor.brooks@example.invalid', NULL, 'completed', 4, NOW() - INTERVAL '23 days'),
 ('00000000-0000-0000-0005-000000000026', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000017', '00000000-0000-0000-0004-000000000010',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '17 days' + INTERVAL '21 hours 30 minutes') AT TIME ZONE 'Europe/Berlin',
-  '+14155551017', 'taylor.brooks@example.com', NULL, 'completed', 2, NOW() - INTERVAL '18 days'),
+  '+12025550117', 'taylor.brooks@example.invalid', NULL, 'completed', 2, NOW() - INTERVAL '18 days'),
 ('00000000-0000-0000-0005-000000000036', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000017', '00000000-0000-0000-0004-000000000010',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') + INTERVAL '3 days' + INTERVAL '21 hours 30 minutes') AT TIME ZONE 'Europe/Berlin',
-  '+14155551017', 'taylor.brooks@example.com', NULL, 'confirmed', 2, NOW()),
+  '+12025550117', 'taylor.brooks@example.invalid', NULL, 'confirmed', 2, NOW()),
 
 -- Morgan Davis — At Risk (2 completed, 1 cancelled, 1 upcoming confirmed)
 ('00000000-0000-0000-0005-000000000027', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000018', '00000000-0000-0000-0004-000000000010',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '28 days' + INTERVAL '22 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551018', 'morgan.davis@example.com', NULL, 'cancelled', 2, NOW() - INTERVAL '29 days'),
+  '+12025550118', 'morgan.davis@example.invalid', NULL, 'cancelled', 2, NOW() - INTERVAL '29 days'),
 ('00000000-0000-0000-0005-000000000028', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000018', '00000000-0000-0000-0004-000000000011',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '22 days' + INTERVAL '20 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551018', 'morgan.davis@example.com', NULL, 'completed', 3, NOW() - INTERVAL '23 days'),
+  '+12025550118', 'morgan.davis@example.invalid', NULL, 'completed', 3, NOW() - INTERVAL '23 days'),
 ('00000000-0000-0000-0005-000000000029', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000018', '00000000-0000-0000-0004-000000000010',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '17 days' + INTERVAL '21 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551018', 'morgan.davis@example.com', NULL, 'completed', 2, NOW() - INTERVAL '18 days'),
+  '+12025550118', 'morgan.davis@example.invalid', NULL, 'completed', 2, NOW() - INTERVAL '18 days'),
 ('00000000-0000-0000-0005-000000000037', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000018', '00000000-0000-0000-0004-000000000011',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') + INTERVAL '7 days' + INTERVAL '20 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551018', 'morgan.davis@example.com', NULL, 'confirmed', 3, NOW()),
+  '+12025550118', 'morgan.davis@example.invalid', NULL, 'confirmed', 3, NOW()),
 
 -- Riley Wilson — Needs Attention (3 completed, 1 upcoming confirmed)
 ('00000000-0000-0000-0005-000000000030', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000019', '00000000-0000-0000-0004-000000000011',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '42 days' + INTERVAL '19 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551019', 'riley.wilson@example.com', NULL, 'completed', 4, NOW() - INTERVAL '43 days'),
+  '+12025550119', 'riley.wilson@example.invalid', NULL, 'completed', 4, NOW() - INTERVAL '43 days'),
 ('00000000-0000-0000-0005-000000000031', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000019', '00000000-0000-0000-0004-000000000010',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '35 days' + INTERVAL '21 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551019', 'riley.wilson@example.com', NULL, 'completed', 2, NOW() - INTERVAL '36 days'),
+  '+12025550119', 'riley.wilson@example.invalid', NULL, 'completed', 2, NOW() - INTERVAL '36 days'),
 ('00000000-0000-0000-0005-000000000032', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000019', '00000000-0000-0000-0004-000000000011',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '28 days' + INTERVAL '20 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551019', 'riley.wilson@example.com', NULL, 'completed', 3, NOW() - INTERVAL '29 days'),
+  '+12025550119', 'riley.wilson@example.invalid', NULL, 'completed', 3, NOW() - INTERVAL '29 days'),
 ('00000000-0000-0000-0005-000000000038', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000019', '00000000-0000-0000-0004-000000000011',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') + INTERVAL '7 days' + INTERVAL '19 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551019', 'riley.wilson@example.com', 'Birthday celebration', 'confirmed', 3, NOW()),
+  '+12025550119', 'riley.wilson@example.invalid', 'Birthday celebration', 'confirmed', 3, NOW()),
 
 -- Quinn Foster — Lost (single visit 41 days ago)
 ('00000000-0000-0000-0005-000000000033', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000020', '00000000-0000-0000-0004-000000000010',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') - INTERVAL '41 days' + INTERVAL '21 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551020', 'quinn.foster@example.com', NULL, 'completed', 2, NOW() - INTERVAL '42 days'),
+  '+12025550120', 'quinn.foster@example.invalid', NULL, 'completed', 2, NOW() - INTERVAL '42 days'),
 
 -- Drew Nakamura — New (first reservation: tomorrow evening)
 ('00000000-0000-0000-0005-000000000034', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000021', '00000000-0000-0000-0004-000000000010',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') + INTERVAL '1 day' + INTERVAL '20 hours') AT TIME ZONE 'Europe/Berlin',
-  '+14155551021', 'drew.nakamura@example.com', NULL, 'confirmed', 2, NOW() - INTERVAL '1 hour');
+  '+12025550121', 'drew.nakamura@example.invalid', NULL, 'confirmed', 2, NOW() - INTERVAL '1 hour');
 
 -- ─── Menus ─────────────────────────────────────────────────────────────────────
 INSERT INTO menus (id, business_id, name, description, is_active) VALUES
@@ -511,13 +511,13 @@ ALTER TABLE order_line_items ALTER COLUMN tax_amount SET DEFAULT 0;
 ALTER TABLE order_line_items ALTER COLUMN total_amount SET DEFAULT 0;
 
 INSERT INTO orders (
-  id, business_id, session_token, table_identifier, status, idempotency_key,
+  id, business_id, session_token_hash, table_identifier, status, idempotency_key,
   request_fingerprint, total_amount, placed_at
 )
 SELECT
   id::uuid,
   business_id::uuid,
-  session_token,
+  encode(digest(session_token, 'sha256'), 'hex'),
   table_identifier,
   status,
   idempotency_key,
@@ -554,6 +554,8 @@ FROM (VALUES
 );
 
 -- ─── Order Line Items ─────────────────────────────────────────────────────────
+ALTER TABLE order_line_items ALTER COLUMN business_id
+  SET DEFAULT '00000000-0000-0000-0000-000000000002';
 INSERT INTO order_line_items (id, order_id, item_id, item_name, quantity, unit_price, routing_tag) VALUES
 -- Order 1: Espresso Martini x2 + Nachos x1 = €37
 (gen_random_uuid(), '00000000-0000-0000-0011-000000000001', '00000000-0000-0000-0008-000000000010', 'Espresso Martini',   2, 14.00, 'bar'),
@@ -669,15 +671,17 @@ ALTER TABLE order_line_items ALTER COLUMN price_includes_tax DROP DEFAULT;
 ALTER TABLE order_line_items ALTER COLUMN subtotal_amount DROP DEFAULT;
 ALTER TABLE order_line_items ALTER COLUMN tax_amount DROP DEFAULT;
 ALTER TABLE order_line_items ALTER COLUMN total_amount DROP DEFAULT;
+ALTER TABLE order_line_items ALTER COLUMN business_id DROP DEFAULT;
 
 -- ─── Order Status Timeline ────────────────────────────────────────────────────
 -- Each served order: received → preparing → ready → served
-INSERT INTO order_status_timeline (id, order_id, status, changed_by, changed_at)
+INSERT INTO order_status_timeline (id, business_id, order_id, status, changed_by, changed_at)
 SELECT
   gen_random_uuid(),
+  o.business_id,
   o.id,
   s.status,
-  '00000000-0000-0000-0002-000000000012',  -- Alex Torres (staff)
+  '00000000-0000-0000-0002-000000000012',  -- Demo Staff
   o.placed_at + s.offset_minutes * INTERVAL '1 minute'
 FROM orders o
 CROSS JOIN (
@@ -691,7 +695,20 @@ WHERE o.business_id = '00000000-0000-0000-0000-000000000002';
 -- The seed runs after all migrations. Give the legacy-shaped insert a temporary
 -- value, then derive the authoritative venue-local service date and location.
 ALTER TABLE queue_entries ALTER COLUMN service_date SET DEFAULT CURRENT_DATE;
-INSERT INTO queue_entries (id, business_id, session_token, name, party_size, phone, status, joined_at, called_at, seated_at, removed_at) VALUES
+INSERT INTO queue_entries (id, business_id, session_token_hash, name, party_size, phone, status, joined_at, called_at, seated_at, removed_at)
+SELECT
+  id::uuid,
+  business_id::uuid,
+  encode(digest(raw_token, 'sha256'), 'hex'),
+  name,
+  party_size,
+  phone,
+  status,
+  joined_at,
+  called_at,
+  seated_at,
+  removed_at
+FROM (VALUES
 -- Friday
 ('00000000-0000-0000-0013-000000000001', '00000000-0000-0000-0000-000000000002', 'pzl-q-fri-001', 'Mike Johnson',   3, '+14155552001', 'seated',
   DATE_TRUNC('day', NOW()) - INTERVAL '7 days' + INTERVAL '19 hours 30 minutes',
@@ -741,7 +758,11 @@ INSERT INTO queue_entries (id, business_id, session_token, name, party_size, pho
 ('00000000-0000-0000-0013-000000000012', '00000000-0000-0000-0000-000000000002', 'pzl-q-sat-007', 'Hannah Park',    3, '+14155552012', 'removed',
   DATE_TRUNC('day', NOW()) - INTERVAL '6 days' + INTERVAL '22 hours',
   NULL, NULL,
-  DATE_TRUNC('day', NOW()) - INTERVAL '6 days' + INTERVAL '22 hours 15 minutes');
+  DATE_TRUNC('day', NOW()) - INTERVAL '6 days' + INTERVAL '22 hours 15 minutes')
+) AS seeded_queue_entries(
+  id, business_id, raw_token, name, party_size, phone, status,
+  joined_at, called_at, seated_at, removed_at
+);
 
 UPDATE queue_entries qe
 SET location_id = location.id,
@@ -755,48 +776,12 @@ JOIN locations location
 WHERE qe.business_id = business.id;
 ALTER TABLE queue_entries ALTER COLUMN service_date DROP DEFAULT;
 
--- ─── ML Predictions: Cancellation Risk ────────────────────────────────────────
--- Pre-seeded so high-risk reservations appear in Insights without running ML.
--- model_name must be 'cancellation' (matches get_high_risk_reservations query).
--- Only upcoming confirmed reservations are relevant; >0.6 = shown in high-risk list.
-INSERT INTO ml_predictions (id, business_id, model_name, model_version, entity_type, entity_id, prediction, computed_at) VALUES
--- HIGH RISK: Alex Morgan +3 days
-(gen_random_uuid(), '00000000-0000-0000-0000-000000000002', 'cancellation', 'v1.2', 'reservation',
-  '00000000-0000-0000-0005-000000000004',
-  '{"cancellation_probability": 0.72, "risk_level": "high", "features": {"lead_time_hours": 72, "prior_cancellations": 0, "day_of_week": 3}}'::jsonb,
-  NOW() - INTERVAL '6 hours'),
--- HIGH RISK: Chris Patel +5 days
-(gen_random_uuid(), '00000000-0000-0000-0000-000000000002', 'cancellation', 'v1.2', 'reservation',
-  '00000000-0000-0000-0005-000000000012',
-  '{"cancellation_probability": 0.65, "risk_level": "high", "features": {"lead_time_hours": 120, "prior_cancellations": 0, "day_of_week": 5}}'::jsonb,
-  NOW() - INTERVAL '6 hours'),
--- HIGH RISK: Sam Lee +7 days
-(gen_random_uuid(), '00000000-0000-0000-0000-000000000002', 'cancellation', 'v1.2', 'reservation',
-  '00000000-0000-0000-0005-000000000018',
-  '{"cancellation_probability": 0.78, "risk_level": "high", "features": {"lead_time_hours": 168, "prior_cancellations": 0, "day_of_week": 0}}'::jsonb,
-  NOW() - INTERVAL '6 hours'),
--- Medium risk: Pat Kim +3 days
-(gen_random_uuid(), '00000000-0000-0000-0000-000000000002', 'cancellation', 'v1.2', 'reservation',
-  '00000000-0000-0000-0005-000000000015',
-  '{"cancellation_probability": 0.35, "risk_level": "medium", "features": {"lead_time_hours": 72, "prior_cancellations": 0, "day_of_week": 3}}'::jsonb,
-  NOW() - INTERVAL '6 hours'),
--- Low risk: Casey Chen +2 days
-(gen_random_uuid(), '00000000-0000-0000-0000-000000000002', 'cancellation', 'v1.2', 'reservation',
-  '00000000-0000-0000-0005-000000000022',
-  '{"cancellation_probability": 0.42, "risk_level": "medium", "features": {"lead_time_hours": 48, "prior_cancellations": 0, "day_of_week": 2}}'::jsonb,
-  NOW() - INTERVAL '6 hours'),
--- Low risk: Drew Nakamura +1 day (new customer)
-(gen_random_uuid(), '00000000-0000-0000-0000-000000000002', 'cancellation', 'v1.2', 'reservation',
-  '00000000-0000-0000-0005-000000000034',
-  '{"cancellation_probability": 0.28, "risk_level": "low", "features": {"lead_time_hours": 24, "prior_cancellations": 0, "day_of_week": 1}}'::jsonb,
-  NOW() - INTERVAL '6 hours');
-
 -- ─── Business Daily Metrics (42 days) ─────────────────────────────────────────
 -- Used by the ML pipeline for forecasting. Weekend days have higher traffic.
 INSERT INTO business_daily_metrics (
   id, business_id, date,
   total_reservations, completed_reservations, cancelled_reservations,
-  no_show_count, total_guests, total_revenue,
+  no_show_count, total_guests,
   avg_lead_time_hours, peak_hour, utilization_rate
 )
 SELECT
@@ -816,9 +801,6 @@ SELECT
   CASE WHEN EXTRACT(DOW FROM d) IN (5, 6) THEN (7 + (EXTRACT(DAY FROM d)::int % 4)) * 2 + 4
        WHEN EXTRACT(DOW FROM d) IN (0, 4) THEN (4 + (EXTRACT(DAY FROM d)::int % 3)) * 2 + 2
        ELSE (2 + (EXTRACT(DAY FROM d)::int % 2)) * 2 END,
-  CASE WHEN EXTRACT(DOW FROM d) IN (5, 6) THEN 1200 + (EXTRACT(DAY FROM d)::int % 7) * 60
-       WHEN EXTRACT(DOW FROM d) IN (0, 4) THEN 700 + (EXTRACT(DAY FROM d)::int % 5) * 50
-       ELSE 350 + (EXTRACT(DAY FROM d)::int % 4) * 30 END,
   48 + (EXTRACT(DAY FROM d)::int % 24),
   21,
   CASE WHEN EXTRACT(DOW FROM d) IN (5, 6) THEN 0.75 + (EXTRACT(DAY FROM d)::int % 20) * 0.01

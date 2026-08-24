@@ -8,20 +8,17 @@ than Alembic. Run commands from `server/` with `venv/` activated.
 | Command | Effect |
 | --- | --- |
 | `python -m db.migrate` | Apply pending migrations |
-| `SEED_DATA=true python -m db.migrate` | Apply migrations, then replace the Puzzles demo tenant |
-| `python -m db.migrate seed` | Replace the Puzzles demo tenant without running migrations |
+| `SEED_DATA=true DEMO_ADMIN_PASSWORD='<one-time value>' python -m db.migrate` | Apply migrations, then replace the synthetic Example Lantern demo tenant |
+| `DEMO_ADMIN_PASSWORD='<one-time value>' python -m db.migrate seed` | Replace the synthetic Example Lantern demo tenant without running migrations |
 | `docker compose up -d` | Start local PostgreSQL, Redis, and ML |
 | `docker compose down` | Stop local containers while keeping volumes |
 | `../scripts/verify-fresh-db.sh` | Recreate a name-restricted disposable database, run every migration, repeat the canonical seed, and assert current invariants |
 
-Seeding is a data mutation. The seed deletes and recreates its fixed Puzzles
-tenant and must not be run against shared or production data without explicit
-authorization.
-
-Do not use `python -m db.migrate reset`. Its hard-coded drop list predates the
-current schema, so it is destructive without being a reliable full reset. Do
-not delete Docker volumes unless the user explicitly authorizes losing the
-selected local data.
+Seeding is a data mutation. The seed deletes and recreates its fixed synthetic
+tenant. The runner refuses non-local database hosts and database names that do
+not identify disposable development/test data, and it requires a fresh password
+of at least 12 characters. Do not delete Docker volumes unless the user
+explicitly authorizes losing the selected local data.
 
 ## Test Database
 
@@ -79,20 +76,22 @@ migrations.
 
 ## Canonical Demo Tenant
 
-`db/seeds/001_seed_puzzles.sql` is the only seed file. It creates the Puzzles
-tenant with relative reservation dates and data across all current modules.
+`db/seeds/001_seed_puzzles.sql` retains its historical filename for migration
+tooling compatibility and is the only seed file. It creates the unmistakably
+synthetic Example Lantern tenant with relative reservation dates and data
+across all current modules.
 Migration 037 and the seed make its DE/EUR/`de-DE`/`Europe/Berlin` region plus
 19% beverage/standard, 7% food/reduced, exempt, and custom operational profiles
 explicit. Those profiles are editable demo suggestions, not fiscal rules. The
 seed also snapshots profile/version and line/order net-tax-gross values on its
 historical orders and remains repeat-safe.
-Local demo staff accounts are:
+Local demo staff identities are:
 
 | Role | Email |
 | --- | --- |
-| Owner | `jamie@puzzlesbar.com` |
-| Manager | `sam@puzzlesbar.com` |
-| Staff | `alex@puzzlesbar.com` |
+| Owner | `owner@example.invalid` |
+| Manager | `manager@example.invalid` |
+| Staff | `staff@example.invalid` |
 
-The seed file documents the local-only demo password. Never reuse seed
-credentials in a deployed environment.
+The seed stores no password. Supply a one-time local value through
+`DEMO_ADMIN_PASSWORD`; the seed runner rejects known reusable demo passwords.

@@ -113,7 +113,7 @@ and fiscal authority. Crowbar does not take payment or issue receipts/invoices
 in this MVP, and product/code copy must say **settled externally** rather than
 implying payment processing.
 
-Stages 0–2 are complete locally: the contract and release map are frozen;
+Stages 0–4 are complete locally: the contract and release map are frozen;
 tenant/auth/order/inventory/reservation/CRM/time correctness is repaired;
 retained routes have consistent guards; dead MVP states are removed; and the
 full Stage 1 verification gate passes. Tenant country/currency/formatting
@@ -123,12 +123,15 @@ currency/profile/rate/net/tax/total snapshots. Germany is seeded as an
 editable pilot preset, not hard-coded fiscal law. Availability, the area-based
 host board, table planning/seating, registered-table tab/QR continuity,
 reservation protection, and the future-reservation waitlist remain the
-operational foundation. The next stage is completing the guest-to-table
-workflow, followed by ordering/external settlement, purchasing/cost control,
-staff/CRM/reporting, and the local release gate. [docs/TODO.md](docs/TODO.md)
+operational foundation. The guest-to-table and ordering/external-settlement
+loops are complete and hardened with exchanged capability cookies, staff-
+approved per-browser table sessions, exact public projections, authenticated
+WebSocket frames, hashed bearer persistence, and composite tenant constraints.
+The next stage is purchasing/cost control, followed by staff/CRM/reporting and
+the local release gate. [docs/TODO.md](docs/TODO.md)
 owns the exact 0–9 order, exit gates, and post-MVP deferrals.
 
-Migrations 023–037 are local only. Railway remains at migrations 001–022; its
+Migrations 023–043 are local only. Railway remains at migrations 001–022; its
 partially provisioned rollout is intentionally paused until stages 0–7 pass
 locally and the user explicitly authorizes deployment. The user plans to use
 Railway, but that intent is not authorization to mutate it.

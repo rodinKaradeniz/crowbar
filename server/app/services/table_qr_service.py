@@ -27,10 +27,10 @@ def _decode(value: str) -> bytes:
 
 def issue_table_token(table: Table) -> str:
     """Sign identity plus the table's mutable revision; labels never enter it."""
-    payload = f"v1.{table.business_id}.{table.id}.{table.qr_token_revision}".encode()
+    payload = f"v2.crowbar-table.table-order.{table.business_id}.{table.id}.{table.qr_token_revision}".encode()
     encoded = _encode(payload)
     signature = hmac.new(
-        settings.secret_key.encode("utf-8"), encoded.encode("ascii"), hashlib.sha256
+        settings.table_qr_secret_key.encode("utf-8"), encoded.encode("ascii"), hashlib.sha256
     ).digest()
     return f"{encoded}.{_encode(signature)}"
 
@@ -39,12 +39,12 @@ def _parse_table_token(token: str) -> tuple[UUID, UUID, int]:
     try:
         encoded, provided_signature = token.split(".", 1)
         expected = hmac.new(
-            settings.secret_key.encode("utf-8"), encoded.encode("ascii"), hashlib.sha256
+            settings.table_qr_secret_key.encode("utf-8"), encoded.encode("ascii"), hashlib.sha256
         ).digest()
         if not hmac.compare_digest(expected, _decode(provided_signature)):
             raise TableQrError("This table QR code is no longer valid")
-        version, business_id, table_id, revision = _decode(encoded).decode().split(".")
-        if version != "v1":
+        version, audience, purpose, business_id, table_id, revision = _decode(encoded).decode().split(".")
+        if version != "v2" or audience != "crowbar-table" or purpose != "table-order":
             raise TableQrError("This table QR code is no longer valid")
         return UUID(business_id), UUID(table_id), int(revision)
     except (ValueError, UnicodeDecodeError, TypeError) as exc:
@@ -82,4 +82,3 @@ async def resolve_active_table_seating(
     if seating is None:
         raise TableQrError("This table is not currently seated; please ask a staff member")
     return table, seating
-

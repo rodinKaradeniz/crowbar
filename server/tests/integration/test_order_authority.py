@@ -528,7 +528,7 @@ async def test_settlement_and_order_addition_share_one_tab_lock(
     assert "settled" in outcomes
 
     async with sessions() as session:
-        orders = await tab_service.get_tab_orders(session, tab.id)
+        orders = await tab_service.get_tab_orders(session, business.id, tab.id)
         events = await tab_service.get_settlement_events(session, business.id, tab.id)
         assert len(events) == 1
         assert len(orders) in {0, 1}

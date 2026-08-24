@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { isTrustedMutationRequest } from "@/lib/request-security";
 
 const TOKEN_COOKIE_NAME = "rk-token";
 
@@ -31,11 +32,19 @@ function getCurrentUserFromRequest(
   }
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // API routes are always allowed
+  // Browser mutations routed through the BFF must originate from this site.
   if (pathname.startsWith("/api")) {
+    if (!isTrustedMutationRequest({
+      method: request.method,
+      requestOrigin: request.nextUrl.origin,
+      originHeader: request.headers.get("origin"),
+      fetchSite: request.headers.get("sec-fetch-site"),
+    })) {
+      return NextResponse.json({ code: "FORBIDDEN", message: "Forbidden" }, { status: 403 });
+    }
     return NextResponse.next();
   }
 

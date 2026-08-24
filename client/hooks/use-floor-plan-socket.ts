@@ -51,11 +51,12 @@ export function useFloorPlanSocket(
     if (socketRef.current && socketRef.current.readyState <= WebSocket.OPEN) return;
 
     const socket = new WebSocket(
-      `${getWsBase()}/ws/floor-plan/${businessId}?token=${encodeURIComponent(token)}`,
+      `${getWsBase()}/ws/floor-plan/${businessId}`,
     );
     socketRef.current = socket;
 
     socket.onopen = () => {
+      socket.send(JSON.stringify({ type: "authenticate", token }));
       setConnected(true);
       delayRef.current = BASE_DELAY;
     };

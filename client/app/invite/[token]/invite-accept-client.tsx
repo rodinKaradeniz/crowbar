@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/field";
 
 interface Props {
-  token: string;
   invite: {
     email: string;
     role: string;
@@ -19,7 +18,7 @@ interface Props {
   };
 }
 
-export default function InviteAcceptClient({ token, invite }: Props) {
+export default function InviteAcceptClient({ invite }: Props) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
@@ -37,7 +36,7 @@ export default function InviteAcceptClient({ token, invite }: Props) {
       const res = await fetch("/api/invite/accept", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, name, password }),
+        body: JSON.stringify({ name, password }),
       });
 
       const data = await res.json();

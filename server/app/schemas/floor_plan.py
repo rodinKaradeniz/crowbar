@@ -117,6 +117,29 @@ class TableQrResponse(AppBaseModel):
     url: str
 
 
+class TableGuestSessionCreate(AppBaseModel):
+    table_token: str = Field(min_length=16, max_length=500)
+    browser_nonce: str = Field(min_length=32, max_length=128)
+
+
+class PublicTableGuestSessionResponse(AppBaseModel):
+    status: Literal["pending", "approved", "denied", "revoked"]
+    table_label: str
+    expires_at: datetime
+
+
+class StaffTableGuestSessionResponse(AppBaseModel):
+    id: UUID
+    table_id: UUID
+    seating_id: UUID
+    table_label: str
+    status: Literal["pending", "approved", "denied", "revoked"]
+    expires_at: datetime
+    created_at: datetime
+    decided_by: UUID | None = None
+    decided_at: datetime | None = None
+
+
 class CombinationCreate(AppBaseModel):
     name: str = Field(min_length=1, max_length=100)
     table_ids: list[UUID] = Field(min_length=2)

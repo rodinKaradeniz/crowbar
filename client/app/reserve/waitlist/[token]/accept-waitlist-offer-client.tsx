@@ -4,26 +4,31 @@ import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, Clock, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { clientAcceptWaitlistOffer, clientDeclineWaitlistOffer, clientGetBusiness, clientGetWaitlistOffer } from "@/lib/client-api";
+import { clientAcceptWaitlistOffer, clientDeclineWaitlistOffer, clientExchangePublicCapability, clientGetBusiness, clientGetWaitlistOffer } from "@/lib/client-api";
+import { consumeCapabilityFragment } from "@/lib/capability-fragment";
 import { formatBusinessDateTime } from "@/lib/business-time";
 import type { ReservationWaitlistEntry } from "@/types";
 
-export default function AcceptWaitlistOfferClient({ token }: { token: string }) {
+export default function AcceptWaitlistOfferClient() {
   const [entry, setEntry] = useState<ReservationWaitlistEntry | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    try { setEntry(await clientGetWaitlistOffer(token)); setLoadError(null); }
+    try { setEntry(await clientGetWaitlistOffer()); setLoadError(null); }
     catch (error) { setLoadError(error instanceof Error ? error.message : "This offer link is no longer available."); }
-  }, [token]);
-  useEffect(() => { void load(); }, [load]);
+  }, []);
+  useEffect(() => {
+    const token = consumeCapabilityFragment();
+    const exchange = token ? clientExchangePublicCapability("waitlist_offer", token) : Promise.resolve();
+    void exchange.then(load).catch((error) => setLoadError(error instanceof Error ? error.message : "This offer link is no longer available."));
+  }, [load]);
 
   async function accept() {
     setSubmitting(true); setMessage(null);
     try {
-      const reservation = await clientAcceptWaitlistOffer(token);
+      const reservation = await clientAcceptWaitlistOffer();
       const business = await clientGetBusiness(reservation.businessId).catch(() => null);
       setMessage(`Your reservation is confirmed for ${formatBusinessDateTime(reservation.time, business?.timezone ?? "UTC", business?.locale)}.`);
       setEntry((current) => current ? { ...current, status: "accepted", acceptedReservationId: reservation.id } : current);
@@ -33,7 +38,7 @@ export default function AcceptWaitlistOfferClient({ token }: { token: string }) 
 
   async function decline() {
     setSubmitting(true); setMessage(null);
-    try { setEntry(await clientDeclineWaitlistOffer(token)); setMessage("You declined this offer. The venue has been updated."); }
+    try { setEntry(await clientDeclineWaitlistOffer()); setMessage("You declined this offer. The venue has been updated."); }
     catch (error) { setMessage(error instanceof Error ? error.message : "Could not decline this offer."); }
     finally { setSubmitting(false); }
   }

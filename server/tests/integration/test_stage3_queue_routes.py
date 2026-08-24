@@ -47,7 +47,14 @@ async def test_queue_policy_capacity_idempotency_reason_and_delivery_truth(clien
     exact_retry = await client.post(f"/api/queue/{business_id}/join", json=request)
     assert created.status_code == 201, created.text
     assert exact_retry.status_code == 200, exact_retry.text
-    assert exact_retry.json()["entry"]["id"] == created.json()["entry"]["id"]
+    assert exact_retry.json()["entry"] == created.json()["entry"]
+    assert "id" not in created.json()["entry"]
+    assert "session_token" not in created.text
+    assert "total_waiting" not in created.json()
+    assert {
+        "joined_at", "called_at", "seated_at", "completed_at", "removed_at",
+        "service_date", "delivery",
+    }.isdisjoint(created.json()["entry"])
 
     conflicting_retry = await client.post(f"/api/queue/{business_id}/join", json={
         **request, "name": "Different party",
@@ -60,7 +67,9 @@ async def test_queue_policy_capacity_idempotency_reason_and_delivery_truth(clien
     assert full.status_code == 409
     assert full.json()["code"] == "QUEUE_FULL"
 
-    entry_id = created.json()["entry"]["id"]
+    entries = await client.get("/api/queue/entries", headers=headers)
+    assert entries.status_code == 200, entries.text
+    entry_id = entries.json()[0]["id"]
     called = await client.post(f"/api/queue/entries/{entry_id}/call", headers=headers)
     assert called.status_code == 200, called.text
     assert called.json()["status"] == "called"

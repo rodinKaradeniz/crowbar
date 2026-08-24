@@ -4,6 +4,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERIFY_DB="${CROWBAR_VERIFY_DB:-crowbar_verify_mvp}"
+VERIFY_DEMO_PASSWORD="${CROWBAR_VERIFY_DEMO_PASSWORD:-$(openssl rand -hex 16)}"
 
 if [[ ! "$VERIFY_DB" =~ ^crowbar_verify_[a-z0-9_]+$ ]]; then
   echo "Verification database must start with crowbar_verify_ and use lowercase letters, digits, or underscores." >&2
@@ -23,10 +24,12 @@ docker exec crowbar-db createdb -U postgres "$VERIFY_DB"
 cd "$ROOT/server"
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/$VERIFY_DB" \
   SEED_DATA=true \
+  DEMO_ADMIN_PASSWORD="$VERIFY_DEMO_PASSWORD" \
   venv/bin/python -m db.migrate
 
 # The canonical seed is replacement-based and must be safe to repeat.
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/$VERIFY_DB" \
+  DEMO_ADMIN_PASSWORD="$VERIFY_DEMO_PASSWORD" \
   venv/bin/python -m db.migrate seed
 
 EXPECTED_MIGRATIONS="$(find db/migrations -maxdepth 1 -name '*.sql' | wc -l | tr -d ' ')"
@@ -37,11 +40,11 @@ BEGIN
   IF (SELECT COUNT(*) FROM _migrations) <> :'expected'::integer THEN
     RAISE EXCEPTION 'migration count mismatch';
   END IF;
-  IF (SELECT COUNT(*) FROM businesses WHERE slug = 'puzzles') <> 1 THEN
-    RAISE EXCEPTION 'canonical Puzzles tenant missing or duplicated';
+  IF (SELECT COUNT(*) FROM businesses WHERE slug = 'example-lantern') <> 1 THEN
+    RAISE EXCEPTION 'synthetic Example Lantern tenant missing or duplicated';
   END IF;
   IF (SELECT COUNT(*) FROM staff s JOIN businesses b ON b.id = s.business_id
-      WHERE b.slug = 'puzzles' AND s.role IN ('owner', 'manager', 'staff')) <> 3 THEN
+      WHERE b.slug = 'example-lantern' AND s.role IN ('owner', 'manager', 'staff')) <> 3 THEN
     RAISE EXCEPTION 'canonical staff-role seed is invalid';
   END IF;
   IF EXISTS (
@@ -58,12 +61,12 @@ BEGIN
     RAISE EXCEPTION 'order authority backfill invariant failed';
   END IF;
   IF (SELECT COUNT(*) FROM businesses
-      WHERE slug = 'puzzles' AND country_code = 'DE' AND currency_code = 'EUR'
+      WHERE slug = 'example-lantern' AND country_code = 'DE' AND currency_code = 'EUR'
         AND locale = 'de-DE' AND timezone = 'Europe/Berlin') <> 1 THEN
     RAISE EXCEPTION 'canonical regional configuration is invalid';
   END IF;
   IF (SELECT COUNT(*) FROM tax_profiles tp JOIN businesses b ON b.id = tp.business_id
-      WHERE b.slug = 'puzzles' AND tp.code IN ('STANDARD', 'REDUCED', 'EXEMPT', 'CUSTOM')) <> 4 THEN
+      WHERE b.slug = 'example-lantern' AND tp.code IN ('STANDARD', 'REDUCED', 'EXEMPT', 'CUSTOM')) <> 4 THEN
     RAISE EXCEPTION 'canonical operational tax profiles are invalid';
   END IF;
   IF EXISTS (

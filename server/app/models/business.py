@@ -31,6 +31,8 @@ class Business(Base, UUIDMixin, TimestampMixin):
     description: Mapped[str | None] = mapped_column(Text)
     image: Mapped[str | None] = mapped_column(String(500))
     website: Mapped[str | None] = mapped_column(String(500))
+    privacy_contact: Mapped[str | None] = mapped_column(String(255))
+    privacy_policy_url: Mapped[str | None] = mapped_column(String(500))
     tags: Mapped[list[str] | None] = mapped_column(ARRAY(Text), default=list)
     max_guests: Mapped[int] = mapped_column(Integer, default=10)
     reservation_time: Mapped[int] = mapped_column(Integer, default=60)

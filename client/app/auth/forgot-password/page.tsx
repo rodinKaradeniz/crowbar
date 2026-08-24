@@ -1,7 +1,7 @@
 import { GalleryVerticalEnd } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { ForgotPasswordForm } from "@/components/forgot-password-form";
+import { AuthVisual } from "@/components/auth-visual";
 
 export default function ForgotPasswordPage() {
   return (
@@ -25,15 +25,7 @@ export default function ForgotPasswordPage() {
 
       {/* Right side - Image */}
       <div className="hidden w-1/2 items-center justify-center bg-muted lg:flex">
-        <div className="relative h-full w-full">
-          <Image
-            src="/website-img-2.jpg"
-            alt="Bar interior"
-            fill
-            className="object-cover"
-            priority
-          />
-        </div>
+        <AuthVisual />
       </div>
     </div>
   );

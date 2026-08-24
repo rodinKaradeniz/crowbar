@@ -735,10 +735,24 @@ async def close_seating(db, business_id: UUID, seating_id: UUID, actor_id: UUID)
             table.operational_state_changed_by = actor_id
             table.operational_state_changed_at = now
     if seating.reservation_id:
-        reservation = await db.get(Reservation, seating.reservation_id)
+        reservation = await db.scalar(
+            select(Reservation).where(
+                Reservation.id == seating.reservation_id,
+                Reservation.business_id == business_id,
+            )
+        )
+        if reservation is None:
+            raise _not_found("Reservation")
         reservation.status = "completed"
     else:
-        entry = await db.get(QueueEntry, seating.queue_entry_id)
+        entry = await db.scalar(
+            select(QueueEntry).where(
+                QueueEntry.id == seating.queue_entry_id,
+                QueueEntry.business_id == business_id,
+            )
+        )
+        if entry is None:
+            raise _not_found("Queue entry")
         entry.status = "completed"
         entry.completed_at = now
         db.add(QueueEntryEvent(

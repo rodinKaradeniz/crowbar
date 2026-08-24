@@ -126,19 +126,26 @@ async def test_invitation_is_single_use_and_delivery_status_is_truthful(
     )
     assert invited.status_code == 201, invited.text
     assert invited.json()["delivery_status"] == "sent"
-    raw_token = urlparse(captured["url"]).path.rsplit("/", 1)[-1]
+    parsed = urlparse(captured["url"])
+    assert parsed.query == ""
+    raw_token = parse_qs(parsed.fragment)["token"][0]
 
+    exchange = await client.post(
+        "/api/public/capabilities/exchange",
+        json={"kind": "staff_invite", "token": raw_token},
+    )
     accepted = await client.post(
-        f"/api/staff/invite/{raw_token}/accept",
+        "/api/staff/invite/accept",
         json={"name": "Invited", "password": "password1234"},
     )
-    replay = await client.post(
-        f"/api/staff/invite/{raw_token}/accept",
-        json={"name": "Invited", "password": "password1234"},
+    replay_exchange = await client.post(
+        "/api/public/capabilities/exchange",
+        json={"kind": "staff_invite", "token": raw_token},
     )
 
+    assert exchange.status_code == 204, exchange.text
     assert accepted.status_code == 201, accepted.text
-    assert replay.status_code == 410
+    assert replay_exchange.status_code == 404
 
 
 @pytest.mark.asyncio
@@ -164,19 +171,26 @@ async def test_password_reset_is_generic_single_use_and_revokes_sessions(
     assert existing.status_code == missing.status_code == 202
     assert existing.json() == missing.json()
 
-    raw_token = parse_qs(urlparse(captured["url"]).query)["token"][0]
+    parsed = urlparse(captured["url"])
+    assert parsed.query == ""
+    raw_token = parse_qs(parsed.fragment)["token"][0]
+    exchange = await client.post(
+        "/api/public/capabilities/exchange",
+        json={"kind": "password_reset", "token": raw_token},
+    )
     reset = await client.post(
         "/api/auth/reset-password",
-        json={"token": raw_token, "new_password": "new-password-1234"},
+        json={"new_password": "new-password-1234"},
     )
     stale_session = await client.get(
         "/api/auth/me", headers={"Authorization": f"Bearer {owner_token}"}
     )
-    replay = await client.post(
-        "/api/auth/reset-password",
-        json={"token": raw_token, "new_password": "another-password-1234"},
+    replay_exchange = await client.post(
+        "/api/public/capabilities/exchange",
+        json={"kind": "password_reset", "token": raw_token},
     )
 
+    assert exchange.status_code == 204, exchange.text
     assert reset.status_code == 200, reset.text
     assert stale_session.status_code == 401
-    assert replay.status_code == 400
+    assert replay_exchange.status_code == 404

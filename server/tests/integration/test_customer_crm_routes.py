@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.booking_schedule import BookingSchedule, BookingScheduleWindow
 from app.models.customer import Customer, CustomerMarketingConsent
 from app.models.queue_entry import QueueEntry
+from app.models.reservation import Reservation
 
 
 async def _owner(client: AsyncClient, suffix: str):
@@ -43,7 +44,14 @@ async def test_public_opt_ins_and_queue_share_the_phone_keyed_guest(client: Asyn
         "idempotency_key": "crm-public-1",
     })
     assert created.status_code == 201, created.text
-    guest_id = created.json()["customer_id"]
+    reservation = await db_session.scalar(
+        select(Reservation).where(
+            Reservation.business_id == business_id,
+            Reservation.idempotency_key == "crm-public-1",
+        )
+    )
+    assert reservation is not None
+    guest_id = str(reservation.customer_id)
 
     queue_opened = await client.put(
         "/api/queue/service-day",
@@ -61,7 +69,12 @@ async def test_public_opt_ins_and_queue_share_the_phone_keyed_guest(client: Asyn
         },
     )
     assert joined.status_code == 201, joined.text
-    entry = await db_session.get(QueueEntry, joined.json()["entry"]["id"])
+    entry = await db_session.scalar(
+        select(QueueEntry).where(
+            QueueEntry.business_id == business_id,
+            QueueEntry.idempotency_key == "crm-queue-join-1",
+        )
+    )
     assert entry is not None and str(entry.customer_id) == guest_id
 
     profile = await client.get(f"/api/customers/{guest_id}", headers={"Authorization": f"Bearer {token}"})
@@ -151,8 +164,15 @@ async def test_later_public_choice_withdraws_prior_marketing_consent(
     )
     assert second.status_code == 201, second.text
 
+    reservation = await db_session.scalar(
+        select(Reservation).where(
+            Reservation.business_id == business_id,
+            Reservation.idempotency_key == "consent-first",
+        )
+    )
+    assert reservation is not None
     profile = await client.get(
-        f"/api/customers/{first.json()['customer_id']}",
+        f"/api/customers/{reservation.customer_id}",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert profile.status_code == 200

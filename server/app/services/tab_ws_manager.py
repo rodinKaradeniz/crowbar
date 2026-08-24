@@ -8,7 +8,6 @@ class TabConnectionManager:
         self.active: dict[str, list[WebSocket]] = defaultdict(list)
 
     async def connect(self, business_id: str, websocket: WebSocket) -> None:
-        await websocket.accept()
         self.active[business_id].append(websocket)
 
     def disconnect(self, business_id: str, websocket: WebSocket) -> None:

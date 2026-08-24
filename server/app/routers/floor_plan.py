@@ -39,6 +39,7 @@ from app.schemas.floor_plan import (
     FloorPlanSettingsUpdate,
     SeatingOpen,
     SeatingResponse,
+    StaffTableGuestSessionResponse,
     TableAssignmentReplace,
     TableAssignmentResponse,
     TableCreate,
@@ -47,7 +48,7 @@ from app.schemas.floor_plan import (
     TableStateUpdate,
     TableUpdate,
 )
-from app.services import floor_plan_service
+from app.services import floor_plan_service, table_guest_session_service
 from app.services.floor_plan_service import FloorPlanError
 from app.services.floor_plan_ws_manager import manager as floor_plan_ws_manager
 from app.services.websocket_auth import authorize_staff_websocket
@@ -345,7 +346,7 @@ async def _table_qr_response(
         table_id=table.id,
         label=table.label,
         revision=table.qr_token_revision,
-        url=f"/menu/{business.slug}?table_token={token}",
+        url=f"/menu/{business.slug}#table_token={token}",
     )
 
 
@@ -367,9 +368,115 @@ async def rotate_table_qr(
     _: User = Depends(require_roles("owner", "manager")),
 ):
     response = await _table_qr_response(db, business, table_id, rotate=True)
+    await table_guest_session_service.revoke_for_table(
+        db, business_id=business.id, table_id=table_id
+    )
     await db.commit()
     await _publish_change("table.qr_rotated", business.id, resource_id=table_id)
     return response
+
+
+def _staff_table_guest_session_response(row) -> StaffTableGuestSessionResponse:
+    guest_session, table = row
+    return StaffTableGuestSessionResponse(
+        id=guest_session.id,
+        table_id=guest_session.table_id,
+        seating_id=guest_session.seating_id,
+        table_label=table.label,
+        status=guest_session.status,
+        expires_at=guest_session.expires_at,
+        created_at=guest_session.created_at,
+        decided_by=guest_session.decided_by,
+        decided_at=guest_session.decided_at,
+    )
+
+
+@router.get(
+    "/table-guest-sessions",
+    response_model=list[StaffTableGuestSessionResponse],
+    dependencies=[Depends(require_module("ordering"))],
+)
+async def list_table_guest_sessions(
+    status_filter: str | None = Query(default=None, alias="status", pattern="^(pending|approved|denied|revoked)$"),
+    db: AsyncSession = Depends(get_db),
+    business: Business = Depends(get_current_business),
+):
+    rows = await table_guest_session_service.list_for_staff(
+        db, business_id=business.id, status=status_filter
+    )
+    return [_staff_table_guest_session_response(row) for row in rows]
+
+
+async def _decide_table_guest_session(
+    *,
+    session_id: UUID,
+    decision: str,
+    db: AsyncSession,
+    business: Business,
+    user: User,
+) -> StaffTableGuestSessionResponse:
+    try:
+        guest_session = await table_guest_session_service.decide(
+            db,
+            business_id=business.id,
+            session_id=session_id,
+            actor_id=user.id,
+            decision=decision,
+        )
+    except table_guest_session_service.TableGuestSessionError as exc:
+        raise FloorPlanError(404, str(exc), code="TABLE_GUEST_SESSION_UNAVAILABLE") from exc
+    await db.commit()
+    rows = await table_guest_session_service.list_for_staff(
+        db, business_id=business.id
+    )
+    row = next(row for row in rows if row[0].id == guest_session.id)
+    await _publish_change(
+        "table_guest_session.updated",
+        business.id,
+        resource_id=guest_session.id,
+        location_id=guest_session.location_id,
+    )
+    return _staff_table_guest_session_response(row)
+
+
+@router.post(
+    "/table-guest-sessions/{session_id}/approve",
+    response_model=StaffTableGuestSessionResponse,
+    dependencies=[Depends(require_module("ordering"))],
+)
+async def approve_table_guest_session(
+    session_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    business: Business = Depends(get_current_business),
+    user: User = Depends(get_current_user),
+):
+    return await _decide_table_guest_session(
+        session_id=session_id,
+        decision="approved",
+        db=db,
+        business=business,
+        user=user,
+    )
+
+
+@router.post(
+    "/table-guest-sessions/{session_id}/deny",
+    response_model=StaffTableGuestSessionResponse,
+    dependencies=[Depends(require_module("ordering"))],
+)
+async def deny_table_guest_session(
+    session_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    business: Business = Depends(get_current_business),
+    user: User = Depends(get_current_user),
+):
+    return await _decide_table_guest_session(
+        session_id=session_id,
+        decision="denied",
+        db=db,
+        business=business,
+        user=user,
+    )
 
 
 @router.get("/combinations", response_model=list[CombinationResponse])
@@ -636,6 +743,9 @@ async def close_seating(
     seating = await floor_plan_service.close_seating(
         db, business.id, seating_id, user.id
     )
+    await table_guest_session_service.revoke_for_seating(
+        db, business_id=business.id, seating_id=seating.id
+    )
     await db.commit()
     await _publish_change(
         "seating.closed",
@@ -650,13 +760,11 @@ async def close_seating(
 async def floor_plan_websocket(
     ws: WebSocket,
     business_id: UUID,
-    token: str = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
     authorized = await authorize_staff_websocket(
         db,
         ws,
-        token=token,
         business_id=business_id,
         required_modules=("reservations", "queue", "ordering"),
     )

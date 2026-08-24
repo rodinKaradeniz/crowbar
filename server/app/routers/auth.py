@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,6 +40,7 @@ from app.services.auth_service import (
 )
 from app.services import staff_service
 from app.services.email_service import send_password_reset
+from app.services.public_session_service import clear_public_cookie, get_public_cookie
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -321,7 +322,7 @@ async def forgot_password(
         await db.commit()
         send_password_reset(
             to_email=user.email,
-            reset_url=f"{settings.frontend_url}/auth/reset-password?token={raw_token}",
+            reset_url=f"{settings.frontend_url}/auth/reset-password#token={raw_token}",
         )
 
     return {
@@ -333,6 +334,7 @@ async def forgot_password(
 async def reset_password(
     data: ResetPasswordRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     await enforce_rate_limits(
@@ -341,11 +343,17 @@ async def reset_password(
             key_parts=(get_client_ip(request),),
         ),
     )
-    user = await consume_password_reset(db, data.token, data.new_password)
+    token = get_public_cookie(request, kind="password_reset")
+    user = (
+        await consume_password_reset(db, token, data.new_password)
+        if token is not None
+        else None
+    )
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This password reset link is invalid or has expired",
         )
     await db.commit()
+    clear_public_cookie(response, kind="password_reset")
     return {"message": "Password updated successfully"}

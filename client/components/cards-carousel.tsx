@@ -6,7 +6,7 @@ import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 export interface Card {
-  src: string;
+  src?: string;
   title: string;
   category: string;
   content: React.ReactNode;
@@ -148,13 +148,17 @@ export const BusinessCard = ({
       onClick={onClick}
     >
       <div className="absolute inset-0">
-        <BlurImage
-          src={card.src}
-          alt={card.title}
-          width="100%"
-          height="100%"
-          className="transition-transform duration-300 group-hover:scale-105"
-        />
+        {card.src ? (
+          <BlurImage
+            src={card.src}
+            alt={card.title}
+            width="100%"
+            height="100%"
+            className="transition-transform duration-300 group-hover:scale-105"
+          />
+        ) : (
+          <div className="h-full w-full bg-[radial-gradient(circle_at_30%_24%,#d4a24d_0_7%,transparent_30%),linear-gradient(145deg,#251812,#7b3f27)]" />
+        )}
       </div>
       <div className="absolute inset-0 flex flex-col justify-end p-6 text-white">
         <div className="mb-2">

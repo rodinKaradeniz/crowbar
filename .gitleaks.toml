@@ -1,0 +1,7 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Historical product prose misclassified as a generic API key"
+regexTarget = "secret"
+regexes = ['''^purchasing/ML$''']

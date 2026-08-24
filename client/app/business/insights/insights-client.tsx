@@ -168,8 +168,8 @@ export default function InsightsClient({
             <BrainCircuit className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-medium mb-2">No insights yet</h3>
             <p className="text-sm text-muted-foreground text-center max-w-md mb-6">
-              Run the ML pipeline to generate customer segmentation, cancellation
-              predictions, and demand forecasts from your reservation data.
+              Run the ML pipeline to generate demand forecasts from operational
+              reservation data.
             </p>
             <Button onClick={handleRunPipeline} disabled={isRunning}>
               <RefreshCw
@@ -436,8 +436,8 @@ function SegmentationSection({
               </TooltipTrigger>
               <TooltipContent side="right" className="max-w-xs">
                 <p className="text-xs">
-                  Customers grouped by RFM analysis (Recency, Frequency,
-                  Monetary value) using K-Means clustering.
+                  This model is unavailable until its Stage 6 operational-input
+                  training contract and evidence are complete.
                 </p>
               </TooltipContent>
             </Tooltip>
@@ -901,10 +901,6 @@ function getInsightText(topFeature: string | undefined): string {
       "A customer's past cancellation behavior is a strong predictor. Watch repeat cancellers.",
     is_weekend:
       "Weekend reservations show different cancellation patterns than weekdays.",
-    has_payment:
-      "Whether a reservation requires payment significantly affects cancellation likelihood.",
-    is_paid:
-      "Paid reservations are much less likely to be cancelled. Consider requiring deposits.",
     guests:
       "Group size affects cancellation risk. Larger parties tend to have different patterns.",
     hour_of_day:

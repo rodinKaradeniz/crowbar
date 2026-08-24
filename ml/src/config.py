@@ -1,4 +1,4 @@
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -36,6 +36,18 @@ class Settings(BaseSettings):
         if value.startswith("postgresql+asyncpg://"):
             return value.replace("postgresql+asyncpg://", "postgresql://", 1)
         return value
+
+    @model_validator(mode="after")
+    def validate_production_security(self) -> "Settings":
+        if self.environment.lower() == "production" and (
+            not self.ml_internal_token
+            or len(self.ml_internal_token.encode("utf-8")) < 32
+            or "not-for-production" in self.ml_internal_token
+        ):
+            raise ValueError(
+                "Unsafe production configuration: ML_INTERNAL_TOKEN must be a secret of at least 32 bytes"
+            )
+        return self
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

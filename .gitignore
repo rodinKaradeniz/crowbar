@@ -25,6 +25,15 @@ build/
 # misc
 .DS_Store
 *.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.der
+*.jks
+*.keystore
+*.mobileprovision
 
 # debug
 npm-debug.log*
@@ -36,6 +45,8 @@ yarn-error.log*
 .env
 .env.*
 !.env.example
+*.env
+*.env.local
 
 # vercel
 .vercel
@@ -59,3 +70,37 @@ server/.venv/
 # Uploads (keep directory, ignore contents)
 server/uploads/*
 !server/uploads/.gitkeep
+
+# Local databases, exports, captures, and generated private data
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+*.backup
+*.sql.gz
+*.csv.gz
+uploads/
+artifacts/
+reports/
+*.har
+
+# Python and notebook state
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+ml/notebooks/
+ml/mlruns/
+ml/mlflow.db
+
+# Local agent/editor state is not part of the portfolio mirror
+.claude/
+.codex/
+.agents/
+.idea/
+.vscode/
+
+# Local public-mirror exports
+portfolio-export/

@@ -9,7 +9,7 @@ from app.services.auth_service import (
     hash_password,
     verify_password,
 )
-from jose import jwt
+import jwt
 
 
 # --------------------------------------------------------------------------- #
@@ -53,17 +53,17 @@ class TestPasswordHashing:
 class TestAccessToken:
     def test_token_contains_user_id(self):
         token = create_access_token("user-abc-123", "customer")
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm], audience="crowbar-staff-api")
         assert payload["sub"] == "user-abc-123"
 
     def test_token_contains_user_type(self):
         token = create_access_token("user-1", "staff")
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm], audience="crowbar-staff-api")
         assert payload["user_type"] == "staff"
 
     def test_token_has_expiration(self):
         token = create_access_token("user-1", "customer")
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm], audience="crowbar-staff-api")
         assert "exp" in payload
 
     def test_token_is_decodable_string(self):
@@ -77,7 +77,7 @@ class TestWebSocketToken:
     def test_token_is_short_lived_and_business_bound(self):
         token = create_websocket_token("user-1", "business-1")
         payload = jwt.decode(
-            token, settings.secret_key, algorithms=[settings.algorithm]
+            token, settings.secret_key, algorithms=[settings.algorithm], audience="crowbar-staff-websocket"
         )
 
         assert payload["sub"] == "user-1"

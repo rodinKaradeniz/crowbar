@@ -35,7 +35,6 @@ function toOrderFromWS(o: Record<string, unknown>): Order {
     id: o.id as string,
     businessId: o.business_id as string,
     locationId: (o.location_id as string) || undefined,
-    sessionToken: o.session_token as string,
     tableIdentifier: (o.table_identifier as string) || undefined,
     status: o.status as Order["status"],
     idempotencyKey: o.idempotency_key as string,
@@ -114,11 +113,12 @@ export function useOrderSocket(
 
     if (wsRef.current && wsRef.current.readyState <= WebSocket.OPEN) return;
 
-    const url = `${getWsBase()}/ws/orders/${businessId}?token=${encodeURIComponent(jwt)}`;
+    const url = `${getWsBase()}/ws/orders/${businessId}`;
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
     ws.onopen = () => {
+      ws.send(JSON.stringify({ type: "authenticate", token: jwt }));
       setConnected(true);
       delayRef.current = BASE_DELAY;
     };

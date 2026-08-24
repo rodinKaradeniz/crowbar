@@ -38,6 +38,7 @@ from app.services.auth_service import (
     hash_password,
 )
 from app.services.email_service import send_staff_invitation
+from app.services.public_session_service import clear_public_cookie, get_public_cookie
 
 router = APIRouter(prefix="/api/staff", tags=["staff"])
 
@@ -84,7 +85,7 @@ async def _deliver_invitation(
         to_email=invitation.email,
         business_name=business.name,
         role=invitation.role,
-        invite_url=f"{settings.frontend_url}/invite/{raw_token}",
+        invite_url=f"{settings.frontend_url}/invite#token={raw_token}",
     )
     now = datetime.now(timezone.utc)
     invitation.sent_at = now if delivered else None
@@ -355,11 +356,14 @@ def _assert_invitation_active(invitation: StaffInvitation) -> None:
 
 
 @router.get(
-    "/invite/{token}",
+    "/invite",
     response_model=InviteDetailsResponse,
     dependencies=[Depends(enforce_public_read_limit)],
 )
-async def get_invite(token: str, db: AsyncSession = Depends(get_db)):
+async def get_invite(request: Request, db: AsyncSession = Depends(get_db)):
+    token = get_public_cookie(request, kind="staff_invite")
+    if token is None:
+        raise not_found("Invitation")
     invitation = await _public_invitation(db, token)
     if invitation is None:
         raise not_found("Invitation")
@@ -375,14 +379,14 @@ async def get_invite(token: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post(
-    "/invite/{token}/accept",
+    "/invite/accept",
     response_model=LoginResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def accept_invite(
-    token: str,
     data: AcceptInviteRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     await enforce_rate_limits(
@@ -391,7 +395,12 @@ async def accept_invite(
             key_parts=(get_client_ip(request),),
         ),
     )
-    invitation = await _public_invitation(db, token, for_update=True)
+    token = get_public_cookie(request, kind="staff_invite")
+    invitation = (
+        await _public_invitation(db, token, for_update=True)
+        if token is not None
+        else None
+    )
     if invitation is None:
         raise not_found("Invitation")
     _assert_invitation_active(invitation)
@@ -419,6 +428,7 @@ async def accept_invite(
     )
     invitation.accepted_at = datetime.now(timezone.utc)
     await db.commit()
+    clear_public_cookie(response, kind="staff_invite")
 
     access_token = create_access_token(
         str(new_user.id), "staff", new_user.session_version

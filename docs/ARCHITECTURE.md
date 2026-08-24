@@ -172,22 +172,27 @@ the authenticated assignment rather than request identifiers.
 
 Public pages resolve the business slug to a UUID on the server. Browser calls
 then use `/api/backend/*`, which Next.js rewrites to FastAPI without auth.
-Public write endpoints therefore rely on server-side validation, explicit
-business scoping, idempotency/session tokens where implemented, and business
-configuration such as ordering availability. Public reservation availability
-and creation additionally require the business-level
+Public write endpoints rely on server-side validation, exact public response
+projections, explicit business scoping, idempotency, purpose-scoped capability
+cookies, and business configuration such as ordering availability. Link
+credentials arrive only in URL fragments, are POSTed once to
+`/api/public/capabilities/exchange`, and are immediately removed from browser
+history. The exchange sets Secure, HttpOnly, SameSite cookies with `__Host-`
+names in production. Reservation availability and creation additionally require
+the business-level
 `public_reservations_enabled` flag; staff reservation workflows do not use that
 gate.
 
 FastAPI applies Redis-backed rolling-window limits to authentication, public
 reservation, queue, ordering, and related public-read routes when
 `RATE_LIMIT_ENABLED=true`. Keys HMAC client IPs, identity values, business IDs,
-paths, and opaque session tokens before storing them in Redis.
+paths, capabilities, and table sessions before storing them in Redis.
 Production trusts Railway's `X-Real-IP`; non-production uses the direct peer
 address. A blocked request uses the standard `RATE_LIMITED` error body and
 `Retry-After`. Redis failure is logged and fails open so a protection-layer
-incident does not take reservations or ordering offline. The Next.js docs
-assistant has no equivalent control yet.
+incident does not take reservations or ordering offline; database uniqueness,
+capacity locks, and pending-session caps remain authoritative. The Next.js docs
+assistant retains its separate bounded per-process staff limit.
 
 ### Regional configuration and operational tax
 
@@ -268,9 +273,12 @@ uses the business timezone and HTML email escapes user content.
    Next.js `/api/ws-token` because the primary JWT is httpOnly. That server
    route exchanges the cookie-backed access token with FastAPI and returns only
    a 120-second, business-bound WebSocket credential.
-2. FastAPI requires `token_use=websocket`, the exact business, current staff
-   membership, and a relevant enabled module. The scoped credential is
-   rejected by normal HTTP authentication.
+2. The browser opens WSS without a credential in the URL and sends the token in
+   the first authentication frame. FastAPI closes connections that do not
+   authenticate within five seconds and emits no operational data first.
+   Validation requires `token_use=websocket`, the exact business, current staff
+   membership, and a relevant enabled module. The scoped credential is rejected
+   by normal HTTP authentication.
 3. A queue or order HTTP mutation commits PostgreSQL state.
 4. The router publishes a `DomainEvent` to Redis Stream `crowbar:events`.
 5. FastAPI's lifespan consumer group `ws_push` reads the event, re-queries
@@ -444,24 +452,27 @@ path that seats a queue party, so it opens a real `table_seating` instead of
 only changing queue status. The Queue page keeps notification and no-show work,
 but its former table-less accept/seat commands are removed.
 
-Migration 028 completes registered-table order continuity without rewriting
-historical order labels. A table's existing `qr_token_revision` is signed with
-the server secret into an opaque credential; the public order route verifies
-the signature, business, active table, revision, and an open seating before it
-creates an order. `tabs.seating_id` establishes one open tab per seating via a
-partial unique index. QR rounds create or reuse that tab under a seating row
-lock; staff can do the same through the authenticated Floor → Tabs handoff.
+Migration 028 establishes registered-table order continuity without rewriting
+historical order labels. Migration 041 changes the signed, revision-bound QR
+from direct ordering authority into a pending browser-session bootstrap. The
+session stores only a browser nonce hash, is bound to business, location,
+table, and active seating, and must be approved by eligible staff before its
+purpose-scoped cookie can order. Denial, expiry, seating closure/reseat, or QR
+rotation revokes it. Session expiry uses the bounded
+`TABLE_GUEST_SESSION_TTL_MINUTES` deployment setting (30 minutes through 24
+hours). `tabs.seating_id` establishes one open tab per seating via a partial
+unique index. Approved guest rounds create or reuse that tab under a seating
+row lock; staff can do the same through the authenticated Floor → Tabs handoff.
 Orders persist the authoritative registered `table_id` and `tab_id`; their
 legacy `table_identifier` stays nullable read-only compatibility data. Closing
 a seating locks and rejects an open seating tab, so settlement precedes the
 source visit's completion. QR rotation increments the table revision and
 invalidates earlier credentials without storing a reusable public secret.
 
-The current `tabs.settled_method` closure is simulated: it records a label and
-closes a tab without processing payment. MVP stage 4 replaces this ambiguous
-shape with an audited `settled_externally` assertion and immutable total
-snapshot. It must not grow tender, cash, card, receipt, refund, or fiscal
-semantics; those belong to the separate post-MVP German POS/payment program.
+Migration 040 replaced simulated closure with an audited
+`settled_externally` assertion and immutable total snapshot. It must not grow
+tender, cash, card, receipt, refund, or fiscal semantics; those belong to the
+separate post-MVP German POS/payment program.
 
 ### Authoritative order placement
 
@@ -524,12 +535,12 @@ Backend integration tests do not run migrations. Their autouse fixture creates
 and drops ORM metadata in a dedicated `crowbar_test` PostgreSQL database. This
 means both migrations and ORM metadata require deliberate validation.
 
-Migrations 023–037 are implemented locally. On 2026-08-14 the repeatable
-`scripts/verify-fresh-db.sh` check applied the full 001–037 chain, ran the
-canonical seed twice, asserted its schema/relationship invariants, and
-cleaned the disposable database. The seed still lacks the complete Stage 7
-pilot scenario and therefore does not prove the full MVP demo journey. Railway
-remains at migrations 001–022 while deployment is paused.
+Migrations 023–043 are implemented locally. On 2026-08-23 the repeatable
+`scripts/verify-fresh-db.sh` check applied the full 001–043 chain, ran the
+canonical synthetic seed twice, asserted its schema/relationship invariants,
+and cleaned the disposable database. The seed still lacks the complete Stage
+7 pilot scenario and therefore does not prove the full MVP demo journey.
+Railway remains at migrations 001–022 while deployment is paused.
 
 Migrations 005 and 006 were renamed early in the project. A database restored
 from an old backup may still contain their former names in `_migrations`; use
@@ -550,8 +561,8 @@ migration chain.
   Chat Completions. Stage 7 still owns distributed production abuse controls.
 - Local file storage: `storage_service.py`; S3 is only an intended extension.
 - Payment provider packages and payment data paths are absent from the MVP.
-  Tab closure remains a legacy simulated label until Stage 4 replaces it with
-  the external-settlement assertion; it does not authorize payment work.
+  Tab closure is the Stage 4 external-settlement assertion; it does not
+  authorize payment work.
 
 ## Delivery State
 

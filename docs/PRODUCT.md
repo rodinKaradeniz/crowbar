@@ -162,11 +162,12 @@ Entering `served` records the actual sale movements; reversing service uses
 those recorded movements, not the current recipe. Auto-disabled menu items
 remain disabled after stock recovery until staff re-enable them.
 
-Public dine-in orders start from an opaque QR credential issued for a
-registered table. The credential is signed and bound to the table's current
-revision; an owner or manager can rotate it to invalidate a lost printed code.
-It resolves only while that table belongs to an active seating. Each seating
-has at most one open tab, so staff and guest rounds share one total even when
+Public dine-in ordering starts when a registered-table QR creates a pending
+browser session for the table's current seating. The QR credential is signed,
+purpose-bound and tied to the table revision, but cannot place an order by
+itself. Staff must approve that browser from Floor; denial, seating closure,
+reseating, expiry, or QR rotation revokes its authority. Each seating has at
+most one open tab, so approved guest and staff rounds share one total even when
 the seating spans a configured table combination. Staff start or open that tab
 from the occupied table on Floor, record it as settled externally after the
 venue completes payment in its compliant register, then close the seating. A

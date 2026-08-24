@@ -14,6 +14,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
+from app.core.redis_client import close_redis
 from app.database import get_db
 from app.main import app as fastapi_app
 from app.models.base import Base
@@ -46,6 +47,10 @@ async def setup_database():
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
+    # The application Redis client is process-global while pytest-asyncio uses
+    # a fresh event loop for each test. Close it on the loop that created it so
+    # later tests cannot inherit a connection bound to a closed loop.
+    await close_redis()
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
     await test_engine.dispose()

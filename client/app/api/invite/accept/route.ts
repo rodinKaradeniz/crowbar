@@ -8,20 +8,25 @@ const API_BASE =
 
 export async function POST(request: NextRequest) {
   try {
-    const { token, name, password } = await request.json();
+    const { name, password } = await request.json();
 
-    if (!token || !name || !password) {
+    if (!name || !password) {
       return NextResponse.json(
-        { error: "token, name, and password are required" },
+        { error: "name and password are required" },
         { status: 400 }
       );
     }
 
     const backendResponse = await fetch(
-      `${API_BASE}/api/staff/invite/${token}/accept`,
+      `${API_BASE}/api/staff/invite/accept`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: request.headers.get("cookie") ?? "",
+          Origin: request.nextUrl.origin,
+          "Sec-Fetch-Site": "same-origin",
+        },
         body: JSON.stringify({ name, password }),
       }
     );
@@ -42,7 +47,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch user profile" }, { status: 500 });
     }
 
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         id: user.id,
         email: user.email,
@@ -53,6 +58,11 @@ export async function POST(request: NextRequest) {
       },
       { status: 201 }
     );
+    const clearedCapabilityCookie = backendResponse.headers.get("set-cookie");
+    if (clearedCapabilityCookie) {
+      response.headers.append("set-cookie", clearedCapabilityCookie);
+    }
+    return response;
   } catch (error) {
     console.error("Accept invite error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

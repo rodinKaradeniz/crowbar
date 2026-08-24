@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.errors import ErrorCode
+from app.core.public_access import has_required_privacy_contact
 from app.models.booking_schedule import (
     BookingSchedule,
     BookingScheduleException,
@@ -638,6 +639,12 @@ async def ensure_public_booking_access(
     """Reject public booking requests without affecting staff booking tools."""
     business = await db.scalar(select(Business).where(Business.id == business_id))
     if business is None:
+        raise AvailabilityError(
+            status_code=404,
+            code=ErrorCode.NOT_FOUND,
+            message="Business not found",
+        )
+    if not has_required_privacy_contact(business):
         raise AvailabilityError(
             status_code=404,
             code=ErrorCode.NOT_FOUND,

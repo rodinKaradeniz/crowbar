@@ -2,13 +2,11 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { ArrowDown, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import heroPhoto from "@/assets/crowbar-hero.jpg";
 
 /**
- * Landing hero (Phase 2.1). The photograph sits behind the type at partial
+ * Landing hero. A code-generated light-and-grid treatment sits behind the type
  * opacity and fades to fully transparent across the hero's own scroll range;
  * the text drifts upward slower than the page (parallax lag) and fades on the
  * same curve. Scroll values are written to refs per frame — no re-renders.
@@ -60,23 +58,14 @@ export function LandingHero() {
       ref={sectionRef}
       className="relative min-h-svh overflow-hidden flex flex-col items-center justify-center text-center px-6 pt-14"
     >
-      {/* Photograph behind the type, fading out with scroll */}
+      {/* Code-generated atmosphere behind the type, fading out with scroll. */}
       <div
         ref={photoRef}
         className="absolute inset-0 pointer-events-none"
         style={{ opacity: BASE_PHOTO_OPACITY }}
         aria-hidden
       >
-        <Image
-          src={heroPhoto}
-          alt=""
-          fill
-          priority
-          placeholder="blur"
-          sizes="100vw"
-          className="object-cover"
-        />
-        {/* Settle the photo into the pilsner ground at the edges */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_25%,color-mix(in_oklab,var(--brass)_42%,transparent),transparent_32%),radial-gradient(circle_at_75%_62%,color-mix(in_oklab,var(--dubbel)_35%,transparent),transparent_34%),repeating-linear-gradient(115deg,transparent_0_34px,color-mix(in_oklab,var(--foreground)_6%,transparent)_35px_36px)]" />
         <div className="absolute inset-0 bg-linear-to-b from-background via-transparent to-background" />
       </div>
 

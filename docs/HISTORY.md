@@ -1002,6 +1002,44 @@ remains payment and fiscal authority.
 `server/db/migrations/040_stage4_external_settlement.sql`,
 `server/app/services/order_service.py`, `server/app/services/tab_service.py`
 
+## 2026-08-23 — Public capabilities require exchange and table-browser approval
+
+**Context:** Publishing the development repository exposed no committed provider
+credential in scanned history, but the application still transported bearer
+credentials in URLs, let a photographed table QR order during a seating, shared
+staff-oriented response shapes with public routes, and had tenant relationships
+that were checked only in selected application paths. The Debian ML runtime also
+could not meet the zero-high/critical image gate without suppressing unfixed
+findings.
+
+**Decision:** Keep the private canonical repository and generate a separate
+portfolio mirror from an explicit tracked-file allowlist. Exchange fragment-only
+link credentials for purpose-scoped `__Host-` cookies, hash queue/order bearer
+state, authenticate staff WebSockets in a bounded first frame, and make table QR
+entry a pending per-browser session requiring current-seating staff approval.
+Keep Redis rate limits fail-open with alerts while preserving database locks,
+uniqueness, and capacity caps. Add migrations 041–043 for capability state,
+Stage 3–4 composite tenant constraints, and the required venue privacy contact.
+Use exact public projections and keep external settlement as the only settlement
+model. Build the ML runtime from digest-pinned Chainguard build/runtime images,
+copying only installed Python packages and LightGBM's OpenMP library into the
+non-root final image.
+
+**Consequences:** Legacy credential-bearing URLs and printed QR authority are
+intentionally invalid; they require credential rotation and QR reprint during a
+separately authorized deployment. Public DTO growth now requires an explicit
+allowlist decision and negative contract tests. The public mirror excludes
+agent state, plans, history, roadmap, deployment state, local environments, and
+undocumented media. Publication remains user-owned and is gated on rotating the
+ignored local OpenAI and Resend keys, committing the intended source, exporting
+from that commit, and scanning the exact export.
+
+**References:** `server/db/migrations/041_public_capability_hardening.sql`,
+`server/db/migrations/042_stage3_stage4_tenant_constraints.sql`,
+`server/app/routers/public_capabilities.py`,
+`server/app/services/table_guest_session_service.py`, `client/proxy.ts`,
+`scripts/export-portfolio.sh`, `ml/Dockerfile`
+
 ## Entry Template
 
 ```markdown

@@ -29,8 +29,8 @@ ws_router = APIRouter(tags=["tabs"])
 
 async def _tab_response(db: AsyncSession, tab: Tab) -> TabResponse:
     """Assemble a TabResponse with the on-demand total and associated orders."""
-    orders = await tab_service.get_tab_orders(db, tab.id)
-    total = await tab_service.get_tab_total(db, tab.id)
+    orders = await tab_service.get_tab_orders(db, tab.business_id, tab.id)
+    total = await tab_service.get_tab_total(db, tab.business_id, tab.id)
     events = await tab_service.get_settlement_events(db, tab.business_id, tab.id)
     return TabResponse(
         id=tab.id,
@@ -274,13 +274,11 @@ async def reopen_tab(
 async def tabs_websocket(
     business_id: UUID,
     ws: WebSocket,
-    token: str = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
     if not await authorize_staff_websocket(
         db,
         ws,
-        token=token,
         business_id=business_id,
         required_modules=("ordering",),
     ):

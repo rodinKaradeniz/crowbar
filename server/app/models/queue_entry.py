@@ -26,7 +26,7 @@ class QueueEntry(Base, UUIDMixin, TimestampMixin):
         ForeignKey("customers.id", ondelete="SET NULL"),
         nullable=True,
     )
-    session_token: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    session_token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     party_size: Mapped[int] = mapped_column(Integer, default=1)
     phone: Mapped[str | None] = mapped_column(String(50), nullable=True)

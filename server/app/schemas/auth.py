@@ -43,7 +43,6 @@ class ForgotPasswordRequest(AppBaseModel):
 
 
 class ResetPasswordRequest(AppBaseModel):
-    token: str
     new_password: str
 
     _valid_password = field_validator("new_password")(validate_password)

@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 import { ArrowRight, GalleryVerticalEnd } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LandingNavbar } from "@/components/landing-navbar";
@@ -8,9 +7,6 @@ import { PhotoPanelGroup, PhotoPanelSection } from "@/components/photo-panel-sec
 import { FeatureStack, type StackFeature } from "@/components/feature-stack";
 import { FaqSection, type FaqItem } from "@/components/faq-section";
 import { Reveal } from "@/components/reveal";
-import beerTapPhoto from "@/assets/beer-tap.jpg";
-import inventoryPhoto from "@/assets/inventory.jpg";
-import cocktailPhoto from "@/assets/cocktail.jpg";
 
 // The business carousel comes from FastAPI at request time. Railway's private
 // API is not available while the frontend image is being built.
@@ -62,10 +58,10 @@ const features: StackFeature[] = [
     name: "Insights",
     motto: "Know Friday will be busy before it is",
     description:
-      "A seven-day demand forecast tells you which nights will be busy before they are. Cancellation-risk flags and live KPIs across the other modules keep staffing and stocking decisions grounded in your own numbers.",
+      "A seven-day demand forecast tells you which nights will be busy before they are. Live KPIs across the other modules keep staffing and stocking decisions grounded in your own numbers.",
     bullets: [
       "7-day demand forecast",
-      "Cancellation risk flags",
+      "Operational input only",
       "Operational KPIs",
     ],
   },
@@ -101,7 +97,7 @@ const faqItems: FaqItem[] = [
   {
     question: "What do the insights actually tell me?",
     answer:
-      "A seven-day demand forecast so you can staff the rush before it arrives, flags on reservations that look likely to cancel, and live KPIs across reservations, ordering, and inventory — all drawn from your venue's own data.",
+      "A seven-day demand forecast so you can staff the rush before it arrives, plus live KPIs across reservations, ordering, and inventory — all drawn from your venue's own operational data. Customer segmentation and cancellation prediction remain unavailable until replacement models are validated.",
   },
 ];
 
@@ -124,8 +120,7 @@ export default async function Home() {
             ["Tabs", "one running total per table"],
             ["Queue", "SMS when their seat is ready"],
           ]}
-          photo={beerTapPhoto}
-          photoAlt="Beer being drawn from a tap"
+          visual="service"
           on="lager"
         />
 
@@ -138,8 +133,7 @@ export default async function Home() {
             ["Pours", "tracked in ml, bottle or keg"],
             ["Forecast", "staff up before the rush"],
           ]}
-          photo={inventoryPhoto}
-          photoAlt="Back-bar shelves of bottles"
+          visual="inventory"
           on="dubbel"
           flip
         />
@@ -159,16 +153,9 @@ export default async function Home() {
 
       {/* ── Last call — merged CTA + footer, after dark ────────────────── */}
       <footer className="theme-night relative overflow-hidden bg-background text-foreground">
-        {/* Photograph settled into the porter ground */}
+        {/* Code-generated atmosphere settled into the porter ground. */}
         <div className="absolute inset-0 pointer-events-none" aria-hidden>
-          <Image
-            src={cocktailPhoto}
-            alt=""
-            fill
-            placeholder="blur"
-            sizes="100vw"
-            className="object-cover opacity-20"
-          />
+          <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_18%_35%,#d6a349_0_5%,transparent_20%),radial-gradient(circle_at_78%_62%,#763d28_0_8%,transparent_30%)]" />
           <div className="absolute inset-0 bg-linear-to-b from-background/60 via-transparent to-background/80" />
         </div>
 

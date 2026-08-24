@@ -90,6 +90,8 @@ export interface BusinessResponse {
   description: string | null;
   image: string | null;
   website: string | null;
+  privacy_contact?: string | null;
+  privacy_policy_url?: string | null;
   tags: string[] | null;
   max_guests: number;
   reservation_time: number;

@@ -126,6 +126,11 @@ PUBLIC_READ_LIMIT = RateLimitPolicy(
     limit=300,
     window_seconds=60,
 )
+PUBLIC_CAPABILITY_READ_LIMIT = RateLimitPolicy(
+    name="public_capability_read",
+    limit=180,
+    window_seconds=60,
+)
 
 
 RedisProvider = Callable[[], Awaitable[aioredis.Redis]]
@@ -162,16 +167,30 @@ def get_client_ip(
 
 
 def public_read_check(request: Request) -> RateLimitCheck:
-    """Build a read key scoped to client, route and any opaque session token."""
-    session_token = request.query_params.get("session_token", "")
+    """Build the per-IP public read key without reading credentials from URLs."""
     return RateLimitCheck(
         policy=PUBLIC_READ_LIMIT,
         key_parts=(
             get_client_ip(request),
             request.url.path,
-            session_token,
         ),
     )
+
+
+def public_capability_checks(request: Request) -> list[RateLimitCheck]:
+    """Bound each purpose-scoped capability independently of a shared IP."""
+    return [
+        RateLimitCheck(
+            policy=PUBLIC_CAPABILITY_READ_LIMIT,
+            key_parts=(cookie_key, cookie_value, request.url.path),
+        )
+        for cookie_key, cookie_value in sorted(request.cookies.items())
+        if cookie_value
+        and (
+            cookie_key.startswith("crowbar-")
+            or cookie_key.startswith("__Host-crowbar-")
+        )
+    ]
 
 
 class RateLimiter:
@@ -192,7 +211,7 @@ class RateLimiter:
     def _redis_key(self, check: RateLimitCheck) -> str:
         material = "\x1f".join(str(part) for part in check.key_parts)
         digest = hmac.new(
-            settings.secret_key.encode("utf-8"),
+            settings.rate_limit_hmac_secret.encode("utf-8"),
             material.encode("utf-8"),
             hashlib.sha256,
         ).hexdigest()
@@ -254,4 +273,7 @@ async def enforce_rate_limits(*checks: RateLimitCheck) -> None:
 
 
 async def enforce_public_read_limit(request: Request) -> None:
-    await enforce_rate_limits(public_read_check(request))
+    await enforce_rate_limits(
+        public_read_check(request),
+        *public_capability_checks(request),
+    )

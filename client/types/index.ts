@@ -43,6 +43,8 @@ export interface Business {
   description?: string;
   image?: string;
   website?: string;
+  privacyContact?: string;
+  privacyPolicyUrl?: string;
   tags?: string[];
   createdAt: string;
   maxGuests: number;
@@ -191,7 +193,6 @@ export interface Notification {
 export interface QueueEntry {
   id: string;
   businessId: string;
-  sessionToken: string;
   name: string;
   partySize: number;
   phone?: string;
@@ -210,7 +211,6 @@ export interface QueueEntry {
 
 export interface QueueStatus {
   entry: QueueEntry;
-  totalWaiting: number;
   estimatedWaitMinutes?: number;
 }
 
@@ -552,7 +552,6 @@ export interface Order {
   locationId?: string;
   tableId?: string;
   tabId?: string;
-  sessionToken: string;
   tableIdentifier?: string;
   status: "received" | "preparing" | "ready" | "served" | "cancelled";
   idempotencyKey: string;

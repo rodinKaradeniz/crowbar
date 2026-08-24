@@ -18,7 +18,7 @@ function TestConsumer() {
       <span data-testid="loading">{String(isLoading)}</span>
       <span data-testid="user">{user ? user.name : "none"}</span>
       <span data-testid="user-type">{user ? user.type : "none"}</span>
-      <button onClick={() => login("test@example.com", "password123")}>
+      <button onClick={() => login("test@example.com", "test-password-1234")}>
         Login
       </button>
       <button onClick={() => login("wrong@example.com", "bad")}>

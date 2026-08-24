@@ -36,7 +36,7 @@ async def _create_business_owner(
     user = User(
         email=email,
         name=f"Owner of {business_name}",
-        password_hash=hash_password("password123"),
+        password_hash=hash_password("test-password-1234"),
         user_type="staff",
     )
     db.add(user)

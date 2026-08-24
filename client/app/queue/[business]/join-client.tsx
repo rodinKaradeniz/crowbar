@@ -10,31 +10,6 @@ import type { Business, QueueServiceDay, QueueStatus } from "@/types";
 import { NightTheme } from "@/components/night-theme";
 
 const POLL_INTERVAL = 30_000;
-const SESSION_KEY = (bizId: string) => `queue-session-${bizId}`;
-
-interface StoredSession {
-  sessionToken: string;
-  businessId: string;
-}
-
-function getStoredSession(businessId: string): StoredSession | null {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY(businessId));
-    if (!raw) return null;
-    return JSON.parse(raw) as StoredSession;
-  } catch {
-    return null;
-  }
-}
-
-function saveSession(businessId: string, sessionToken: string) {
-  localStorage.setItem(SESSION_KEY(businessId), JSON.stringify({ sessionToken, businessId }));
-}
-
-function clearSession(businessId: string) {
-  localStorage.removeItem(SESSION_KEY(businessId));
-}
-
 function formatWait(minutes?: number): string {
   if (minutes === undefined) return "Not enough history yet";
   if (minutes < 60) return `~${minutes} min`;
@@ -99,10 +74,11 @@ export function QueueJoinClient({ business }: { business: Business }) {
   };
 
   const fetchStatus = useCallback(
-    async (sessionToken: string) => {
+    async () => {
       try {
-        const s = await clientGetQueueStatus(business.id, sessionToken);
+        const s = await clientGetQueueStatus(business.id);
         setQueueStatus(s);
+        setStep("status");
         setStale(false);
         if (s.entry.status === "seated" || s.entry.status === "removed") {
           stopPolling();
@@ -131,13 +107,11 @@ export function QueueJoinClient({ business }: { business: Business }) {
     return () => clearInterval(id);
   }, [refreshService]);
 
-  // Check for existing session on mount
+  // The queue capability lives only in an HttpOnly cookie. A missing cookie is
+  // indistinguishable from an expired or unknown queue entry.
   useEffect(() => {
-    const stored = getStoredSession(business.id);
-    if (!stored) return;
-    setStep("status");
-    fetchStatus(stored.sessionToken);
-    pollRef.current = setInterval(() => fetchStatus(stored.sessionToken), POLL_INTERVAL);
+    void fetchStatus();
+    pollRef.current = setInterval(() => void fetchStatus(), POLL_INTERVAL);
     return stopPolling;
   }, [business.id, fetchStatus]);
 
@@ -157,12 +131,11 @@ export function QueueJoinClient({ business }: { business: Business }) {
         phone: phone.trim() || undefined,
         idempotencyKey: joinKeyRef.current,
       });
-      saveSession(business.id, status.entry.sessionToken);
       setQueueStatus(status);
       setStep("status");
       joinKeyRef.current = null;
       pollRef.current = setInterval(
-        () => fetchStatus(status.entry.sessionToken),
+        () => void fetchStatus(),
         POLL_INTERVAL,
       );
     } catch (err) {
@@ -173,15 +146,11 @@ export function QueueJoinClient({ business }: { business: Business }) {
   };
 
   const handleLeaveQueue = async () => {
-    const stored = getStoredSession(business.id);
-    if (stored) {
-      try {
-        await clientLeaveQueue(business.id, stored.sessionToken);
-      } catch {
-        // ignore — clear session regardless
-      }
+    try {
+      await clientLeaveQueue(business.id);
+    } catch {
+      // The local status is cleared even if the capability has already expired.
     }
-    clearSession(business.id);
     setQueueStatus(null);
     setName("");
     setPhone("");
@@ -194,7 +163,7 @@ export function QueueJoinClient({ business }: { business: Business }) {
   // ─── Status view ─────────────────────────────────────────────────────────────
 
   if (step === "status" && queueStatus) {
-    const { entry, totalWaiting, estimatedWaitMinutes } = queueStatus;
+    const { entry, estimatedWaitMinutes } = queueStatus;
     const isCalled = entry.status === "called";
     const isDone = entry.status === "seated" || entry.status === "removed";
 
@@ -272,13 +241,6 @@ export function QueueJoinClient({ business }: { business: Business }) {
                   <span className="text-muted-foreground">Est. wait</span>
                   <span className="leader-dots text-brass" aria-hidden />
                   <span className="figures">{formatWait(estimatedWaitMinutes)}</span>
-                </div>
-                <div className="flex items-baseline gap-2.5 text-sm">
-                  <span className="text-muted-foreground">Waiting</span>
-                  <span className="leader-dots text-brass" aria-hidden />
-                  <span className="figures">
-                    {totalWaiting} {totalWaiting === 1 ? "party" : "parties"}
-                  </span>
                 </div>
               </div>
 

@@ -6,17 +6,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   clientCancelPublicReservation,
+  clientExchangePublicCapability,
   clientGetAvailability,
   clientGetBusiness,
   clientGetPublicManagedReservation,
   clientReconfirmPublicReservation,
   clientReschedulePublicReservation,
 } from "@/lib/client-api";
+import { consumeCapabilityFragment } from "@/lib/capability-fragment";
 import type { Availability, Reservation } from "@/types";
 import type { Business } from "@/types";
 import { formatBusinessDateTime, formatBusinessTime } from "@/lib/business-time";
 
-export default function ManageReservationClient({ token }: { token: string }) {
+export default function ManageReservationClient() {
   const [reservation, setReservation] = useState<Reservation | null>(null);
   const [business, setBusiness] = useState<Business | null>(null);
   const [availability, setAvailability] = useState<Availability | null>(null);
@@ -27,7 +29,11 @@ export default function ManageReservationClient({ token }: { token: string }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    void clientGetPublicManagedReservation(token)
+    const token = consumeCapabilityFragment();
+    const exchange = token
+      ? clientExchangePublicCapability("reservation", token)
+      : Promise.resolve();
+    void exchange.then(() => clientGetPublicManagedReservation())
       .then(async (value) => {
         setBusiness(await clientGetBusiness(value.businessId).catch(() => null));
         setReservation(value);
@@ -36,7 +42,7 @@ export default function ManageReservationClient({ token }: { token: string }) {
       })
       .catch((reason) => setError(reason instanceof Error ? reason.message : "This reservation link is unavailable."))
       .finally(() => setLoading(false));
-  }, [token]);
+  }, []);
 
   const slots = useMemo(() => availability?.dates.flatMap((item) => item.slots) ?? [], [availability]);
 
@@ -55,7 +61,7 @@ export default function ManageReservationClient({ token }: { token: string }) {
   async function run(kind: "cancel" | "reconfirm") {
     setAction(kind); setError(null);
     try {
-      setReservation(kind === "cancel" ? await clientCancelPublicReservation(token) : await clientReconfirmPublicReservation(token));
+      setReservation(kind === "cancel" ? await clientCancelPublicReservation() : await clientReconfirmPublicReservation());
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not update reservation."); }
     finally { setAction(null); }
   }
@@ -63,7 +69,7 @@ export default function ManageReservationClient({ token }: { token: string }) {
   async function reschedule(time: string) {
     if (!reservation) return;
     setAction(time); setError(null);
-    try { setReservation(await clientReschedulePublicReservation(token, { serviceTypeId: reservation.serviceTypeId, time, guests })); setAvailability(null); }
+    try { setReservation(await clientReschedulePublicReservation({ serviceTypeId: reservation.serviceTypeId, time, guests })); setAvailability(null); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "That time is no longer available."); }
     finally { setAction(null); }
   }

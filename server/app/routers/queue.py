@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import api_error
+from app.core.public_access import has_required_privacy_contact
 from app.core.events import DomainEvent, publish
 from app.core.rate_limit import (
     PUBLIC_IDENTITY_WRITE_LIMIT,
@@ -23,12 +24,19 @@ from app.models.user import User
 from app.schemas.queue_entry import (
     QueueEntryResponse,
     QueueJoinRequest,
+    PublicQueueStatusResponse,
+    PublicQueueServiceDayResponse,
     QueueRemovalRequest,
     QueueServiceDayResponse,
     QueueServiceDayUpdate,
     QueueStatusResponse,
 )
 from app.services import notification_service, queue_service
+from app.services.public_session_service import (
+    clear_public_cookie,
+    get_public_cookie,
+    set_public_cookie,
+)
 from app.services.queue_ws_manager import manager
 from app.services.websocket_auth import authorize_staff_websocket
 
@@ -42,7 +50,11 @@ def _queue_error(exc: queue_service.QueuePolicyError):
 
 async def _load_business_or_404(db: AsyncSession, business_id: UUID) -> Business:
     business = await db.scalar(select(Business).where(Business.id == business_id))
-    if business is None or "queue" not in (business.enabled_modules or []):
+    if (
+        business is None
+        or "queue" not in (business.enabled_modules or [])
+        or not has_required_privacy_contact(business)
+    ):
         raise api_error(404, "NOT_FOUND", "Business not found")
     return business
 
@@ -53,7 +65,7 @@ async def _entry_response(db: AsyncSession, entry, position: int | None = None):
 
 @router.get(
     "/api/queue/{business_id}/service",
-    response_model=QueueServiceDayResponse,
+    response_model=PublicQueueServiceDayResponse,
     dependencies=[Depends(enforce_public_read_limit)],
 )
 async def get_public_queue_service(
@@ -64,12 +76,12 @@ async def get_public_queue_service(
         state = await queue_service.get_service_day(db, business_id)
     except queue_service.QueuePolicyError as exc:
         raise _queue_error(exc) from exc
-    return QueueServiceDayResponse(**queue_service.service_day_to_dict(state))
+    return PublicQueueServiceDayResponse(**queue_service.service_day_to_dict(state))
 
 
 @router.post(
     "/api/queue/{business_id}/join",
-    response_model=QueueStatusResponse,
+    response_model=PublicQueueStatusResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def join_queue(
@@ -111,6 +123,7 @@ async def join_queue(
     except queue_service.QueuePolicyError as exc:
         raise _queue_error(exc) from exc
 
+    raw_session_token = state.pop("_public_session_token", None)
     if created:
         await notification_service.notify_business_staff(
             db,
@@ -121,6 +134,8 @@ async def join_queue(
             payload={"entry_id": str(state["entry"]["id"])},
         )
     await db.commit()
+    if raw_session_token is not None:
+        set_public_cookie(response, kind="queue", token=raw_session_token)
     if created:
         await publish(
             DomainEvent(
@@ -131,17 +146,19 @@ async def join_queue(
         )
     else:
         response.status_code = status.HTTP_200_OK
-    return QueueStatusResponse(**state)
+    return PublicQueueStatusResponse(**state)
 
 
 @router.post("/api/queue/{business_id}/leave", status_code=status.HTTP_204_NO_CONTENT)
 async def leave_queue(
     business_id: UUID,
     request: Request,
-    session_token: str = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
     await _load_business_or_404(db, business_id)
+    session_token = get_public_cookie(request, kind="queue")
+    if session_token is None:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     await enforce_rate_limits(
         RateLimitCheck(
             policy=PUBLIC_WRITE_IP_LIMIT,
@@ -171,24 +188,28 @@ async def leave_queue(
             payload={"entry_id": str(entry.id), "reason_code": "guest_left"},
         )
     )
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    clear_public_cookie(response := Response(status_code=status.HTTP_204_NO_CONTENT), kind="queue")
+    return response
 
 
 @router.get(
     "/api/queue/{business_id}/status",
-    response_model=QueueStatusResponse,
+    response_model=PublicQueueStatusResponse,
     dependencies=[Depends(enforce_public_read_limit)],
 )
 async def get_queue_status(
     business_id: UUID,
-    session_token: str = Query(...),
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
     await _load_business_or_404(db, business_id)
+    session_token = get_public_cookie(request, kind="queue")
+    if session_token is None:
+        raise api_error(404, "NOT_FOUND", "Queue entry not found")
     state = await queue_service.get_status_by_token(db, business_id, session_token)
     if state is None:
         raise api_error(404, "NOT_FOUND", "Queue entry not found")
-    return QueueStatusResponse(**state)
+    return PublicQueueStatusResponse(**state)
 
 
 @router.get(
@@ -296,6 +317,7 @@ async def create_staff_walk_in(
             actor_id=current_user.id,
             channel="staff",
         )
+        state.pop("_public_session_token", None)
     except RegionalValidationError as exc:
         raise api_error(422, "VALIDATION_ERROR", str(exc)) from exc
     except queue_service.QueuePolicyError as exc:
@@ -434,11 +456,10 @@ async def remove_queue_entry(
 async def queue_websocket(
     business_id: UUID,
     ws: WebSocket,
-    token: str = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
     if not await authorize_staff_websocket(
-        db, ws, token=token, business_id=business_id, required_modules=("queue",)
+        db, ws, business_id=business_id, required_modules=("queue",)
     ):
         return
     bid = str(business_id)

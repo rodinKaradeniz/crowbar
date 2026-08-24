@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -12,24 +12,34 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { clientExchangePublicCapability } from "@/lib/client-api";
+import { consumeCapabilityFragment } from "@/lib/capability-fragment";
 
 const PASSWORD_MIN_LENGTH = 12;
 
-export function ResetPasswordForm({
-  token,
-  className,
-  ...props
-}: React.ComponentProps<"form"> & { token?: string }) {
+export function ResetPasswordForm({ className, ...props }: React.ComponentProps<"form">) {
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [complete, setComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [capabilityReady, setCapabilityReady] = useState(false);
+
+  useEffect(() => {
+    const token = consumeCapabilityFragment();
+    if (!token) {
+      setError("This password reset link is incomplete or has expired.");
+      return;
+    }
+    void clientExchangePublicCapability("password_reset", token)
+      .then(() => setCapabilityReady(true))
+      .catch(() => setError("This password reset link is invalid or has expired."));
+  }, []);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
-    if (!token) {
+    if (!capabilityReady) {
       setError("This password reset link is incomplete.");
       return;
     }
@@ -46,7 +56,7 @@ export function ResetPasswordForm({
       const response = await fetch("/api/backend/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, new_password: password }),
+        body: JSON.stringify({ new_password: password }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -84,7 +94,7 @@ export function ResetPasswordForm({
           </>
         )}
         {error && <p className="rounded-md bg-destructive/15 p-3 text-sm text-destructive" role="alert">{error}</p>}
-        {!complete && <Field><Button type="submit" className="w-full" disabled={submitting || !token}>{submitting ? "Resetting…" : "Reset password"}</Button></Field>}
+        {!complete && <Field><Button type="submit" className="w-full" disabled={submitting || !capabilityReady}>{submitting ? "Resetting…" : "Reset password"}</Button></Field>}
         <FieldDescription className="text-center"><Link href="/auth/login" className="underline underline-offset-4">Back to login</Link></FieldDescription>
       </FieldGroup>
     </form>

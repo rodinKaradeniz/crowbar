@@ -17,6 +17,7 @@ from app.services import sms_service
 from app.services.customer_identity_service import upsert_customer
 from app.services.floor_plan_service import resolve_service_window
 from app.services.location_service import get_primary_location
+from app.services.public_session_service import hash_token
 
 
 ACTIVE_STATUSES = ("waiting", "called")
@@ -243,7 +244,7 @@ async def join_queue(
     *,
     actor_id: UUID | None = None,
     channel: str = "web",
-) -> tuple[dict, bool]:
+) -> tuple[dict, bool, str | None]:
     fingerprint = request_fingerprint(name=name, party_size=party_size, phone=phone)
     existing = await db.scalar(
         select(QueueEntry).where(
@@ -277,7 +278,7 @@ async def join_queue(
                 "This idempotency key was already used for a different queue request",
                 code="IDEMPOTENCY_CONFLICT",
             )
-        return await _build_status(db, existing), False
+        return await _build_status(db, existing), False, None
     if phone is not None:
         duplicate = await db.scalar(
             select(QueueEntry.id).where(
@@ -295,11 +296,12 @@ async def join_queue(
         raise QueuePolicyError("The queue is full", code="QUEUE_FULL")
 
     customer = await upsert_customer(db, business_id=business_id, phone=phone, name=name)
+    raw_session_token = secrets.token_urlsafe(32)
     entry = QueueEntry(
         business_id=business_id,
         location_id=state["location"].id,
         customer_id=customer.id if customer else None,
-        session_token=secrets.token_urlsafe(32),
+        session_token_hash=hash_token(raw_session_token),
         name=name,
         party_size=party_size,
         phone=phone,
@@ -320,7 +322,9 @@ async def join_queue(
         )
     )
     await db.flush()
-    return await _build_status(db, entry), True
+    response = await _build_status(db, entry)
+    response["_public_session_token"] = raw_session_token
+    return response, True
 
 
 async def get_entry_by_token(
@@ -329,7 +333,7 @@ async def get_entry_by_token(
     return await db.scalar(
         select(QueueEntry).where(
             QueueEntry.business_id == business_id,
-            QueueEntry.session_token == session_token,
+            QueueEntry.session_token_hash == hash_token(session_token),
         )
     )
 
@@ -468,7 +472,7 @@ async def remove_by_token(
         select(QueueEntry)
         .where(
             QueueEntry.business_id == business_id,
-            QueueEntry.session_token == session_token,
+            QueueEntry.session_token_hash == hash_token(session_token),
             QueueEntry.status.in_(ACTIVE_STATUSES),
         )
         .with_for_update()
@@ -527,9 +531,10 @@ async def remove_entry(
     return entry
 
 
-async def delivery_summary(db: AsyncSession, entry_id: UUID) -> dict:
+async def delivery_summary(db: AsyncSession, business_id: UUID, entry_id: UUID) -> dict:
     attempt = await db.scalar(
         select(DeliveryAttempt).where(
+            DeliveryAttempt.business_id == business_id,
             DeliveryAttempt.queue_entry_id == entry_id,
             DeliveryAttempt.message_kind == "queue_called",
             DeliveryAttempt.channel == "sms",
@@ -557,7 +562,6 @@ async def entry_to_dict(
     return {
         "id": str(entry.id),
         "business_id": str(entry.business_id),
-        "session_token": entry.session_token,
         "name": entry.name,
         "party_size": entry.party_size,
         "phone": entry.phone,
@@ -571,7 +575,7 @@ async def entry_to_dict(
         "removed_at": entry.removed_at,
         "terminal_reason_code": entry.terminal_reason_code,
         "terminal_reason_note": entry.terminal_reason_note,
-        "delivery": await delivery_summary(db, entry.id),
+        "delivery": await delivery_summary(db, entry.business_id, entry.id),
     }
 
 

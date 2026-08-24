@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { clientPlaceOrder, clientGetOrderStatus } from "@/lib/client-api";
+import {
+  clientGetCurrentTableSession,
+  clientPlaceOrder,
+  clientGetOrderStatus,
+} from "@/lib/client-api";
 import type { Order } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,9 +64,6 @@ interface OrderClientProps {
 export default function OrderClient({ businessId, businessSlug, legalDrinkingAge }: OrderClientProps) {
   const { currencyCode, locale, taxLabel } = useRegionalSettings();
   const money = (value: number | string) => formatMoney(value, currencyCode, locale);
-  const searchParams = useSearchParams();
-  const tableToken = searchParams.get("table_token");
-
   const [cart, setCart] = useState<CartItem[]>([]);
   // Happy-hour state carried from the menu page (server-decided). Display only —
   // the backend re-decides authoritatively at order placement.
@@ -74,7 +74,8 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
   const [ageConfirmed, setAgeConfirmed] = useState(false);
 
   // Post-order state
-  const [sessionToken, setSessionToken] = useState<string | null>(null);
+  const [placed, setPlaced] = useState(false);
+  const [tableApproved, setTableApproved] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [polling, setPolling] = useState(false);
 
@@ -95,12 +96,18 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
     }
   }, [businessSlug]);
 
+  useEffect(() => {
+    void clientGetCurrentTableSession(businessId)
+      .then((session) => setTableApproved(session.status === "approved"))
+      .catch(() => setTableApproved(false));
+  }, [businessId]);
+
   // Poll order status every 10s after placing
   useEffect(() => {
-    if (!sessionToken) return;
+    if (!placed) return;
     setPolling(true);
     const id = setInterval(() => {
-      clientGetOrderStatus(businessId, sessionToken)
+      clientGetOrderStatus(businessId)
         .then(setOrders)
         .catch(() => {});
     }, 10_000);
@@ -108,7 +115,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
       clearInterval(id);
       setPolling(false);
     };
-  }, [businessId, sessionToken]);
+  }, [businessId, placed]);
 
   function removeItem(index: number) {
     const next = cart.filter((_, i) => i !== index);
@@ -142,14 +149,13 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
   async function placeOrder() {
     if (cart.length === 0) return;
     if (cartHasAlcohol && !ageConfirmed) return;
-    if (!tableToken) {
-      toast.error("Scan the QR code on your table to place an order.");
+    if (!tableApproved) {
+      toast.error("Ask a staff member to approve ordering for this table.");
       return;
     }
     setPlacing(true);
     try {
       const order = await clientPlaceOrder(businessId, {
-        tableToken,
         items: cart.map((ci) => ({
           itemId: ci.item.id,
           quantity: ci.quantity,
@@ -160,7 +166,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
         idempotencyKey: generateIdempotencyKey(),
         ageConfirmed: cartHasAlcohol ? ageConfirmed : undefined,
       });
-      setSessionToken(order.sessionToken);
+      setPlaced(true);
       setOrders([order]);
       setCart([]);
       if (typeof window !== "undefined") {
@@ -175,7 +181,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
 
   // ─── Post-order status view ───────────────────────────────────────────────────
 
-  if (sessionToken) {
+  if (placed) {
     return (
       <div className="min-h-screen bg-background p-6 max-w-md mx-auto">
         <NightTheme />
@@ -193,8 +199,8 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
             Loading status…
           </div>
         ) : (
-          orders.map((order) => (
-            <div key={order.id} className="rounded-lg border bg-card p-5 space-y-4 fade-rise" style={{ animationDelay: "120ms" }}>
+          orders.map((order, orderIndex) => (
+            <div key={`${order.placedAt}-${orderIndex}`} className="rounded-lg border bg-card p-5 space-y-4 fade-rise" style={{ animationDelay: "120ms" }}>
               <div className="flex items-center justify-between gap-3">
                 <p className="eyebrow">
                   Order
@@ -210,8 +216,8 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
                 </span>
               </div>
               <div className="space-y-2">
-                {order.lineItems.map((li) => (
-                  <div key={li.id} className="flex items-baseline gap-2.5 text-sm">
+                {order.lineItems.map((li, lineIndex) => (
+                  <div key={`${li.itemName}-${lineIndex}`} className="flex items-baseline gap-2.5 text-sm">
                     <span className="figures text-muted-foreground shrink-0">{li.quantity}×</span>
                     <span>{li.itemName}</span>
                     {li.selectedModifiers.length > 0 && (
@@ -244,7 +250,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
         )}
 
         <div className="mt-8">
-          <Link href={`/menu/${businessSlug}${tableToken ? `?table_token=${encodeURIComponent(tableToken)}` : ""}`}>
+          <Link href={`/menu/${businessSlug}`}>
             <Button variant="outline" className="w-full">
               Order more
             </Button>
@@ -260,7 +266,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
     <div className="min-h-screen bg-background pb-32">
       <NightTheme />
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b px-6 py-3 flex items-center gap-2">
-        <Link href={`/menu/${businessSlug}${tableToken ? `?table_token=${encodeURIComponent(tableToken)}` : ""}`}
+        <Link href={`/menu/${businessSlug}`}
           className="eyebrow text-muted-foreground hover:text-primary transition-colors"
         >
           ← Back to menu
@@ -276,7 +282,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
         {cart.length === 0 ? (
           <div className="text-center py-10">
             <p className="text-muted-foreground text-sm">Your cart is empty.</p>
-            <Link href={`/menu/${businessSlug}${tableToken ? `?table_token=${encodeURIComponent(tableToken)}` : ""}`}>
+            <Link href={`/menu/${businessSlug}`}>
               <Button variant="outline" className="mt-4">Browse menu</Button>
             </Link>
           </div>
@@ -318,7 +324,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
             </div>
 
             <div className="space-y-4 fade-rise" style={{ animationDelay: "160ms" }}>
-              {!tableToken && <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">Scan the QR code on your table to place this order.</p>}
+              {!tableApproved && <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">Ask a staff member to approve ordering for this table.</p>}
               <div className="space-y-1.5">
                 <Label className="eyebrow">Order notes (optional)</Label>
                 <Input
@@ -362,7 +368,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
                   disabled={
                     placing ||
                     cart.length === 0 ||
-                    !tableToken ||
+                    !tableApproved ||
                     (cartHasAlcohol && !ageConfirmed)
                   }
                 >

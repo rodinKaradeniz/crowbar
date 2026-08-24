@@ -410,6 +410,60 @@ pilot scenario and its accessibility/load/failure matrix.
 Railway remains intentionally paused at migrations 001–022. No stage completion
 authorizes deployment or any other external mutation.
 
+## Stages 3 and 4 public-security evidence — 2026-08-24
+
+The Stage 3–4 journeys remain functionally closed after the public-repository
+hardening pass. Migrations 041–043 add hashed queue/order credentials,
+per-browser table guest sessions, missing composite tenant constraints, and the
+venue privacy-contact production gate without editing migrations 001–040.
+
+- Link credentials are delivered only in fragments and exchanged once for
+  purpose-scoped Secure, HttpOnly, SameSite cookies; legacy token-path routes
+  are absent. Wrong-purpose, stale-revision, expired, terminal and cross-tenant
+  capabilities fail without enumerating another tenant's resource.
+- Staff WebSockets open without URL credentials, authenticate in the first
+  frame within five seconds, and receive no projection before validation. The
+  credential is short-lived, business-bound and unusable as an HTTP staff JWT.
+- A registered-table QR creates a bounded pending browser session rather than
+  ordering authority. Only staff for the current tenant/seating can approve it;
+  denial, seating close/reseat, expiry and QR rotation revoke it. PostgreSQL
+  advisory locking, uniqueness and capacity checks remain authoritative when
+  Redis limits fail open.
+- Public menu, reservation, waitlist, queue, table-session and order responses
+  use explicit DTOs with negative assertions for internal identifiers,
+  credentials, routing/tax configuration, capacity totals, delivery/provider
+  state and settlement internals. Stage 3–4 helpers require business scope and
+  the database enforces the new composite tenant relationships.
+- Production configuration rejects missing, weak, reused or placeholder staff,
+  public-link, table-QR and rate-limit secrets; unsafe CORS, disabled rate
+  limiting, absent public origins/privacy contact, or missing internal-service
+  credentials stop startup. Production docs and environment disclosure are
+  disabled; request/log redaction and global security headers are installed.
+- The portfolio exporter reads only an explicit tracked-file allowlist. The
+  public surface has synthetic reserved seed data, no reusable demo password or
+  reset command, an all-rights-reserved view-only license, private-reporting
+  security policy, factual controller/processor copy, and an asset-rights
+  manifest. Agent state, history, TODO/evidence, plans, deployment state,
+  environments, notebooks and undocumented media are excluded.
+
+Final local verification: 188 PostgreSQL backend tests, 51 frontend tests and
+6 ML tests passed; frontend lint (two existing navigation warnings), TypeScript
+and the Next.js 16.3.2 production build passed; the disposable verifier applied
+migrations 001–043 and repeated the synthetic seed; npm audit and both Python
+lock audits reported no known vulnerabilities; the digest-pinned non-root ML
+image imported LightGBM and Trivy reported zero high/critical OS or Python
+findings; workflow YAML, Python compilation, shell syntax and `git diff --check`
+passed. Full-history Gitleaks (with one exact documented false-positive
+allowlist) and TruffleHog scans found no committed secret. Gitleaks and
+TruffleHog also reported zero findings in the complete intended working-tree
+portfolio allowlist, which contained no media, notebook, or environment file.
+
+Publication is not yet authorized or complete. Before creating the mirror, the
+user must rotate the ignored local OpenAI and Resend keys discovered during the
+working-tree audit, commit the intended canonical source, export from that
+commit, and run the checklist plus both scanners against the exact export.
+Railway and all production credentials remain untouched.
+
 Stage implementations replace these observations with dated command output,
 test names, screenshots or recordings where useful, and links to any durable
 runbook or CI artifact. Do not mark a risk closed by editing this document

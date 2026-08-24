@@ -10,8 +10,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.booking_schedule import BookingSchedule, BookingScheduleWindow
 from app.models.business import Business
 from app.models.reservation import Reservation
+from app.models.reservation_waitlist import ReservationWaitlistEntry
 from app.services.reservation_guest_token_service import issue_guest_token
-from app.services.reservation_waitlist_token_service import issue_offer_token
+from app.services.reservation_waitlist_token_service import (
+    issue_management_token,
+    issue_offer_token,
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -187,6 +191,33 @@ class TestPublicReservation:
         data = resp.json()
         assert data["email"] == "guest@example.com"
         assert data["status"] == "pending"
+        assert {
+            "id", "customer_id", "availability_override_by", "cancelled_by",
+            "no_show_note", "reminder_enabled", "reminder_lead_minutes",
+            "cancelled_at", "no_show_at", "cancellation_window_minutes",
+            "arrival_grace_period_minutes", "reconfirmation_enabled",
+            "created_at", "updated_at",
+        }.isdisjoint(data)
+
+        public_types = await client.get(
+            f"/api/service-types/business/{business_id}"
+        )
+        assert public_types.status_code == 200, public_types.text
+        public_type = public_types.json()[0]
+        assert {
+            "business_id", "max_concurrent_bookings",
+            "availability_resource_mode", "reservable_cover_capacity",
+            "resource_turn_buffer_minutes", "is_pending_enabled",
+            "created_at", "updated_at",
+        }.isdisjoint(public_type)
+
+        staff_types = await client.get(
+            f"/api/service-types/business/{business_id}",
+            headers={"Authorization": f"Bearer {owner_token}"},
+        )
+        assert staff_types.status_code == 200, staff_types.text
+        assert staff_types.json()[0]["business_id"] == business_id
+        assert "availability_resource_mode" in staff_types.json()[0]
 
     @pytest.mark.asyncio
     async def test_staff_can_create_when_public_reservations_are_disabled(
@@ -251,18 +282,31 @@ class TestPublicReservation:
             },
         )
         assert created.status_code == 201
-        reservation = await db_session.get(Reservation, created.json()["id"])
+        reservation = await db_session.scalar(
+            select(Reservation).where(
+                Reservation.business_id == business_id,
+                Reservation.email == "guest@example.com",
+            )
+        )
         assert reservation is not None
         token = issue_guest_token(
             business_id=reservation.business_id,
             reservation_id=reservation.id,
             revision=reservation.guest_token_revision,
         )
-        cancelled = await client.post(f"/api/reservations/public/manage/{token}/cancel")
+        exchange = await client.post(
+            "/api/public/capabilities/exchange",
+            json={"kind": "reservation", "token": token},
+        )
+        assert exchange.status_code == 204, exchange.text
+        cancelled = await client.post("/api/reservations/public/manage/cancel")
         assert cancelled.status_code == 200, cancelled.text
         assert cancelled.json()["status"] == "cancelled"
-        assert cancelled.json()["cancelled_by"] == "guest"
+        assert "cancelled_by" not in cancelled.json()
         assert cancelled.json()["cancelled_late"] is False
+        await db_session.refresh(reservation)
+        assert reservation.cancelled_by == "guest"
+        assert reservation.cancelled_late is False
 
     @pytest.mark.asyncio
     async def test_staff_marks_no_show_after_grace_period(
@@ -328,20 +372,30 @@ class TestPublicReservation:
             },
         )
         assert joined.status_code == 201, joined.text
+        entry = await db_session.scalar(
+            select(ReservationWaitlistEntry).where(
+                ReservationWaitlistEntry.business_id == business_id,
+                ReservationWaitlistEntry.idempotency_key == "waitlist-offer-accept-1",
+            )
+        )
+        assert entry is not None
         await _open_default_schedule(db_session, business_id)
         offered = await client.post(
-            f"/api/reservations/waitlist/{joined.json()['id']}/offer",
+            f"/api/reservations/waitlist/{entry.id}/offer",
             headers={"Authorization": f"Bearer {owner_token}"},
             json={"reservation_time": requested_time},
         )
         assert offered.status_code == 200, offered.text
-        from app.models.reservation_waitlist import ReservationWaitlistEntry
-        entry = await db_session.get(ReservationWaitlistEntry, joined.json()["id"])
-        assert entry is not None
+        await db_session.refresh(entry)
         token = issue_offer_token(
             business_id=entry.business_id, entry_id=entry.id, revision=entry.offer_token_revision
         )
-        accepted = await client.post(f"/api/reservations/waitlist/offers/{token}/accept")
+        exchange = await client.post(
+            "/api/public/capabilities/exchange",
+            json={"kind": "waitlist_offer", "token": token},
+        )
+        assert exchange.status_code == 204, exchange.text
+        accepted = await client.post("/api/reservations/waitlist/offers/accept")
         assert accepted.status_code == 200, accepted.text
         assert accepted.json()["status"] == "pending"
 
@@ -381,21 +435,38 @@ class TestPublicReservation:
         retried = await client.post("/api/reservations/waitlist/public", json=request)
         assert created.status_code == 201, created.text
         assert retried.status_code == 200, retried.text
-        assert retried.json()["id"] == created.json()["id"]
-        token = created.json()["management_token"]
-        assert token
+        assert retried.json() == created.json()
+        assert "id" not in created.json()
+        assert "management_token" not in created.json()
+        entry = await db_session.scalar(
+            select(ReservationWaitlistEntry).where(
+                ReservationWaitlistEntry.business_id == business_id,
+                ReservationWaitlistEntry.idempotency_key == "waitlist-manage-1",
+            )
+        )
+        assert entry is not None
+        token = issue_management_token(
+            business_id=entry.business_id,
+            entry_id=entry.id,
+            revision=entry.management_token_revision,
+        )
 
         conflict = await client.post("/api/reservations/waitlist/public", json={
             **request, "guests": 3,
         })
         assert conflict.status_code == 409
 
-        managed = await client.get(f"/api/reservations/waitlist/manage/{token}")
+        exchange = await client.post(
+            "/api/public/capabilities/exchange",
+            json={"kind": "waitlist_manage", "token": token},
+        )
+        assert exchange.status_code == 204, exchange.text
+        managed = await client.get("/api/reservations/waitlist/manage")
         assert managed.status_code == 200
-        cancelled = await client.post(f"/api/reservations/waitlist/manage/{token}/cancel")
+        cancelled = await client.post("/api/reservations/waitlist/manage/cancel")
         assert cancelled.status_code == 200, cancelled.text
         assert cancelled.json()["status"] == "cancelled"
-        assert cancelled.json()["terminal_reason_code"] == "guest_cancelled"
+        assert "terminal_reason_code" not in cancelled.json()
 
         history = await client.get(
             "/api/reservations/waitlist?view=history",

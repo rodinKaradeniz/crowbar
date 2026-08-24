@@ -1,6 +1,7 @@
 __pycache__
 *.pyc
 .env
+.env.*
 venv/
 .venv/
 notebooks/
@@ -8,3 +9,10 @@ mlflow.db
 mlruns/
 *.egg-info
 .pytest_cache
+tests/
+*.pem
+*.key
+*.p12
+*.pfx
+*.dump
+*.sqlite*

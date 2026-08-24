@@ -7,7 +7,7 @@ export const handlers = [
   // Login (BFF route used by AuthContext)
   http.post("/api/auth/login", async ({ request }) => {
     const body = (await request.json()) as { email: string; password: string };
-    if (body.email === "test@example.com" && body.password === "password123") {
+    if (body.email === "test@example.com" && body.password === "test-password-1234") {
       return HttpResponse.json({
         id: "user-1",
         email: "test@example.com",

@@ -3,7 +3,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
-from jose import jwt
+import jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -66,6 +66,8 @@ def create_access_token(
     to_encode = {
         "sub": user_id,
         "user_type": user_type,
+        "aud": "crowbar-staff-api",
+        "token_use": "staff_access",
         "session_version": session_version,
         "exp": expire,
     }
@@ -86,6 +88,7 @@ def create_websocket_token(
         {
             "sub": user_id,
             "business_id": business_id,
+            "aud": "crowbar-staff-websocket",
             "token_use": "websocket",
             "session_version": session_version,
             "exp": expire,

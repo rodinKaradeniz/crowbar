@@ -17,9 +17,9 @@ class SelectedModifier(AppBaseModel):
 
 class OrderLineItemRequest(AppBaseModel):
     item_id: UUID
-    quantity: int = Field(default=1, ge=1)
-    selected_modifiers: list[SelectedModifier] = []
-    notes: str | None = None
+    quantity: int = Field(default=1, ge=1, le=100)
+    selected_modifiers: list[SelectedModifier] = Field(default_factory=list, max_length=20)
+    notes: str | None = Field(default=None, max_length=500)
 
 
 class OrderLineItemResponse(AppBaseModel):
@@ -53,11 +53,7 @@ class OrderLineItemResponse(AppBaseModel):
 # ─── Orders ───────────────────────────────────────────────────────────────────
 
 class OrderPlaceRequest(AppBaseModel):
-    # Legacy compatibility only. New public dine-in ordering resolves a signed
-    # registered-table credential instead of accepting a browser-entered label.
-    table_identifier: str | None = Field(None, max_length=100)
-    table_token: str | None = Field(None, min_length=16, max_length=500)
-    items: list[OrderLineItemRequest] = Field(..., min_length=1, max_length=100)
+    items: list[OrderLineItemRequest] = Field(..., min_length=1, max_length=50)
     notes: str | None = Field(None, max_length=2000)
     idempotency_key: str = Field(..., min_length=1, max_length=100)
     # Self-attestation that the guest is of legal drinking age. Required (must be
@@ -101,7 +97,6 @@ class OrderResponse(AppBaseModel):
     location_id: UUID | None = None
     table_id: UUID | None = None
     tab_id: UUID | None = None
-    session_token: str
     table_identifier: str | None = None
     status: str
     idempotency_key: str
@@ -116,6 +111,36 @@ class OrderResponse(AppBaseModel):
     cancellation_reason: str | None = None
     line_items: list[OrderLineItemResponse] = []
     status_timeline: list[OrderStatusTimelineResponse] = []
+
+
+class PublicSelectedModifierResponse(AppBaseModel):
+    name: str
+    price_delta: Decimal
+
+
+class PublicOrderLineItemResponse(AppBaseModel):
+    item_name: str
+    quantity: int
+    unit_price: Decimal
+    currency_code: str
+    subtotal_amount: Decimal
+    tax_amount: Decimal
+    total_amount: Decimal
+    selected_modifiers: list[PublicSelectedModifierResponse] = []
+    line_status: str
+    notes: str | None = None
+
+
+class PublicOrderResponse(AppBaseModel):
+    status: str
+    currency_code: str
+    subtotal_amount: Decimal
+    tax_amount: Decimal
+    total_amount: Decimal
+    notes: str | None = None
+    placed_at: datetime
+    cancelled_at: datetime | None = None
+    line_items: list[PublicOrderLineItemResponse] = []
 
 
 class OrderAllDayCount(AppBaseModel):

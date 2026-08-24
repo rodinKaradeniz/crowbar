@@ -1,7 +1,8 @@
+import asyncio
 from uuid import UUID
 
-from fastapi import WebSocket
-from jose import JWTError, jwt
+from fastapi import WebSocket, WebSocketDisconnect
+import jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,14 +16,26 @@ async def authorize_staff_websocket(
     db: AsyncSession,
     ws: WebSocket,
     *,
-    token: str,
     business_id: UUID,
     required_modules: tuple[str, ...],
 ) -> bool:
-    """Validate a short-lived, business-bound WebSocket credential."""
+    """Accept a socket, then validate its first authentication frame."""
+    await ws.accept()
     try:
+        message = await asyncio.wait_for(ws.receive_json(), timeout=5)
+        token = (
+            message.get("token")
+            if isinstance(message, dict) and message.get("type") == "authenticate"
+            else None
+        )
+        if not isinstance(token, str):
+            await ws.close(code=1008)
+            return False
         payload = jwt.decode(
-            token, settings.secret_key, algorithms=[settings.algorithm]
+            token,
+            settings.secret_key,
+            algorithms=[settings.algorithm],
+            audience="crowbar-staff-websocket",
         )
         user_id = payload.get("sub")
         token_business_id = payload.get("business_id")
@@ -34,7 +47,7 @@ async def authorize_staff_websocket(
         ):
             await ws.close(code=1008)
             return False
-    except JWTError:
+    except (jwt.InvalidTokenError, asyncio.TimeoutError, ValueError, WebSocketDisconnect):
         await ws.close(code=1008)
         return False
 
@@ -64,4 +77,5 @@ async def authorize_staff_websocket(
     if not enabled.intersection(required_modules):
         await ws.close(code=1008)
         return False
+    await ws.send_json({"type": "authenticated"})
     return True

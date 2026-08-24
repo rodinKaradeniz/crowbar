@@ -77,8 +77,6 @@ def load_reservations(business_id: str) -> pd.DataFrame:
             r.time AS reservation_time,
             r.status,
             r.guests,
-            r.payment_amount,
-            r.payment_status,
             r.note,
             r.custom_fields,
             r.created_at AS booked_at,
@@ -87,8 +85,6 @@ def load_reservations(business_id: str) -> pd.DataFrame:
             b.max_guests AS business_max_guests,
             st.name AS service_type_name,
             st.capacity AS service_capacity,
-            st.requires_payment,
-            st.amount AS service_price,
             st.duration AS service_duration
         FROM reservations r
         JOIN businesses b ON r.business_id = b.id
@@ -144,8 +140,6 @@ def load_service_types() -> pd.DataFrame:
             name,
             capacity,
             max_concurrent_bookings,
-            requires_payment,
-            amount AS price,
             duration,
             created_at
         FROM service_types

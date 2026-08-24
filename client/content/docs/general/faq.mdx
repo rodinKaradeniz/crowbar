@@ -64,11 +64,14 @@ Go to **Settings → Modules** in your dashboard. Each module (Queue, Ordering, 
 | **Queue** | Digital walk-in queue — customers join via QR, staff manage a live board |
 | **Ordering** | QR menu, customer self-order, kitchen/bar live ticket board |
 | **Inventory** | Stock tracking, par levels, movement history, low-stock alerts |
-| **Insights** | ML demand forecasts, customer segmentation, cancellation risk, operational KPIs |
+| **Insights** | ML demand forecasts and operational KPIs; other models are deferred |
 
 ### What are Insights?
 
-**Insights** runs **machine learning** models on your data for customer segmentation, cancellation risk scoring, and short-term demand forecasting. It also surfaces operational KPIs (reservations, ordering, inventory) computed from the last 30 days of live data. See the [Insights](../businesses/insights) guide.
+**Insights** runs a short-term demand forecast from operational reservation data
+and surfaces operational KPIs for reservations, ordering, and inventory.
+Customer segmentation and cancellation-risk models are unavailable pending a
+Stage 6 redesign using permitted inputs. See the [Insights](../businesses/insights) guide.
 
 ## Technical Questions
 
@@ -80,12 +83,13 @@ Crowbar works on all modern browsers, including:
 - Safari
 - Microsoft Edge
 
-### Is my data secure?
+### Who is responsible for guest data?
 
-Yes. We use industry-standard security practices, including:
-- Encrypted passwords (bcrypt hashing)
-- Secure authentication (JWT tokens)
-- HTTPS encryption for all data in transit
+The venue is the data controller and Crowbar acts as its software processor.
+The venue must publish a privacy contact and policy before public production
+flows are enabled. Operational confirmations and reminders are separate from
+optional marketing consent, and retention follows the venue's configured
+policy.
 
 ### Can I access Crowbar on my phone?
 

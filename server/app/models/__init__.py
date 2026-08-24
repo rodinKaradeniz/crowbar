@@ -28,6 +28,7 @@ from app.models.table_area import TableArea
 from app.models.table_assignment import QueueTableAssignment, ReservationTableAssignment
 from app.models.table_combination import TableCombination, TableCombinationMember
 from app.models.table_seating import TableSeating, TableSeatingTable
+from app.models.table_guest_session import TableGuestSession
 from app.models.tax import BusinessRegionalAudit, TaxProfile, TaxProfileVersion
 from app.models.user import User
 
@@ -77,6 +78,7 @@ __all__ = [
     "QueueTableAssignment",
     "TableSeating",
     "TableSeatingTable",
+    "TableGuestSession",
     "BotConfig",
     "BookingSchedule",
     "BookingScheduleWindow",

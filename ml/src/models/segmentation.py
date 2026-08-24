@@ -1,11 +1,11 @@
 """
 Customer Segmentation Model
 
-Uses K-Means clustering on RFM (Recency, Frequency, Monetary) features
+Uses K-Means clustering on operational recency, frequency, and party volume
 to group customers into actionable segments.
 
 Segments are labeled based on cluster centroids:
-    - Champions: Low recency, high frequency, high monetary
+    - Champions: Low recency, high frequency, high party volume
     - Loyal: Moderate recency, good frequency
     - At Risk: High recency, was previously active
     - New: Low frequency, recent first booking
@@ -32,7 +32,7 @@ SEGMENT_LABELS = {
 
 
 class CustomerSegmentationModel:
-    """K-Means customer segmentation on RFM features."""
+    """K-Means customer segmentation on operational booking features."""
 
     def __init__(self, n_clusters: int = 4, random_state: int = 42):
         self.n_clusters = n_clusters
@@ -51,12 +51,12 @@ class CustomerSegmentationModel:
         Fit the segmentation model and return customer segments.
 
         Args:
-            rfm: DataFrame with columns [customer_id, recency, frequency, monetary]
+            rfm: DataFrame with columns [customer_id, recency, frequency, engagement]
 
         Returns:
             DataFrame with customer_id, cluster, segment_label, and RFM values
         """
-        feature_cols = ["recency", "frequency", "monetary"]
+        feature_cols = ["recency", "frequency", "engagement"]
         X = rfm[feature_cols].copy()
 
         # Handle edge case: fewer customers than clusters
@@ -113,11 +113,11 @@ class CustomerSegmentationModel:
         c["recency_rank"] = c["recency"].rank(ascending=True)
         # For frequency: higher is better
         c["frequency_rank"] = c["frequency"].rank(ascending=False)
-        # For monetary: higher is better
-        c["monetary_rank"] = c["monetary"].rank(ascending=False)
+        # For party-volume engagement: higher is better
+        c["engagement_rank"] = c["engagement"].rank(ascending=False)
 
         # Combined score (lower = better overall customer)
-        c["score"] = c["recency_rank"] + c["frequency_rank"] + c["monetary_rank"]
+        c["score"] = c["recency_rank"] + c["frequency_rank"] + c["engagement_rank"]
         c = c.sort_values("score")
 
         labels = ["champions", "loyal", "at_risk", "lost"]
@@ -133,7 +133,7 @@ class CustomerSegmentationModel:
         return {
             "n_clusters": len(self.centroids),
             "centroids": self.centroids[
-                ["cluster", "recency", "frequency", "monetary"]
+                ["cluster", "recency", "frequency", "engagement"]
             ].to_dict(orient="records"),
             "labels": self.cluster_labels,
         }

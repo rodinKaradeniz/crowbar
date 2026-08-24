@@ -15,9 +15,9 @@ def build_reservation_features(reservations: pd.DataFrame) -> pd.DataFrame:
 
     Input columns expected:
         reservation_id, business_id, customer_id, service_type_id,
-        reservation_time, status, guests, payment_amount, payment_status,
+        reservation_time, status, guests,
         booked_at, business_name, service_type_name, service_capacity,
-        requires_payment, service_price, service_duration
+        service_duration
 
     Returns DataFrame with one row per reservation and engineered features.
     """
@@ -47,10 +47,6 @@ def build_reservation_features(reservations: pd.DataFrame) -> pd.DataFrame:
         0,
     )
 
-    # --- Payment features ---
-    df["has_payment"] = df["payment_amount"].notna().astype(int)
-    df["is_paid"] = (df["payment_status"] == "paid").astype(int)
-
     # --- Has note (proxy for customer engagement) ---
     df["has_note"] = df["note"].notna().astype(int)
 
@@ -67,7 +63,7 @@ def build_daily_demand(reservations: pd.DataFrame) -> pd.DataFrame:
     Returns DataFrame with columns:
         business_id, business_name, date, total_reservations,
         total_guests, completed, cancelled, pending, confirmed,
-        total_revenue, avg_lead_time_hours, peak_hour, utilization_rate
+        avg_lead_time_hours, peak_hour, utilization_rate
     """
     df = reservations.copy()
     df["reservation_time"] = pd.to_datetime(df["reservation_time"], utc=True)
@@ -82,7 +78,6 @@ def build_daily_demand(reservations: pd.DataFrame) -> pd.DataFrame:
             cancelled=("status", lambda x: (x == "cancelled").sum()),
             pending=("status", lambda x: (x == "pending").sum()),
             confirmed=("status", lambda x: (x == "confirmed").sum()),
-            total_revenue=("payment_amount", lambda x: x.fillna(0).sum()),
             avg_lead_time_hours=(
                 "lead_time_hours",
                 lambda x: x.mean() if "lead_time_hours" in df.columns else np.nan,

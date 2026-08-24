@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import forbidden, not_found
+from app.core.public_access import has_required_privacy_contact
 from app.core.rate_limit import enforce_public_read_limit
 from app.database import get_db
 from app.dependencies import get_current_business, require_roles
@@ -22,7 +23,11 @@ router = APIRouter(prefix="/api/businesses", tags=["businesses"])
     dependencies=[Depends(enforce_public_read_limit)],
 )
 async def list_businesses(db: AsyncSession = Depends(get_db)):
-    return await business_service.get_businesses(db)
+    return [
+        business
+        for business in await business_service.get_businesses(db)
+        if has_required_privacy_contact(business)
+    ]
 
 
 @router.get("/current", response_model=BusinessResponse)
@@ -39,7 +44,7 @@ async def get_current_business_profile(
 )
 async def get_business(business_id: UUID, db: AsyncSession = Depends(get_db)):
     business = await business_service.get_business_by_id(db, business_id)
-    if business is None:
+    if business is None or not has_required_privacy_contact(business):
         raise not_found("Business")
     return business
 
@@ -51,7 +56,7 @@ async def get_business(business_id: UUID, db: AsyncSession = Depends(get_db)):
 )
 async def get_business_by_slug(slug: str, db: AsyncSession = Depends(get_db)):
     business = await business_service.get_business_by_slug(db, slug)
-    if business is None:
+    if business is None or not has_required_privacy_contact(business):
         raise not_found("Business")
     return business
 

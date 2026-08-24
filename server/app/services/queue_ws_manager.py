@@ -18,7 +18,6 @@ class QueueConnectionManager:
         self._connections: dict[str, set[WebSocket]] = defaultdict(set)
 
     async def connect(self, business_id: str, ws: WebSocket) -> None:
-        await ws.accept()
         self._connections[business_id].add(ws)
         logger.debug("WS connected: business=%s total=%d", business_id, len(self._connections[business_id]))
 

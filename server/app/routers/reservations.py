@@ -25,6 +25,7 @@ from app.models.user import User
 from app.schemas.reservation import (
     PublicReservationCreate,
     PublicReservationManagementReschedule,
+    PublicReservationResponse,
     ReservationCreate,
     ReservationNoShow,
     ReservationReschedule,
@@ -34,6 +35,7 @@ from app.schemas.reservation import (
 from app.schemas.reservation_waitlist import (
     ReservationWaitlistCreate,
     ReservationWaitlistOffer,
+    PublicReservationWaitlistResponse,
     ReservationWaitlistResponse,
     ReservationWaitlistTerminalCommand,
 )
@@ -69,6 +71,11 @@ from app.services.reservation_waitlist_token_service import (
     parse_offer_token,
 )
 from app.models.reservation_waitlist import ReservationWaitlistEntry
+from app.services.public_session_service import (
+    clear_public_cookie,
+    get_public_cookie,
+    set_public_cookie,
+)
 
 router = APIRouter(prefix="/api/reservations", tags=["reservations"])
 
@@ -121,7 +128,18 @@ def _reservation_management_url(reservation) -> str:
         reservation_id=reservation.id,
         revision=reservation.guest_token_revision,
     )
-    return f"{settings.frontend_url}/reserve/manage/{token}"
+    return f"{settings.frontend_url}/reserve/manage#token={token}"
+
+
+def _capability_cookie(request: Request, kind: str) -> str:
+    token = get_public_cookie(request, kind=kind)
+    if token is None:
+        raise api_error(
+            status.HTTP_404_NOT_FOUND,
+            ErrorCode.NOT_FOUND,
+            "This link is no longer valid",
+        )
+    return token
 
 
 async def _get_guest_reservation(db: AsyncSession, token: str, *, for_update: bool = False):
@@ -253,10 +271,11 @@ async def get_reservation(
     return reservation
 
 
-@router.post("/public", response_model=ReservationResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/public", response_model=PublicReservationResponse, status_code=status.HTTP_201_CREATED)
 async def create_public_reservation(
     data: PublicReservationCreate,
     request: Request,
+    response: Response,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
@@ -290,6 +309,15 @@ async def create_public_reservation(
             db, reservation, customer_display_name=data.name
         )
     await db.commit()
+    set_public_cookie(
+        response,
+        kind="reservation",
+        token=issue_guest_token(
+            business_id=reservation.business_id,
+            reservation_id=reservation.id,
+            revision=reservation.guest_token_revision,
+        ),
+    )
     if created:
         background_tasks.add_task(
             _send_reservation_email,
@@ -322,21 +350,24 @@ async def create_public_reservation(
     return reservation
 
 
-@router.get("/public/manage/{guest_token}", response_model=ReservationResponse)
+@router.get("/public/manage", response_model=PublicReservationResponse)
 async def get_public_reservation_management(
-    guest_token: str,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
     """A bearer link deliberately exposes only its own reservation."""
-    return await _get_guest_reservation(db, guest_token)
+    return await _get_guest_reservation(db, _capability_cookie(request, "reservation"))
 
 
-@router.post("/public/manage/{guest_token}/cancel", response_model=ReservationResponse)
+@router.post("/public/manage/cancel", response_model=PublicReservationResponse)
 async def cancel_public_reservation(
-    guest_token: str,
+    request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
-    reservation = await _get_guest_reservation(db, guest_token, for_update=True)
+    reservation = await _get_guest_reservation(
+        db, _capability_cookie(request, "reservation"), for_update=True
+    )
     if reservation.time <= datetime.now(timezone.utc):
         raise api_error(
             status.HTTP_409_CONFLICT,
@@ -356,15 +387,18 @@ async def cancel_public_reservation(
         business_id=str(reservation.business_id),
         payload={"reservation_id": str(reservation.id), "source": "guest", "late": reservation.cancelled_late},
     ))
+    clear_public_cookie(response, kind="reservation")
     return reservation
 
 
-@router.post("/public/manage/{guest_token}/reconfirm", response_model=ReservationResponse)
+@router.post("/public/manage/reconfirm", response_model=PublicReservationResponse)
 async def reconfirm_public_reservation(
-    guest_token: str,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    reservation = await _get_guest_reservation(db, guest_token, for_update=True)
+    reservation = await _get_guest_reservation(
+        db, _capability_cookie(request, "reservation"), for_update=True
+    )
     try:
         reservation = await reservation_service.reconfirm_reservation(db, reservation=reservation)
     except AvailabilityError as exc:
@@ -378,14 +412,17 @@ async def reconfirm_public_reservation(
     return reservation
 
 
-@router.post("/public/manage/{guest_token}/reschedule", response_model=ReservationResponse)
+@router.post("/public/manage/reschedule", response_model=PublicReservationResponse)
 async def reschedule_public_reservation(
-    guest_token: str,
+    request: Request,
+    response: Response,
     data: PublicReservationManagementReschedule,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
-    reservation = await _get_guest_reservation(db, guest_token, for_update=True)
+    reservation = await _get_guest_reservation(
+        db, _capability_cookie(request, "reservation"), for_update=True
+    )
     if reservation.time <= datetime.now(timezone.utc):
         raise api_error(
             status.HTTP_409_CONFLICT,
@@ -426,6 +463,15 @@ async def reschedule_public_reservation(
         business_id=str(reservation.business_id),
         payload={"reservation_id": str(reservation.id), "source": "guest", "old_time": old_snapshot.time.isoformat()},
     ))
+    set_public_cookie(
+        response,
+        kind="reservation",
+        token=issue_guest_token(
+            business_id=reservation.business_id,
+            reservation_id=reservation.id,
+            revision=reservation.guest_token_revision,
+        ),
+    )
     return reservation
 
 
@@ -450,7 +496,9 @@ async def _waitlist_response(
                 if include_management_token
                 else None
             ),
-            "delivery_state": await reservation_waitlist_service.delivery_state(db, entry.id),
+            "delivery_state": await reservation_waitlist_service.delivery_state(
+                db, business_id=entry.business_id, entry_id=entry.id
+            ),
         }
     )
 
@@ -502,7 +550,7 @@ async def _public_waitlist_entry(
 
 @router.post(
     "/waitlist/public",
-    response_model=ReservationWaitlistResponse,
+    response_model=PublicReservationWaitlistResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def create_public_waitlist_entry(
@@ -524,6 +572,15 @@ async def create_public_waitlist_entry(
         raise _availability_http_error(exc) from exc
     await db.commit()
     await db.refresh(entry)
+    set_public_cookie(
+        response,
+        kind="waitlist_manage",
+        token=issue_management_token(
+            business_id=entry.business_id,
+            entry_id=entry.id,
+            revision=entry.management_token_revision,
+        ),
+    )
     if created:
         await publish(DomainEvent(
             event_type="reservation.waitlist_created",
@@ -532,30 +589,35 @@ async def create_public_waitlist_entry(
         ))
     else:
         response.status_code = status.HTTP_200_OK
-    return await _waitlist_response(db, entry, include_management_token=True)
+    return await _waitlist_response(db, entry)
 
 
 @router.get(
-    "/waitlist/manage/{management_token}",
-    response_model=ReservationWaitlistResponse,
+    "/waitlist/manage",
+    response_model=PublicReservationWaitlistResponse,
 )
 async def get_public_waitlist_entry(
-    management_token: str, db: AsyncSession = Depends(get_db)
+    request: Request, db: AsyncSession = Depends(get_db)
 ):
-    entry = await _public_waitlist_entry(db, management_token, offer=False)
+    entry = await _public_waitlist_entry(
+        db, _capability_cookie(request, "waitlist_manage"), offer=False
+    )
     await db.commit()
-    return await _waitlist_response(db, entry, include_management_token=True)
+    return await _waitlist_response(db, entry)
 
 
 @router.post(
-    "/waitlist/manage/{management_token}/cancel",
-    response_model=ReservationWaitlistResponse,
+    "/waitlist/manage/cancel",
+    response_model=PublicReservationWaitlistResponse,
 )
 async def cancel_public_waitlist_entry(
-    management_token: str,
+    request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
-    entry = await _public_waitlist_entry(db, management_token, offer=False, lock=True)
+    entry = await _public_waitlist_entry(
+        db, _capability_cookie(request, "waitlist_manage"), offer=False, lock=True
+    )
     try:
         entry = await reservation_waitlist_service.terminal_command(
             db,
@@ -574,6 +636,7 @@ async def cancel_public_waitlist_entry(
         business_id=str(entry.business_id),
         payload={"entry_id": str(entry.id)},
     ))
+    clear_public_cookie(response, kind="waitlist_manage")
     return await _waitlist_response(db, entry)
 
 
@@ -623,7 +686,7 @@ async def offer_reservation_waitlist_entry(
         entry_id=entry.id,
         revision=entry.offer_token_revision,
     )
-    offer_url = f"{settings.frontend_url}/reserve/waitlist/{token}"
+    offer_url = f"{settings.frontend_url}/reserve/waitlist#token={token}"
     email_attempt = await reservation_waitlist_service.deliver_waitlist_offer(
         db,
         business_id=business.id,
@@ -656,25 +719,31 @@ async def offer_reservation_waitlist_entry(
 
 
 @router.get(
-    "/waitlist/offers/{offer_token}",
-    response_model=ReservationWaitlistResponse,
+    "/waitlist/offers",
+    response_model=PublicReservationWaitlistResponse,
 )
 async def get_public_waitlist_offer(
-    offer_token: str, db: AsyncSession = Depends(get_db)
+    request: Request, db: AsyncSession = Depends(get_db)
 ):
-    entry = await _public_waitlist_entry(db, offer_token, offer=True)
+    entry = await _public_waitlist_entry(
+        db, _capability_cookie(request, "waitlist_offer"), offer=True
+    )
     await db.commit()
     return await _waitlist_response(db, entry)
 
 
 @router.post(
-    "/waitlist/offers/{offer_token}/decline",
-    response_model=ReservationWaitlistResponse,
+    "/waitlist/offers/decline",
+    response_model=PublicReservationWaitlistResponse,
 )
 async def decline_public_waitlist_offer(
-    offer_token: str, db: AsyncSession = Depends(get_db)
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
 ):
-    entry = await _public_waitlist_entry(db, offer_token, offer=True, lock=True)
+    entry = await _public_waitlist_entry(
+        db, _capability_cookie(request, "waitlist_offer"), offer=True, lock=True
+    )
     try:
         entry = await reservation_waitlist_service.terminal_command(
             db,
@@ -693,15 +762,19 @@ async def decline_public_waitlist_offer(
         business_id=str(entry.business_id),
         payload={"entry_id": str(entry.id)},
     ))
+    clear_public_cookie(response, kind="waitlist_offer")
     return await _waitlist_response(db, entry)
 
 
-@router.post("/waitlist/offers/{offer_token}/accept", response_model=ReservationResponse)
+@router.post("/waitlist/offers/accept", response_model=PublicReservationResponse)
 async def accept_public_waitlist_offer(
-    offer_token: str,
+    request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
-    entry = await _public_waitlist_entry(db, offer_token, offer=True, lock=True)
+    entry = await _public_waitlist_entry(
+        db, _capability_cookie(request, "waitlist_offer"), offer=True, lock=True
+    )
     was_accepted = entry.status == "accepted"
     try:
         reservation = await reservation_waitlist_service.accept_waitlist_offer(db, entry=entry)
@@ -715,6 +788,16 @@ async def accept_public_waitlist_offer(
             business_id=str(reservation.business_id),
             payload={"reservation_id": str(reservation.id), "entry_id": str(entry.id)},
         ))
+    clear_public_cookie(response, kind="waitlist_offer")
+    set_public_cookie(
+        response,
+        kind="reservation",
+        token=issue_guest_token(
+            business_id=reservation.business_id,
+            reservation_id=reservation.id,
+            revision=reservation.guest_token_revision,
+        ),
+    )
     return reservation
 
 
@@ -772,7 +855,7 @@ async def retry_waitlist_delivery(
         entry_id=entry.id,
         revision=entry.offer_token_revision,
     )
-    offer_url = f"{settings.frontend_url}/reserve/waitlist/{token}"
+    offer_url = f"{settings.frontend_url}/reserve/waitlist#token={token}"
     attempts = []
     for channel in ("email", "sms"):
         if channel == "sms":

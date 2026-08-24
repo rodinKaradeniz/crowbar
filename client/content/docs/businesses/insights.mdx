@@ -17,47 +17,16 @@ Navigate to **Insights** in the sidebar. If this is your first time, you'll see 
 
 The pipeline takes a few seconds to run and will:
 1. Load all your reservation and customer data
-2. Engineer features (booking patterns, customer behavior, time-series trends)
-3. Train three ML models
+2. Engineer operational booking and time-series features
+3. Train the demand forecast model
 4. Display the results on the dashboard
 
-## Customer Segmentation
+## Deferred models
 
-Your customers are automatically grouped into segments using **RFM analysis** (Recency, Frequency, Monetary value) and K-Means clustering:
-
-| Segment | Description |
-|---------|-------------|
-| **Champions** | Recent, frequent, high-spending customers — your best clients |
-| **Loyal Customers** | Regular visitors with consistent booking patterns |
-| **Potential Loyalists** | Moderately recent with decent spending — could become loyal |
-| **At Risk** | Previously active customers who haven't booked recently |
-| **Lost Customers** | Haven't booked in a long time with low frequency |
-
-### How to use this
-- **Champions** — Offer exclusive perks or early access to new services
-- **At Risk** — Send re-engagement emails or special offers to win them back
-- **Lost Customers** — Consider a win-back campaign with a compelling discount
-
-## Cancellation Prediction
-
-A **gradient-boosting** machine learning model (LightGBM) is trained on your resolved reservations (completed vs. cancelled) to predict which future bookings are most likely to be cancelled.
-
-### Key metrics shown
-- **AUC-ROC** — How well the model distinguishes cancellations from completions (closer to 1.0 is better)
-- **Precision** — Of the reservations flagged as likely cancellations, how many actually were
-- **Recall** — Of all actual cancellations, how many the model caught
-- **F1 Score** — The harmonic mean of precision and recall
-
-### Top risk factors
-The chart shows which features most influence the model's predictions. Common top factors include:
-- **Lead time** — Reservations booked far in advance are more likely to be cancelled
-- **Payment status** — Paid reservations are much less likely to be cancelled
-- **Customer history** — Customers with past cancellations are more likely to cancel again
-
-### How to use this
-- Consider requiring deposits for high-risk bookings
-- Send confirmation reminders for reservations booked far in advance
-- Flag repeat cancellers for special attention
+Customer segmentation and cancellation prediction are unavailable in this
+release. Their former training inputs are no longer part of the product
+contract. Stage 6 must define and validate replacement models using permitted
+operational inputs before either insight can return.
 
 ## Demand Forecasting
 
@@ -73,16 +42,6 @@ The demand forecast predicts your expected reservation volume for the next 7 day
 - **Staff scheduling** — Schedule more staff on predicted busy days
 - **Inventory planning** — Order supplies based on expected volume
 - **Marketing** — Run promotions on predicted quiet days to boost traffic
-
-## High-Risk Reservations
-
-The **Cancellation Risk** section also lists upcoming confirmed reservations that the ML model considers high-risk (cancellation probability > 60%). Each flagged reservation shows:
-
-- Customer name and reservation details
-- The model's confidence score
-- A quick link to view or follow up on the booking
-
-Use this to proactively reach out to customers who might cancel — a quick reminder or a small gesture can meaningfully reduce no-shows.
 
 ## Operational KPIs
 

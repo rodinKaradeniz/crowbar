@@ -22,7 +22,7 @@ export function BusinessesCarouselSection({ businesses }: BusinessesCarouselSect
     <BusinessCard
       key={business.id}
       card={{
-        src: business.image || "",
+        src: business.image,
         title: business.name,
         category: business.tags?.[0] || "Business",
         content: business.description || "Experience great atmosphere and service",

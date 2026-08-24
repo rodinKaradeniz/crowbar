@@ -14,7 +14,6 @@ class FloorPlanConnectionManager:
         self._connections: dict[str, set[WebSocket]] = defaultdict(set)
 
     async def connect(self, business_id: str, ws: WebSocket) -> None:
-        await ws.accept()
         self._connections[business_id].add(ws)
 
     def disconnect(self, business_id: str, ws: WebSocket) -> None:

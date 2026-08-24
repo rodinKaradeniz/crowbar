@@ -37,11 +37,11 @@ class PublicReservationCreate(AppBaseModel):
     business_id: UUID
     service_type_id: UUID
     time: datetime
-    phone: str
+    phone: str = Field(min_length=3, max_length=32)
     email: EmailStr
-    name: str
-    note: str | None = None
-    guests: int = 1
+    name: str = Field(min_length=1, max_length=255)
+    note: str | None = Field(default=None, max_length=1000)
+    guests: int = Field(default=1, ge=1, le=100)
     marketing_email_opt_in: bool = False
     marketing_sms_opt_in: bool = False
     idempotency_key: str = Field(min_length=1, max_length=100)
@@ -122,3 +122,17 @@ class ReservationResponse(AppBaseModel):
     reconfirmation_enabled: bool | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class PublicReservationResponse(AppBaseModel):
+    business_id: UUID
+    service_type_id: UUID
+    time: datetime
+    ends_at: datetime
+    phone: str | None
+    email: str | None
+    note: str | None = None
+    status: str
+    guests: int
+    cancelled_late: bool | None = None
+    reconfirmed_at: datetime | None = None

@@ -95,11 +95,11 @@ async def run_reservation_reminders(
                 )
                 body = (
                     f"Reminder from {business.name}: you have a reservation "
-                    f"at {reservation_time}. Manage it: {settings.frontend_url}/reserve/manage/{token} "
+                    f"at {reservation_time}. Manage it: {settings.frontend_url}/reserve/manage#token={token} "
                     "Reply STOP to opt out."
                 )
 
-                management_url = f"{settings.frontend_url}/reserve/manage/{token}"
+                management_url = f"{settings.frontend_url}/reserve/manage#token={token}"
                 configured_channels = [
                     channel for channel in ("email", "sms") if channel in channels
                 ]

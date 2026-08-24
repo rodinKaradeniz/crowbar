@@ -1,7 +1,7 @@
 """
 Feature engineering for customer-level data.
 
-Builds RFM (Recency, Frequency, Monetary) features and behavioral
+Builds recency, frequency, and operational behavioral
 profiles for customer segmentation and CLV estimation.
 """
 
@@ -18,7 +18,7 @@ def build_customer_features(
     Build per-customer behavioral features from reservation history.
 
     Returns DataFrame with one row per customer and features:
-        - RFM: recency, frequency, monetary
+        - Recency and frequency
         - Behavioral: cancellation rate, avg guests, preferred service, etc.
         - Temporal: tenure, booking patterns
     """
@@ -38,9 +38,6 @@ def build_customer_features(
             first_reservation=("reservation_time", "min"),
             # Frequency
             total_reservations=("reservation_id", "count"),
-            # Monetary
-            total_spend=("payment_amount", lambda x: x.fillna(0).sum()),
-            avg_spend=("payment_amount", lambda x: x.dropna().mean()),
             # Behavioral
             total_guests=("guests", "sum"),
             avg_guests=("guests", "mean"),
@@ -102,7 +99,6 @@ def build_customer_features(
     # Fill NaN for customers with no reservations
     fill_zero_cols = [
         "total_reservations",
-        "total_spend",
         "total_guests",
         "cancelled_count",
         "completed_count",
@@ -122,7 +118,7 @@ def build_customer_features(
 
 def build_rfm_features(customer_features: pd.DataFrame) -> pd.DataFrame:
     """
-    Extract clean RFM (Recency, Frequency, Monetary) matrix for clustering.
+    Extract an operational recency/frequency/party-volume matrix.
 
     Returns DataFrame with customer_id + R, F, M columns,
     plus scaled versions ready for clustering.
@@ -130,7 +126,7 @@ def build_rfm_features(customer_features: pd.DataFrame) -> pd.DataFrame:
     rfm = customer_features[["customer_id"]].copy()
     rfm["recency"] = customer_features["recency_days"]
     rfm["frequency"] = customer_features["total_reservations"]
-    rfm["monetary"] = customer_features["total_spend"]
+    rfm["engagement"] = customer_features["total_guests"]
 
     # Drop customers with no reservations (can't cluster them meaningfully)
     rfm = rfm.dropna(subset=["recency"])

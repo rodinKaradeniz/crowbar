@@ -210,6 +210,54 @@ class MenuResponse(AppBaseModel):
     categories: list[MenuCategoryResponse] = []
 
 
+# Public menu projections intentionally keep only the opaque identifiers a
+# browser must submit back when ordering plus guest-facing presentation data.
+class PublicModifierResponse(AppBaseModel):
+    id: UUID
+    name: str
+    price_delta: Decimal
+    is_available: bool
+
+
+class PublicModifierGroupResponse(AppBaseModel):
+    id: UUID
+    name: str
+    required: bool
+    min_select: int
+    max_select: int
+    modifiers: list[PublicModifierResponse] = []
+
+
+class PublicMenuItemResponse(AppBaseModel):
+    id: UUID
+    name: str
+    description: str | None = None
+    price: Decimal
+    happy_hour_price: Decimal | None = None
+    is_alcoholic: bool = False
+    is_available: bool
+    display_order: int
+    image: str | None = None
+    tax_rate: Decimal | None = None
+    price_includes_tax: bool | None = None
+    modifier_groups: list[PublicModifierGroupResponse] = []
+
+
+class PublicMenuCategoryResponse(AppBaseModel):
+    id: UUID
+    name: str
+    display_order: int
+    is_active: bool
+    items: list[PublicMenuItemResponse] = []
+
+
+class PublicMenuResponse(AppBaseModel):
+    name: str
+    description: str | None = None
+    happy_hour_active: bool = False
+    categories: list[PublicMenuCategoryResponse] = []
+
+
 class PreparationStationCreate(AppBaseModel):
     name: str = Field(..., min_length=1, max_length=120)
     sort_order: int = 0

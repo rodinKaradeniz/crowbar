@@ -8,7 +8,6 @@ function toQueueEntryFromWS(e: Record<string, unknown>): QueueEntry {
   return {
     id: e.id as string,
     businessId: e.business_id as string,
-    sessionToken: e.session_token as string,
     name: e.name as string,
     partySize: e.party_size as number,
     phone: (e.phone as string) || undefined,
@@ -81,11 +80,12 @@ export function useQueueSocket(
     // Guard: don't open a second socket if one is already open/connecting
     if (wsRef.current && wsRef.current.readyState <= WebSocket.OPEN) return;
 
-    const url = `${getWsBase()}/ws/queue/${businessId}?token=${encodeURIComponent(jwt)}`;
+    const url = `${getWsBase()}/ws/queue/${businessId}`;
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
     ws.onopen = () => {
+      ws.send(JSON.stringify({ type: "authenticate", token: jwt }));
       setConnected(true);
       delayRef.current = BASE_DELAY;
     };

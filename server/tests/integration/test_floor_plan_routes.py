@@ -19,6 +19,7 @@ from app.models.user import User
 from app.services.auth_service import create_access_token
 from app.services.floor_plan_service import resolve_service_window
 from app.services import tax_service
+from app.services.public_session_service import hash_token
 
 
 async def _tenant(
@@ -200,7 +201,7 @@ async def test_staff_capacity_override_is_forbidden(
     queue_entry = QueueEntry(
         business_id=business.id,
         location_id=location.id,
-        session_token="capacity-entry-token",
+        session_token_hash=hash_token("capacity-entry-token"),
         name="Large Party",
         party_size=4,
         status="waiting",
@@ -232,7 +233,7 @@ async def test_closing_queue_seating_completes_visit_and_returns_table_to_ready(
     entry = QueueEntry(
         business_id=business.id,
         location_id=location.id,
-        session_token="seating-entry-token",
+        session_token_hash=hash_token("seating-entry-token"),
         name="Walk In",
         party_size=3,
         status="waiting",
@@ -408,15 +409,40 @@ async def test_qr_orders_use_one_active_seating_tab_and_require_settlement_befor
     assert qr.status_code == 200, qr.text
     token = qr.json()["url"].split("table_token=", 1)[1]
     payload = {
-        "table_token": token,
         "items": [{"item_id": item_id, "quantity": 1}],
         "idempotency_key": "qr-order-one",
     }
-    missing_token = await client.post(
+    missing_approval = await client.post(
         f"/api/ordering/{business_id}/orders",
-        json={**payload, "table_token": None, "idempotency_key": "missing-token"},
+        json={**payload, "idempotency_key": "missing-approval"},
     )
-    assert missing_token.status_code == 422
+    assert missing_approval.status_code == 401
+
+    pending = await client.post(
+        f"/api/ordering/{business_id}/table-sessions",
+        json={"table_token": token, "browser_nonce": "browser-nonce-00000000000000000001"},
+    )
+    assert pending.status_code == 201, pending.text
+    assert pending.json()["status"] == "pending"
+    photographed_qr = await client.post(
+        f"/api/ordering/{business_id}/orders",
+        json={**payload, "idempotency_key": "pending-browser"},
+    )
+    assert photographed_qr.status_code == 422
+
+    pending_sessions = await client.get(
+        "/api/floor-plan/table-guest-sessions",
+        headers=headers,
+        params={"status": "pending"},
+    )
+    assert pending_sessions.status_code == 200, pending_sessions.text
+    approved = await client.post(
+        f"/api/floor-plan/table-guest-sessions/{pending_sessions.json()[0]['id']}/approve",
+        headers=headers,
+    )
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["status"] == "approved"
+
     first = await client.post(f"/api/ordering/{business_id}/orders", json=payload)
     second = await client.post(
         f"/api/ordering/{business_id}/orders",
@@ -424,10 +450,17 @@ async def test_qr_orders_use_one_active_seating_tab_and_require_settlement_befor
     )
     assert first.status_code == 201, first.text
     assert second.status_code == 201, second.text
-    assert first.json()["table_id"] == table["id"]
-    assert first.json()["tab_id"] == second.json()["tab_id"]
+    assert "table_id" not in first.json()
+    assert "tab_id" not in first.json()
 
-    tab_id = first.json()["tab_id"]
+    first_order = await db_session.scalar(
+        select(Order).where(
+            Order.business_id == business.id,
+            Order.idempotency_key == "qr-order-one",
+        )
+    )
+    assert first_order is not None
+    tab_id = first_order.tab_id
     tab = await db_session.get(Tab, tab_id)
     assert tab is not None and str(tab.seating_id) == seating_id and tab.opened_by is None
     orders = list((await db_session.execute(select(Order).where(Order.tab_id == tab_id))).scalars())
@@ -565,7 +598,8 @@ async def test_board_projects_assignments_seatings_and_unassigned_parties(
     queue_entry = QueueEntry(
         business_id=business.id,
         location_id=location.id,
-        session_token="board-entry-token",
+        service_date=resolve_service_window(business, now=now)[0],
+        session_token_hash=hash_token("board-entry-token"),
         name="Walk In",
         party_size=2,
         status="waiting",
@@ -623,7 +657,8 @@ async def test_secondary_location_board_does_not_claim_legacy_unscoped_parties(
     legacy_entry = QueueEntry(
         business_id=business.id,
         location_id=None,
-        session_token="legacy-location-token",
+        service_date=resolve_service_window(business)[0],
+        session_token_hash=hash_token("legacy-location-token"),
         name="Legacy Party",
         party_size=2,
         status="waiting",

@@ -1,6 +1,6 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+import jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,9 +26,12 @@ async def get_current_user(
 
     try:
         payload = jwt.decode(
-            token, settings.secret_key, algorithms=[settings.algorithm]
+            token,
+            settings.secret_key,
+            algorithms=[settings.algorithm],
+            audience="crowbar-staff-api",
         )
-        if payload.get("token_use") == "websocket":
+        if payload.get("token_use") != "staff_access":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail={
@@ -44,7 +47,7 @@ async def get_current_user(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail={"code": ErrorCode.INVALID_TOKEN, "message": "Invalid token", "details": None},
             )
-    except JWTError:
+    except jwt.InvalidTokenError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"code": ErrorCode.INVALID_TOKEN, "message": "Invalid token", "details": None},

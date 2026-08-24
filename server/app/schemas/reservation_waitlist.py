@@ -52,3 +52,14 @@ class ReservationWaitlistResponse(AppBaseModel):
     delivery_state: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class PublicReservationWaitlistResponse(AppBaseModel):
+    business_id: UUID
+    service_type_id: UUID
+    requested_starts_at: datetime
+    flexible_until: datetime
+    guests: int
+    status: str
+    offered_reservation_time: datetime | None = None
+    offer_expires_at: datetime | None = None

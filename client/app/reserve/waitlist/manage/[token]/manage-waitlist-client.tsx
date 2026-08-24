@@ -4,21 +4,26 @@ import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { clientCancelManagedWaitlist, clientGetManagedWaitlist } from "@/lib/client-api";
+import { clientCancelManagedWaitlist, clientExchangePublicCapability, clientGetManagedWaitlist } from "@/lib/client-api";
+import { consumeCapabilityFragment } from "@/lib/capability-fragment";
 import type { ReservationWaitlistEntry } from "@/types";
 
-export default function ManageWaitlistClient({ token }: { token: string }) {
+export default function ManageWaitlistClient() {
   const [entry, setEntry] = useState<ReservationWaitlistEntry | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
-    try { setEntry(await clientGetManagedWaitlist(token)); setError(null); }
+    try { setEntry(await clientGetManagedWaitlist()); setError(null); }
     catch (caught) { setError(caught instanceof Error ? caught.message : "This management link is no longer valid."); }
-  }, [token]);
-  useEffect(() => { void load(); }, [load]);
+  }, []);
+  useEffect(() => {
+    const token = consumeCapabilityFragment();
+    const exchange = token ? clientExchangePublicCapability("waitlist_manage", token) : Promise.resolve();
+    void exchange.then(load).catch((caught) => setError(caught instanceof Error ? caught.message : "This management link is no longer valid."));
+  }, [load]);
   const cancel = async () => {
     setBusy(true);
-    try { setEntry(await clientCancelManagedWaitlist(token)); }
+    try { setEntry(await clientCancelManagedWaitlist()); }
     catch (caught) { setError(caught instanceof Error ? caught.message : "Could not cancel this request."); }
     finally { setBusy(false); }
   };

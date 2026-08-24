@@ -1,8 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { clientGetMenu, clientGetOrderingSettings } from "@/lib/client-api";
+import {
+  clientCreateTableSession,
+  clientGetCurrentTableSession,
+  clientGetMenu,
+  clientGetOrderingSettings,
+} from "@/lib/client-api";
 import type { Menu, MenuItem, ModifierGroup, SelectedModifier } from "@/types";
 import {
   type CartItem,
@@ -39,13 +43,11 @@ interface MenuClientProps {
 export default function MenuClient({ businessId, businessSlug }: MenuClientProps) {
   const { currencyCode, locale, taxLabel } = useRegionalSettings();
   const money = (value: number | string) => formatMoney(value, currencyCode, locale);
-  const searchParams = useSearchParams();
-  const tableToken = searchParams.get("table_token");
-
   const [menu, setMenu] = useState<Menu | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAcceptingOrders, setIsAcceptingOrders] = useState(true);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [tableSessionStatus, setTableSessionStatus] = useState<string | null>(null);
 
   // Item detail sheet
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
@@ -63,6 +65,38 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [businessId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fragment = new URLSearchParams(window.location.hash.slice(1));
+    const tableToken = fragment.get("table_token");
+    if (tableToken) {
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+    }
+    const nonceKey = `crowbar-table-browser-${businessId}`;
+    let nonce = localStorage.getItem(nonceKey);
+    if (!nonce) {
+      nonce = crypto.randomUUID();
+      localStorage.setItem(nonceKey, nonce);
+    }
+    const bootstrap = tableToken
+      ? clientCreateTableSession(businessId, tableToken, nonce)
+      : clientGetCurrentTableSession(businessId);
+    void bootstrap
+      .then((session) => { if (!cancelled) setTableSessionStatus(session.status); })
+      .catch(() => { if (!cancelled) setTableSessionStatus(null); });
+    return () => { cancelled = true; };
+  }, [businessId]);
+
+  useEffect(() => {
+    if (tableSessionStatus !== "pending") return;
+    const id = window.setInterval(() => {
+      void clientGetCurrentTableSession(businessId)
+        .then((session) => setTableSessionStatus(session.status))
+        .catch(() => setTableSessionStatus(null));
+    }, 5_000);
+    return () => window.clearInterval(id);
+  }, [businessId, tableSessionStatus]);
 
   function openItem(item: MenuItem) {
     setSelectedItem(item);
@@ -123,7 +157,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
 
       {/* Masthead — set like the cover of a printed list */}
       <header className="px-6 pt-10 pb-6 text-center fade-rise">
-        {tableToken && <p className="eyebrow text-brass mb-2">Table ordering</p>}
+        {tableSessionStatus && <p className="eyebrow text-brass mb-2">Table ordering</p>}
         <h1 className="font-display text-3xl tracking-tight">{menu.name}</h1>
         <div className="rule-double mt-5 mx-auto max-w-36" />
       </header>
@@ -220,9 +254,9 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
         <div className="fixed bottom-0 inset-x-0 z-20 bg-background/95 backdrop-blur">
           <div className="rule-double" />
           <div className="p-4 max-w-xl mx-auto">
-            {isAcceptingOrders && tableToken ? (
+            {isAcceptingOrders && tableSessionStatus === "approved" ? (
               <Link
-                href={`/order/${businessSlug}${tableToken ? `?table_token=${encodeURIComponent(tableToken)}` : ""}`}
+                href={`/order/${businessSlug}`}
                 onClick={() => {
                   if (typeof window !== "undefined") {
                     sessionStorage.setItem(`cart_${businessSlug}`, JSON.stringify(cart));
@@ -241,7 +275,11 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
             ) : (
               <Button className="w-full" size="lg" disabled>
                 <ShoppingCart className="h-5 w-5 mr-2" />
-                {isAcceptingOrders ? "Scan your table QR to order" : "Ordering unavailable"}
+                {isAcceptingOrders
+                  ? tableSessionStatus === "pending"
+                    ? "Waiting for staff approval"
+                    : "Scan your table QR to order"
+                  : "Ordering unavailable"}
               </Button>
             )}
           </div>

@@ -158,6 +158,8 @@ function toBusiness(b: Record<string, unknown>): Business {
     description: (b.description as string) || undefined,
     image: (b.image as string) || undefined,
     website: (b.website as string) || undefined,
+    privacyContact: (b.privacy_contact as string) || undefined,
+    privacyPolicyUrl: (b.privacy_policy_url as string) || undefined,
     tags: (b.tags as string[]) || undefined,
     createdAt: b.created_at as string,
     maxGuests: b.max_guests as number,
@@ -620,6 +622,8 @@ export async function clientUpdateBusiness(
     description: string;
     image: string;
     website: string;
+    privacyContact: string;
+    privacyPolicyUrl: string;
     tags: string[];
     maxGuests: number;
     reservationTime: number;
@@ -644,6 +648,10 @@ export async function clientUpdateBusiness(
   if (data.description !== undefined) apiData.description = data.description;
   if (data.image !== undefined) apiData.image = data.image;
   if (data.website !== undefined) apiData.website = data.website;
+  if (data.privacyContact !== undefined)
+    apiData.privacy_contact = data.privacyContact;
+  if (data.privacyPolicyUrl !== undefined)
+    apiData.privacy_policy_url = data.privacyPolicyUrl;
   if (data.tags !== undefined) apiData.tags = data.tags;
   if (data.maxGuests !== undefined) apiData.max_guests = data.maxGuests;
   if (data.reservationTime !== undefined)
@@ -832,37 +840,37 @@ export async function clientCreatePublicReservation(data: {
   return toReservation(result);
 }
 
-export async function clientGetPublicManagedReservation(token: string): Promise<Reservation> {
-  return toReservation(await clientFetch<Record<string, unknown>>(`/reservations/public/manage/${encodeURIComponent(token)}`));
+export async function clientGetPublicManagedReservation(): Promise<Reservation> {
+  return toReservation(await clientFetch<Record<string, unknown>>(`/reservations/public/manage`));
 }
 
-export async function clientCancelPublicReservation(token: string): Promise<Reservation> {
-  return toReservation(await clientFetch<Record<string, unknown>>(`/reservations/public/manage/${encodeURIComponent(token)}/cancel`, { method: "POST" }));
+export async function clientCancelPublicReservation(): Promise<Reservation> {
+  return toReservation(await clientFetch<Record<string, unknown>>(`/reservations/public/manage/cancel`, { method: "POST" }));
 }
 
-export async function clientReconfirmPublicReservation(token: string): Promise<Reservation> {
-  return toReservation(await clientFetch<Record<string, unknown>>(`/reservations/public/manage/${encodeURIComponent(token)}/reconfirm`, { method: "POST" }));
+export async function clientReconfirmPublicReservation(): Promise<Reservation> {
+  return toReservation(await clientFetch<Record<string, unknown>>(`/reservations/public/manage/reconfirm`, { method: "POST" }));
 }
 
-export async function clientReschedulePublicReservation(token: string, data: {
+export async function clientReschedulePublicReservation(data: {
   serviceTypeId: string; time: string; guests: number;
 }): Promise<Reservation> {
-  return toReservation(await clientFetch<Record<string, unknown>>(`/reservations/public/manage/${encodeURIComponent(token)}/reschedule`, {
+  return toReservation(await clientFetch<Record<string, unknown>>(`/reservations/public/manage/reschedule`, {
     method: "POST",
     body: JSON.stringify({ service_type_id: data.serviceTypeId, time: data.time, guests: data.guests }),
   }));
 }
 
-export async function clientAcceptWaitlistOffer(token: string): Promise<Reservation> {
-  return toReservation(await clientFetch<Record<string, unknown>>(`/reservations/waitlist/offers/${encodeURIComponent(token)}/accept`, { method: "POST" }));
+export async function clientAcceptWaitlistOffer(): Promise<Reservation> {
+  return toReservation(await clientFetch<Record<string, unknown>>(`/reservations/waitlist/offers/accept`, { method: "POST" }));
 }
 
-export async function clientGetWaitlistOffer(token: string): Promise<ReservationWaitlistEntry> {
-  return toReservationWaitlistEntry(await clientFetch<Record<string, unknown>>(`/reservations/waitlist/offers/${encodeURIComponent(token)}`));
+export async function clientGetWaitlistOffer(): Promise<ReservationWaitlistEntry> {
+  return toReservationWaitlistEntry(await clientFetch<Record<string, unknown>>(`/reservations/waitlist/offers`));
 }
 
-export async function clientDeclineWaitlistOffer(token: string): Promise<ReservationWaitlistEntry> {
-  return toReservationWaitlistEntry(await clientFetch<Record<string, unknown>>(`/reservations/waitlist/offers/${encodeURIComponent(token)}/decline`, { method: "POST" }));
+export async function clientDeclineWaitlistOffer(): Promise<ReservationWaitlistEntry> {
+  return toReservationWaitlistEntry(await clientFetch<Record<string, unknown>>(`/reservations/waitlist/offers/decline`, { method: "POST" }));
 }
 
 export interface ReservationWaitlistCreateInput {
@@ -894,12 +902,12 @@ export async function clientGetReservationWaitlist(view: "active" | "history" = 
   return result.map(toReservationWaitlistEntry);
 }
 
-export async function clientGetManagedWaitlist(token: string): Promise<ReservationWaitlistEntry> {
-  return toReservationWaitlistEntry(await clientFetch<Record<string, unknown>>(`/reservations/waitlist/manage/${encodeURIComponent(token)}`));
+export async function clientGetManagedWaitlist(): Promise<ReservationWaitlistEntry> {
+  return toReservationWaitlistEntry(await clientFetch<Record<string, unknown>>(`/reservations/waitlist/manage`));
 }
 
-export async function clientCancelManagedWaitlist(token: string): Promise<ReservationWaitlistEntry> {
-  return toReservationWaitlistEntry(await clientFetch<Record<string, unknown>>(`/reservations/waitlist/manage/${encodeURIComponent(token)}/cancel`, { method: "POST" }));
+export async function clientCancelManagedWaitlist(): Promise<ReservationWaitlistEntry> {
+  return toReservationWaitlistEntry(await clientFetch<Record<string, unknown>>(`/reservations/waitlist/manage/cancel`, { method: "POST" }));
 }
 
 export async function clientRemoveReservationWaitlist(entryId: string, reasonCode: string, note?: string): Promise<ReservationWaitlistEntry> {
@@ -1303,9 +1311,8 @@ export async function clientDeleteStaff(id: string): Promise<void> {
 function toQueueEntry(e: Record<string, unknown>): QueueEntry {
   const delivery = e.delivery as Record<string, unknown> | null | undefined;
   return {
-    id: e.id as string,
-    businessId: e.business_id as string,
-    sessionToken: e.session_token as string,
+    id: (e.id as string) ?? "public-queue-entry",
+    businessId: (e.business_id as string) ?? "",
     name: e.name as string,
     partySize: e.party_size as number,
     phone: (e.phone as string) || undefined,
@@ -1345,17 +1352,15 @@ function toQueueServiceDay(s: Record<string, unknown>): QueueServiceDay {
 function toQueueStatus(s: Record<string, unknown>): QueueStatus {
   return {
     entry: toQueueEntry(s.entry as Record<string, unknown>),
-    totalWaiting: s.total_waiting as number,
     estimatedWaitMinutes: (s.estimated_wait_minutes as number) ?? undefined,
   };
 }
 
 export async function clientLeaveQueue(
   businessId: string,
-  sessionToken: string,
 ): Promise<void> {
   await clientFetch(
-    `/queue/${businessId}/leave?session_token=${encodeURIComponent(sessionToken)}`,
+    `/queue/${businessId}/leave`,
     { method: "POST" },
   );
 }
@@ -1376,10 +1381,9 @@ export async function clientJoinQueue(
 
 export async function clientGetQueueStatus(
   businessId: string,
-  sessionToken: string,
 ): Promise<QueueStatus> {
   const result = await clientFetch<Record<string, unknown>>(
-    `/queue/${businessId}/status?session_token=${encodeURIComponent(sessionToken)}`,
+    `/queue/${businessId}/status`,
   );
   return toQueueStatus(result);
 }
@@ -1901,15 +1905,14 @@ function toOrder(o: Record<string, unknown>): Order {
   const lineItems = (o.line_items as Record<string, unknown>[]) ?? [];
   const timeline = (o.status_timeline as Record<string, unknown>[]) ?? [];
   return {
-    id: o.id as string,
-    businessId: o.business_id as string,
+    id: (o.id as string) ?? `public-order-${String(o.placed_at)}`,
+    businessId: (o.business_id as string) ?? "",
     locationId: (o.location_id as string) || undefined,
     tableId: (o.table_id as string) || undefined,
     tabId: (o.tab_id as string) || undefined,
-    sessionToken: o.session_token as string,
     tableIdentifier: (o.table_identifier as string) || undefined,
     status: o.status as Order["status"],
-    idempotencyKey: o.idempotency_key as string,
+    idempotencyKey: (o.idempotency_key as string) ?? "",
     currencyCode: o.currency_code as string,
     subtotalAmount: toMoney(o.subtotal_amount),
     taxAmount: toMoney(o.tax_amount),
@@ -1922,8 +1925,8 @@ function toOrder(o: Record<string, unknown>): Order {
     cancelledAt: (o.cancelled_at as string) || undefined,
     cancellationReason: (o.cancellation_reason as string) || undefined,
     lineItems: lineItems.map((li) => ({
-      id: li.id as string,
-      orderId: li.order_id as string,
+      id: (li.id as string) ?? `public-line-${String(li.item_name)}`,
+      orderId: (li.order_id as string) ?? "",
       itemId: (li.item_id as string) || undefined,
       itemName: li.item_name as string,
       quantity: Number(li.quantity),
@@ -1963,6 +1966,55 @@ function toOrder(o: Record<string, unknown>): Order {
 
 // ─── Ordering: Public endpoints ───────────────────────────────────────────────
 
+export interface PublicTableSession {
+  status: "pending" | "approved" | "denied" | "revoked";
+  tableLabel: string;
+  expiresAt: string;
+}
+
+function toPublicTableSession(value: Record<string, unknown>): PublicTableSession {
+  return {
+    status: value.status as PublicTableSession["status"],
+    tableLabel: value.table_label as string,
+    expiresAt: value.expires_at as string,
+  };
+}
+
+export async function clientCreateTableSession(
+  businessId: string,
+  tableToken: string,
+  browserNonce: string,
+): Promise<PublicTableSession> {
+  const result = await clientFetch<Record<string, unknown>>(
+    `/ordering/${businessId}/table-sessions`,
+    {
+      method: "POST",
+      body: JSON.stringify({ table_token: tableToken, browser_nonce: browserNonce }),
+    },
+  );
+  return toPublicTableSession(result);
+}
+
+export async function clientGetCurrentTableSession(
+  businessId: string,
+): Promise<PublicTableSession> {
+  return toPublicTableSession(
+    await clientFetch<Record<string, unknown>>(
+      `/ordering/${businessId}/table-sessions/current`,
+    ),
+  );
+}
+
+export async function clientExchangePublicCapability(
+  kind: "reservation" | "waitlist_manage" | "waitlist_offer" | "password_reset" | "staff_invite",
+  token: string,
+): Promise<void> {
+  await clientFetch(`/public/capabilities/exchange`, {
+    method: "POST",
+    body: JSON.stringify({ kind, token }),
+  });
+}
+
 export async function clientGetMenu(businessId: string): Promise<Menu | null> {
   try {
     const data = await clientFetch<Record<string, unknown>>(
@@ -1977,7 +2029,6 @@ export async function clientGetMenu(businessId: string): Promise<Menu | null> {
 export async function clientPlaceOrder(
   businessId: string,
   data: {
-    tableToken: string;
     items: Array<{
       itemId: string;
       quantity: number;
@@ -1990,7 +2041,6 @@ export async function clientPlaceOrder(
   },
 ): Promise<Order> {
   const body = {
-    table_token: data.tableToken,
     items: data.items.map((i) => ({
       item_id: i.itemId,
       quantity: i.quantity,
@@ -2012,10 +2062,9 @@ export async function clientPlaceOrder(
 
 export async function clientGetOrderStatus(
   businessId: string,
-  sessionToken: string,
 ): Promise<Order[]> {
   const result = await clientFetch<Record<string, unknown>[]>(
-    `/ordering/${businessId}/orders/status?session_token=${encodeURIComponent(sessionToken)}`,
+    `/ordering/${businessId}/orders/status`,
   );
   return result.map(toOrder);
 }
@@ -2977,13 +3026,13 @@ export async function clientResendInvitation(id: string): Promise<StaffInvitatio
   return toStaffInvitation(result);
 }
 
-export async function clientGetInvite(token: string): Promise<{
+export async function clientGetInvite(): Promise<{
   email: string;
   role: string;
   business_name: string;
 } | null> {
   try {
-    return await clientFetch(`/staff/invite/${token}`);
+    return await clientFetch(`/staff/invite`);
   } catch {
     return null;
   }

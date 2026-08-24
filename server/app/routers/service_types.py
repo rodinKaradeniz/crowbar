@@ -5,11 +5,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.core.errors import forbidden, not_found
-from app.dependencies import get_current_business, require_module, require_roles
+from app.dependencies import (
+    get_current_business,
+    get_optional_user,
+    require_module,
+    require_roles,
+)
 from app.core.rate_limit import enforce_public_read_limit
+from app.core.public_access import has_required_privacy_contact
 from app.models.business import Business
 from app.models.user import User
 from app.schemas.service_type import (
+    PublicServiceTypeResponse,
     ServiceTypeCreate,
     ServiceTypeResponse,
     ServiceTypeUpdate,
@@ -21,27 +28,60 @@ router = APIRouter(prefix="/api/service-types", tags=["service-types"])
 
 @router.get(
     "/business/{business_id}",
-    response_model=list[ServiceTypeResponse],
+    response_model=list[ServiceTypeResponse | PublicServiceTypeResponse],
     dependencies=[Depends(enforce_public_read_limit)],
 )
 async def list_service_types(
-    business_id: UUID, db: AsyncSession = Depends(get_db)
+    business_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_optional_user),
 ):
-    return await service_type_service.get_service_types_by_business(db, business_id)
+    business = await db.get(Business, business_id)
+    is_own_staff = bool(
+        current_user
+        and any(
+            assignment.business_id == business_id
+            for assignment in current_user.staff_assignments
+        )
+    )
+    if business is None or (
+        not is_own_staff and not has_required_privacy_contact(business)
+    ):
+        raise not_found("Business")
+    service_types = await service_type_service.get_service_types_by_business(
+        db, business_id
+    )
+    if is_own_staff:
+        return service_types
+    return [PublicServiceTypeResponse.model_validate(item) for item in service_types]
 
 
 @router.get(
     "/{service_type_id}",
-    response_model=ServiceTypeResponse,
+    response_model=ServiceTypeResponse | PublicServiceTypeResponse,
     dependencies=[Depends(enforce_public_read_limit)],
 )
 async def get_service_type(
-    service_type_id: UUID, db: AsyncSession = Depends(get_db)
+    service_type_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_optional_user),
 ):
     service_type = await service_type_service.get_service_type_by_id(db, service_type_id)
     if service_type is None:
         raise HTTPException(status_code=404, detail="Service type not found")
-    return service_type
+    is_own_staff = bool(
+        current_user
+        and any(
+            assignment.business_id == service_type.business_id
+            for assignment in current_user.staff_assignments
+        )
+    )
+    if is_own_staff:
+        return service_type
+    business = await db.get(Business, service_type.business_id)
+    if business is None or not has_required_privacy_contact(business):
+        raise not_found("Service type")
+    return PublicServiceTypeResponse.model_validate(service_type)
 
 
 @router.post("", response_model=ServiceTypeResponse, status_code=status.HTTP_201_CREATED)

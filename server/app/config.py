@@ -1,4 +1,4 @@
-from pydantic import field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -20,7 +20,11 @@ class Settings(BaseSettings):
 
     # Auth
     secret_key: str = "your-secret-key-change-in-production"
+    public_link_secret_key: str = "development-public-link-secret-not-for-production"
+    table_qr_secret_key: str = "development-table-qr-secret-not-for-production"
+    rate_limit_hmac_secret: str = "development-rate-limit-secret-not-for-production"
     access_token_expire_minutes: int = 60
+    table_guest_session_ttl_minutes: int = Field(default=12 * 60, ge=30, le=24 * 60)
     algorithm: str = "HS256"
 
     # Environment
@@ -57,6 +61,57 @@ class Settings(BaseSettings):
         if value.startswith("postgresql://"):
             return value.replace("postgresql://", "postgresql+asyncpg://", 1)
         return value
+
+    @model_validator(mode="after")
+    def validate_production_security(self) -> "Settings":
+        if self.environment.lower() != "production":
+            return self
+
+        errors: list[str] = []
+        required_secrets = {
+            "SECRET_KEY": self.secret_key,
+            "PUBLIC_LINK_SECRET_KEY": self.public_link_secret_key,
+            "TABLE_QR_SECRET_KEY": self.table_qr_secret_key,
+            "RATE_LIMIT_HMAC_SECRET": self.rate_limit_hmac_secret,
+            "ML_INTERNAL_TOKEN": self.ml_internal_token,
+        }
+        development_defaults = {
+            "your-secret-key-change-in-production",
+            "development-public-link-secret-not-for-production",
+            "development-table-qr-secret-not-for-production",
+            "development-rate-limit-secret-not-for-production",
+        }
+        for name, value in required_secrets.items():
+            if (
+                not value
+                or len(value.encode("utf-8")) < 32
+                or value in development_defaults
+                or "change-in-production" in value
+                or "not-for-production" in value
+            ):
+                errors.append(f"{name} must be a unique secret of at least 32 bytes")
+
+        distinct = [value for value in required_secrets.values() if value]
+        if len(distinct) != len(set(distinct)):
+            errors.append("Production signing and internal-service secrets must be distinct")
+        if not self.rate_limit_enabled:
+            errors.append("RATE_LIMIT_ENABLED must be true in production")
+        if (
+            not self.cors_origins
+            or "*" in self.cors_origins
+            or any(not origin.startswith("https://") for origin in self.cors_origins)
+        ):
+            errors.append("CORS_ORIGINS must contain explicit HTTPS production origins")
+        if not self.frontend_url.startswith("https://"):
+            errors.append("FRONTEND_URL must be an explicit HTTPS production origin")
+        elif self.frontend_url.rstrip("/") not in {
+            origin.rstrip("/") for origin in self.cors_origins
+        }:
+            errors.append("CORS_ORIGINS must include FRONTEND_URL")
+
+        if errors:
+            raise ValueError("Unsafe production configuration: " + "; ".join(errors))
+        return self
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

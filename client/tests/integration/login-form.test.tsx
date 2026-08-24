@@ -86,7 +86,7 @@ describe("LoginForm", () => {
     });
 
     await user.type(screen.getByLabelText(/email/i), "test@example.com");
-    await user.type(screen.getByLabelText(/password/i), "password123");
+    await user.type(screen.getByLabelText(/password/i), "test-password-1234");
     await user.click(screen.getByRole("button", { name: /log in/i }));
 
     // Give it a moment and verify no error appears

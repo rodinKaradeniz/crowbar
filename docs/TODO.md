@@ -253,6 +253,13 @@ management, delivery, expiry and reservation-acceptance paths, while Floor
 remains the sole authority that creates real seating. Closure evidence is in
 [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md).
 
+**Security hardening completed locally 2026-08-23 in migrations 041–043.**
+Reservation, waitlist, queue and table-browser authority now uses exchanged
+purpose-scoped cookies and hashed persisted credentials; public responses are
+exact projections; Stage 3 tenant relationships have composite constraints;
+and capability routes have bounded bodies, abuse limits and non-enumerating
+failures. Publication and deployment remain separately gated.
+
 - Make the current-service queue explicitly open/closed and schedule/capacity
   aware. Add staff-created walk-ins, duplicate/idempotency protection,
   called/left/no-show/removal reasons, and a measured or configured wait
@@ -278,6 +285,14 @@ line-level fulfillment, exact movement linkage, audited correction/cancellation,
 authoritative item availability, external-settlement history, controlled reopen
 and tab invalidation/reconciliation now form one shared-tab lifecycle. Crowbar
 records only the venue register's external-settlement assertion.
+
+**Security hardening completed locally 2026-08-23 in migrations 041–043.** A
+printed table QR can create only a pending browser session for the current
+seating; staff approval is tenant- and seating-bound, and deny/close/reseat/
+expiry/rotation revokes it. Order credentials are stored as hashes, public menu
+and order DTOs exclude operational internals, staff WebSockets authenticate in
+a bounded first frame, and missing Stage 4 tenant relationships have composite
+database constraints.
 
 - Add tenant-configurable preparation stations and replace hard-coded
   `kitchen | bar | any` routing. Support audited order edits/cancellation,

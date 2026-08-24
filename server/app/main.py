@@ -1,13 +1,16 @@
 import asyncio
 import logging
+import re
 import time
 import uuid
 from contextlib import asynccontextmanager
+from typing import Any
 
 import redis.asyncio as aioredis
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.core.errors import http_exception_handler, validation_exception_handler
 from app.core.events import STREAM_KEY
+from app.core.log_redaction import install_log_redaction
 from app.core.redis_client import close_redis, get_redis
 from app.core.stream_consumer import GROUP_NAME, ws_push_consumer
 from app.database import get_db
@@ -32,6 +36,7 @@ from app.routers import (
     inventory,
     notifications,
     ordering,
+    public_capabilities,
     queue,
     reservations,
     service_types,
@@ -45,7 +50,83 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
+install_log_redaction()
 logger = logging.getLogger("crowbar")
+
+_MAX_REQUEST_BODY_BYTES = 1_048_576
+
+_CREDENTIAL_PATH_PATTERNS = (
+    re.compile(r"(/public/manage/)[^/]+"),
+    re.compile(r"(/waitlist/manage/)[^/]+"),
+    re.compile(r"(/waitlist/offers/)[^/]+"),
+    re.compile(r"(/invite/)[^/]+"),
+)
+
+
+def redact_request_path(path: str) -> str:
+    """Remove legacy bearer credentials before a request path reaches logs."""
+    redacted = path
+    for pattern in _CREDENTIAL_PATH_PATTERNS:
+        redacted = pattern.sub(r"\1[redacted]", redacted)
+    return redacted
+
+
+class RequestBodyLimitMiddleware:
+    """Bound declared and streamed HTTP bodies before route parsing."""
+
+    def __init__(self, app: Any, max_bytes: int = _MAX_REQUEST_BODY_BYTES):
+        self.app = app
+        self.max_bytes = max_bytes
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        headers = dict(scope.get("headers", ()))
+        content_length = headers.get(b"content-length", b"")
+        if content_length.isdigit() and int(content_length) > self.max_bytes:
+            await self._reject(scope, receive, send)
+            return
+
+        received = 0
+        messages = []
+        while True:
+            message = await receive()
+            messages.append(message)
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > self.max_bytes:
+                    await self._reject(scope, receive, send)
+                    return
+                if not message.get("more_body", False):
+                    break
+            elif message["type"] == "http.disconnect":
+                break
+
+        message_index = 0
+
+        async def replay_receive():
+            nonlocal message_index
+            if message_index < len(messages):
+                message = messages[message_index]
+                message_index += 1
+                return message
+            return await receive()
+
+        await self.app(scope, replay_receive, send)
+
+    @staticmethod
+    async def _reject(scope, receive, send):
+        response = JSONResponse(
+            status_code=413,
+            content={
+                "code": "REQUEST_TOO_LARGE",
+                "message": "The request body is too large.",
+                "details": None,
+            },
+        )
+        await response(scope, receive, send)
 
 
 @asynccontextmanager
@@ -80,6 +161,9 @@ app = FastAPI(
     description="Reservation management system API",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url=None if settings.environment == "production" else "/docs",
+    redoc_url=None if settings.environment == "production" else "/redoc",
+    openapi_url=None if settings.environment == "production" else "/openapi.json",
 )
 
 # ─── Error handlers ───────────────────────────────────────────────────────────
@@ -106,7 +190,7 @@ async def logging_middleware(request: Request, call_next):
     logger.info(
         "http_request method=%s path=%s status=%s duration_ms=%s request_id=%s user_id=%s business_id=%s",
         request.method,
-        request.url.path,
+        redact_request_path(request.url.path),
         response.status_code,
         duration_ms,
         request_id,
@@ -114,6 +198,11 @@ async def logging_middleware(request: Request, call_next):
         business_id or "-",
     )
     response.headers["X-Request-ID"] = request_id
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if settings.environment == "production":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
 
 # ─── CORS ─────────────────────────────────────────────────────────────────────
@@ -125,6 +214,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RequestBodyLimitMiddleware)
 
 # ─── Routers ──────────────────────────────────────────────────────────────────
 
@@ -142,6 +232,7 @@ app.include_router(staff.router)
 app.include_router(analytics.router)
 app.include_router(queue.router)
 app.include_router(ordering.router)
+app.include_router(public_capabilities.router)
 app.include_router(inventory.router)
 app.include_router(tabs.router)
 app.include_router(tabs.ws_router)
@@ -164,6 +255,4 @@ async def health_check(db: AsyncSession = Depends(get_db)):
     return {
         "status": "ok",
         "service": "api",
-        "database": "connected",
-        "environment": settings.environment,
     }

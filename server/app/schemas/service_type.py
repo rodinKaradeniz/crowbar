@@ -79,3 +79,16 @@ class ServiceTypeResponse(AppBaseModel):
     image: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class PublicServiceTypeResponse(AppBaseModel):
+    """Guest-facing booking option without capacity-policy internals."""
+
+    id: UUID
+    name: str
+    description: str | None = None
+    capacity: int
+    duration: int | None = None
+    color: str
+    display_order: int | None = None
+    image: str | None = None

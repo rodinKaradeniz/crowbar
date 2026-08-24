@@ -38,6 +38,12 @@ export default function BusinessInfoClient({
   const [businessPhone, setBusinessPhone] = useState(initialBusiness?.phone || "");
   const [businessAddress, setBusinessAddress] = useState(initialBusiness?.address || "");
   const [businessImage, setBusinessImage] = useState(initialBusiness?.image || "");
+  const [privacyContact, setPrivacyContact] = useState(
+    initialBusiness?.privacyContact || ""
+  );
+  const [privacyPolicyUrl, setPrivacyPolicyUrl] = useState(
+    initialBusiness?.privacyPolicyUrl || ""
+  );
   const [businessTimezone, setBusinessTimezone] = useState(
     initialBusiness?.timezone || "UTC"
   );
@@ -73,6 +79,8 @@ export default function BusinessInfoClient({
         image: businessImage,
         timezone: businessTimezone,
         legalDrinkingAge: parseInt(legalDrinkingAge, 10) || 18,
+        privacyContact,
+        privacyPolicyUrl,
       });
       toast.success("Business info saved");
       router.refresh();
@@ -192,6 +200,31 @@ export default function BusinessInfoClient({
                   type="url"
                   value={businessImage}
                   onChange={(e) => setBusinessImage(e.target.value)}
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="privacyContact">Venue privacy contact</FieldLabel>
+                <Input
+                  id="privacyContact"
+                  value={privacyContact}
+                  onChange={(event) => setPrivacyContact(event.target.value)}
+                  placeholder="privacy@example.invalid"
+                />
+                <FieldDescription>
+                  The venue is the data controller. Public production flows stay
+                  unavailable until a contact and policy URL are configured.
+                </FieldDescription>
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="privacyPolicyUrl">Venue privacy policy URL</FieldLabel>
+                <Input
+                  id="privacyPolicyUrl"
+                  type="url"
+                  value={privacyPolicyUrl}
+                  onChange={(event) => setPrivacyPolicyUrl(event.target.value)}
+                  placeholder="https://example.invalid/privacy"
                 />
               </Field>
             </FieldSet>

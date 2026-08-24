@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import Image, { type StaticImageData } from "next/image";
 import { Reveal } from "@/components/reveal";
 import { cn } from "@/lib/utils";
 
@@ -79,8 +78,7 @@ interface PhotoPanelSectionProps {
   body: string;
   /** name → detail rows, set with the signature dot leader */
   rows: Array<[string, string]>;
-  photo: StaticImageData;
-  photoAlt: string;
+  visual: "service" | "inventory";
   /** which end of the group panel's gradient this section rests on */
   on: "lager" | "dubbel";
   /** graphic on the left on wide screens */
@@ -92,8 +90,7 @@ export function PhotoPanelSection({
   title,
   body,
   rows,
-  photo,
-  photoAlt,
+  visual,
   on,
   flip,
 }: PhotoPanelSectionProps) {
@@ -179,7 +176,7 @@ export function PhotoPanelSection({
           </div>
         </Reveal>
 
-        {/* Photograph in its clipped frame; the image travels inside it */}
+        {/* Rights-clear code-generated graphic in the clipped frame. */}
         <div className={cn("relative py-10", flip ? "lg:order-1 pl-10" : "pr-10")}>
           <div
             className={cn(
@@ -191,13 +188,15 @@ export function PhotoPanelSection({
               ref={imageRef}
               className="absolute inset-x-0 -top-[30%] h-[160%] will-change-transform"
             >
-              <Image
-                src={photo}
-                alt={photoAlt}
-                fill
-                placeholder="blur"
-                sizes="(min-width: 1024px) 40vw, 88vw"
-                className="object-cover"
+              <div
+                role="img"
+                aria-label={visual === "service" ? "Abstract service flow" : "Abstract inventory levels"}
+                className={cn(
+                  "absolute inset-0",
+                  visual === "service"
+                    ? "bg-[radial-gradient(circle_at_30%_30%,#f3c86a_0_9%,transparent_10%),radial-gradient(circle_at_70%_62%,#f3c86a_0_13%,transparent_14%),linear-gradient(135deg,#3a2118,#7f3d22_55%,#d79942)]"
+                    : "bg-[repeating-linear-gradient(90deg,#251812_0_11%,#4b2c20_11%_19%,#d5a24e_19%_22%),linear-gradient(#20150f,#6d3823)]",
+                )}
               />
             </div>
           </div>

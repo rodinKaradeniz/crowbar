@@ -31,13 +31,15 @@ export function BusinessDetailsDialog({
       <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-4xl max-h-[90vh] overflow-y-auto p-0">
         <div className="grid md:grid-cols-2 gap-0">
           {/* Left side - Image */}
-          <div className="relative h-[300px] md:h-[500px] w-full">
-            <Image
-              src={business.image || ""}
-              alt={business.name}
-              fill
-              className="object-cover"
-            />
+          <div className="relative h-[300px] md:h-[500px] w-full bg-[radial-gradient(circle_at_30%_24%,#d4a24d_0_7%,transparent_30%),linear-gradient(145deg,#251812,#7b3f27)]">
+            {business.image ? (
+              <Image
+                src={business.image}
+                alt={business.name}
+                fill
+                className="object-cover"
+              />
+            ) : null}
           </div>
 
           {/* Right side - Content */}

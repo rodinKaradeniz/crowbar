@@ -396,8 +396,22 @@ async def prepare_waitlist_sms_fallback(
     db: AsyncSession, *, business_id: UUID, entry_id: UUID
 ) -> DeliveryAttempt | None:
     business = await db.get(Business, business_id)
-    entry = await db.get(ReservationWaitlistEntry, entry_id)
-    customer = await db.get(Customer, entry.customer_id) if entry else None
+    entry = await db.scalar(
+        select(ReservationWaitlistEntry).where(
+            ReservationWaitlistEntry.id == entry_id,
+            ReservationWaitlistEntry.business_id == business_id,
+        )
+    )
+    customer = (
+        await db.scalar(
+            select(Customer).where(
+                Customer.id == entry.customer_id,
+                Customer.business_id == business_id,
+            )
+        )
+        if entry
+        else None
+    )
     if (
         business is None
         or entry is None
@@ -408,6 +422,7 @@ async def prepare_waitlist_sms_fallback(
         return None
     attempt = await db.scalar(
         select(DeliveryAttempt).where(
+            DeliveryAttempt.business_id == business_id,
             DeliveryAttempt.waitlist_entry_id == entry_id,
             DeliveryAttempt.message_kind == "waitlist_offer",
             DeliveryAttempt.channel == "sms",
@@ -426,11 +441,14 @@ async def prepare_waitlist_sms_fallback(
     return attempt
 
 
-async def delivery_state(db: AsyncSession, entry_id: UUID) -> str:
+async def delivery_state(
+    db: AsyncSession, *, business_id: UUID, entry_id: UUID
+) -> str:
     attempts = list(
         (
             await db.scalars(
                 select(DeliveryAttempt).where(
+                    DeliveryAttempt.business_id == business_id,
                     DeliveryAttempt.waitlist_entry_id == entry_id,
                     DeliveryAttempt.message_kind == "waitlist_offer",
                 )

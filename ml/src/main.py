@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Response
 
 from src.config import settings
 from src.db import check_db_connection
+from src.log_redaction import install_log_redaction
 from src.pipelines.insights_pipeline import InsightsPipeline
 
 # Configure logging
@@ -23,6 +24,7 @@ logging.basicConfig(
     format="%(asctime)s | %(name)s | %(levelname)s | %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
+install_log_redaction()
 logger = logging.getLogger(__name__)
 
 # In-memory stores are tenant-keyed so one business can never read another
@@ -48,10 +50,13 @@ app = FastAPI(
     title="Crowbar — ML Insights",
     description=(
         "Machine learning insights microservice for the Crowbar platform. "
-        "Provides customer segmentation, cancellation prediction, and demand forecasting."
+        "Provides operational demand forecasting; deferred insights remain unavailable."
     ),
     version="0.1.0",
     lifespan=lifespan,
+    docs_url=None if settings.environment == "production" else "/docs",
+    redoc_url=None if settings.environment == "production" else "/redoc",
+    openapi_url=None if settings.environment == "production" else "/openapi.json",
 )
 
 # ── Health & Status ──
@@ -67,7 +72,6 @@ async def health_check(response: Response):
         "status": "ok" if db_ok else "degraded",
         "service": "ml-insights",
         "database": "connected" if db_ok else "disconnected",
-        "environment": settings.environment,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 

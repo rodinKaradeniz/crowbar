@@ -8,7 +8,6 @@ Features used:
     - Lead time (hours/days between booking and reservation)
     - Day of week, hour of day, weekend flag
     - Guest count and capacity ratio
-    - Whether payment is required / paid
     - Customer historical cancellation rate
     - Service type characteristics
 """
@@ -39,8 +38,6 @@ FEATURE_COLUMNS = [
     "is_weekend",
     "guests",
     "guest_capacity_ratio",
-    "has_payment",
-    "is_paid",
     "has_note",
     "customer_cancellation_rate",
     "customer_total_reservations",

@@ -1,6 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
+from pydantic import Field
 
 from app.schemas.base import AppBaseModel
 
@@ -46,6 +47,8 @@ class BusinessUpdate(AppBaseModel):
     description: str | None = None
     image: str | None = None
     website: str | None = None
+    privacy_contact: str | None = Field(default=None, max_length=255)
+    privacy_policy_url: str | None = Field(default=None, max_length=500)
     tags: list[str] | None = None
     max_guests: int | None = None
     reservation_time: int | None = None
@@ -74,6 +77,8 @@ class BusinessResponse(AppBaseModel):
     description: str | None = None
     image: str | None = None
     website: str | None = None
+    privacy_contact: str | None = None
+    privacy_policy_url: str | None = None
     tags: list[str] | None = None
     max_guests: int
     reservation_time: int
@@ -104,6 +109,8 @@ class PublicBusinessResponse(AppBaseModel):
     description: str | None = None
     image: str | None = None
     website: str | None = None
+    privacy_contact: str | None = None
+    privacy_policy_url: str | None = None
     tags: list[str] | None = None
     max_guests: int
     reservation_time: int

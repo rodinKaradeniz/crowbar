@@ -7,7 +7,7 @@ Can be triggered manually via the API or scheduled via cron.
 Each pipeline run:
     1. Loads raw data from the app database
     2. Engineers features (reservation-level, customer-level, daily demand)
-    3. Trains/evaluates models (segmentation, cancellation, demand)
+    3. Trains/evaluates the permitted demand model
     4. Stores predictions and metrics back to the database
 """
 
@@ -95,15 +95,17 @@ class InsightsPipeline:
             f"{len(daily_demand)} daily records"
         )
 
-        # ── Step 3: Customer Segmentation ──
-        logger.info("Step 3: Running customer segmentation...")
-        segmentation_result = self._run_segmentation(rfm)
-
-        # ── Step 4: Cancellation Prediction ──
-        logger.info("Step 4: Training cancellation model...")
-        cancellation_result = self._run_cancellation(
-            reservation_features, customer_features
-        )
+        # These models previously depended on removed payment-era fields. They
+        # remain unavailable until Stage 6 supplies a newly accepted training
+        # contract and evidence using permitted operational inputs.
+        segmentation_result = {
+            "status": "unavailable",
+            "reason": "Retraining is scheduled for Stage 6",
+        }
+        cancellation_result = {
+            "status": "unavailable",
+            "reason": "Retraining is scheduled for Stage 6",
+        }
 
         # ── Step 5: Demand Forecasting ──
         logger.info("Step 5: Training demand forecast...")
@@ -160,7 +162,7 @@ class InsightsPipeline:
                 "segments": segment_counts,
                 "model_summary": summary,
                 "customer_segments": segments[
-                    ["customer_id", "recency", "frequency", "monetary", "segment_label"]
+                    ["customer_id", "recency", "frequency", "engagement", "segment_label"]
                 ].to_dict(orient="records"),
             }
         except Exception as e:
@@ -283,7 +285,7 @@ class InsightsPipeline:
                                         "segment": seg["segment_label"],
                                         "recency_days": seg["recency"],
                                         "frequency": seg["frequency"],
-                                        "monetary": float(seg["monetary"]),
+                                        "engagement": float(seg["engagement"]),
                                     }
                                 ),
                             },
@@ -297,16 +299,15 @@ class InsightsPipeline:
                                 "INSERT INTO business_daily_metrics "
                                 "(id, business_id, date, total_reservations, "
                                 "completed_reservations, cancelled_reservations, "
-                                "total_guests, total_revenue, peak_hour, "
+                                "total_guests, peak_hour, "
                                 "utilization_rate, computed_at) "
                                 "VALUES (:id, :biz, :date, :total, :completed, "
-                                ":cancelled, :guests, :revenue, :peak, :util, NOW()) "
+                                ":cancelled, :guests, :peak, :util, NOW()) "
                                 "ON CONFLICT (business_id, date) DO UPDATE SET "
                                 "total_reservations = EXCLUDED.total_reservations, "
                                 "completed_reservations = EXCLUDED.completed_reservations, "
                                 "cancelled_reservations = EXCLUDED.cancelled_reservations, "
                                 "total_guests = EXCLUDED.total_guests, "
-                                "total_revenue = EXCLUDED.total_revenue, "
                                 "peak_hour = EXCLUDED.peak_hour, "
                                 "utilization_rate = EXCLUDED.utilization_rate, "
                                 "computed_at = NOW()"
@@ -319,7 +320,6 @@ class InsightsPipeline:
                                 "completed": int(row.get("completed", 0)),
                                 "cancelled": int(row.get("cancelled", 0)),
                                 "guests": int(row["total_guests"]),
-                                "revenue": float(row.get("total_revenue", 0)),
                                 "peak": int(row["peak_hour"])
                                 if pd.notna(row.get("peak_hour"))
                                 else None,

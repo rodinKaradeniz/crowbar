@@ -33,6 +33,7 @@ from app.schemas.order import (
 )
 from app.services import happy_hour_service, recipe_service, tax_service
 from app.services.floor_plan_service import resolve_service_window
+from app.services.public_session_service import hash_token
 
 logger = logging.getLogger(__name__)
 
@@ -260,7 +261,6 @@ def order_to_dict(order: Order) -> dict:
         "location_id": str(order.location_id) if order.location_id else None,
         "table_id": str(order.table_id) if order.table_id else None,
         "tab_id": str(order.tab_id) if order.tab_id else None,
-        "session_token": order.session_token,
         "table_identifier": order.table_identifier,
         "status": order.status,
         "idempotency_key": order.idempotency_key,
@@ -402,7 +402,7 @@ async def place_order(
     order = Order(
         business_id=business_id,
         location_id=location_id,
-        session_token=session_token,
+        session_token_hash=hash_token(session_token),
         table_id=table_id,
         tab_id=tab_id,
         customer_id=customer_id,
@@ -470,6 +470,7 @@ async def place_order(
         total += line_total
 
         li = OrderLineItem(
+            business_id=business_id,
             order_id=order.id,
             item_id=item.id,
             item_name=item.name,
@@ -511,12 +512,14 @@ async def place_order(
     order.total_amount = total
     db.add(
         OrderStatusTimeline(
+            business_id=business_id,
             order_id=order.id,
             status="received",
         )
     )
     await db.flush()
     await db.refresh(order, ["line_items", "status_timeline"])
+    order.public_session_token = session_token
     return order, True
 
 
@@ -635,6 +638,7 @@ async def advance_order_status(
     _recompute_order_status(order)
     db.add(
         OrderStatusTimeline(
+            business_id=business_id,
             order_id=order.id,
             from_status=from_status,
             status=order.status,
@@ -710,6 +714,7 @@ async def advance_order_line_status(
     _recompute_order_status(order)
     if order.status != from_order_status:
         db.add(OrderStatusTimeline(
+            business_id=business_id,
             order_id=order.id,
             from_status=from_order_status,
             status=order.status,
@@ -829,6 +834,7 @@ async def _build_corrected_lines(
                     f"The preparation station for {item.name} is unavailable"
                 )
         lines.append(OrderLineItem(
+            business_id=order.business_id,
             order_id=order.id,
             item_id=item.id,
             item_name=item.name,
@@ -983,6 +989,7 @@ async def cancel_order(
     order.cancelled_at = now
     order.cancellation_reason = request.reason
     db.add(OrderStatusTimeline(
+        business_id=business_id,
         order_id=order.id,
         from_status=from_status,
         status="cancelled",
@@ -1059,7 +1066,7 @@ async def get_order_by_session(
         select(Order)
         .where(
             Order.business_id == business_id,
-            Order.session_token == session_token,
+            Order.session_token_hash == hash_token(session_token),
         )
         .options(selectinload(Order.line_items), selectinload(Order.status_timeline))
         .order_by(Order.placed_at.desc())

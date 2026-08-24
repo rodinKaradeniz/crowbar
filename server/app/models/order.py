@@ -48,7 +48,7 @@ class Order(Base, UUIDMixin, TimestampMixin):
         ForeignKey("tabs.id", ondelete="SET NULL"),
         nullable=True,
     )
-    session_token: Mapped[str] = mapped_column(String(64), nullable=False)
+    session_token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     table_identifier: Mapped[str | None] = mapped_column(String(100), nullable=True)
     channel: Mapped[str | None] = mapped_column(String(16), nullable=True)
     fulfillment_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
@@ -90,6 +90,9 @@ class Order(Base, UUIDMixin, TimestampMixin):
 class OrderLineItem(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "order_line_items"
 
+    business_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("businesses.id", ondelete="RESTRICT"), nullable=False
+    )
     order_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("orders.id", ondelete="CASCADE"),
@@ -136,6 +139,9 @@ class OrderLineItem(Base, UUIDMixin, TimestampMixin):
 class OrderStatusTimeline(Base, UUIDMixin):
     __tablename__ = "order_status_timeline"
 
+    business_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("businesses.id", ondelete="RESTRICT"), nullable=False
+    )
     order_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("orders.id", ondelete="CASCADE"),

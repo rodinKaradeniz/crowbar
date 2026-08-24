@@ -7,10 +7,20 @@ Never raises exceptions — always returns bool.
 """
 
 import logging
+import hashlib
+import hmac
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _destination_reference(to_number: str) -> str:
+    return hmac.new(
+        settings.rate_limit_hmac_secret.encode("utf-8"),
+        to_number.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()[:12]
 
 
 def send_sms(to_number: str, body: str) -> bool:
@@ -29,7 +39,7 @@ def send_sms(to_number: str, body: str) -> bool:
         return False
 
     if not to_number or not to_number.startswith("+"):
-        logger.debug("SMS skipped: phone number %r is not E.164 format", to_number)
+        logger.debug("SMS skipped: destination format is invalid")
         return False
 
     try:
@@ -41,8 +51,12 @@ def send_sms(to_number: str, body: str) -> bool:
             from_=settings.twilio_from_number,
             to=to_number,
         )
-        logger.info("SMS sent to %s: sid=%s", to_number, message.sid)
+        logger.info("SMS sent destination_ref=%s", _destination_reference(to_number))
         return True
-    except Exception as e:
-        logger.warning("SMS send failed to %s: %s", to_number, e)
+    except Exception as exc:
+        logger.warning(
+            "SMS send failed destination_ref=%s error_type=%s",
+            _destination_reference(to_number),
+            type(exc).__name__,
+        )
         return False

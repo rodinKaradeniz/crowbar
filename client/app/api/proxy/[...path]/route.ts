@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { isTrustedMutationRequest, safeSameOriginRedirect } from "@/lib/request-security";
 
 const BACKEND_URL =
   process.env.API_INTERNAL_URL ||
@@ -18,6 +19,19 @@ async function proxyRequest(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
+  if (
+    !isTrustedMutationRequest({
+      method: request.method,
+      requestOrigin: request.nextUrl.origin,
+      originHeader: request.headers.get("origin"),
+      fetchSite: request.headers.get("sec-fetch-site"),
+    })
+  ) {
+    return NextResponse.json(
+      { code: "INVALID_ORIGIN", message: "This request origin is not allowed.", details: null },
+      { status: 403 },
+    );
+  }
   const { path } = await params;
   const backendPath = `/api/${path.join("/")}`;
   const url = new URL(backendPath, BACKEND_URL);
@@ -56,7 +70,14 @@ async function proxyRequest(
   if (backendResponse.status >= 300 && backendResponse.status < 400) {
     const location = backendResponse.headers.get("location");
     if (location) {
-      return NextResponse.redirect(location, backendResponse.status as 301 | 302 | 303 | 307 | 308);
+      const safeLocation = safeSameOriginRedirect(location, request.nextUrl.origin);
+      if (!safeLocation) {
+        return NextResponse.json(
+          { code: "UNSAFE_REDIRECT", message: "The upstream redirect was rejected.", details: null },
+          { status: 502 },
+        );
+      }
+      return NextResponse.redirect(safeLocation, backendResponse.status as 301 | 302 | 303 | 307 | 308);
     }
   }
 

@@ -102,6 +102,8 @@ function toBusiness(b: BusinessResponse): Business {
     description: b.description || undefined,
     image: b.image || undefined,
     website: b.website || undefined,
+    privacyContact: b.privacy_contact || undefined,
+    privacyPolicyUrl: b.privacy_policy_url || undefined,
     tags: b.tags || undefined,
     createdAt: b.created_at,
     maxGuests: b.max_guests,
