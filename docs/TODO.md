@@ -317,7 +317,14 @@ database constraints.
   that the external register completed settlement without Crowbar claiming to
   process payment.
 
-### 5. Finish stock, purchasing, and cost control — ready after stage 4
+### 5. Finish stock, purchasing, and cost control — in progress
+
+**Started locally 2026-08-24 in migrations 044–046.** The inventory ledger now
+has canonical base-unit and moving-cost foundations, pack conversion metadata,
+supplier/purchase-order/partial-receipt persistence, and the transfer/count
+session schema. Supplier payment remains outside Crowbar. Staff transfer,
+count, CSV, and cost-control workflows are still required before this stage can
+close; do not describe the schema alone as an operationally complete workflow.
 
 - Add supplier records, supplier products, lead times, purchase orders,
   approval/status flow, partial receiving, substitutions, discrepancies,

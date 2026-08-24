@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.inventory import InventoryDiscrepancy, InventoryItem, StockMovement
+from app.models.inventory import InventoryDiscrepancy, InventoryItem, InventoryPackConversion, StockMovement
 from app.models.location import Location
 from app.models.recipe import MenuItemIngredient
 from app.schemas.inventory import InventoryItemCreate, InventoryItemUpdate, StockMovementCreate
@@ -91,16 +91,25 @@ async def create_item(
     data: InventoryItemCreate,
 ) -> InventoryItem:
     await _validate_location(db, business_id, data.location_id)
+    base_unit = data.base_unit or ("ml" if data.unit_type in {"bottle", "keg"} else "each")
+    dimension = data.dimension or ("volume" if base_unit == "ml" else "mass" if base_unit == "g" else "count")
+    if (dimension, base_unit) not in {("count", "each"), ("volume", "ml"), ("mass", "g")}:
+        raise ValueError("base_unit must be each/count, ml/volume, or g/mass")
+    if data.unit_type == "weight" and (dimension, base_unit) != ("mass", "g"):
+        raise ValueError("weight inventory is stored in grams")
     item = InventoryItem(
         business_id=business_id,
         location_id=data.location_id,
         name=data.name,
         unit=data.unit,
         unit_type=data.unit_type,
+        base_unit=base_unit,
+        dimension=dimension,
         container_volume_ml=data.container_volume_ml,
         default_pour_ml=data.default_pour_ml,
         par_quantity=data.par_quantity,
         cost_per_unit=data.cost_per_unit,
+        weighted_average_cost=data.cost_per_unit,
         notes=data.notes,
     )
     db.add(item)
@@ -139,6 +148,17 @@ async def update_item(
                     f"count-based and volume-based."
                 )
         item.unit_type = data.unit_type
+    if "base_unit" in data.model_fields_set or "dimension" in data.model_fields_set:
+        base_unit = data.base_unit or item.base_unit
+        dimension = data.dimension or item.dimension
+        if (dimension, base_unit) not in {("count", "each"), ("volume", "ml"), ("mass", "g")}:
+            raise ValueError("base_unit must be each/count, ml/volume, or g/mass")
+        # Reinterpreting stored balances or recipe quantities is never safe.
+        if (base_unit, dimension) != (item.base_unit, item.dimension):
+            ref_count = await db.scalar(select(func.count()).select_from(MenuItemIngredient).where(MenuItemIngredient.inventory_item_id == item.id))
+            if ref_count or item.current_quantity != 0:
+                raise UnitTypeChangeBlocked("Cannot change an item's canonical unit after stock or recipe history exists")
+            item.base_unit, item.dimension = base_unit, dimension
     if "location_id" in data.model_fields_set:
         await _validate_location(db, business_id, data.location_id)
 
@@ -206,6 +226,10 @@ async def apply_movement(
     location_id: UUID | None = None,
     order_id: UUID | None = None,
     order_line_item_id: UUID | None = None,
+    unit_cost_snapshot: Decimal | None = None,
+    cost_currency_code: str | None = None,
+    reference_type: str | None = None,
+    reference_id: UUID | None = None,
 ) -> StockMovement:
     """Schema-free core: mutate current_quantity, write the movement audit row,
     and fire a low-stock notification on a par breach. Shared by the API-driven
@@ -235,6 +259,15 @@ async def apply_movement(
         and locked_item.current_quantity < locked_item.par_quantity
     )
 
+    applied_cost = unit_cost_snapshot if unit_cost_snapshot is not None else locked_item.weighted_average_cost
+    # A receipt changes the maintained moving weighted average. All outgoing
+    # ledger rows retain the cost in force at movement time.
+    if movement_type == "receive" and delta > 0 and unit_cost_snapshot is not None:
+        old_value = previous_quantity * (locked_item.weighted_average_cost or Decimal(0))
+        locked_item.weighted_average_cost = (old_value + delta * unit_cost_snapshot) / (previous_quantity + delta)
+        locked_item.cost_per_unit = locked_item.weighted_average_cost
+        locked_item.cost_currency_code = cost_currency_code
+        applied_cost = unit_cost_snapshot
     movement = StockMovement(
         business_id=locked_item.business_id,
         location_id=location_id,
@@ -247,6 +280,10 @@ async def apply_movement(
         notes=notes,
         created_by=created_by_id,
         alert_triggered=par_breached,
+        unit_cost_snapshot=applied_cost,
+        cost_currency_code=cost_currency_code or locked_item.cost_currency_code,
+        reference_type=reference_type,
+        reference_id=reference_id,
     )
     db.add(movement)
     await db.flush()
@@ -359,6 +396,33 @@ async def get_low_stock_items(
     )
     result = await db.execute(stmt)
     return list(result.scalars().all())
+
+
+async def create_pack_conversion(
+    db: AsyncSession, item_id: UUID, business_id: UUID, *, label: str,
+    pack_unit: str, base_quantity: Decimal, is_default_receiving_unit: bool,
+) -> InventoryPackConversion:
+    item = await get_item(db, item_id, business_id, include_archived=True, for_update=True)
+    if item is None:
+        raise ValueError("Inventory item not found")
+    expected = {"count": {"case", "each", "bottle", "keg"}, "volume": {"case", "bottle", "keg", "litre", "millilitre"}, "mass": {"case", "kilogram"}}
+    if pack_unit not in expected[item.dimension]:
+        raise ValueError(f"{pack_unit} is not compatible with this item's {item.dimension} dimension")
+    if is_default_receiving_unit:
+        existing = await db.scalars(select(InventoryPackConversion).where(InventoryPackConversion.inventory_item_id == item.id, InventoryPackConversion.is_default_receiving_unit.is_(True)).with_for_update())
+        for row in existing:
+            row.is_default_receiving_unit = False
+    pack = InventoryPackConversion(business_id=business_id, inventory_item_id=item.id, label=label, pack_unit=pack_unit, base_quantity=base_quantity, is_default_receiving_unit=is_default_receiving_unit)
+    db.add(pack)
+    await db.flush()
+    return pack
+
+
+async def list_pack_conversions(db: AsyncSession, item_id: UUID, business_id: UUID) -> list[InventoryPackConversion]:
+    item = await get_item(db, item_id, business_id, include_archived=True)
+    if item is None:
+        return []
+    return list((await db.scalars(select(InventoryPackConversion).where(InventoryPackConversion.inventory_item_id == item_id, InventoryPackConversion.business_id == business_id).order_by(InventoryPackConversion.label))).all())
 
 
 async def recompute_quantity_from_movements(

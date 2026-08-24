@@ -35,6 +35,10 @@ class InventoryItem(Base, UUIDMixin, TimestampMixin):
     # 'bottle'/'keg' = liquid tracked in ml (current_quantity/par_quantity are ml).
     # bottle and keg share identical math — they differ only in UI size presets.
     unit_type: Mapped[str] = mapped_column(String(16), default="each", nullable=False)
+    # Stage 5 canonical quantity semantics. Packaging is represented separately
+    # by InventoryPackConversion; balances never use a pack unit.
+    base_unit: Mapped[str] = mapped_column(String(12), default="each", nullable=False)
+    dimension: Mapped[str] = mapped_column(String(12), default="count", nullable=False)
     # ml capacity of one storage container (one bottle / one keg). Used to convert
     # a container-count receipt into a ml delta. NULL for 'each' items.
     container_volume_ml: Mapped[Decimal | None] = mapped_column(
@@ -51,6 +55,8 @@ class InventoryItem(Base, UUIDMixin, TimestampMixin):
     )
     par_quantity: Mapped[Decimal | None] = mapped_column(Numeric(10, 3), nullable=True)
     cost_per_unit: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    weighted_average_cost: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    cost_currency_code: Mapped[str | None] = mapped_column(String(3))
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default="true", nullable=False
@@ -112,11 +118,26 @@ class StockMovement(Base, UUIDMixin):
         nullable=True,
     )
     alert_triggered: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    unit_cost_snapshot: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
+    cost_currency_code: Mapped[str | None] = mapped_column(String(3))
+    reference_type: Mapped[str | None] = mapped_column(String(32))
+    reference_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     item: Mapped["InventoryItem"] = relationship(back_populates="movements")
+
+
+class InventoryPackConversion(Base, UUIDMixin, TimestampMixin):
+    __tablename__ = "inventory_pack_conversions"
+
+    business_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    inventory_item_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    label: Mapped[str] = mapped_column(String(120), nullable=False)
+    pack_unit: Mapped[str] = mapped_column(String(16), nullable=False)
+    base_quantity: Mapped[Decimal] = mapped_column(Numeric(18, 3), nullable=False)
+    is_default_receiving_unit: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
 class InventoryDiscrepancy(Base, UUIDMixin):

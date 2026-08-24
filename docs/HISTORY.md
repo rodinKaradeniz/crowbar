@@ -1040,6 +1040,29 @@ from that commit, and scanning the exact export.
 `server/app/services/table_guest_session_service.py`, `client/proxy.ts`,
 `scripts/export-portfolio.sh`, `ml/Dockerfile`
 
+## 2026-08-24 — Stage 5 preserves one stock ledger and uses moving average cost
+
+**Context:** Purchasing introduces supplier pack prices while current stock,
+recipes, and fulfillment already use canonical quantities and an append-only
+movement ledger. A second receipt balance or recomputing historical cost from
+the latest supplier price would make COGS non-auditable.
+
+**Decision:** Store stock in `each`, ml, or g only; represent cases, bottles,
+kegs, litres, kilograms, and similar receiving choices as tenant-owned pack
+conversions. Receipts write ordinary positive stock movements and snapshot the
+per-base-unit receipt cost. The maintained item cost is moving weighted average;
+outgoing movements snapshot the cost then in force.
+
+**Consequences:** Purchase price changes do not rewrite historical consumption
+cost. Supplier payment, accounting exports, and fiscal claims remain excluded.
+Transfers and count workflows must use the same movement service rather than
+mutating balances directly.
+
+**References:** `server/db/migrations/044_inventory_units_and_cost_basis.sql`,
+`server/db/migrations/045_suppliers_purchase_orders_and_receiving.sql`,
+`server/app/services/inventory_service.py`,
+`server/app/services/purchasing_service.py`
+
 ## Entry Template
 
 ```markdown

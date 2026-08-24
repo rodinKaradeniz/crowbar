@@ -8,7 +8,9 @@ from app.models.booking_schedule import (
 from app.models.business import Business
 from app.models.customer import Customer, CustomerDataRequest, CustomerMarketingConsent, CustomerMergeAudit, CustomerNote, CustomerTag
 from app.models.happy_hour_window import HappyHourWindow
-from app.models.inventory import InventoryDiscrepancy, InventoryItem, StockMovement
+from app.models.inventory import InventoryDiscrepancy, InventoryItem, InventoryPackConversion, StockMovement
+from app.models.inventory_operations import InventoryCountLine, InventoryCountSession, InventoryTransfer, InventoryTransferLine
+from app.models.purchasing import PurchaseOrder, PurchaseOrderLine, PurchasePriceHistory, PurchaseReceipt, PurchaseReceiptLine, Supplier, SupplierProduct
 from app.models.location import Location
 from app.models.menu import ItemLibrary, Menu, MenuCategory, MenuItem, MenuItemAvailabilityEvent, Modifier, ModifierGroup
 from app.models.notification import Notification
@@ -69,6 +71,15 @@ __all__ = [
     "InventoryItem",
     "StockMovement",
     "InventoryDiscrepancy",
+    "InventoryPackConversion",
+    "InventoryTransfer", "InventoryTransferLine", "InventoryCountSession", "InventoryCountLine",
+    "Supplier",
+    "SupplierProduct",
+    "PurchaseOrder",
+    "PurchaseOrderLine",
+    "PurchaseReceipt",
+    "PurchaseReceiptLine",
+    "PurchasePriceHistory",
     "MenuItemIngredient",
     "Table",
     "TableArea",

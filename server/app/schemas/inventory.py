@@ -7,7 +7,9 @@ from pydantic import Field, model_validator
 from app.schemas.base import AppBaseModel
 
 # unit_type ∈ {each, bottle, keg}. bottle/keg store liquid quantities in ml.
-_UNIT_TYPE_PATTERN = "^(each|bottle|keg)$"
+_UNIT_TYPE_PATTERN = "^(each|bottle|keg|weight)$"
+_BASE_UNIT_PATTERN = "^(each|ml|g)$"
+_DIMENSION_PATTERN = "^(count|volume|mass)$"
 # Structured waste cause (see migration 021). Scoped to waste movements.
 _WASTE_REASON_PATTERN = "^(spillage|wrong_measure|breakage|spoilage|other)$"
 
@@ -18,6 +20,8 @@ class InventoryItemCreate(AppBaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     unit: str = Field(default="each", max_length=50)
     unit_type: str = Field(default="each", pattern=_UNIT_TYPE_PATTERN)
+    base_unit: str | None = Field(default=None, pattern=_BASE_UNIT_PATTERN)
+    dimension: str | None = Field(default=None, pattern=_DIMENSION_PATTERN)
     container_volume_ml: Decimal | None = Field(default=None, gt=0)
     # Reference pour size (ml) for the rough pours-remaining estimate. Optional.
     default_pour_ml: Decimal | None = Field(default=None, gt=0)
@@ -42,6 +46,8 @@ class InventoryItemUpdate(AppBaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     unit: str | None = Field(default=None, max_length=50)
     unit_type: str | None = Field(default=None, pattern=_UNIT_TYPE_PATTERN)
+    base_unit: str | None = Field(default=None, pattern=_BASE_UNIT_PATTERN)
+    dimension: str | None = Field(default=None, pattern=_DIMENSION_PATTERN)
     container_volume_ml: Decimal | None = Field(default=None, gt=0)
     default_pour_ml: Decimal | None = Field(default=None, gt=0)
     par_quantity: Decimal | None = Field(default=None, ge=0)
@@ -57,16 +63,50 @@ class InventoryItemResponse(AppBaseModel):
     name: str
     unit: str
     unit_type: str
+    base_unit: str
+    dimension: str
     container_volume_ml: Decimal | None = None
     default_pour_ml: Decimal | None = None
     current_quantity: Decimal
     par_quantity: Decimal | None = None
     cost_per_unit: Decimal | None = None
+    weighted_average_cost: Decimal | None = None
+    cost_currency_code: str | None = None
     notes: str | None = None
     is_active: bool
     archived_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class InventoryPackConversionCreate(AppBaseModel):
+    label: str = Field(min_length=1, max_length=120)
+    pack_unit: str = Field(pattern="^(case|each|bottle|keg|kilogram|litre|millilitre)$")
+    base_quantity: Decimal = Field(gt=0)
+    is_default_receiving_unit: bool = False
+
+
+class InventoryPackConversionResponse(AppBaseModel):
+    id: UUID
+    business_id: UUID
+    inventory_item_id: UUID
+    label: str
+    pack_unit: str
+    base_quantity: Decimal
+    is_default_receiving_unit: bool
+
+
+class TransferReceiveLine(AppBaseModel):
+    transfer_line_id: UUID
+    received_quantity: Decimal = Field(gt=0)
+    discrepancy_reason: str | None = None
+
+
+class CountReconcileLine(AppBaseModel):
+    count_line_id: UUID
+    counted_quantity: Decimal = Field(ge=0)
+    shrinkage_reason: str | None = Field(default=None, max_length=32)
+    note: str | None = None
 
 
 
@@ -131,4 +171,6 @@ class StockMovementResponse(AppBaseModel):
     notes: str | None = None
     created_by: UUID | None = None
     alert_triggered: bool
+    unit_cost_snapshot: Decimal | None = None
+    cost_currency_code: str | None = None
     created_at: datetime

@@ -34,6 +34,7 @@ from app.routers import (
     happy_hour,
     insights,
     inventory,
+    purchasing,
     notifications,
     ordering,
     public_capabilities,
@@ -234,6 +235,7 @@ app.include_router(queue.router)
 app.include_router(ordering.router)
 app.include_router(public_capabilities.router)
 app.include_router(inventory.router)
+app.include_router(purchasing.router)
 app.include_router(tabs.router)
 app.include_router(tabs.ws_router)
 app.include_router(tax.router)
