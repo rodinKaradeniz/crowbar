@@ -40,7 +40,12 @@ import {
   type StaffInvitation,
 } from "@/lib/client-api";
 
-type StaffRole = "owner" | "manager" | "staff";
+import {
+  hasCapability,
+  manageableRoles,
+  roleLabel,
+  type StaffRole,
+} from "@/lib/permissions";
 
 interface StaffClientProps {
   initialStaff: StaffResponse[];
@@ -54,9 +59,11 @@ export default function StaffClient({
   currentRole,
 }: StaffClientProps) {
   const router = useRouter();
-  const canAdminister = currentRole === "owner" || currentRole === "manager";
-  const assignableRoles: StaffRole[] =
-    currentRole === "owner" ? ["owner", "manager", "staff"] : ["staff"];
+  const canAdminister = hasCapability(currentRole, "staff.manage");
+  // Mirrors ROLE_MANAGEMENT_AUTHORITY: an owner assigns any role, a manager
+  // only the three operational ones, so a manager cannot promote to their own
+  // level. staff_service.assert_can_manage_role enforces the same server-side.
+  const assignableRoles = manageableRoles(currentRole);
   const [staffMembers, setStaffMembers] = useState(initialStaff);
   const [invitations, setInvitations] = useState<StaffInvitation[]>([]);
   const [editingStaff, setEditingStaff] = useState<StaffResponse | null>(null);
@@ -65,8 +72,9 @@ export default function StaffClient({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionInvitationId, setActionInvitationId] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [role, setRole] = useState<StaffRole>("staff");
-  const [editRole, setEditRole] = useState<StaffRole>("staff");
+  const defaultRole: StaffRole = assignableRoles[0] ?? "host_server";
+  const [role, setRole] = useState<StaffRole>(defaultRole);
+  const [editRole, setEditRole] = useState<StaffRole>(defaultRole);
 
   useEffect(() => {
     if (!canAdminister) return;
@@ -85,14 +93,13 @@ export default function StaffClient({
 
   const canManageMember = (member: StaffResponse) => {
     if (member.user_id === currentUserId) return false;
-    if (currentRole === "owner") return true;
-    return currentRole === "manager" && member.role === "staff";
+    return assignableRoles.includes(member.role as StaffRole);
   };
 
   const handleInvite = () => {
     setEditingStaff(null);
     setInviteEmail("");
-    setRole("staff");
+    setRole(defaultRole);
     setIsDialogOpen(true);
   };
 
@@ -181,6 +188,12 @@ export default function StaffClient({
     if (value === "manager") {
       return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200";
     }
+    if (value === "inventory_operator") {
+      return "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200";
+    }
+    if (value === "bar_kitchen") {
+      return "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200";
+    }
     return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200";
   };
 
@@ -226,8 +239,8 @@ export default function StaffClient({
                       {member.user_name || `Staff #${member.id.slice(0, 8)}`}
                       {member.user_id === currentUserId ? " (you)" : ""}
                     </h3>
-                    <span className={`rounded-full px-2 py-0.5 text-xs capitalize ${roleBadgeClass(member.role)}`}>
-                      {member.role}
+                    <span className={`rounded-full px-2 py-0.5 text-xs ${roleBadgeClass(member.role)}`}>
+                      {roleLabel(member.role)}
                     </span>
                   </div>
                 </div>
@@ -266,7 +279,7 @@ export default function StaffClient({
                   <div>
                     <div className="font-medium">{invitation.email}</div>
                     <div className="text-sm text-muted-foreground">
-                      <span className="capitalize">{invitation.role}</span>
+                      <span>{roleLabel(invitation.role)}</span>
                       {" · "}
                       {invitation.deliveryStatus === "sent" ? "Email sent" : "Email delivery failed"}
                     </div>
@@ -324,13 +337,16 @@ export default function StaffClient({
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {assignableRoles.map((assignableRole) => (
-                      <SelectItem key={assignableRole} value={assignableRole} className="capitalize">
-                        {assignableRole}
+                      <SelectItem key={assignableRole} value={assignableRole}>
+                        {roleLabel(assignableRole)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                <FieldDescription>Owners may manage all roles; managers may manage staff only.</FieldDescription>
+                <FieldDescription>
+                  Owners may assign any role. Managers may assign the host/server,
+                  bar/kitchen and inventory operator roles, but not owner or manager.
+                </FieldDescription>
               </Field>
             </FieldGroup>
             <DialogFooter className="mt-6">

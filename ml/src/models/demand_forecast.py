@@ -47,11 +47,22 @@ class ForecastMetrics:
 
 @dataclass
 class ForecastResult:
-    """Complete result of a demand forecasting run."""
+    """Complete result of a demand forecasting run.
+
+    `insufficient_reasons` is keyed by business id and holds the reason a venue
+    got no forecast. A new venue sitting below the floor is expected, so the
+    reason is data to render, not an error to log and drop.
+    """
 
     metrics: dict[str, ForecastMetrics] = field(default_factory=dict)
     forecasts: pd.DataFrame = field(default_factory=pd.DataFrame)
     feature_importance: dict[str, float] = field(default_factory=dict)
+    insufficient_reasons: dict[str, str] = field(default_factory=dict)
+
+
+#: Days of usable history needed before a demand forecast is produced. Two full
+#: weeks, so the 7-day lag features the model leans on actually exist.
+MIN_HISTORY_DAYS = 14
 
 
 class DemandForecastModel:
@@ -99,9 +110,18 @@ class DemandForecastModel:
             ]
             df_clean = df.dropna(subset=available_features)
 
-            if len(df_clean) < 5:
-                logger.warning(
-                    f"Business {business_id}: only {len(df_clean)} rows — skipping"
+            if len(df_clean) < MIN_HISTORY_DAYS:
+                # Below two weeks of usable history the lag features that drive
+                # this model barely exist, and a forecast built on them is noise
+                # rendered as a chart. Skipping is the honest answer.
+                result.insufficient_reasons[str(business_id)] = (
+                    f"{len(df_clean)} day(s) of usable history; at least "
+                    f"{MIN_HISTORY_DAYS} are needed to forecast."
+                )
+                logger.info(
+                    "Demand forecast skipped for business %s: %s rows",
+                    business_id,
+                    len(df_clean),
                 )
                 continue
 

@@ -43,9 +43,21 @@ BEGIN
   IF (SELECT COUNT(*) FROM businesses WHERE slug = 'example-lantern') <> 1 THEN
     RAISE EXCEPTION 'synthetic Example Lantern tenant missing or duplicated';
   END IF;
-  IF (SELECT COUNT(*) FROM staff s JOIN businesses b ON b.id = s.business_id
-      WHERE b.slug = 'example-lantern' AND s.role IN ('owner', 'manager', 'staff')) <> 3 THEN
+  -- One demo account per pilot role, so the stage-6 permission matrix can be
+  -- checked by signing in rather than by reading a table.
+  IF (SELECT COUNT(DISTINCT s.role) FROM staff s JOIN businesses b ON b.id = s.business_id
+      WHERE b.slug = 'example-lantern'
+        AND s.role IN ('owner', 'manager', 'host_server', 'bar_kitchen',
+                       'inventory_operator')) <> 5 THEN
     RAISE EXCEPTION 'canonical staff-role seed is invalid';
+  END IF;
+  -- Migration 049 retired the old catch-all role; a leftover row means the
+  -- backfill did not run.
+  IF EXISTS (SELECT 1 FROM staff WHERE role = 'staff') THEN
+    RAISE EXCEPTION 'a legacy staff role survived the 049 backfill';
+  END IF;
+  IF EXISTS (SELECT 1 FROM staff_invitations WHERE role = 'staff') THEN
+    RAISE EXCEPTION 'a legacy staff invitation role survived the 049 backfill';
   END IF;
   IF EXISTS (
     SELECT 1 FROM service_types

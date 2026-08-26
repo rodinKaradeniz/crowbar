@@ -30,7 +30,11 @@ operate a cash register, issue a fiscal receipt, or claim fiscal/accounting
 authority in this MVP.
 
 Complete these stages in order unless the user explicitly reprioritizes them.
-Stage 8 remains an external deployment action requiring separate user
+Stages 0–6 build the operational record, stage 7 makes it good to use, stage 8
+proves it locally, stages 9–10 put it in front of the venue, and stage 11 adds
+a second client once the first one is settled.
+
+Stage 9 remains an external deployment action requiring separate user
 authorization even after the local release gate passes.
 
 ### 0. Freeze the MVP contract and baseline — complete
@@ -52,7 +56,7 @@ authorization even after the local release gate passes.
   and tenant-configured tax profiles. The area-based Floor board is sufficient
   for the pilot; geometry and drag-and-drop remain later work.
 - **Complete — documentation alignment:** `AGENTS.md` and the owning documents
-  under `docs/` use the same 0–9 order, external-settlement language,
+  under `docs/` use the same 0–11 order, external-settlement language,
   Germany/non-fiscal boundary, local-first gate, and post-MVP exclusions.
 - **Complete — authoritative release inventory:**
   [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md) traces every current public and staff
@@ -63,7 +67,7 @@ authorization even after the local release gate passes.
   [`MVP_ACCEPTANCE.md`](MVP_ACCEPTANCE.md) owns the initial P0/P1/P2 register,
   assigns every audit finding to a numbered stage, and defines the risk-ranked
   journey, invariant, failure, test-level, and release-evidence matrix for
-  stages 1–7. Later implementation closes those rows instead of creating a
+  stages 1–8. Later implementation closes those rows instead of creating a
   parallel checklist.
 - **Exit gate — met:** The product/fiscal boundary is consistent across
   canonical documentation and planned contract vocabulary; every currently
@@ -103,7 +107,7 @@ regression tests are closed. Work in the following dependency order.
   deprecation-warning backlog, and create a reproducible ML test environment.
 - Add a repeatable fresh-database migration-and-seed verification. Expand the
   canonical demo seed only enough to exercise stage-1 invariants and assert its
-  schema/relationship validity; stage 7 owns the richer scenario. Never use the
+  schema/relationship validity; stage 8 owns the richer scenario. Never use the
   stale destructive reset path.
 - Capture the initial P0/P1 register in the acceptance map and require a
   regression test for each closed defect.
@@ -317,14 +321,18 @@ database constraints.
   that the external register completed settlement without Crowbar claiming to
   process payment.
 
-### 5. Finish stock, purchasing, and cost control — in progress
+### 5. Finish stock, purchasing, and cost control — complete
 
-**Started locally 2026-08-24 in migrations 044–046.** The inventory ledger now
-has canonical base-unit and moving-cost foundations, pack conversion metadata,
-supplier/purchase-order/partial-receipt persistence, and the transfer/count
-session schema. Supplier payment remains outside Crowbar. Staff transfer,
-count, CSV, and cost-control workflows are still required before this stage can
-close; do not describe the schema alone as an operationally complete workflow.
+**Schema started locally 2026-08-24 in migrations 044–047; completed locally
+2026-08-25 in migration 048.** Suppliers, supplier products with lead times,
+purchase orders with a deliberate terminal-state map, partial receiving with
+retry-safe idempotency, pack conversions, stocktake and cycle-count sessions
+with bar-native pack and keg-level entry, a CSV count-sheet round trip,
+purchase-price history, delivery-note attachments, and cost control spanning
+valuation, recipe cost, margin, pour cost, consumption variance, waste and
+controllable COGS now run on one movement ledger with a staff UI. Supplier
+payment remains outside Crowbar. Location transfers were deliberately cut — see
+the deferred entry under Product Architecture.
 
 - Add supplier records, supplier products, lead times, purchase orders,
   approval/status flow, partial receiving, substitutions, discrepancies,
@@ -333,50 +341,113 @@ close; do not describe the schema alone as an operationally complete workflow.
 - Add canonical pack and unit conversions across case, each, bottle, keg,
   kilogram, litre, and millilitre without creating a second inventory unit
   system. Keep the movement ledger authoritative.
-- Add location transfers with in-transit/reconciliation semantics; stocktake
-  and cycle-count sessions; counted-versus-book variance; bar-native
-  open-bottle/tenthing and keg-level entry; reasoned shrinkage; and safe CSV
-  import/export. Full offline counts remain post-MVP unless the pilot proves a
-  hard need.
+- Add stocktake and cycle-count sessions; counted-versus-book variance;
+  bar-native open-bottle/tenthing and keg-level entry; reasoned shrinkage; and
+  safe CSV import/export. Location transfers are deferred, not delivered. Full
+  offline counts remain post-MVP unless the pilot proves a hard need.
 - Add inventory valuation, recipe cost, menu gross margin, pour cost,
   actual-versus-theoretical consumption, controllable COGS, waste/variance,
   cost-change alerts, and explainable reorder suggestions using par, forecast,
   open purchase orders, and lead time.
 - Keep accounting exports provider-neutral and deferred until the first venue's
   accountant confirms the required German format and authority boundary.
-- **Exit gate:** a manager can order, receive, count, reconcile, and explain
-  stock and margin from one auditable ledger without entering or implying
-  payment data.
+- **Exit gate — met:** a manager can order, receive, count, reconcile, and
+  explain stock and margin from one auditable ledger without entering or
+  implying payment data. Evidence in `MVP_ACCEPTANCE.md`.
 
-### 6. Staff, CRM, and operational reporting — ready after stage 5
+### 6. Staff, CRM, and operational reporting — complete
+
+**Completed locally 2026-08-26 in migration 049.** Authorization moved from a
+flat role list to a fixed five-role capability matrix covering every
+authenticated route; guests can raise their own access, correction, deletion and
+consent-withdrawal requests through the reservation link they already hold;
+consent withdrawal now actually suppresses marketing at the send boundary; a
+reporting surface covers bookings and no-shows, queue wait and seating
+conversion, table utilization and turn time, station throughput and ticket
+timing, the three separate value figures, stock and waste, purchasing spend and
+staff actions, each over a chosen range with CSV export; and Insights survives an
+ML restart by serving its last result marked stale. Evidence in
+`MVP_ACCEPTANCE.md`.
 
 - Replace coarse operational access with a secure fixed MVP permission matrix:
-  owner, manager, host/server, bar/kitchen, and inventory operator. Add shared-
-  device PIN unlock/automatic lock only if the pilot hardware/workflow requires
-  it; defer a tenant-custom permission builder.
+  owner, manager, host/server, bar/kitchen, and inventory operator. Shared-device
+  PIN unlock and a tenant-custom permission builder are deferred with triggers
+  below.
 - Complete the guest timeline across reservations, queue, tabs, and orders;
   guest-led data-request/withdrawal intake; consent suppression; privacy contact;
   scheduled retention; conservative merge; and venue-owned portable export.
-  Defer automated marketing, loyalty, and review campaigns.
+  Automated marketing, loyalty, and review campaigns remain deferred.
 - Provide authoritative reports for reservations/covers/no-shows, queue wait
   and seating conversion, table utilization/turn time, ordered items/stations,
   open versus externally settled tabs, inventory movement and variance,
   purchasing cost, recipe cost, margin, waste, and staff actions/ticket timing.
-  Add CSV/PDF where operationally useful, but not fiscal or accounting reports.
+  CSV ships; PDF is deferred with a trigger below. No fiscal or accounting
+  report exists.
 - Keep ML optional and failure-tolerant. Persist latest results and establish
   minimum-data, reproducibility, leakage, drift, version, and scheduling rules;
   do not let ML readiness block the core pilot.
-- **Exit gate:** each pilot role sees only the data/actions it needs, managers
-  can explain service and stock outcomes, and privacy operations are usable
-  without marketing automation.
+- **Exit gate — met:** each pilot role sees only the data/actions it needs,
+  managers can explain service and stock outcomes, and privacy operations are
+  usable without marketing automation. Evidence in `MVP_ACCEPTANCE.md`.
+- **Deferred — shared-device PIN unlock and automatic lock.** Nobody has
+  confirmed the pilot runs a shared terminal, and building a second
+  authentication path for a workflow that may not exist is exactly the
+  over-building `RULES.md` warns about. Every role signs in with its own account
+  today. **Trigger:** the venue confirms a shared terminal behind the bar that
+  more than one person uses during a shift.
+- **Deferred — PDF report export.** CSV covers the operational need: a manager
+  takes a figure into whatever they already use. PDF means a new dependency and a
+  rendering path this repository has never had. **Trigger:** a pilot user needs
+  to hand a report to someone on paper.
 
-### 7. Demo environment and local release gate — ready after stage 6
+### 7. Interface redesign pass — ready after stage 6
+
+The first six stages build the operational record; this stage makes it good to
+use. Run it once every workflow is authoritative, so the redesign works on
+finished behavior instead of guessing at it, and so stage 8's release gate and
+demo journey validate the interface the pilot will actually ship.
+
+This is a presentation stage. It does not add features. If a surface needs a
+field, endpoint, or rule that does not exist, record it in `TODO.md` and leave
+the surface honest — do not grow stage 7 into stage 5 or 6 work.
+
+- Audit every retained staff and guest surface against the real task it serves:
+  what the operator is doing, on which device, under what interruption, and how
+  many taps it currently costs. Record findings before redesigning; a page with
+  no measured problem does not need a redesign.
+- Absorb the mobile-first staff audit into this stage. Host, bartender, server,
+  inventory-count, and manager tasks are judged on taps, latency, one-handed
+  use, interruption recovery, and accessibility during live service.
+- Settle the design system before applying it. Promote
+  [`DESIGN.md`](DESIGN.md) from a description of what exists into the committed
+  contract: tokens, type scale, spacing, density, operational status treatment,
+  empty/loading/error/module-disabled states, and the responsive breakpoints.
+  Every screen then derives from that contract instead of inventing locally.
+- Consolidate the component layer so one shared, documented primitive set backs
+  every surface, and so stage 11 can reuse the same contract on a second
+  client. Delete one-off variants as they are replaced; do not maintain two
+  design languages during the pass.
+- Do a copy and naming pass across staff surfaces: rename ML Insights to
+  operator-legible language, keep the **settled externally** vocabulary exact,
+  never call an uncollected total revenue, and keep empty and failure states
+  honest rather than decorative.
+- Re-verify accessibility, reduced-motion, keyboard operation, contrast, and
+  responsive behavior after the pass, not before it.
+- Keep the area-based Floor board unless the audit produces evidence against
+  it. Geometry and drag-and-drop remain a separate later decision.
+- **Exit gate:** every retained surface follows one documented design contract,
+  each pilot role can complete its core task on a phone during service, no
+  screen carries a placeholder or dishonest state, and no functional behavior
+  changed without being recorded as its own item.
+
+### 8. Demo environment and local release gate — ready after stage 7
 
 - Expand the canonical demo tenant with areas, tables, combinations, current
   and future reservations, offer-ready waitlist, active queue, open seating and
   tab, kitchen/bar orders, externally settled history, recipes, stock risks,
   suppliers, purchase orders, stock counts, cost/margin examples, guest
-  profiles, role-limited staff, and printable table QR sheets.
+  profiles, and printable table QR sheets. Role-limited staff ship as of stage
+  6 — the seed carries one account per role.
 - Automate the critical browser journey: book → assign/seat → QR/staff order →
   fulfill → deduct/reconcile stock → record waste → settle externally → close
   seating → inspect guest and cost history.
@@ -391,7 +462,7 @@ close; do not describe the schema alone as an operationally complete workflow.
   device/browser matrix; the demo can be reset reproducibly without destructive
   production tooling.
 
-### 8. Railway deployment — blocked on stages 0–7 and explicit authorization
+### 9. Railway deployment — blocked on stages 0–8 and explicit authorization
 
 - Resume the existing Railway project only after the local release gate passes
   and the user explicitly authorizes deployment work. Reconcile the preserved
@@ -407,7 +478,7 @@ close; do not describe the schema alone as an operationally complete workflow.
 - **Exit gate:** the exact locally accepted build runs in a recoverable,
   observable Railway environment and passes post-deploy critical journeys.
 
-### 9. Supervised pilot rollout — ready after stage 8
+### 10. Supervised pilot rollout — ready after stage 9
 
 - Introduce the venue in controlled steps: configuration/demo data;
   reservations/queue/floor alongside the incumbent process; ordering and
@@ -422,6 +493,33 @@ close; do not describe the schema alone as an operationally complete workflow.
 - **Exit gate:** the venue can run the agreed operational loop under supervision
   with reconciled data, trained staff, documented fallback, and no unresolved
   high-risk defect.
+
+### 11. Mobile app on the shared design system — ready after stage 10
+
+Deferred until the pilot proves the workflows and the redesign settles the
+design contract. Building a second client before either is stable duplicates
+churn across two codebases.
+
+- **Needs decision — audience and technology:** Staff shift operations, owner
+  analytics, and guest booking/ordering are three different products. Pick one
+  first, then compare a stronger responsive web/PWA against React Native, Expo,
+  and Flutter on offline behavior, push notifications, camera/QR, background
+  work, distribution, and team capacity. An installable PWA is the honest
+  baseline the native options must beat.
+- Reuse the stage 7 design contract rather than reinterpreting it: same tokens,
+  type scale, status treatment, and vocabulary, adapted to platform-native
+  navigation and touch targets instead of copied pixel for pixel.
+- Reuse the existing API, authentication, entitlement, and module boundaries.
+  Do not add a mobile-only backend, a second ordering path, or a parallel
+  booking engine.
+- Define the offline contract before building: which views stay readable, which
+  writes may queue, how staff see stale state, and how conflicts reconcile.
+  Do not promise generic "offline mode" without per-operation safety rules.
+- Decide push notification ownership, device/session revocation, store
+  distribution, and release cadence alongside the web release process.
+- **Exit gate:** the chosen audience can complete its core journey on the app
+  with the same authority, tenancy, and vocabulary guarantees as the web
+  client, and the design reads as the same product.
 
 ### Post-MVP: German fiscal POS, payments, and broader platform work — deferred
 
@@ -449,7 +547,7 @@ close; do not describe the schema alone as an operationally complete workflow.
 
 The following completed local stages remain useful evidence and must not be
 mistaken for the new MVP exit gate. They predate the 2026-08-13 supervised-pilot
-roadmap and feed its stages 1–7.
+roadmap and feed its stages 1–8.
 
 ### Authoritative availability and capacity — complete
 
@@ -609,25 +707,16 @@ the confirmed sequence unless a stage explicitly pulls the item forward.
   as features evolve.
 - **Ready:** Reconcile environment examples with every supported mode,
   including frontend mock mode and production CORS configuration.
-- **In progress:** `docs/backlog.md` is explicitly a legacy ledger; its payment,
-  staff-invitation, phone-normalization, and reminder entries are reconciled
-  with the MVP boundary. Reconcile or retire the remaining historical entries
-  instead of extending the file.
+- **Complete — 2026-08-25:** `docs/backlog.md`, `docs/README.md`,
+  `docs/PORTABLE_AGENT_SETUP.md`, `docs/plans/`, and root `reminders.txt` were
+  removed after every unresolved entry was reconciled into this file. `AGENTS.md`
+  is now the only document ownership map and reading order.
 - **Ready:** Add nested `AGENTS.md` files only when client, server, or ML work
   develops genuinely different recurring instructions. Avoid duplicating the
   root guide.
-- **Ready — deferred agent skills:** Nine skills are specified in
-  [`SKILLS.md`](SKILLS.md) but not written: `change-crowbar-service-time`,
-  `change-crowbar-inventory-ledger`, `change-crowbar-realtime`,
-  `verify-crowbar-change`, `review-crowbar-shift-usability`,
-  `shape-crowbar-product-change`, `experiment-crowbar-ml`, `release-crowbar`,
-  and `record-crowbar-decision`. The first five were deferred on 2026-08-17
-  rather than shipped thin; the last four were folded in on 2026-08-18 when
-  `SKILLS.md` retired its overlapping candidate catalogue. `release-crowbar`
-  additionally waits on the deployment arc resuming. The trigger for writing
-  one is repeated real friction in that workflow, not completeness of the list.
-  Each must be grounded in verified source paths, and must not duplicate an
-  installed skill — check the division of labor in `SKILLS.md` first.
+- **Deferred — additional agent skills:** [`SKILLS.md`](SKILLS.md) lists the
+  named candidates and the bar for writing one. None is scheduled; the trigger
+  is repeated real friction in that workflow, not completeness of the list.
 
 ## Product and UX
 
@@ -663,10 +752,19 @@ the confirmed sequence unless a stage explicitly pulls the item forward.
   delivery/support-triage path; they must not keep their false-success state.
 - **Needs decision:** Review and approve the landing FAQ and pricing copy before
   treating it as published product messaging.
+- **Needs decision:** Decide whether a booking type may attach a small set of
+  venue-defined questions to a reservation (allergies, occasion, seating
+  preference). The guest CRM already stores dietary notes, so confirm this is
+  not a second overlapping capture path before designing it.
+- **Complete — stage 6:** Every report takes an explicit range through a shared
+  picker (`client/components/reports/report-range.tsx`) and echoes the window
+  back beside the figure, so a number on screen always carries the period it
+  covers. The Inventory cost-control panel, which hard-coded 28 days, uses the
+  same picker.
 
 ## Testing and Quality
 
-- **Ready — stages 0, 1, and 7:** Build the risk-based acceptance matrix and
+- **Ready — stages 0, 1, and 8:** Build the risk-based acceptance matrix and
   use unit, PostgreSQL integration, contract, end-to-end, visual,
   accessibility, performance, security, concurrency, failure, and migration
   tests according to blast radius and invariant ownership.
@@ -676,7 +774,7 @@ the confirmed sequence unless a stage explicitly pulls the item forward.
 - **Ready:** Expand PostgreSQL-backed backend integration coverage for every
   module, tenant isolation, roles, public endpoint abuse cases, idempotency,
   legal state transitions, and inventory ledger effects.
-- **Ready — stage 7:** Use Playwright for the small critical browser-journey
+- **Ready — stage 8:** Use Playwright for the small critical browser-journey
   suite unless implementation discovery finds a repository-specific blocker;
   retain Vitest/Testing Library for component and mapper behavior.
 - **Ready:** Add migration-chain tests against a fresh database in addition to
@@ -711,7 +809,7 @@ the confirmed sequence unless a stage explicitly pulls the item forward.
 
 ## Deployment
 
-- **Blocked on stages 0–7 and explicit authorization — Railway rollout:**
+- **Blocked on stages 0–8 and explicit authorization — Railway rollout:**
   Deployment is intentionally paused while local MVP development and
   verification continue. In project
   `crowbar`, private PostgreSQL, private Redis, and the public FastAPI service
@@ -739,8 +837,10 @@ the confirmed sequence unless a stage explicitly pulls the item forward.
   `frame-ancestors 'self'`; operators may configure exact HTTP(S) origins with
   `RESERVATION_FRAME_ANCESTORS`, and wildcard values are rejected. A future
   per-business allowlist remains optional breadth.
-- **Ready:** Persist tenant-scoped ML result summaries so an ML service restart
-  does not empty the Insights dashboard until the next pipeline run.
+- **Complete — stage 6:** FastAPI snapshots each successful Insights read into
+  `ml_result_snapshots` (migration 049) and serves the snapshot marked
+  `stale: true` with its capture time when the ML service is unreachable, so a
+  restart degrades the dashboard visibly instead of emptying it.
 - **Ready:** Complete abuse controls for the Next.js docs assistant and
   evaluate whether an edge/WAF layer is warranted. FastAPI now has local,
   Redis-backed rolling-window limits for auth, public reservation, queue,
@@ -772,14 +872,46 @@ the confirmed sequence unless a stage explicitly pulls the item forward.
   not make personal data anonymous.
 - **Ready — stage 4:** Replace hard-coded `kitchen | bar | any` routing tags
   with tenant-configurable preparation stations.
-- **Ready — stage 6 / deferred expansion:** Implement the confirmed fixed MVP
-  permission matrix and audit security-sensitive actions in stage 6. A fully
-  tenant-custom permission builder and platform-wide audit explorer remain
-  post-MVP.
+- **Complete — stage 6:** The fixed five-role capability matrix ships in
+  `server/app/core/permissions.py`, mirrored to `client/lib/permissions.ts` and
+  documented route-by-route in [`permission-matrix.md`](permission-matrix.md).
+- **Needs decision — tenant-configurable RBAC.** Evaluate whether a venue owner
+  should be able to define their own roles and capability sets rather than
+  living with the fixed five. This is an evaluation, not an agreed feature: the
+  question to answer first is whether a real pilot venue actually wants a sixth
+  role, or whether the five cover the jobs a bar staffs. If they do, the
+  evaluation must cover where a tenant-defined matrix is stored and validated,
+  how a capability is retired without silently widening access, whether a
+  tenant can grant a capability its own role does not hold, how the frontend
+  mirror stays correct when the map is no longer compile-time, what the
+  migration path is for venues on the fixed matrix, and what an operator sees
+  when they lock themselves out. The current design is deliberately hostile to
+  this — the map is a frozen module with an import-time well-formedness check —
+  so treat a positive answer as a rewrite of the authorization layer, not an
+  extension of it. **Trigger:** a pilot venue asks for a role the fixed five do
+  not cover, twice.
+- **Deferred — platform-wide audit explorer.** Stage 6 reports over the actor
+  columns that already exist rather than introducing an audit-event table,
+  because a general log would mean a second write path on every mutation for a
+  reporting convenience. **Trigger:** an incident that the existing actor
+  columns cannot reconstruct.
 - **Needs decision:** Design active context for dual-role or multi-business
   accounts before changing the one-business tenancy assumption.
 - **Deferred:** Multi-location management and location filtering UI. The
   floor-plan stage stays location-ready but does not pull this scope forward.
+- **Deferred — inventory location transfers.** Migrations 046 and 047 hold the
+  transfer schema and the ORM models remain mapped and documented as dormant,
+  but no route reaches them. The pilot runs one location, no endpoint creates a
+  second one, and `inventory_items.location_id` is nullable with one row per
+  item rather than one per (item, location), so a transfer could never move an
+  ordinary item. **Trigger:** the venue actually runs a second stockroom. That
+  work starts with location CRUD and per-location stock identity, not with the
+  transfer routes.
+- **Deferred — S3 attachment storage.** Purchase-order attachments ship against
+  `LocalStorageService`, so uploaded delivery notes live on the container disk
+  and do not survive a restart. `S3StorageService` still raises
+  `NotImplementedError`. **Trigger:** any deployment that must retain
+  attachments — implement S3 before relying on them off a single host.
 - **Ready:** Replace the sidebar queue-count poll with shared real-time state
   when the queue socket is lifted into a common provider.
 - **Ready — stage 4:** Add real-time tab updates; tab detail is currently
@@ -806,12 +938,9 @@ the confirmed sequence unless a stage explicitly pulls the item forward.
 
 ## Client Applications
 
-- **Needs decision — Mobile app:** Define the primary audience and native-only
-  value before choosing technology. Staff shift operations, owner analytics,
-  and customer booking/ordering are different products. Compare a stronger
-  responsive web/PWA experience with React Native, Expo, Flutter, and native
-  apps based on offline behavior, push notifications, camera/QR, background
-  work, device integrations, distribution, and team capacity.
+- **Mobile app — owned by stage 11.** The audience and technology decision,
+  design reuse, offline contract, and API reuse rules live there; do not open a
+  parallel mobile plan here.
 - **Needs decision — Desktop app:** Identify desktop-specific workflows before
   wrapping the web app. Compare an installable PWA with Tauri or Electron based
   on offline resilience, kitchen/bar display mode, receipt printers, cash
@@ -820,17 +949,15 @@ the confirmed sequence unless a stage explicitly pulls the item forward.
 - **Needs decision:** Define a shared API, authentication, entitlement,
   observability, release, and design-system strategy across web, mobile, and
   desktop without forcing every client into identical interaction patterns.
-- **Deferred beyond MVP, with graceful degradation required in stage 7:**
+- **Deferred beyond MVP, with graceful degradation required in stage 8:**
   Define an offline survival contract for live service:
   which queue, table, order, and inventory views remain readable; which writes
   may queue locally; how staff see stale state; and how conflicts reconcile
   after connectivity returns. Do not promise generic "offline mode" without
   per-operation safety rules.
-- **Ready — stage 7:** Treat mobile-first staff operation as a measurable
-  workflow requirement now, independent of whether a native app is chosen
-  later. Audit host, bartender, server, inventory-count, and manager tasks for
-  taps, latency, one-handed use, interruption recovery, and accessibility
-  during service.
+- **Mobile-first staff operation — owned by stage 7.** Treating it as a
+  measurable workflow requirement is independent of whether a native app is
+  ever chosen; the audit runs in the redesign pass.
 
 ## Conversational AI
 
@@ -856,15 +983,32 @@ the confirmed sequence unless a stage explicitly pulls the item forward.
   input, provider retry, and human escalation before production rollout.
 - **Deferred:** Generalize the channel adapter to Instagram, web chat, SMS, or
   voice only after the WhatsApp workflow and operational model are validated.
+- **Ready:** WhatsApp as an outbound reservation-notification channel is a
+  smaller, separable step from the bot. The `notification_channels` JSONB
+  column on businesses already accepts additional channel values, so adding
+  `"whatsapp"` is backward compatible and does not require the conversational
+  model to be settled first.
 
 ## Data and ML
 
 - **Ready within stages 5–6:** Attach waste/loss analysis, reorder suggestions,
   and richer operational forecasting to purchasing and cost-control actions
   rather than building isolated predictions. ML remains optional for the pilot.
-- **Ready:** Establish reproducible training/evaluation artifacts and tests;
-  current latest results are process-memory state backed by durable prediction
-  tables.
+- **Complete — stage 6:** Minimum-data floors, reproducibility, leakage and
+  seeding rules are documented in `ml/CONTEXT.md` and asserted by
+  `ml/tests/test_model_policy.py`. Latest results survive an ML restart through
+  `ml_result_snapshots`.
+- **Needs decision — nothing writes cancellation-risk predictions.**
+  `analytics_service.get_high_risk_reservations` queries
+  `model_name='cancellation'` / `entity_type='reservation'`, but the pipeline
+  only ever persists `customer_segmentation` rows, so the endpoint returns an
+  empty list for every tenant and always has. It now answers honestly rather
+  than erroring, and the Insights panel shows an empty state. Decide whether
+  per-reservation cancellation risk is worth persisting at all before building
+  it: the model is trained and evaluated on every run, so the missing piece is
+  storage plus a decision about what a manager does with a risk score.
+  **Trigger:** a pilot venue with enough booking history to clear
+  `MIN_TRAINING_SAMPLES` asks to act on no-show risk.
 - **Ready:** Add model/data drift monitoring, minimum-data thresholds, model
   versioning, and scheduled pipeline execution.
 - **Ready:** Review whether the ML service should retain write access only to

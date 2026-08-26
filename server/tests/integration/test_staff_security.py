@@ -67,7 +67,7 @@ async def test_manager_cannot_manage_owner_or_invite_manager(
     role_change = await client.patch(
         f"/api/staff/{owner['id']}",
         headers={"Authorization": f"Bearer {manager_token}"},
-        json={"role": "staff"},
+        json={"role": "host_server"},
     )
     invite = await client.post(
         "/api/staff/invite",
@@ -85,7 +85,7 @@ async def test_staff_removal_revokes_existing_session_and_is_tenant_scoped(
 ):
     owner_token, business_id, _ = await _owner(client, "removal")
     _, assignment, staff_token = await _staff_user(
-        db_session, business_id=business_id, role="staff", suffix="removal"
+        db_session, business_id=business_id, role="host_server", suffix="removal"
     )
     assignment_id = str(assignment.id)
     other_owner_token, _, _ = await _owner(client, "removal-other")
@@ -122,7 +122,7 @@ async def test_invitation_is_single_use_and_delivery_status_is_truthful(
     invited = await client.post(
         "/api/staff/invite",
         headers={"Authorization": f"Bearer {owner_token}"},
-        json={"email": "invited@example.com", "role": "staff"},
+        json={"email": "invited@example.com", "role": "host_server"},
     )
     assert invited.status_code == 201, invited.text
     assert invited.json()["delivery_status"] == "sent"

@@ -11,6 +11,10 @@ class StorageService(ABC):
         pass
 
     @abstractmethod
+    async def download(self, file_path: str) -> bytes:
+        pass
+
+    @abstractmethod
     async def delete(self, file_path: str) -> bool:
         pass
 
@@ -28,6 +32,17 @@ class LocalStorageService(StorageService):
 
         return f"/uploads/{file_path}"
 
+    async def download(self, file_path: str) -> bytes:
+        clean_path = file_path.removeprefix("/uploads/")
+        full_path = os.path.join(self.base_dir, clean_path)
+        # Refuse to read outside the upload root even if a stored key is
+        # malformed; object keys are generated, but a read primitive should not
+        # depend on that to stay contained.
+        if os.path.commonpath([os.path.realpath(full_path), os.path.realpath(self.base_dir)]) != os.path.realpath(self.base_dir):
+            raise FileNotFoundError(file_path)
+        with open(full_path, "rb") as f:
+            return f.read()
+
     async def delete(self, file_path: str) -> bool:
         # Strip leading /uploads/ if present
         clean_path = file_path.removeprefix("/uploads/")
@@ -41,6 +56,9 @@ class LocalStorageService(StorageService):
 
 class S3StorageService(StorageService):
     async def upload(self, file_path: str, file_data: bytes) -> str:
+        raise NotImplementedError("S3 storage not yet configured")
+
+    async def download(self, file_path: str) -> bytes:
         raise NotImplementedError("S3 storage not yet configured")
 
     async def delete(self, file_path: str) -> bool:

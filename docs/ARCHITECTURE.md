@@ -1,6 +1,6 @@
 # Crowbar Architecture
 
-Last verified against the repository and confirmed MVP boundary on 2026-08-14.
+Last verified against the repository and confirmed MVP boundary on 2026-08-25.
 
 ## Product Boundary
 
@@ -97,8 +97,10 @@ components and FastAPI dependencies perform the authoritative auth checks.
 - `app/services/`: domain logic and database operations.
 - `app/models/`: async SQLAlchemy ORM models.
 - `app/schemas/`: Pydantic wire contracts based on `AppBaseModel`.
-- `app/dependencies.py`: JWT authentication, current-business resolution, role
-  checks, and module entitlements.
+- `app/dependencies.py`: JWT authentication, current-business resolution,
+  capability checks, and module entitlements.
+- `app/core/permissions.py`: the fixed five-role capability matrix. Single
+  source of truth for authorization; mirrored to `client/lib/permissions.ts`.
 - `app/core/`: Redis client, application rate limiting, domain events, stream
   consumer, WebSocket projections, and structured API errors.
 - `app/jobs/reservation_reminders.py`: one-shot, platform-wide reservation
@@ -153,9 +155,10 @@ Neither the browser nor a request-supplied business ID selects the ML tenant.
 4. The proxy reads the cookie and attaches `Authorization: Bearer ...`.
 5. FastAPI verifies the token, checks the user's current `session_version` and
    active staff assignment, resolves the assignment's business, and applies
-   role/module dependencies. Password/security changes, staff removal, and
-   account disablement increment the version so existing HTTP and WebSocket
-   credentials stop working immediately.
+   capability/module dependencies. Password/security changes, **role changes**,
+   staff removal, and account disablement increment the version so existing HTTP
+   and WebSocket credentials stop working immediately — a demotion takes effect
+   for a session that is already open, not at the next login.
 
 Do not read the cookie from client JavaScript or treat a browser-supplied
 business ID as authority.
@@ -164,9 +167,46 @@ Staff accounts enter through the atomic business-owner registration path or a
 business-scoped invitation. Invitation and password-reset secrets are stored as
 hashes, expire, and are consumed once; request endpoints return generic
 responses, while invitation management records truthful send/failure state for
-authorized owners/managers. Role mutations enforce `owner > manager > staff`,
-prevent self-removal and removal of the last owner, and derive the tenant from
-the authenticated assignment rather than request identifiers.
+authorized owners/managers. Role mutations prevent self-removal and removal of
+the last owner, and derive the tenant from the authenticated assignment rather
+than request identifiers.
+
+### Permission model
+
+The venue staffs five fixed roles: `owner`, `manager`, `host_server`,
+`bar_kitchen`, and `inventory_operator`, constrained by `ck_staff_role`
+(migration 049). A role is not checked directly. `app/core/permissions.py` maps
+each role to a set of capability strings, and routes ask for a capability
+through `require_capability("purchasing.order.approve")` rather than naming
+roles. Call sites therefore state intent, and one module holds every
+authorization decision.
+
+The map is hard-coded and resolved at import time. It is not configuration, not
+tenant-editable, and has no admin UI — a tenant-configurable RBAC module is a
+deferred post-MVP item in `docs/TODO.md`.
+
+Two boundaries are deliberately separate. A capability says what a role may do.
+`ROLE_MANAGEMENT_AUTHORITY`, enforced by `staff_service.assert_can_manage_role`,
+says which roles an actor may hand out: an owner assigns anything, a manager
+assigns only the three operational roles, so a manager can neither promote
+someone to their own level nor edit a peer.
+
+Every authenticated route names exactly one capability, apart from a short
+recorded exemption list of self-service account and session-context routes.
+`docs/permission-matrix.md` is generated from the running app by
+`server/scripts/generate_permission_matrix.py` and is the review artifact;
+`tests/integration/test_permission_matrix.py` fails when an authenticated route
+has neither a capability nor an exemption, so a new route cannot default open.
+
+`client/lib/permissions.ts` mirrors the map so a staff member never sees a
+control the API would reject, and `/api/auth/me/context` returns the server's own
+capability list so an open session follows a role change. The server is the
+authority in every case; the mirror only saves a round trip. A frontend parity
+test reads the Python module and fails on drift.
+
+Capabilities do not replace module entitlement or tenancy. A route can carry
+all three, and they answer different questions: has the venue bought this, does
+this role do this work, and does this row belong to this tenant.
 
 ### Public guest HTTP
 
@@ -280,7 +320,10 @@ uses the business timezone and HTML email escapes user content.
    membership, and a relevant enabled module. The scoped credential is rejected
    by normal HTTP authentication.
 3. A queue or order HTTP mutation commits PostgreSQL state.
-4. The router publishes a `DomainEvent` to Redis Stream `crowbar:events`.
+4. The router publishes a `DomainEvent` to Redis Stream
+   `crowbar:events:<database>`. The stream is keyed by the producing
+   database so a shared Redis never replays one database's events against
+   another's tenants.
 5. FastAPI's lifespan consumer group `ws_push` reads the event, re-queries
    current database state, and broadcasts a projection through an in-memory
    queue or order WebSocket manager. Reservation, queue, and `floor_plan.*`
@@ -524,6 +567,97 @@ client preview never becomes calculation authority.
 Tab totals, recipe servings remaining, and reference pours remaining are
 computed rather than denormalized.
 
+### Purchasing, pack conversion and cost basis
+
+- Suppliers, supplier products, purchase orders and receipts are tenant-owned
+  rows reached through `/api/purchasing/{business_id}/...`. The router carries
+  `require_module("inventory")`; purchasing is a feature of that module, not a
+  module of its own.
+- Purchase order and receipt quantities count **packs**, and their `unit_price`
+  is per pack. `purchase_price_history.unit_cost_per_base_unit` is per canonical
+  base unit. Conversion between the two always goes through the pack
+  conversion's `base_quantity`.
+- Receiving locks the purchase order, re-checks the idempotency key **under that
+  lock**, and compares a request fingerprint so a replayed key with a different
+  body is refused rather than silently returning the first receipt.
+- A receipt writes an ordinary positive `receive` movement through
+  `inventory_service.apply_movement`, which recomputes the item's moving
+  weighted average cost. Receipts never write a balance directly.
+- A receipt cannot stamp a movement with a location that contradicts where the
+  item is stocked. Order status is recomputed from line quantities, never taken
+  from the request.
+- Purchase order status transitions are an explicit map. `received`,
+  `closed_short` and `cancelled` are terminal; `closed_short` requires a reason
+  and exists so an order that ends incomplete does not claim nothing arrived.
+- Supplier products carry `lead_time_days`, which is the forecast term in reorder
+  suggestions. Archiving a supplier is refused while it has open orders.
+- Attachments store a storage-relative object key and are served only through an
+  authenticated tenant-scoped route, never the public `/uploads` mount.
+
+### Stocktakes and cost control
+
+- Opening a count session seeds one line per selected active item from the
+  current book quantity. A partial unique index allows only one open session per
+  location, and treats a null location as a single slot.
+- Counts may be keyed in canonical base units, in packs (an open bottle is a
+  fraction), or as a keg level. The service converts to base units and preserves
+  what was keyed in `entry_mode`, `entry_value` and `entry_pack_conversion_id`.
+- Saving lines and reconciling both take the session row lock, so a save cannot
+  interleave with a reconcile reading the same lines.
+- Reconciling re-reads each book quantity **under lock** rather than trusting the
+  figure seeded when the session opened, then posts the difference as an ordinary
+  `adjust` or `waste` movement. A negative variance requires a shrinkage reason.
+- The CSV count sheet exports and imports the same shape. An import is validated
+  whole and rejected whole: a half-imported stocktake is worse than none.
+- Cost figures are read-only derivations over movement and order facts. Money
+  totals quantize half-up at the tenant currency's minor unit; per-base-unit
+  costs do not, because rounding them to cents would misstate consumption.
+- Every cost payload carries the non-fiscal disclosure and a `complete` flag with
+  the specific reason it is not complete. No figure substitutes zero for a
+  missing cost, recipe or lead time.
+
+### Operational reporting
+
+`app/services/reporting_service.py` derives every report at read time from the
+ledgers the service loop already writes — reservation statuses and no-show
+columns, queue transitions, seatings, order lines and their status timeline,
+settlement events, stock movements, count lines, purchase receipts. Nothing is
+denormalized and no report writes.
+
+Every route takes a required `start`/`end` window and echoes it back, so a figure
+on screen always carries the range it covers. `reporting_service.Window` rejects
+a backwards range with 422. Guards split three ways: `reports.service` for floor
+outcomes, `reports.cost` for stock and purchasing, `reports.staff_actions` for
+who did what, each combined with the module that owns the underlying data.
+
+Value reporting keeps three figures apart and never sums them: ordered value from
+`orders.total_amount`, open-tab value from orders on tabs still `open`, and
+externally settled value from `tab_settlement_events.total_snapshot` — the
+immutable amount captured when the venue's own register took payment, never
+recomputed from orders. Every response carries `complete`, the specific reason
+when it is false, and a disclosure the client renders verbatim.
+
+Staff-action reporting reads the actor columns that already exist on purchase
+orders, receipts, count sessions, settlement events and reservations. There is no
+audit-event table; a platform-wide audit explorer is deferred.
+
+`app/core/csv_export.py` renders every export: a buffered `csv.DictWriter` to a
+string, served as a plain `Response` with a download filename and
+`Cache-Control: private, no-store`. Buffered rather than streamed so a failure
+happens before any bytes reach the client, and because each export is bounded by
+one venue's ledger over one date range.
+
+### ML result snapshots
+
+`app/routers/insights.py` proxies the private ML service and snapshots each
+successful read into `ml_result_snapshots` (migration 049), one row per tenant
+and resource. When the service is unreachable the router serves that snapshot
+with `stale: true` and its `captured_at`, or an honest empty state when there is
+nothing remembered — never a 503 to the dashboard. An error *response* from a
+reachable service is passed through unchanged, because it is a real answer.
+`POST /api/insights/run` keeps its 503: there is nothing honest to remember
+about a run that never started.
+
 ## Data and Migration Model
 
 The custom migrator sorts `*.sql` filenames and records applied filenames in
@@ -535,11 +669,11 @@ Backend integration tests do not run migrations. Their autouse fixture creates
 and drops ORM metadata in a dedicated `crowbar_test` PostgreSQL database. This
 means both migrations and ORM metadata require deliberate validation.
 
-Migrations 023–043 are implemented locally. On 2026-08-23 the repeatable
-`scripts/verify-fresh-db.sh` check applied the full 001–043 chain, ran the
+Migrations 023–049 are implemented locally. On 2026-08-25 the repeatable
+`scripts/verify-fresh-db.sh` check applied the full 001–048 chain, ran the
 canonical synthetic seed twice, asserted its schema/relationship invariants,
 and cleaned the disposable database. The seed still lacks the complete Stage
-7 pilot scenario and therefore does not prove the full MVP demo journey.
+8 pilot scenario and therefore does not prove the full MVP demo journey.
 Railway remains at migrations 001–022 while deployment is paused.
 
 Migrations 005 and 006 were renamed early in the project. A database restored
@@ -571,7 +705,7 @@ public FastAPI service are online in EU West; API health and migrations 001–02
 were verified there. Next.js, ML, reminders, retention scheduling, and durable
 uploads are not deployed, and the local rate-limit implementation is not
 active in Railway until its code is deployed with `RATE_LIMIT_ENABLED=true`.
-The rollout remains paused until MVP stages 0–7 pass locally and the user
+The rollout remains paused until MVP stages 0–8 pass locally and the user
 explicitly authorizes deployment work. `docs/deployment.md` records the resume
 point. Production readiness still requires web origin/CORS, secrets, durable
 storage, private ML networking, backups/restore, observability, job/delivery

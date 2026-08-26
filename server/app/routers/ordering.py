@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.events import DomainEvent, publish
+from app.core.permissions import has_capability
 from app.core.public_access import has_required_privacy_contact
 from app.core.rate_limit import (
     PUBLIC_ORDER_IP_LIMIT,
@@ -16,7 +17,13 @@ from app.core.rate_limit import (
     get_client_ip,
 )
 from app.database import get_db
-from app.dependencies import get_current_business, get_current_user, require_module, require_roles
+from app.dependencies import (
+    current_staff_role,
+    get_current_business,
+    get_current_user,
+    require_capability,
+    require_module,
+)
 from app.models.business import Business
 from app.models.user import User
 from app.schemas.menu import (
@@ -83,10 +90,13 @@ router = APIRouter(tags=["ordering"])
 
 
 def _can_manage_tax(user: User) -> bool:
-    return bool(
-        user.staff_assignments
-        and user.staff_assignments[0].role in {"owner", "manager"}
-    )
+    """Whether this user may set a price or assign a tax profile.
+
+    `PRODUCT.md` draws the line here: ordinary staff may change other item
+    details, but not tax assignments or pricing policy. The route guard is
+    `menu.edit`; this narrower check gates the money-shaped fields inside it.
+    """
+    return has_capability(current_staff_role(user), "menu.pricing")
 
 
 # ─── helpers ──────────────────────────────────────────────────────────────────
@@ -315,7 +325,7 @@ async def get_order_status(
 @router.get(
     "/api/ordering/{business_id}/orders",
     response_model=list[OrderResponse],
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("orders.view"))],
 )
 async def list_orders(
     business_id: UUID,
@@ -334,7 +344,7 @@ async def list_orders(
 @router.patch(
     "/api/ordering/{business_id}/orders/{order_id}/status",
     response_model=OrderResponse,
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("orders.fulfill"))],
 )
 async def update_order_status(
     business_id: UUID,
@@ -368,7 +378,7 @@ async def update_order_status(
 @router.patch(
     "/api/ordering/{business_id}/orders/{order_id}/lines/{line_id}/status",
     response_model=OrderResponse,
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("orders.fulfill"))],
 )
 async def update_order_line_status(
     business_id: UUID,
@@ -406,7 +416,7 @@ async def update_order_line_status(
 @router.post(
     "/api/ordering/{business_id}/orders/{order_id}/correct",
     response_model=OrderResponse,
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("orders.take"))],
 )
 async def correct_order(
     business_id: UUID,
@@ -446,7 +456,7 @@ async def correct_order(
 @router.post(
     "/api/ordering/{business_id}/orders/{order_id}/cancel",
     response_model=OrderResponse,
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("orders.take"))],
 )
 async def cancel_order(
     business_id: UUID,
@@ -483,7 +493,7 @@ async def cancel_order(
 @router.get(
     "/api/ordering/all-day-counts",
     response_model=list[OrderAllDayCount],
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("orders.view"))],
 )
 async def get_all_day_counts(
     db: AsyncSession = Depends(get_db),
@@ -497,7 +507,7 @@ async def get_all_day_counts(
 @router.get(
     "/api/ordering/stations",
     response_model=list[PreparationStationResponse],
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.view"))],
 )
 async def list_preparation_stations(
     db: AsyncSession = Depends(get_db),
@@ -510,10 +520,7 @@ async def list_preparation_stations(
     "/api/ordering/stations",
     response_model=PreparationStationResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[
-        Depends(require_module("ordering")),
-        Depends(require_roles("owner", "manager")),
-    ],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("stations.configure"))],
 )
 async def create_preparation_station(
     body: PreparationStationCreate,
@@ -538,10 +545,7 @@ async def create_preparation_station(
 @router.patch(
     "/api/ordering/stations/{station_id}",
     response_model=PreparationStationResponse,
-    dependencies=[
-        Depends(require_module("ordering")),
-        Depends(require_roles("owner", "manager")),
-    ],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("stations.configure"))],
 )
 async def update_preparation_station(
     station_id: UUID,
@@ -570,10 +574,7 @@ async def update_preparation_station(
 @router.post(
     "/api/ordering/stations/{station_id}/archive",
     response_model=PreparationStationResponse,
-    dependencies=[
-        Depends(require_module("ordering")),
-        Depends(require_roles("owner", "manager")),
-    ],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("stations.configure"))],
 )
 async def archive_preparation_station(
     station_id: UUID,
@@ -601,7 +602,7 @@ async def archive_preparation_station(
 @router.get(
     "/api/ordering/{business_id}/menus",
     response_model=list[MenuResponse],
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.view"))],
 )
 async def list_menus(
     business_id: UUID,
@@ -618,7 +619,7 @@ async def list_menus(
     "/api/ordering/{business_id}/menus",
     response_model=MenuResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.configure"))],
 )
 async def create_menu(
     business_id: UUID,
@@ -647,7 +648,7 @@ async def create_menu(
 @router.patch(
     "/api/ordering/{business_id}/menus/{menu_id}",
     response_model=MenuResponse,
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.configure"))],
 )
 async def update_menu(
     business_id: UUID,
@@ -669,7 +670,7 @@ async def update_menu(
 @router.delete(
     "/api/ordering/{business_id}/menus/{menu_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.configure"))],
 )
 async def delete_menu(
     business_id: UUID,
@@ -693,7 +694,7 @@ async def delete_menu(
     "/api/ordering/{business_id}/menus/{menu_id}/categories",
     response_model=MenuCategoryResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.configure"))],
 )
 async def create_category(
     business_id: UUID,
@@ -725,7 +726,7 @@ async def create_category(
 @router.patch(
     "/api/ordering/{business_id}/categories/{category_id}",
     response_model=MenuCategoryResponse,
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.configure"))],
 )
 async def update_category(
     business_id: UUID,
@@ -747,7 +748,7 @@ async def update_category(
 @router.delete(
     "/api/ordering/{business_id}/categories/{category_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.configure"))],
 )
 async def delete_category(
     business_id: UUID,
@@ -771,7 +772,7 @@ async def delete_category(
     "/api/ordering/{business_id}/categories/{category_id}/items",
     response_model=MenuItemResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.configure"))],
 )
 async def create_item(
     business_id: UUID,
@@ -802,7 +803,7 @@ async def create_item(
 @router.patch(
     "/api/ordering/{business_id}/items/{item_id}",
     response_model=MenuItemResponse,
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.edit"))],
 )
 async def update_item(
     business_id: UUID,
@@ -833,7 +834,7 @@ async def update_item(
 @router.put(
     "/api/ordering/items/{item_id}/availability",
     response_model=MenuItemResponse,
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.edit"))],
 )
 async def update_item_availability(
     item_id: UUID,
@@ -865,7 +866,7 @@ async def update_item_availability(
 @router.delete(
     "/api/ordering/{business_id}/items/{item_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.configure"))],
 )
 async def delete_item(
     business_id: UUID,
@@ -888,7 +889,7 @@ async def delete_item(
 @router.get(
     "/api/ordering/{business_id}/items/{item_id}/recipe",
     response_model=list[RecipeIngredientResponse],
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.view"))],
 )
 async def get_item_recipe(
     business_id: UUID,
@@ -908,7 +909,7 @@ async def get_item_recipe(
 @router.put(
     "/api/ordering/{business_id}/items/{item_id}/recipe",
     response_model=list[RecipeIngredientResponse],
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.configure"))],
 )
 async def set_item_recipe(
     business_id: UUID,
@@ -937,7 +938,7 @@ async def set_item_recipe(
 @router.get(
     "/api/ordering/{business_id}/menu-item-stock-flags",
     response_model=list[MenuItemStockFlag],
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.view"))],
 )
 async def get_menu_item_stock_flags(
     business_id: UUID,
@@ -958,7 +959,7 @@ async def get_menu_item_stock_flags(
     "/api/ordering/{business_id}/items/{item_id}/modifier-groups",
     response_model=ModifierGroupResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.configure"))],
 )
 async def create_modifier_group(
     business_id: UUID,
@@ -982,7 +983,7 @@ async def create_modifier_group(
     "/api/ordering/{business_id}/modifier-groups/{group_id}/modifiers",
     response_model=ModifierResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.configure"))],
 )
 async def create_modifier(
     business_id: UUID,
@@ -1004,7 +1005,7 @@ async def create_modifier(
 @router.delete(
     "/api/ordering/{business_id}/modifier-groups/{group_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.configure"))],
 )
 async def delete_modifier_group(
     business_id: UUID,
@@ -1060,7 +1061,7 @@ async def orders_websocket(
 
 @router.patch(
     "/api/ordering/{business_id}/settings",
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.configure"))],
 )
 async def update_ordering_settings(
     business_id: UUID,
@@ -1101,7 +1102,7 @@ async def get_ordering_settings(
 @router.get(
     "/api/ordering/{business_id}/library",
     response_model=list[LibraryItemResponse],
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.view"))],
 )
 async def list_library(
     business_id: UUID,
@@ -1118,7 +1119,7 @@ async def list_library(
     "/api/ordering/{business_id}/library",
     response_model=LibraryItemResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.configure"))],
 )
 async def create_library_item(
     business_id: UUID,
@@ -1146,7 +1147,7 @@ async def create_library_item(
 @router.patch(
     "/api/ordering/{business_id}/library/{item_id}",
     response_model=LibraryItemResponse,
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.configure"))],
 )
 async def update_library_item(
     business_id: UUID,
@@ -1177,7 +1178,7 @@ async def update_library_item(
 @router.delete(
     "/api/ordering/{business_id}/library/{item_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.configure"))],
 )
 async def delete_library_item(
     business_id: UUID,
@@ -1198,7 +1199,7 @@ async def delete_library_item(
 @router.post(
     "/api/ordering/{business_id}/items/{item_id}/save-to-library",
     response_model=LibraryItemResponse,
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.configure"))],
 )
 async def save_item_to_library(
     business_id: UUID,
@@ -1220,7 +1221,7 @@ async def save_item_to_library(
     "/api/ordering/{business_id}/library/{item_id}/add-to-category/{category_id}",
     response_model=MenuItemResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.configure"))],
 )
 async def add_library_item_to_category(
     business_id: UUID,

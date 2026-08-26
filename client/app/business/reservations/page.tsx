@@ -10,6 +10,8 @@ import {
 } from "@/lib/api";
 import { ModuleDisabled } from "@/components/module-disabled";
 import { hasModule, MODULE_KEYS } from "@/lib/modules";
+import { hasCapability } from "@/lib/permissions";
+import { RoleRestricted } from "@/components/role-restricted";
 
 export default async function ReservationsPage() {
   const user = await getCurrentUser();
@@ -37,6 +39,10 @@ export default async function ReservationsPage() {
     return <ModuleDisabled moduleName="Reservations" />;
   }
 
+  if (!hasCapability(user.role, "reservations.view")) {
+    return <RoleRestricted surface="Reservations" role={user.role} />;
+  }
+
   return (
     <ReservationsClient
       initialReservations={reservations}
@@ -47,7 +53,7 @@ export default async function ReservationsPage() {
       businessTimezone={business.timezone ?? "UTC"}
       businessMaxGuests={business.maxGuests}
       currentTime={new Date().toISOString()}
-      canOverride={user.role === "owner" || user.role === "manager"}
+      canOverride={hasCapability(user.role, "reservations.override")}
     />
   );
 }

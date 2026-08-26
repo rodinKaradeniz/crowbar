@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { QueueBoardClient } from "./queue-board-client";
 import { ModuleDisabled } from "@/components/module-disabled";
 import { hasModule, MODULE_KEYS } from "@/lib/modules";
+import { hasCapability } from "@/lib/permissions";
+import { RoleRestricted } from "@/components/role-restricted";
 
 export default async function QueuePage() {
   const user = await getCurrentUser();
@@ -22,11 +24,15 @@ export default async function QueuePage() {
     return <ModuleDisabled moduleName="Queue" />;
   }
 
+  if (!hasCapability(user.role, "queue.view")) {
+    return <RoleRestricted surface="Queue" role={user.role} />;
+  }
+
   return (
     <QueueBoardClient
       businessId={business.id}
       businessSlug={business.slug}
-      canOverride={user.role === "owner" || user.role === "manager"}
+      canOverride={hasCapability(user.role, "queue.configure")}
     />
   );
 }

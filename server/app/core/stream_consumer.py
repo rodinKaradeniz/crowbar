@@ -1,16 +1,17 @@
 """
 Redis Stream consumer for WebSocket push.
 
-Reads from the "crowbar:events" stream and dispatches events to the appropriate
-WebSocket broadcast function. Runs as an asyncio background task started in
-the FastAPI lifespan.
+Reads from the per-database "crowbar:events:<db>" stream and dispatches events
+to the appropriate WebSocket broadcast function. Runs as an asyncio background
+task started in the FastAPI lifespan.
 
 Consumer group: ws_push
 Consumer name:  worker_1  (single-instance; see backlog for multi-process strategy)
 
 Retry policy: unACK'd messages are re-claimed after RETRY_CLAIM_AFTER_MS and
 retried up to MAX_RETRIES times. After that the message is ACK'd and an error
-is logged — no dead-letter queue.
+is logged — no dead-letter queue. Failures that can never succeed on retry are
+ACK'd immediately instead of burning the retry budget (see _is_permanent).
 """
 import asyncio
 import logging
@@ -26,6 +27,7 @@ from app.core.ws_projections import (
     broadcast_tab_invalidation,
 )
 from app.database import async_session
+from app.services.queue_service import QueuePolicyError
 
 logger = logging.getLogger("crowbar.stream_consumer")
 
@@ -72,9 +74,24 @@ async def ws_push_consumer() -> None:
             await asyncio.sleep(1)
 
 
+def _is_permanent(exc: Exception) -> bool:
+    """
+    True when re-delivering the event could never succeed.
+
+    The case that matters in practice is an event naming a tenant that no
+    longer exists — a business dropped with its database, whose events survive
+    in the stream. Retrying spends three re-delivery cycles and three ERROR
+    tracebacks to reach the same 404, so these are ACK'd on the first failure.
+    """
+    if isinstance(exc, QueuePolicyError):
+        return exc.status_code == 404
+    return False
+
+
 async def _dispatch(fields: dict) -> bool:
     """
-    Route event to the correct WS projection. Returns True on success.
+    Route event to the correct WS projection. Returns True when the message
+    should be ACK'd — either it was broadcast, or it can never be.
     Opens a dedicated DB session scoped to this event.
     """
     event_type = fields.get("event_type", "")
@@ -97,7 +114,16 @@ async def _dispatch(fields: dict) -> bool:
                 await broadcast_floor_plan_invalidation(business_id)
             # inventory.* events do not currently drive a WebSocket projection.
         return True
-    except Exception:
+    except Exception as exc:
+        if _is_permanent(exc):
+            logger.warning(
+                "stream_consumer: discarding undeliverable event "
+                "event_type=%s business_id=%s reason=%s",
+                event_type,
+                business_id,
+                exc,
+            )
+            return True
         logger.exception(
             "stream_consumer: dispatch failed event_type=%s business_id=%s",
             event_type,

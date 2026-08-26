@@ -113,7 +113,7 @@ async def test_all_staff_can_read_but_only_manager_or_owner_can_replace(
     business, _, staff_token = await _create_staff_tenant(
         db_session,
         slug="read-only-staff",
-        role="staff",
+        role="host_server",
     )
 
     read_response = await client.get(
@@ -349,7 +349,7 @@ async def test_service_type_mutations_are_role_and_tenant_scoped(
     first_business, _, staff_token = await _create_staff_tenant(
         db_session,
         slug="service-staff",
-        role="staff",
+        role="host_server",
     )
     second_business, _, owner_token = await _create_staff_tenant(
         db_session,

@@ -289,7 +289,7 @@ export async function serverGetMeContext(): Promise<MeContext | null> {
         locations: data.business.locations ?? [],
       },
       role: data.role,
-      permissions: data.permissions ?? [],
+      capabilities: data.capabilities ?? [],
       enabledModules: data.enabled_modules ?? [],
     };
   } catch {

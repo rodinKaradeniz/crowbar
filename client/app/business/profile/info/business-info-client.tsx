@@ -13,6 +13,7 @@ import {
   FieldSet,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { ShieldAlert } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Mail, Phone, MapPin, ExternalLink, Copy, Check } from "lucide-react";
 import { Business } from "@/types";
@@ -44,6 +45,12 @@ export default function BusinessInfoClient({
   const [privacyPolicyUrl, setPrivacyPolicyUrl] = useState(
     initialBusiness?.privacyPolicyUrl || ""
   );
+  // Mirrors app/core/public_access.has_privacy_contact. The rule is relaxed
+  // outside production, so without this warning an operator only finds out at
+  // launch that their public pages will not serve.
+  const privacyReady =
+    privacyContact.trim().length > 0 &&
+    /^https:\/\/[^/\s]+/.test(privacyPolicyUrl.trim());
   const [businessTimezone, setBusinessTimezone] = useState(
     initialBusiness?.timezone || "UTC"
   );
@@ -203,13 +210,25 @@ export default function BusinessInfoClient({
                 />
               </Field>
 
+              {!privacyReady && (
+                <div className="flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                  <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                  <p>
+                    Public booking, queue and ordering pages will not be served in
+                    production until this venue has a privacy contact and an
+                    <strong> https </strong> policy URL. They still work locally, so
+                    this is easy to miss until launch.
+                  </p>
+                </div>
+              )}
+
               <Field>
                 <FieldLabel htmlFor="privacyContact">Venue privacy contact</FieldLabel>
                 <Input
                   id="privacyContact"
                   value={privacyContact}
                   onChange={(event) => setPrivacyContact(event.target.value)}
-                  placeholder="privacy@example.invalid"
+                  placeholder="privacy@example.com"
                 />
                 <FieldDescription>
                   The venue is the data controller. Public production flows stay

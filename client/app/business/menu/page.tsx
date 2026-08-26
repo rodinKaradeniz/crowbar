@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { MenuManagementClient } from "./menu-management-client";
 import { ModuleDisabled } from "@/components/module-disabled";
 import { hasModule, MODULE_KEYS } from "@/lib/modules";
+import { hasCapability } from "@/lib/permissions";
+import { RoleRestricted } from "@/components/role-restricted";
 
 export default async function MenuPage() {
   const user = await getCurrentUser();
@@ -22,11 +24,15 @@ export default async function MenuPage() {
     return <ModuleDisabled moduleName="Ordering" />;
   }
 
+  if (!hasCapability(user.role, "menu.view")) {
+    return <RoleRestricted surface="Menu" role={user.role} />;
+  }
+
   return (
     <MenuManagementClient
       businessId={business.id}
       businessSlug={business.slug}
-      canManageTax={user.role === "owner" || user.role === "manager"}
+      canManageTax={hasCapability(user.role, "menu.pricing")}
     />
   );
 }

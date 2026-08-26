@@ -49,6 +49,22 @@ German fiscal POS and payment processing are a separate post-MVP program. See
 - **Inventory movement:** the authoritative ledger record of a stock change.
   `bottle` and `keg` use the same canonical milliliter math; `each` is for
   countable inventory.
+- **Pack conversion:** tenant-owned metadata saying how many canonical base
+  units are in a case, bottle, keg or litre. It is a conversion, never a second
+  balance, and it is what lets a buyer order in cases and a bartender count in
+  bottles while the ledger stays in one unit.
+- **Purchase order:** what the venue has asked a supplier for, counted in packs
+  and priced per pack. Its terminal states are received, closed short, or
+  cancelled. **Closed short** ends an order the supplier will not complete
+  without claiming that nothing arrived.
+- **Receipt:** a recorded delivery against a purchase order. It writes ordinary
+  stock movements and captures delivery and invoice references for
+  reconciliation. Crowbar does not pay the invoice.
+- **Moving weighted average cost:** the maintained per-base-unit cost of an
+  item. Outgoing movements snapshot the cost in force at the time, so a later
+  price change never rewrites what past consumption cost.
+- **Count session:** a stocktake or cycle count. Counted-versus-book variance is
+  posted to the ledger as ordinary movements, and a shortfall needs a reason.
 - **External settlement:** a staff assertion that the venue's separate,
   compliant register completed settlement for the tab. It is not a payment,
   tender, receipt, refund, cash, bank, or fiscal transaction in Crowbar.

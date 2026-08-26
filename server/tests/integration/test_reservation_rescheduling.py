@@ -38,7 +38,7 @@ async def _create_context(
     enabled_modules: list[str] | None = None,
     status: str = "confirmed",
     starts_at: datetime | None = None,
-    role: str = "staff",
+    role: str = "host_server",
 ) -> tuple[Business, ServiceType, Reservation, str]:
     business = Business(
         name=f"{slug} Bar",

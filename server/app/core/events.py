@@ -10,18 +10,38 @@ Usage:
         payload={"reservation_id": str(reservation.id), "status": reservation.status},
     ))
 
-Phase 4: publish() writes to Redis Stream "crowbar:events".
-Callers are unchanged from Phase 0.
+Phase 4: publish() writes to a Redis Stream scoped to the producing database
+(see STREAM_KEY below). Callers are unchanged from Phase 0.
 """
 import json
 import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import urlparse
+
+from app.config import settings
 
 logger = logging.getLogger("crowbar.events")
 
-STREAM_KEY = "crowbar:events"
+
+def _stream_namespace() -> str:
+    """
+    Scope the event stream to the database that produced its events.
+
+    One Redis instance is shared by every database this backend is pointed at:
+    the dev DB, the ephemeral crowbar_verify_* databases, the pytest database.
+    Under a single global stream key, events outlived the tenants they named —
+    a verification run seeds businesses with fresh random UUIDs, publishes their
+    events, then drops the database, and the next dev boot replays those events
+    against a database where the tenants never existed. Keying by database name
+    isolates each one without every script having to remember to override
+    REDIS_URL.
+    """
+    return urlparse(settings.database_url).path.lstrip("/") or "unknown"
+
+
+STREAM_KEY = f"crowbar:events:{_stream_namespace()}"
 STREAM_MAXLEN = 10_000
 
 

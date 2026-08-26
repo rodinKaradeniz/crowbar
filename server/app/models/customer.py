@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import CheckConstraint, Boolean, Date, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -72,6 +72,19 @@ class CustomerMarketingConsent(Base, UUIDMixin):
 
 class CustomerDataRequest(Base, UUIDMixin):
     __tablename__ = "customer_data_requests"
+    # Mirrors migration 049. The test database is built from ORM metadata rather
+    # than from the migration chain, so a constraint that lives only in SQL is a
+    # constraint no test can observe.
+    __table_args__ = (
+        CheckConstraint(
+            "request_type IN ('export', 'correction', 'deletion', 'withdraw_consent')",
+            name="ck_customer_data_requests_type",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'completed')",
+            name="ck_customer_data_requests_status",
+        ),
+    )
 
     business_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("businesses.id", ondelete="CASCADE"), nullable=False)
     customer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="RESTRICT"), nullable=False)

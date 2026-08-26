@@ -14,21 +14,29 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
-from app.core.redis_client import close_redis
-from app.database import get_db
-from app.main import app as fastapi_app
-from app.models.base import Base
-
-# Import all models so Base.metadata knows about every table
-import app.models  # noqa: F401
 
 # --------------------------------------------------------------------------- #
 # Test database engine (mirrors main but targets the _test database)
 # --------------------------------------------------------------------------- #
+#
+# This must run before any other app module is imported. The Redis event stream
+# is keyed by database name, and app.core.events resolves that key once at
+# import time — so the test run has to claim the test database first. Otherwise
+# tests publish into the dev stream and the dev consumer later replays those
+# events against tenants that only ever existed here.
 
 TEST_DATABASE_URL = settings.database_url.replace(
     "/crowbar", "/crowbar_test"
 )
+settings.database_url = TEST_DATABASE_URL
+
+from app.core.redis_client import close_redis  # noqa: E402
+from app.database import get_db  # noqa: E402
+from app.main import app as fastapi_app  # noqa: E402
+from app.models.base import Base  # noqa: E402
+
+# Import all models so Base.metadata knows about every table
+import app.models  # noqa: E402,F401
 
 test_engine = create_async_engine(TEST_DATABASE_URL, echo=False)
 TestSessionLocal = async_sessionmaker(

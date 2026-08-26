@@ -1,15 +1,44 @@
 ---
 name: frontend-design
-description: Enforces Crowbar's committed design language when building or changing UI in this repo. Use when adding pages, components, dialogs, sheets, or visual states to client/. Produces UI that reads as native to the existing app — SRM taproom tokens, Radix/shadcn primitives, figure-first operational hierarchy, mandatory module-disabled and empty states. For greenfield design work outside this repo, use a generic design skill instead.
+description: Applies Crowbar's design contract when building or changing UI in this repo — the token layer, Radix/shadcn primitives, figure-first operational hierarchy, mandatory module-disabled and empty states, and the canonical formatting and copy rules. Use when adding pages, components, dialogs, sheets, or visual states to client/. Composes with user-level design and taste skills rather than excluding them: they own aesthetic direction and craft, this skill owns what must stay true in this codebase.
 ---
 
 # Frontend Design (Crowbar)
 
-Crowbar's aesthetic direction is **already committed**. Do not pick a new one.
 `docs/DESIGN.md` is the authority; this skill is how you apply it while writing
 components. When the two disagree, DESIGN.md wins and you update this skill.
 
-The job is to make new UI indistinguishable from UI that was always here.
+**The aesthetic direction is open.** Stage 6 closed on 2026-08-26, which puts
+the repository at stage 7 — the interface redesign pass in `docs/TODO.md` whose
+stated deliverable is promoting `DESIGN.md` from a description of what exists
+into the committed contract. A different palette, type scale, density, or
+motion language is therefore a legitimate proposal, not a violation. What is
+**not** open is drifting into one per component: a direction changes in the
+token layer and in `DESIGN.md`, in one deliberate pass, or it does not change.
+
+Outside that pass the job is unchanged — make new UI indistinguishable from UI
+that was always here.
+
+## Composing with user-level design skills
+
+User-level skills installed under `~/.claude/skills/` are in scope for Crowbar
+work and are not overridden by this file. Compose them:
+
+| They own | This skill owns |
+| --- | --- |
+| Aesthetic direction, palette and type proposals, layout and hierarchy craft, motion feel, component API shape, accessibility and performance review | The token mechanism, the state coverage that cannot be skipped, the canonical formatting helpers, the tenancy/module gate, and the compliance copy |
+
+Load whichever ones fit the task — direction and taste skills for a redesign or
+a greenfield surface, review and best-practice skills for a polish pass — then
+run the rules below over the result. The rules constrain *how* a direction is
+expressed in this codebase, not *which* direction is chosen.
+
+Two things they may never relax, because `docs/RULES.md` and `docs/PRODUCT.md`
+outrank every skill: the settlement and revenue vocabulary owned by
+`write-crowbar-operational-copy`, and honest empty, disabled, and failure
+states. A prettier screen that implies Crowbar processed a payment, or that
+hides an unimplemented capability behind convincing chrome, is a defect
+regardless of how good it looks.
 
 ## Service context — read this before laying anything out
 
@@ -29,13 +58,19 @@ Guest surfaces (`/reserve`, `/queue`, `/menu`, `/order`) are the opposite
 context: one-off, unfamiliar, often on a poor connection. Optimize them for
 clarity on first read.
 
-## The committed direction
+## The current direction — the stage 7 baseline
+
+This is what the app looks like today. Treat it as the starting point a
+redesign argues against, and as binding whenever you are not doing the
+redesign.
+
 
 - **Palette:** the warm SRM taproom scale — `pilsner` and `foam` as light
   grounds, `lager` → `marzen` → `dubbel` as the ordered gold-to-amber accent
   range, `porter` as the dark ground, `brass` for rules and dot leaders,
   `oxblood` for destructive. Tokens live in `client/app/globals.css`. The
-  retired green palette does not come back.
+  green palette was retired deliberately; reintroducing it needs the same
+  argument as any other new direction, not a quiet revert.
 - **Type:** Libre Caslon Text is the display face (`--font-display-face`, used
   by `.page-title` / `.page-title-lg` / `.page-title-xl`); Hanken Grotesk is
   the body face; Spline Sans Mono carries operational figures, prices, counts,
@@ -65,9 +100,10 @@ a label or accessible description does the job.
 ## Rules
 
 1. **Tokens, never hex.** No literal colors and no arbitrary Tailwind values
-   (`bg-[#f4f1ea]`) where a semantic token exists. If a genuinely new tone is
-   needed, derive it inside the existing SRM ordering and name it semantically
-   in `globals.css`.
+   (`bg-[#f4f1ea]`) where a semantic token exists. A new tone is added to
+   `globals.css` under a semantic name, never inlined at a call site. This rule
+   survives a change of direction unchanged — a new palette means new token
+   *values*, and the call sites should not have to know it happened.
 
 2. **Every staff surface needs a module-disabled state.** Subscribable features
    are gated on the backend route *and* the staff page. Render
@@ -119,13 +155,14 @@ writing user-facing strings.
 
 ## When NOT to use
 
-- Design work outside this repository.
+- Design work in another repository, where only the user-level design skills apply.
 - Pure logic, data, or API changes with no visual surface.
 
 ## Anti-patterns
 
-- Introducing new fonts, palettes, or a "bolder direction" — that decision is
-  closed.
+- Changing a font, color, or spacing scale inside one component instead of in
+  `globals.css` and `docs/DESIGN.md`. Two design languages running at once is
+  the failure mode, not ambition.
 - Bespoke modal/menu/table implementations when `components/ui/` has one.
 - Inline hex or arbitrary Tailwind values where a token exists.
 - Rendering a raw `Date`, a raw currency number, or a browser-local time.

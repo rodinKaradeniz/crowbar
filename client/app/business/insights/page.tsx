@@ -10,6 +10,8 @@ import {
 import { fetchBusiness, fetchBusinessKpis, fetchHighRiskReservations } from "@/lib/api";
 import { ModuleDisabled } from "@/components/module-disabled";
 import { hasModule, MODULE_KEYS } from "@/lib/modules";
+import { RoleRestricted } from "@/components/role-restricted";
+import { hasCapability } from "@/lib/permissions";
 
 export default async function InsightsPage() {
   const user = await getCurrentUser();
@@ -26,6 +28,10 @@ export default async function InsightsPage() {
 
   if (!hasModule(business.enabledModules ?? [], MODULE_KEYS.INSIGHTS)) {
     return <ModuleDisabled moduleName="Insights" />;
+  }
+
+  if (!hasCapability(user.role, "insights.view")) {
+    return <RoleRestricted surface="Insights" role={user.role} />;
   }
 
   const [status, segmentation, cancellation, demandForecast, rawKpis, rawHighRisk] =

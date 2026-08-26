@@ -16,7 +16,7 @@ from app.core.rate_limit import (
     get_client_ip,
 )
 from app.database import get_db
-from app.dependencies import get_current_business, get_current_user, require_roles
+from app.dependencies import get_current_business, get_current_user, require_capability
 from app.models.business import Business
 from app.models.staff import Staff
 from app.models.staff_invitation import StaffInvitation
@@ -96,7 +96,9 @@ async def _deliver_invitation(
     await db.commit()
 
 
-@router.get("/business/{business_id}", response_model=list[StaffWithUserResponse])
+@router.get("/business/{business_id}", response_model=list[StaffWithUserResponse],
+    dependencies=[Depends(require_capability("staff.view"))],
+)
 async def list_business_staff(
     business_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -120,17 +122,20 @@ async def list_business_staff(
     ]
 
 
-@router.get("/invitations", response_model=list[StaffInviteResponse])
+@router.get("/invitations", response_model=list[StaffInviteResponse],
+    dependencies=[Depends(require_capability("staff.manage"))],
+)
 async def list_invitations(
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_roles("owner", "manager")),
     current_business: Business = Depends(get_current_business),
 ):
     invitations = await staff_service.list_invitations(db, current_business.id)
     return [_invitation_response(invitation) for invitation in invitations]
 
 
-@router.get("/{staff_id}", response_model=StaffResponse)
+@router.get("/{staff_id}", response_model=StaffResponse,
+    dependencies=[Depends(require_capability("staff.view"))],
+)
 async def get_staff(
     staff_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -144,12 +149,14 @@ async def get_staff(
     return member
 
 
-@router.patch("/{staff_id}", response_model=StaffResponse)
+@router.patch("/{staff_id}", response_model=StaffResponse,
+    dependencies=[Depends(require_capability("staff.manage"))],
+)
 async def update_staff(
     staff_id: UUID,
     data: StaffUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles("owner", "manager")),
+    current_user: User = Depends(get_current_user),
     current_business: Business = Depends(get_current_business),
 ):
     actor = await _actor_assignment(db, current_user, current_business)
@@ -178,11 +185,13 @@ async def update_staff(
     return updated
 
 
-@router.delete("/{staff_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{staff_id}", status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_capability("staff.manage"))],
+)
 async def delete_staff(
     staff_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles("owner", "manager")),
+    current_user: User = Depends(get_current_user),
     current_business: Business = Depends(get_current_business),
 ):
     actor = await _actor_assignment(db, current_user, current_business)
@@ -214,11 +223,12 @@ async def delete_staff(
     "/invite",
     response_model=StaffInviteResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_capability("staff.manage"))],
 )
 async def send_invite(
     data: StaffInviteRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles("owner", "manager")),
+    current_user: User = Depends(get_current_user),
     current_business: Business = Depends(get_current_business),
 ):
     actor = await _actor_assignment(db, current_user, current_business)
@@ -264,11 +274,12 @@ async def send_invite(
 @router.post(
     "/invitations/{invitation_id}/revoke",
     response_model=StaffInviteResponse,
+    dependencies=[Depends(require_capability("staff.manage"))],
 )
 async def revoke_invitation(
     invitation_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles("owner", "manager")),
+    current_user: User = Depends(get_current_user),
     current_business: Business = Depends(get_current_business),
 ):
     actor = await _actor_assignment(db, current_user, current_business)
@@ -292,11 +303,12 @@ async def revoke_invitation(
 @router.post(
     "/invitations/{invitation_id}/resend",
     response_model=StaffInviteResponse,
+    dependencies=[Depends(require_capability("staff.manage"))],
 )
 async def resend_invitation(
     invitation_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles("owner", "manager")),
+    current_user: User = Depends(get_current_user),
     current_business: Business = Depends(get_current_business),
 ):
     actor = await _actor_assignment(db, current_user, current_business)

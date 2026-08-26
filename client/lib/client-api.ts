@@ -46,8 +46,25 @@ import {
   TaxProfile,
   TaxProfileVersion,
   WasteReason,
+  ConsumptionVariance,
+  ControllableCogs,
+  CostControlOverview,
+  CountLine,
+  CountSession,
+  CountSessionSummary,
+  InventoryValuation,
+  MenuMargins,
+  PackConversion,
+  PriceHistoryEntry,
+  PurchaseOrder,
+  PurchaseOrderLine,
+  PurchaseReceipt,
+  ReorderSuggestion,
+  Supplier,
+  SupplierProduct,
 } from "@/types";
 import { toMoney, toOptionalMoney } from "@/lib/money";
+import type { Capability, StaffRole } from "@/lib/permissions";
 
 /**
  * Client-side API calls.
@@ -1226,7 +1243,7 @@ export async function clientGetMeContext(): Promise<MeContext | null> {
         locations: (biz.locations as MeContext["business"]["locations"]) ?? [],
       },
       role: data.role as MeContext["role"],
-      permissions: (data.permissions as string[]) ?? [],
+      capabilities: (data.capabilities as Capability[]) ?? [],
       enabledModules: (data.enabled_modules as string[]) ?? [],
     };
   } catch {
@@ -2971,7 +2988,7 @@ export async function clientGetHighRiskReservations(
 export interface StaffInvitation {
   id: string;
   email: string;
-  role: "owner" | "manager" | "staff";
+  role: StaffRole;
   expiresAt: string;
   acceptedAt?: string;
   revokedAt?: string;
@@ -3103,4 +3120,1107 @@ export async function clientUpdateHappyHourWindow(
 
 export async function clientDeleteHappyHourWindow(windowId: string): Promise<void> {
   await authFetch(`/happy-hour/windows/${windowId}`, { method: "DELETE" });
+}
+
+// ─── Purchasing ───────────────────────────────────────────────────────────────
+
+function toSupplier(raw: Record<string, unknown>): Supplier {
+  return {
+    id: raw.id as string,
+    businessId: raw.business_id as string,
+    name: raw.name as string,
+    contactName: (raw.contact_name as string) || undefined,
+    email: (raw.email as string) || undefined,
+    phone: (raw.phone as string) || undefined,
+    address: (raw.address as string) || undefined,
+    notes: (raw.notes as string) || undefined,
+    isActive: raw.is_active as boolean,
+    createdAt: raw.created_at as string,
+    updatedAt: raw.updated_at as string,
+  };
+}
+
+function toSupplierProduct(raw: Record<string, unknown>): SupplierProduct {
+  return {
+    id: raw.id as string,
+    businessId: raw.business_id as string,
+    supplierId: raw.supplier_id as string,
+    inventoryItemId: raw.inventory_item_id as string,
+    supplierSku: (raw.supplier_sku as string) || undefined,
+    productName: raw.product_name as string,
+    packConversionId: (raw.pack_conversion_id as string) || undefined,
+    leadTimeDays: Number(raw.lead_time_days ?? 0),
+    lastPrice: toOptionalMoney(raw.last_price),
+    currencyCode: raw.currency_code as string,
+    isActive: raw.is_active as boolean,
+    createdAt: raw.created_at as string,
+    updatedAt: raw.updated_at as string,
+  };
+}
+
+function toPackConversion(raw: Record<string, unknown>): PackConversion {
+  return {
+    id: raw.id as string,
+    businessId: raw.business_id as string,
+    inventoryItemId: raw.inventory_item_id as string,
+    label: raw.label as string,
+    packUnit: raw.pack_unit as PackConversion["packUnit"],
+    baseQuantity: toMoney(raw.base_quantity),
+    isDefaultReceivingUnit: raw.is_default_receiving_unit as boolean,
+  };
+}
+
+function toPurchaseOrderLine(raw: Record<string, unknown>): PurchaseOrderLine {
+  return {
+    id: raw.id as string,
+    inventoryItemId: raw.inventory_item_id as string,
+    supplierProductId: (raw.supplier_product_id as string) || undefined,
+    description: raw.description as string,
+    orderedQuantity: toMoney(raw.ordered_quantity),
+    receivedQuantity: toMoney(raw.received_quantity),
+    packConversionId: raw.pack_conversion_id as string,
+    unitPrice: toMoney(raw.unit_price),
+    currencyCode: raw.currency_code as string,
+  };
+}
+
+function toPurchaseOrder(raw: Record<string, unknown>): PurchaseOrder {
+  return {
+    id: raw.id as string,
+    businessId: raw.business_id as string,
+    supplierId: raw.supplier_id as string,
+    locationId: (raw.location_id as string) || undefined,
+    status: raw.status as PurchaseOrder["status"],
+    reference: (raw.reference as string) || undefined,
+    expectedOn: (raw.expected_on as string) || undefined,
+    note: (raw.note as string) || undefined,
+    approvedBy: (raw.approved_by as string) || undefined,
+    approvedAt: (raw.approved_at as string) || undefined,
+    orderedAt: (raw.ordered_at as string) || undefined,
+    closedAt: (raw.closed_at as string) || undefined,
+    closedBy: (raw.closed_by as string) || undefined,
+    closureReason: (raw.closure_reason as string) || undefined,
+    lines: ((raw.lines as Record<string, unknown>[]) ?? []).map(toPurchaseOrderLine),
+  };
+}
+
+function toPurchaseReceipt(raw: Record<string, unknown>): PurchaseReceipt {
+  return {
+    id: raw.id as string,
+    businessId: raw.business_id as string,
+    purchaseOrderId: raw.purchase_order_id as string,
+    deliveryReference: (raw.delivery_reference as string) || undefined,
+    invoiceReference: (raw.invoice_reference as string) || undefined,
+    receivedAt: raw.received_at as string,
+    note: (raw.note as string) || undefined,
+    purchaseOrderStatus: raw.purchase_order_status as PurchaseOrder["status"],
+    lines: ((raw.lines as Record<string, unknown>[]) ?? []).map((line) => ({
+      id: line.id as string,
+      purchaseOrderLineId: line.purchase_order_line_id as string,
+      inventoryItemId: line.inventory_item_id as string,
+      receivedQuantity: toMoney(line.received_quantity),
+      unitPrice: toMoney(line.unit_price),
+      currencyCode: line.currency_code as string,
+      substitutionNote: (line.substitution_note as string) || undefined,
+      discrepancyReason: (line.discrepancy_reason as string) || undefined,
+      stockMovementId: (line.stock_movement_id as string) || undefined,
+    })),
+  };
+}
+
+export async function clientGetSuppliers(
+  businessId: string,
+  includeArchived = false,
+): Promise<Supplier[]> {
+  const params = includeArchived ? "?include_archived=true" : "";
+  const result = await authFetch<Record<string, unknown>[]>(
+    `/purchasing/${businessId}/suppliers${params}`,
+  );
+  return (result ?? []).map(toSupplier);
+}
+
+export async function clientCreateSupplier(
+  businessId: string,
+  data: {
+    name: string;
+    contactName?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    notes?: string;
+  },
+): Promise<Supplier> {
+  const body: Record<string, unknown> = { name: data.name };
+  if (data.contactName !== undefined) body.contact_name = data.contactName;
+  if (data.email !== undefined) body.email = data.email;
+  if (data.phone !== undefined) body.phone = data.phone;
+  if (data.address !== undefined) body.address = data.address;
+  if (data.notes !== undefined) body.notes = data.notes;
+  const result = await authFetch<Record<string, unknown>>(
+    `/purchasing/${businessId}/suppliers`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+  return toSupplier(result);
+}
+
+export async function clientUpdateSupplier(
+  businessId: string,
+  supplierId: string,
+  data: {
+    name?: string;
+    contactName?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    notes?: string;
+  },
+): Promise<Supplier> {
+  const body: Record<string, unknown> = {};
+  if (data.name !== undefined) body.name = data.name;
+  if (data.contactName !== undefined) body.contact_name = data.contactName;
+  if (data.email !== undefined) body.email = data.email;
+  if (data.phone !== undefined) body.phone = data.phone;
+  if (data.address !== undefined) body.address = data.address;
+  if (data.notes !== undefined) body.notes = data.notes;
+  const result = await authFetch<Record<string, unknown>>(
+    `/purchasing/${businessId}/suppliers/${supplierId}`,
+    { method: "PATCH", body: JSON.stringify(body) },
+  );
+  return toSupplier(result);
+}
+
+export async function clientArchiveSupplier(
+  businessId: string,
+  supplierId: string,
+): Promise<Supplier> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/purchasing/${businessId}/suppliers/${supplierId}/archive`,
+    { method: "POST" },
+  );
+  return toSupplier(result);
+}
+
+export async function clientGetSupplierProducts(
+  businessId: string,
+  supplierId?: string,
+): Promise<SupplierProduct[]> {
+  const qs = new URLSearchParams();
+  if (supplierId) qs.set("supplier_id", supplierId);
+  const params = qs.toString() ? `?${qs.toString()}` : "";
+  const result = await authFetch<Record<string, unknown>[]>(
+    `/purchasing/${businessId}/supplier-products${params}`,
+  );
+  return (result ?? []).map(toSupplierProduct);
+}
+
+export async function clientCreateSupplierProduct(
+  businessId: string,
+  supplierId: string,
+  data: {
+    inventoryItemId: string;
+    productName: string;
+    supplierSku?: string;
+    packConversionId?: string;
+    leadTimeDays?: number;
+    lastPrice?: number;
+  },
+): Promise<SupplierProduct> {
+  const body: Record<string, unknown> = {
+    inventory_item_id: data.inventoryItemId,
+    product_name: data.productName,
+  };
+  if (data.supplierSku !== undefined) body.supplier_sku = data.supplierSku;
+  if (data.packConversionId !== undefined) body.pack_conversion_id = data.packConversionId;
+  if (data.leadTimeDays !== undefined) body.lead_time_days = data.leadTimeDays;
+  if (data.lastPrice !== undefined) body.last_price = data.lastPrice;
+  const result = await authFetch<Record<string, unknown>>(
+    `/purchasing/${businessId}/suppliers/${supplierId}/products`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+  return toSupplierProduct(result);
+}
+
+export async function clientArchiveSupplierProduct(
+  businessId: string,
+  supplierProductId: string,
+): Promise<SupplierProduct> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/purchasing/${businessId}/supplier-products/${supplierProductId}/archive`,
+    { method: "POST" },
+  );
+  return toSupplierProduct(result);
+}
+
+export async function clientGetPurchaseOrders(
+  businessId: string,
+  status?: string,
+): Promise<PurchaseOrder[]> {
+  const qs = new URLSearchParams();
+  if (status) qs.set("order_status", status);
+  const params = qs.toString() ? `?${qs.toString()}` : "";
+  const result = await authFetch<Record<string, unknown>[]>(
+    `/purchasing/${businessId}/purchase-orders${params}`,
+  );
+  return (result ?? []).map(toPurchaseOrder);
+}
+
+export async function clientCreatePurchaseOrder(
+  businessId: string,
+  data: {
+    supplierId: string;
+    reference?: string;
+    expectedOn?: string;
+    note?: string;
+    lines: {
+      inventoryItemId: string;
+      packConversionId: string;
+      description: string;
+      orderedQuantity: number;
+      unitPrice: number;
+      supplierProductId?: string;
+    }[];
+  },
+): Promise<PurchaseOrder> {
+  const body: Record<string, unknown> = {
+    supplier_id: data.supplierId,
+    lines: data.lines.map((line) => {
+      const mapped: Record<string, unknown> = {
+        inventory_item_id: line.inventoryItemId,
+        pack_conversion_id: line.packConversionId,
+        description: line.description,
+        ordered_quantity: line.orderedQuantity,
+        unit_price: line.unitPrice,
+      };
+      if (line.supplierProductId !== undefined) {
+        mapped.supplier_product_id = line.supplierProductId;
+      }
+      return mapped;
+    }),
+  };
+  if (data.reference !== undefined) body.reference = data.reference;
+  if (data.expectedOn !== undefined) body.expected_on = data.expectedOn;
+  if (data.note !== undefined) body.note = data.note;
+  const result = await authFetch<Record<string, unknown>>(
+    `/purchasing/${businessId}/purchase-orders`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+  return toPurchaseOrder(result);
+}
+
+export async function clientUpdatePurchaseOrderStatus(
+  businessId: string,
+  purchaseOrderId: string,
+  status: string,
+  closureReason?: string,
+): Promise<PurchaseOrder> {
+  const body: Record<string, unknown> = { status };
+  if (closureReason !== undefined) body.closure_reason = closureReason;
+  const result = await authFetch<Record<string, unknown>>(
+    `/purchasing/${businessId}/purchase-orders/${purchaseOrderId}/status`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+  return toPurchaseOrder(result);
+}
+
+export async function clientReceivePurchaseOrder(
+  businessId: string,
+  purchaseOrderId: string,
+  data: {
+    idempotencyKey: string;
+    deliveryReference?: string;
+    invoiceReference?: string;
+    note?: string;
+    lines: {
+      purchaseOrderLineId: string;
+      receivedQuantity: number;
+      unitPrice: number;
+      substitutionNote?: string;
+      discrepancyReason?: string;
+    }[];
+  },
+): Promise<PurchaseReceipt> {
+  const body: Record<string, unknown> = {
+    idempotency_key: data.idempotencyKey,
+    lines: data.lines.map((line) => {
+      const mapped: Record<string, unknown> = {
+        purchase_order_line_id: line.purchaseOrderLineId,
+        received_quantity: line.receivedQuantity,
+        unit_price: line.unitPrice,
+      };
+      if (line.substitutionNote) mapped.substitution_note = line.substitutionNote;
+      if (line.discrepancyReason) mapped.discrepancy_reason = line.discrepancyReason;
+      return mapped;
+    }),
+  };
+  if (data.deliveryReference !== undefined) body.delivery_reference = data.deliveryReference;
+  if (data.invoiceReference !== undefined) body.invoice_reference = data.invoiceReference;
+  if (data.note !== undefined) body.note = data.note;
+  const result = await authFetch<Record<string, unknown>>(
+    `/purchasing/${businessId}/purchase-orders/${purchaseOrderId}/receipts`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+  return toPurchaseReceipt(result);
+}
+
+export async function clientGetPriceHistory(
+  businessId: string,
+  itemId: string,
+): Promise<PriceHistoryEntry[]> {
+  const result = await authFetch<Record<string, unknown>[]>(
+    `/purchasing/${businessId}/items/${itemId}/price-history`,
+  );
+  return (result ?? []).map((raw) => ({
+    id: raw.id as string,
+    inventoryItemId: raw.inventory_item_id as string,
+    supplierProductId: (raw.supplier_product_id as string) || undefined,
+    receiptLineId: (raw.receipt_line_id as string) || undefined,
+    unitCostPerBaseUnit: toMoney(raw.unit_cost_per_base_unit),
+    currencyCode: raw.currency_code as string,
+    observedAt: raw.observed_at as string,
+  }));
+}
+
+export async function clientGetPackConversions(
+  businessId: string,
+  itemId: string,
+): Promise<PackConversion[]> {
+  const result = await authFetch<Record<string, unknown>[]>(
+    `/inventory/${businessId}/items/${itemId}/packs`,
+  );
+  return (result ?? []).map(toPackConversion);
+}
+
+export async function clientCreatePackConversion(
+  businessId: string,
+  itemId: string,
+  data: {
+    label: string;
+    packUnit: string;
+    baseQuantity: number;
+    isDefaultReceivingUnit?: boolean;
+  },
+): Promise<PackConversion> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/inventory/${businessId}/items/${itemId}/packs`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        label: data.label,
+        pack_unit: data.packUnit,
+        base_quantity: data.baseQuantity,
+        is_default_receiving_unit: data.isDefaultReceivingUnit ?? false,
+      }),
+    },
+  );
+  return toPackConversion(result);
+}
+
+// ─── Count sessions ───────────────────────────────────────────────────────────
+
+function toCountLine(raw: Record<string, unknown>): CountLine {
+  return {
+    id: raw.id as string,
+    inventoryItemId: raw.inventory_item_id as string,
+    itemName: raw.item_name as string,
+    baseUnit: raw.base_unit as string,
+    bookQuantity: toMoney(raw.book_quantity),
+    countedQuantity: toMoney(raw.counted_quantity),
+    varianceQuantity: toMoney(raw.variance_quantity),
+    shrinkageReason: (raw.shrinkage_reason as string) || undefined,
+    note: (raw.note as string) || undefined,
+    movementId: (raw.movement_id as string) || undefined,
+    entryMode: (raw.entry_mode as CountLine["entryMode"]) ?? "base_unit",
+    entryValue: toOptionalMoney(raw.entry_value),
+    entryPackConversionId: (raw.entry_pack_conversion_id as string) || undefined,
+  };
+}
+
+function toCountSessionSummary(raw: Record<string, unknown>): CountSessionSummary {
+  return {
+    id: raw.id as string,
+    businessId: raw.business_id as string,
+    locationId: (raw.location_id as string) || undefined,
+    kind: raw.kind as CountSessionSummary["kind"],
+    status: raw.status as CountSessionSummary["status"],
+    note: (raw.note as string) || undefined,
+    openedBy: (raw.opened_by as string) || undefined,
+    reconciledBy: (raw.reconciled_by as string) || undefined,
+    reconciledAt: (raw.reconciled_at as string) || undefined,
+    createdAt: raw.created_at as string,
+  };
+}
+
+function toCountSession(raw: Record<string, unknown>): CountSession {
+  return {
+    ...toCountSessionSummary(raw),
+    lines: ((raw.lines as Record<string, unknown>[]) ?? []).map(toCountLine),
+  };
+}
+
+export async function clientGetCountSessions(
+  businessId: string,
+  status?: string,
+): Promise<CountSessionSummary[]> {
+  const qs = new URLSearchParams();
+  if (status) qs.set("session_status", status);
+  const params = qs.toString() ? `?${qs.toString()}` : "";
+  const result = await authFetch<Record<string, unknown>[]>(
+    `/inventory/${businessId}/counts${params}`,
+  );
+  return (result ?? []).map(toCountSessionSummary);
+}
+
+export async function clientGetCountSession(
+  businessId: string,
+  sessionId: string,
+): Promise<CountSession> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/inventory/${businessId}/counts/${sessionId}`,
+  );
+  return toCountSession(result);
+}
+
+export async function clientCreateCountSession(
+  businessId: string,
+  data: { kind: "stocktake" | "cycle_count"; note?: string; itemIds?: string[] },
+): Promise<CountSession> {
+  const body: Record<string, unknown> = { kind: data.kind };
+  if (data.note !== undefined) body.note = data.note;
+  if (data.itemIds !== undefined) body.item_ids = data.itemIds;
+  const result = await authFetch<Record<string, unknown>>(
+    `/inventory/${businessId}/counts`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+  return toCountSession(result);
+}
+
+// Each line supplies exactly one of countedQuantity, packQuantity or
+// kegLevelPercent; the server converts the latter two to base units.
+export async function clientSaveCountLines(
+  businessId: string,
+  sessionId: string,
+  lines: {
+    countLineId: string;
+    countedQuantity?: number;
+    packConversionId?: string;
+    packQuantity?: number;
+    kegLevelPercent?: number;
+    shrinkageReason?: string;
+    note?: string;
+  }[],
+): Promise<CountSession> {
+  const body = lines.map((line) => {
+    const mapped: Record<string, unknown> = { count_line_id: line.countLineId };
+    if (line.countedQuantity !== undefined) mapped.counted_quantity = line.countedQuantity;
+    if (line.packConversionId !== undefined) mapped.pack_conversion_id = line.packConversionId;
+    if (line.packQuantity !== undefined) mapped.pack_quantity = line.packQuantity;
+    if (line.kegLevelPercent !== undefined) mapped.keg_level_percent = line.kegLevelPercent;
+    if (line.shrinkageReason !== undefined) mapped.shrinkage_reason = line.shrinkageReason;
+    if (line.note !== undefined) mapped.note = line.note;
+    return mapped;
+  });
+  const result = await authFetch<Record<string, unknown>>(
+    `/inventory/${businessId}/counts/${sessionId}/lines`,
+    { method: "PATCH", body: JSON.stringify(body) },
+  );
+  return toCountSession(result);
+}
+
+export async function clientReconcileCountSession(
+  businessId: string,
+  sessionId: string,
+): Promise<CountSession> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/inventory/${businessId}/counts/${sessionId}/reconcile`,
+    { method: "POST" },
+  );
+  return toCountSession(result);
+}
+
+export async function clientCancelCountSession(
+  businessId: string,
+  sessionId: string,
+): Promise<CountSessionSummary> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/inventory/${businessId}/counts/${sessionId}/cancel`,
+    { method: "POST" },
+  );
+  return toCountSessionSummary(result);
+}
+
+// ─── Cost control ─────────────────────────────────────────────────────────────
+
+function toValuation(raw: Record<string, unknown>): InventoryValuation {
+  return {
+    items: ((raw.items as Record<string, unknown>[]) ?? []).map((item) => ({
+      itemId: item.item_id as string,
+      name: item.name as string,
+      baseUnit: item.base_unit as string,
+      quantity: toMoney(item.quantity),
+      unitCost: toOptionalMoney(item.unit_cost),
+      value: toMoney(item.value),
+      costed: item.costed as boolean,
+    })),
+    totalValue: toMoney(raw.total_value),
+    currencyCode: raw.currency_code as string,
+    itemsWithoutCost: (raw.items_without_cost as string[]) ?? [],
+    complete: raw.complete as boolean,
+  };
+}
+
+function toReorderSuggestion(raw: Record<string, unknown>): ReorderSuggestion {
+  const explanation = (raw.explanation ?? {}) as Record<string, unknown>;
+  return {
+    itemId: raw.item_id as string,
+    itemName: raw.item_name as string,
+    baseUnit: raw.base_unit as string,
+    suggestedQuantity: toMoney(raw.suggested_quantity),
+    explanation: {
+      parQuantity: toMoney(explanation.par_quantity),
+      averageConsumedPerDay: toMoney(explanation.average_consumed_per_day),
+      leadTimeDays:
+        explanation.lead_time_days === null || explanation.lead_time_days === undefined
+          ? null
+          : Number(explanation.lead_time_days),
+      leadTimeCover: toMoney(explanation.lead_time_cover),
+      targetQuantity: toMoney(explanation.target_quantity),
+      onHand: toMoney(explanation.on_hand),
+      outstandingOnOrder: toMoney(explanation.outstanding_on_order),
+      lookbackDays: Number(explanation.lookback_days ?? 0),
+      formula: explanation.formula as string,
+      leadTimeKnown: explanation.lead_time_known as boolean,
+    },
+  };
+}
+
+export async function clientGetCostControl(businessId: string): Promise<CostControlOverview> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/inventory/${businessId}/cost-control`,
+  );
+  return {
+    valuation: toValuation(result.valuation as Record<string, unknown>),
+    reorderSuggestions: ((result.reorder_suggestions as Record<string, unknown>[]) ?? []).map(
+      toReorderSuggestion,
+    ),
+    disclosure: result.disclosure as string,
+  };
+}
+
+export async function clientGetMenuMargins(businessId: string): Promise<MenuMargins> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/inventory/${businessId}/cost-control/margins`,
+  );
+  return {
+    items: ((result.items as Record<string, unknown>[]) ?? []).map((row) => ({
+      menuItemId: row.menu_item_id as string,
+      menuItemName: row.menu_item_name as string,
+      price: toMoney(row.price),
+      ingredientCost: toMoney(row.ingredient_cost),
+      grossMargin: row.gross_margin === null ? null : toMoney(row.gross_margin),
+      grossMarginPercent:
+        row.gross_margin_percent === null ? null : toMoney(row.gross_margin_percent),
+      pourCostPercent: row.pour_cost_percent === null ? null : toMoney(row.pour_cost_percent),
+      complete: row.complete as boolean,
+      incompleteReason: (row.incomplete_reason as string) ?? null,
+    })),
+    currencyCode: result.currency_code as string,
+    disclosure: result.disclosure as string,
+  };
+}
+
+export async function clientGetConsumptionVariance(
+  businessId: string,
+  start: string,
+  end: string,
+): Promise<ConsumptionVariance> {
+  const qs = new URLSearchParams({ start, end });
+  const result = await authFetch<Record<string, unknown>>(
+    `/inventory/${businessId}/cost-control/variance?${qs.toString()}`,
+  );
+  return {
+    items: ((result.items as Record<string, unknown>[]) ?? []).map((row) => ({
+      itemId: row.item_id as string,
+      name: row.name as string,
+      baseUnit: row.base_unit as string,
+      soldQuantity: toMoney(row.sold_quantity),
+      wasteQuantity: toMoney(row.waste_quantity),
+      wasteByReason: ((row.waste_by_reason as Record<string, unknown>[]) ?? []).map((w) => ({
+        reason: w.reason as string,
+        quantity: toMoney(w.quantity),
+      })),
+      wasteValue: row.waste_value === null ? null : toMoney(row.waste_value),
+      costed: row.costed as boolean,
+    })),
+    currencyCode: result.currency_code as string,
+    start: result.start as string,
+    end: result.end as string,
+    totalWasteValue: toMoney(result.total_waste_value),
+    disclosure: result.disclosure as string,
+  };
+}
+
+export async function clientGetControllableCogs(
+  businessId: string,
+  start: string,
+  end: string,
+): Promise<ControllableCogs> {
+  const qs = new URLSearchParams({ start, end });
+  const result = await authFetch<Record<string, unknown>>(
+    `/inventory/${businessId}/cost-control/cogs?${qs.toString()}`,
+  );
+  return {
+    start: result.start as string,
+    end: result.end as string,
+    currencyCode: result.currency_code as string,
+    soldCost: toMoney(result.sold_cost),
+    wasteCost: toMoney(result.waste_cost),
+    total: toMoney(result.total),
+    movementsWithoutCost: Number(result.movements_without_cost ?? 0),
+    complete: result.complete as boolean,
+    disclosure: result.disclosure as string,
+  };
+}
+
+// ─── Operational reports ──────────────────────────────────────────────────────
+// Every report takes an explicit window; none renders a fixed period. The API
+// echoes the window back, and the panels render it beside the figure.
+
+export interface ReportWindow {
+  start: string;
+  end: string;
+}
+
+/** Shared by every report: was this figure computable, and if not, why not. */
+interface ReportBase {
+  window: ReportWindow;
+  complete: boolean;
+  incompleteReason: string | null;
+  disclosure: string;
+}
+
+export interface ReservationOutcomesReport extends ReportBase {
+  booked: number;
+  covers: number;
+  byStatus: Record<string, number>;
+  completed: number;
+  cancelled: number;
+  lateCancellations: number;
+  noShows: number;
+  reconfirmed: number;
+  /** Null when nothing was booked — deliberately not 0, which would read as
+   *  "no no-shows" on a day the venue never opened. */
+  noShowRatePercent: number | null;
+  cancellationRatePercent: number | null;
+  completionRatePercent: number | null;
+}
+
+export interface QueueConversionReport extends ReportBase {
+  joined: number;
+  seated: number;
+  removed: number;
+  byStatus: Record<string, number>;
+  seatingConversionPercent: number | null;
+  averageWaitMinutes: number | null;
+  medianWaitMinutes: number | null;
+  longestWaitMinutes: number | null;
+  waitlistOffers: number;
+  waitlistAccepted: number;
+  waitlistAcceptancePercent: number | null;
+}
+
+export interface TableUtilizationRow {
+  tableId: string;
+  tableName: string;
+  seatings: number;
+  covers: number;
+  averageTurnMinutes: number | null;
+  stillOpen: number;
+}
+
+export interface TableUtilizationReport extends ReportBase {
+  seatings: number;
+  covers: number;
+  bySource: Record<string, { seatings: number; covers: number }>;
+  tables: TableUtilizationRow[];
+  seatingsStillOpen: number;
+}
+
+export interface StationThroughputRow {
+  station: string;
+  quantity: number;
+  lines: number;
+  averageTicketMinutes?: number | null;
+  medianTicketMinutes?: number | null;
+  timedLines?: number;
+  items: { itemName: string; quantity: number; lines: number }[];
+}
+
+export interface StationThroughputReport extends ReportBase {
+  stations: StationThroughputRow[];
+}
+
+/**
+ * The three value figures, kept apart on purpose.
+ *
+ * They are not summable and must never be labelled revenue, accounting output
+ * or a fiscal total. `valueDisclosure` carries the wording the UI renders.
+ */
+export interface TabValueReport extends ReportBase {
+  currencyCode: string;
+  orderedValue: string;
+  orders: number;
+  openTabValue: string;
+  openTabs: number;
+  externallySettledValue: string;
+  settlements: number;
+  settlementMethods: {
+    informationalMethod: string;
+    settlements: number;
+    externallySettledValue: string;
+  }[];
+  valueDisclosure: string;
+}
+
+export interface StockActivityReport extends ReportBase {
+  currencyCode: string;
+  movementsByType: { movementType: string; movements: number; quantity: number }[];
+  waste: {
+    reason: string;
+    itemName: string;
+    movements: number;
+    quantity: number;
+    wasteValue: string;
+  }[];
+  totalWasteValue: string;
+  reconciledCounts: {
+    sessionId: string;
+    kind: string;
+    reconciledAt: string | null;
+    lines: number;
+    absoluteVariance: number;
+  }[];
+  movementsWithoutCost: number;
+}
+
+export interface PurchasingSpendReport extends ReportBase {
+  currencyCode: string;
+  totalReceivedValue: string;
+  bySupplier: {
+    supplierId: string;
+    supplierName: string;
+    receipts: number;
+    receivedValue: string;
+  }[];
+  byItem: {
+    itemId: string;
+    itemName: string;
+    packsReceived: number;
+    receivedValue: string;
+  }[];
+  ordersByStatus: Record<string, number>;
+  linesWithDiscrepancies: number;
+}
+
+export interface StaffActionsReport extends ReportBase {
+  actors: {
+    actorId: string;
+    actorName: string;
+    actions: Record<string, number>;
+    total: number;
+  }[];
+  actions: { action: string; actorId: string; actorName: string; count: number }[];
+}
+
+function reportBase(raw: Record<string, unknown>): ReportBase {
+  return {
+    window: raw.window as ReportWindow,
+    complete: Boolean(raw.complete),
+    incompleteReason: (raw.incomplete_reason as string | null) ?? null,
+    disclosure: (raw.disclosure as string) ?? "",
+  };
+}
+
+function reportQuery(range: { start: string; end: string }): string {
+  return new URLSearchParams({ start: range.start, end: range.end }).toString();
+}
+
+export async function clientGetReservationOutcomes(
+  range: { start: string; end: string },
+): Promise<ReservationOutcomesReport> {
+  const raw = await authFetch<Record<string, unknown>>(
+    `/reports/reservations?${reportQuery(range)}`,
+  );
+  return {
+    ...reportBase(raw),
+    booked: raw.booked as number,
+    covers: raw.covers as number,
+    byStatus: (raw.by_status as Record<string, number>) ?? {},
+    completed: raw.completed as number,
+    cancelled: raw.cancelled as number,
+    lateCancellations: raw.late_cancellations as number,
+    noShows: raw.no_shows as number,
+    reconfirmed: raw.reconfirmed as number,
+    noShowRatePercent: (raw.no_show_rate_percent as number | null) ?? null,
+    cancellationRatePercent: (raw.cancellation_rate_percent as number | null) ?? null,
+    completionRatePercent: (raw.completion_rate_percent as number | null) ?? null,
+  };
+}
+
+export async function clientGetQueueConversion(
+  range: { start: string; end: string },
+): Promise<QueueConversionReport> {
+  const raw = await authFetch<Record<string, unknown>>(
+    `/reports/queue?${reportQuery(range)}`,
+  );
+  return {
+    ...reportBase(raw),
+    joined: raw.joined as number,
+    seated: raw.seated as number,
+    removed: raw.removed as number,
+    byStatus: (raw.by_status as Record<string, number>) ?? {},
+    seatingConversionPercent: (raw.seating_conversion_percent as number | null) ?? null,
+    averageWaitMinutes: (raw.average_wait_minutes as number | null) ?? null,
+    medianWaitMinutes: (raw.median_wait_minutes as number | null) ?? null,
+    longestWaitMinutes: (raw.longest_wait_minutes as number | null) ?? null,
+    waitlistOffers: raw.waitlist_offers as number,
+    waitlistAccepted: raw.waitlist_accepted as number,
+    waitlistAcceptancePercent:
+      (raw.waitlist_acceptance_percent as number | null) ?? null,
+  };
+}
+
+export async function clientGetTableUtilization(
+  range: { start: string; end: string },
+): Promise<TableUtilizationReport> {
+  const raw = await authFetch<Record<string, unknown>>(
+    `/reports/tables?${reportQuery(range)}`,
+  );
+  return {
+    ...reportBase(raw),
+    seatings: raw.seatings as number,
+    covers: raw.covers as number,
+    bySource: (raw.by_source as Record<string, { seatings: number; covers: number }>) ?? {},
+    tables: ((raw.tables as Record<string, unknown>[]) ?? []).map((row) => ({
+      tableId: row.table_id as string,
+      tableName: row.table_name as string,
+      seatings: row.seatings as number,
+      covers: row.covers as number,
+      averageTurnMinutes: (row.average_turn_minutes as number | null) ?? null,
+      stillOpen: row.still_open as number,
+    })),
+    seatingsStillOpen: raw.seatings_still_open as number,
+  };
+}
+
+export async function clientGetStationThroughput(
+  range: { start: string; end: string },
+): Promise<StationThroughputReport> {
+  const raw = await authFetch<Record<string, unknown>>(
+    `/reports/stations?${reportQuery(range)}`,
+  );
+  return {
+    ...reportBase(raw),
+    stations: ((raw.stations as Record<string, unknown>[]) ?? []).map((row) => ({
+      station: row.station as string,
+      quantity: row.quantity as number,
+      lines: row.lines as number,
+      averageTicketMinutes: (row.average_ticket_minutes as number | null) ?? null,
+      medianTicketMinutes: (row.median_ticket_minutes as number | null) ?? null,
+      timedLines: (row.timed_lines as number | undefined) ?? 0,
+      items: ((row.items as Record<string, unknown>[]) ?? []).map((item) => ({
+        itemName: item.item_name as string,
+        quantity: item.quantity as number,
+        lines: item.lines as number,
+      })),
+    })),
+  };
+}
+
+export async function clientGetTabValue(
+  range: { start: string; end: string },
+): Promise<TabValueReport> {
+  const raw = await authFetch<Record<string, unknown>>(
+    `/reports/value?${reportQuery(range)}`,
+  );
+  return {
+    ...reportBase(raw),
+    currencyCode: raw.currency_code as string,
+    orderedValue: String(raw.ordered_value),
+    orders: raw.orders as number,
+    openTabValue: String(raw.open_tab_value),
+    openTabs: raw.open_tabs as number,
+    externallySettledValue: String(raw.externally_settled_value),
+    settlements: raw.settlements as number,
+    settlementMethods: ((raw.settlement_methods as Record<string, unknown>[]) ?? []).map(
+      (row) => ({
+        informationalMethod: row.informational_method as string,
+        settlements: row.settlements as number,
+        externallySettledValue: String(row.externally_settled_value),
+      }),
+    ),
+    valueDisclosure: (raw.value_disclosure as string) ?? "",
+  };
+}
+
+export async function clientGetStockActivity(
+  range: { start: string; end: string },
+): Promise<StockActivityReport> {
+  const raw = await authFetch<Record<string, unknown>>(
+    `/reports/stock?${reportQuery(range)}`,
+  );
+  return {
+    ...reportBase(raw),
+    currencyCode: raw.currency_code as string,
+    movementsByType: ((raw.movements_by_type as Record<string, unknown>[]) ?? []).map(
+      (row) => ({
+        movementType: row.movement_type as string,
+        movements: row.movements as number,
+        quantity: row.quantity as number,
+      }),
+    ),
+    waste: ((raw.waste as Record<string, unknown>[]) ?? []).map((row) => ({
+      reason: row.reason as string,
+      itemName: row.item_name as string,
+      movements: row.movements as number,
+      quantity: row.quantity as number,
+      wasteValue: String(row.waste_value),
+    })),
+    totalWasteValue: String(raw.total_waste_value),
+    reconciledCounts: ((raw.reconciled_counts as Record<string, unknown>[]) ?? []).map(
+      (row) => ({
+        sessionId: row.session_id as string,
+        kind: row.kind as string,
+        reconciledAt: (row.reconciled_at as string | null) ?? null,
+        lines: row.lines as number,
+        absoluteVariance: row.absolute_variance as number,
+      }),
+    ),
+    movementsWithoutCost: raw.movements_without_cost as number,
+  };
+}
+
+export async function clientGetPurchasingSpend(
+  range: { start: string; end: string },
+): Promise<PurchasingSpendReport> {
+  const raw = await authFetch<Record<string, unknown>>(
+    `/reports/purchasing?${reportQuery(range)}`,
+  );
+  return {
+    ...reportBase(raw),
+    currencyCode: raw.currency_code as string,
+    totalReceivedValue: String(raw.total_received_value),
+    bySupplier: ((raw.by_supplier as Record<string, unknown>[]) ?? []).map((row) => ({
+      supplierId: row.supplier_id as string,
+      supplierName: row.supplier_name as string,
+      receipts: row.receipts as number,
+      receivedValue: String(row.received_value),
+    })),
+    byItem: ((raw.by_item as Record<string, unknown>[]) ?? []).map((row) => ({
+      itemId: row.item_id as string,
+      itemName: row.item_name as string,
+      packsReceived: row.packs_received as number,
+      receivedValue: String(row.received_value),
+    })),
+    ordersByStatus: (raw.orders_by_status as Record<string, number>) ?? {},
+    linesWithDiscrepancies: raw.lines_with_discrepancies as number,
+  };
+}
+
+export async function clientGetStaffActions(
+  range: { start: string; end: string },
+): Promise<StaffActionsReport> {
+  const raw = await authFetch<Record<string, unknown>>(
+    `/reports/staff-actions?${reportQuery(range)}`,
+  );
+  return {
+    ...reportBase(raw),
+    actors: ((raw.actors as Record<string, unknown>[]) ?? []).map((row) => ({
+      actorId: row.actor_id as string,
+      actorName: row.actor_name as string,
+      actions: (row.actions as Record<string, number>) ?? {},
+      total: row.total as number,
+    })),
+    actions: ((raw.actions as Record<string, unknown>[]) ?? []).map((row) => ({
+      action: row.action as string,
+      actorId: row.actor_id as string,
+      actorName: row.actor_name as string,
+      count: row.count as number,
+    })),
+  };
+}
+
+/**
+ * Download a report as CSV.
+ *
+ * Served through the authenticated proxy, so it cannot be a plain link — the
+ * same reason the count sheet builds a blob. `path` is the report slug, e.g.
+ * "value" for /api/reports/value.csv.
+ */
+export async function clientDownloadReportCsv(
+  path: string,
+  range: { start: string; end: string },
+  filename: string,
+): Promise<void> {
+  const response = await fetch(
+    `/api/proxy/reports/${path}.csv?${reportQuery(range)}`,
+  );
+  if (!response.ok) throw new Error("Export failed");
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+// ─── Guest-led privacy ────────────────────────────────────────────────────────
+// Identity comes from the reservation capability cookie the guest already
+// holds. These never take a customer id, an email or a phone number — accepting
+// one would make the surface enumerable.
+
+export type GuestPrivacyRequestType =
+  | "export"
+  | "correction"
+  | "deletion"
+  | "withdraw_consent";
+
+export interface GuestPrivacyState {
+  marketingConsent: Record<string, boolean>;
+  privacyContact: string | null;
+  privacyPolicyUrl: string | null;
+}
+
+export interface GuestPrivacyRequestResult {
+  requestType: GuestPrivacyRequestType;
+  status: "pending" | "completed";
+  withdrawnChannels: string[];
+  privacyContact: string | null;
+  message: string;
+}
+
+export async function clientGetGuestPrivacyState(): Promise<GuestPrivacyState> {
+  const raw = await clientFetch<Record<string, unknown>>("/public/privacy");
+  return {
+    marketingConsent: (raw.marketing_consent as Record<string, boolean>) ?? {},
+    privacyContact: (raw.privacy_contact as string | null) ?? null,
+    privacyPolicyUrl: (raw.privacy_policy_url as string | null) ?? null,
+  };
+}
+
+export async function clientCreateGuestPrivacyRequest(
+  requestType: GuestPrivacyRequestType,
+  note?: string,
+): Promise<GuestPrivacyRequestResult> {
+  const raw = await clientFetch<Record<string, unknown>>("/public/privacy/requests", {
+    method: "POST",
+    body: JSON.stringify({ request_type: requestType, note: note ?? null }),
+  });
+  return {
+    requestType: raw.request_type as GuestPrivacyRequestType,
+    status: raw.status as "pending" | "completed",
+    withdrawnChannels: (raw.withdrawn_channels as string[]) ?? [],
+    privacyContact: (raw.privacy_contact as string | null) ?? null,
+    message: raw.message as string,
+  };
 }

@@ -70,7 +70,7 @@ async def get_item(
     return result.scalar_one_or_none()
 
 
-async def _validate_location(
+async def validate_location(
     db: AsyncSession, business_id: UUID, location_id: UUID | None
 ) -> None:
     if location_id is None:
@@ -90,7 +90,7 @@ async def create_item(
     business_id: UUID,
     data: InventoryItemCreate,
 ) -> InventoryItem:
-    await _validate_location(db, business_id, data.location_id)
+    await validate_location(db, business_id, data.location_id)
     base_unit = data.base_unit or ("ml" if data.unit_type in {"bottle", "keg"} else "each")
     dimension = data.dimension or ("volume" if base_unit == "ml" else "mass" if base_unit == "g" else "count")
     if (dimension, base_unit) not in {("count", "each"), ("volume", "ml"), ("mass", "g")}:
@@ -160,7 +160,7 @@ async def update_item(
                 raise UnitTypeChangeBlocked("Cannot change an item's canonical unit after stock or recipe history exists")
             item.base_unit, item.dimension = base_unit, dimension
     if "location_id" in data.model_fields_set:
-        await _validate_location(db, business_id, data.location_id)
+        await validate_location(db, business_id, data.location_id)
 
     effective_unit_type = data.unit_type or item.unit_type
     effective_container_volume = (
@@ -337,7 +337,7 @@ async def record_movement(
         delta = data.quantity_delta
 
     effective_location_id = data.location_id or item.location_id
-    await _validate_location(db, business_id, effective_location_id)
+    await validate_location(db, business_id, effective_location_id)
     if (
         data.location_id is not None
         and item.location_id is not None

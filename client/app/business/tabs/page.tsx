@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { ModuleDisabled } from "@/components/module-disabled";
 import { hasModule, MODULE_KEYS } from "@/lib/modules";
 import { TabsClient } from "./tabs-client";
+import { hasCapability } from "@/lib/permissions";
+import { RoleRestricted } from "@/components/role-restricted";
 
 export default async function TabsPage() {
   const user = await getCurrentUser();
@@ -22,5 +24,9 @@ export default async function TabsPage() {
     return <ModuleDisabled moduleName="Ordering" />;
   }
 
-  return <TabsClient businessId={business.id} businessTimezone={business.timezone ?? "UTC"} canReopen={user.role === "owner" || user.role === "manager"} />;
+  if (!hasCapability(user.role, "tabs.view")) {
+    return <RoleRestricted surface="Tabs" role={user.role} />;
+  }
+
+  return <TabsClient businessId={business.id} businessTimezone={business.timezone ?? "UTC"} canReopen={hasCapability(user.role, "tabs.reopen")} />;
 }

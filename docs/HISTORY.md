@@ -560,9 +560,12 @@ the document that owns the changed fact. Local skills remain deliberately
 absent until a real repeated Crowbar workflow justifies one; generic workflow
 files are not added merely to mirror another repository.
 
+**Superseded in part on 2026-08-25:** the one-owner-per-concern principle
+stands, but `docs/README.md` and `docs/PORTABLE_AGENT_SETUP.md` were deleted;
+`AGENTS.md` is now the sole ownership map. See the 2026-08-25 entry.
+
 **References:** `AGENTS.md`, `CLAUDE.md`, `docs/RULES.md`,
-`docs/PRODUCT.md`, `docs/README.md`, `docs/SKILLS.md`,
-`docs/TODO.md`
+`docs/PRODUCT.md`, `docs/SKILLS.md`, `docs/TODO.md`
 
 ## 2026-07-29 — Queue seating always creates actual table occupancy
 
@@ -1062,6 +1065,414 @@ mutating balances directly.
 `server/db/migrations/045_suppliers_purchase_orders_and_receiving.sql`,
 `server/app/services/inventory_service.py`,
 `server/app/services/purchasing_service.py`
+
+## 2026-08-25 — Interface work is a stage, not a side effect
+
+**Context:** Stages 1–6 build authoritative behavior surface by surface, which
+means each screen is designed while the workflow behind it is still moving. The
+user wants the interface reworked once functionality is right, and then reused
+by a mobile client. Without a named stage, that redesign would either leak into
+every feature stage or be skipped entirely before the pilot.
+
+**Decision:** Insert stage 7, an interface redesign pass that runs after
+stage 6 and before the local release gate, and append stage 11, a mobile client
+that reuses stage 7's design contract. The previous stages 7, 8, and 9 became
+8, 9, and 10. Stage 7 is explicitly a presentation stage: it adds no features,
+and a surface that needs a missing field or endpoint stays honest and files a
+`TODO.md` item instead. `DESIGN.md` is its deliverable — promoted from a
+description of what exists into the contract every surface derives from.
+
+**Consequences:** The release gate in stage 8 and the demo journey now validate
+the interface the pilot ships, rather than an interface that will be replaced
+after it. Mobile stays behind the pilot: building a second client before the
+workflows and the design contract are stable duplicates churn across two
+codebases. `MVP_ACCEPTANCE.md`'s matrix now covers stages 1–8.
+
+**References:** `docs/TODO.md` (stages 7 and 11), `docs/DESIGN.md`,
+`docs/MVP_ACCEPTANCE.md`
+
+## 2026-08-25 — One reading order, one ownership map
+
+**Context:** The 2026-07-29 documentation contract put the ownership map in
+`docs/README.md` and `docs/PORTABLE_AGENT_SETUP.md` while `AGENTS.md` and
+`docs/RULES.md` each carried their own reading order, and `RULES.md` restated
+product invariants that `PRODUCT.md` already owned. Four copies of the same map
+plus an always-on rules file that duplicated domain rules made every task load
+more governance than the change needed, and pushed agents toward ceremony over
+delivery on an MVP.
+
+**Decision:** `AGENTS.md` is the only reading order and ownership map.
+`RULES.md` owns process only — it now opens with scope discipline and no longer
+restates reading order, product invariants, or one-off warnings about specific
+files. Deleted: `docs/README.md`, `docs/PORTABLE_AGENT_SETUP.md`,
+`docs/backlog.md`, `docs/plans/`, and root `reminders.txt`, after reconciling
+every unresolved entry into `docs/TODO.md`. `portfolio-docs/` collapsed its
+three summary files into one `SUMMARY.md`.
+
+**Consequences:** A fact has exactly one home; a rule that contradicts its
+owning document is stale by definition and must be fixed rather than obeyed.
+The confirmation gate now asks for one better alternative when the choice is
+genuinely open, not a survey of modern patterns — the previous wording invited
+gold-plating on a single-venue MVP.
+
+**References:** `AGENTS.md`, `docs/RULES.md`, `docs/SKILLS.md`,
+`docs/TODO.md` (Documentation Transition)
+
+## 2026-08-25 — Stage 5 cuts location transfers rather than shipping them unreachable
+
+**Context:** `TODO.md` stage 5 asked for location transfers with in-transit and
+reconciliation semantics, and migrations 046/047 created the schema. But the
+pilot runs one location, no endpoint anywhere creates a `Location`,
+`inventory_items.location_id` is nullable and defaults to `None`, and the model
+assumes one inventory row per (item, location) while the schema has one row per
+item. `dispatch_transfer()` required `item.location_id == transfer.source_location_id`,
+so an ordinary item could never be transferred. Three routes existed that
+nothing could reach.
+
+**Decision:** Delete the transfer routes and service functions. Keep migrations
+046/047 applied and the ORM models mapped, with docstrings marking them dormant
+and naming the trigger. Counts, which a single-location bar genuinely runs, were
+completed in full instead.
+
+**Consequences:** Reviving transfers starts with location CRUD and per-location
+stock identity, not with the deleted routes — a transfer workflow layered on the
+current schema would corrupt location ownership. `MVP_ACCEPTANCE.md`'s stage-5
+count row was amended to drop its transfer clauses rather than closed as written.
+`PRODUCT.md` already defers multi-location management; this keeps the code
+honest about that.
+
+**References:** `docs/TODO.md` (Product Architecture, deferred entry),
+`docs/MVP_ACCEPTANCE.md`, `server/app/models/inventory_operations.py`,
+`server/app/services/inventory_operations_service.py`
+
+## 2026-08-25 — A purchase order that ends incomplete says so
+
+**Context:** The stage-5 transition map allowed nothing out of `ordered`,
+`partially_received` or `received`. An ordered order could never be cancelled,
+and a partially received one stayed open forever unless every line arrived. The
+obvious patch — allow `cancelled` — would claim nothing was received, which is
+untrue once stock is on the shelf and in the movement ledger.
+
+**Decision:** Migration 048 widens the status check with `closed_short`, a
+distinct terminal state that requires a reason and records who closed it and
+when. The map is now explicit in both directions: `ordered` may be cancelled,
+`partially_received` may be completed or closed short, and `received`,
+`closed_short` and `cancelled` are terminal. Receiving still recomputes
+`partially_received` and `received` from line quantities rather than accepting
+them as requests.
+
+**Consequences:** Any future status must be added to the map deliberately rather
+than inherited. Reporting that groups "open" orders must treat `closed_short` as
+closed, and must not fold it into `cancelled` — the received stock is real.
+
+**References:** `server/db/migrations/048_purchasing_cost_clarity_and_terminal_states.sql`,
+`server/app/services/purchasing_service.py`
+
+## 2026-08-25 — Per-pack price and per-base-unit cost stop sharing a column name
+
+**Context:** `purchase_order_lines.unit_price` and
+`purchase_receipt_lines.unit_price` hold the per-pack price a buyer types, while
+`purchase_price_history` stored the derived per-base-unit cost under the same
+name and the same `NUMERIC(18,6)` type. For a case of 24 the two differ by 24x.
+Nothing read the history table yet, so the error was latent rather than live.
+
+**Decision:** Rename the derived column to `unit_cost_per_base_unit` in
+migration 048, comment all three columns in the database, and document the unit
+on the ORM models and Pydantic schemas. Per-base-unit costs are deliberately
+**not** quantized at the currency minor unit — rounding 0.054286 EUR/ml to cents
+understates consumption cost by roughly eight percent — and are quantized to the
+column's own six decimal places instead. Only figures a human reads as an amount
+of money go through `currency_quantum`.
+
+**Consequences:** Any future reporting that unions order, receipt and history
+prices must convert through the pack conversion's `base_quantity` first. A money
+total quantized at the minor unit and a unit cost quantized at six places are
+different operations and must not be merged into one helper.
+
+**References:** `server/db/migrations/048_purchasing_cost_clarity_and_terminal_states.sql`,
+`server/app/services/purchasing_service.py`, `server/app/services/cost_control_service.py`
+
+## 2026-08-25 — Cost figures state what they could not compute
+
+**Context:** The first cost-control slice returned a reorder suggestion labelled
+"served recipe consumption baseline" whose number was pure par-minus-on-hand: the
+consumption figure was displayed but never used, and received stock was
+subtracted twice because it was already in `current_quantity`. Recently restocked
+items were silently suppressed. `MVP_ACCEPTANCE.md` requires that a missing cost,
+forecast or lead time yields an explicit incomplete estimate and never invented
+precision.
+
+**Decision:** "Incoming" now means genuinely outstanding stock — the undelivered
+remainder of open purchase orders — and the forecast is real: par plus expected
+consumption over the supplier's lead time, less on-hand and on-order. Every term
+is returned in the explanation alongside the formula, and `lead_time_known` is
+`false` with a `null` lead time when no supplier product supplies one. Valuation,
+margins and COGS each carry a `complete` flag plus the specific reason they are
+not: named uncosted items, "No recipe", or a count of movements with no cost.
+
+**Consequences:** A UI may not render a cost figure without also rendering its
+incompleteness. Adding a new cost figure means adding its own incompleteness
+marker; substituting zero for a missing input is a product defect, not a
+rounding choice.
+
+**References:** `server/app/services/cost_control_service.py`,
+`server/tests/integration/test_cost_control.py`, `docs/MVP_ACCEPTANCE.md`
+
+## 2026-08-25 — Tenant documents are not served from the public uploads mount
+
+**Context:** Purchase-order attachments are the product's first file upload:
+before stage 5, `get_storage_service()` and `generate_upload_path()` had no
+callers anywhere. `/uploads` is mounted as an unauthenticated `StaticFiles`
+directory, so anything written there is readable by anyone holding the URL.
+Delivery notes and supplier invoices are tenant data.
+
+**Decision:** Attachments store a storage-relative `object_key`, never a public
+`/uploads/...` URL, and are read back through an authenticated, tenant-scoped
+route that streams the bytes. `StorageService` gained a `download` method, and
+the local implementation refuses to read outside the upload root. Uploads are
+limited to PDF, JPEG and PNG under 10 MB.
+
+**Consequences:** Any future upload surface follows the same shape — the public
+mount is for genuinely public assets only. Because `S3StorageService` still
+raises `NotImplementedError`, attachments are local-disk only and do not survive
+a container restart; that limitation is recorded in `TODO.md` with its trigger.
+
+**References:** `server/app/services/storage_service.py`,
+`server/app/services/purchasing_service.py`, `server/app/routers/purchasing.py`
+
+## 2026-08-26 — Routes ask what they do, not who is asking
+
+**Context:** Stage 6 required a five-role pilot matrix, but the system was
+effectively binary. Fifty-seven routes asked for `("owner", "manager")`, two for
+`("owner")`, and roughly a hundred and thirty-seven authenticated routes had no
+role guard at all — so an ordinary staff member could edit menu prices, settle a
+tab externally, post stock movements, read every guest's PII, and read all
+analytics. Adding three roles to `require_roles` would have meant hand-maintaining
+a role list at every one of those call sites and re-auditing all of them the next
+time a role appeared.
+
+**Decision:** Authorization is expressed as capabilities. `app/core/permissions.py`
+maps each of the five roles to a set of capability strings, and routes ask
+`require_capability("purchasing.order.approve")`. The map is hard-coded and
+resolved at import time — not configuration, not tenant-editable, no admin UI.
+`require_roles` was deleted; it had no remaining callers. Two boundaries stay
+separate: a capability says what a role may do, while `ROLE_MANAGEMENT_AUTHORITY`
+says which roles an actor may hand out, which is what stops a manager promoting
+someone to manager.
+
+**Consequences:** Every authenticated route must name exactly one capability or
+appear on a short recorded exemption list of self-service routes;
+`test_permission_matrix.py` fails otherwise, so a new route cannot default open.
+`docs/permission-matrix.md` is generated from the running app and is the review
+artifact — regenerate it when a guard changes. The frontend mirror in
+`client/lib/permissions.ts` is generated from the same module and parity-tested,
+so it cannot drift into showing a control the API will reject. If a future
+requirement asks a venue to define its own roles, that is the deferred RBAC
+evaluation in `TODO.md`, not an extension of this map.
+
+**References:** `server/app/core/permissions.py`, `server/app/dependencies.py`,
+`server/scripts/generate_permission_matrix.py`, `docs/permission-matrix.md`,
+`server/tests/integration/test_permission_matrix.py`,
+`client/tests/unit/permissions.test.ts`
+
+## 2026-08-26 — The old `staff` role became host/server, and lost access on the way
+
+**Context:** Migration 049 replaces `('owner','manager','staff')` with the five
+pilot roles. Existing `staff` rows had to become something. The honest problem is
+that `staff` was not a role — it was the absence of one, and it could do a great
+deal: edit menu prices and tax assignments, settle tabs externally, post stock
+movements, open and reconcile counts, read every guest record.
+
+**Decision:** `staff` backfills to `host_server`, the closest fit to a general
+front-of-house employee. This is a deliberate narrowing, not a rename: a
+host/server no longer edits prices, posts stock movements, or reads cost figures.
+An owner reassigns anyone who needs a different row from the Staff page.
+
+**Consequences:** Anyone relying on the old blanket access loses it at migration
+time, which is the point of the stage. A role change bumps `session_version`, so
+a demotion takes effect for a session that is already open rather than at the
+next login — `test_permission_matrix.py` asserts the old token 401s. The seed
+carries one account per role so the matrix is demonstrable by signing in.
+`PRODUCT.md`'s rule that ordinary staff may change item details but not tax or
+pricing is preserved by splitting `menu.edit` from `menu.pricing`.
+
+**References:** `server/db/migrations/049_role_matrix_and_ml_snapshots.sql`,
+`server/app/services/staff_service.py`, `server/db/seeds/001_seed_puzzles.sql`
+
+## 2026-08-26 — Withdrawn consent suppresses marketing, never the guest's own booking
+
+**Context:** `CustomerMarketingConsent` had been captured by the public
+reservation flow since stage 2 and read by exactly nothing in any send path. A
+guest who withdrew consent kept receiving every email and SMS; the only thing
+withdrawal changed was what the guest profile screen displayed. Separately, the
+only data-request route was staff-authenticated, so a guest could not raise an
+access or withdrawal request themselves.
+
+**Decision:** Every outbound message declares a `message_class`. Marketing is
+opt-in and suppressed for a guest who withdrew or never consented; operational
+messages — confirmation, reminder, queue-ready, waitlist offer — are never
+suppressed, because they fulfil the guest's own request and silencing them would
+be worse for the guest, not better. The synchronous `sms_service.send_sms` has no
+database session and therefore cannot check consent, so it *refuses* a marketing
+send outright; the only path is `send_marketing_sms`, which takes a session and
+checks. Guests raise their own requests through the reservation-management
+capability they already hold — no second guest-identity mechanism.
+
+**Consequences:** No marketing sender ships in the MVP, and the gate exists so the
+first one cannot skip it. Adding an outbound message means classifying it; there
+is no default. Withdrawal completes immediately because it is a setting the venue
+controls; access and deletion are recorded `pending` for a human, because marking
+them complete on receipt would be a false completion. Every failure on the guest
+surface returns the same 404 as the capability exchange, so the surface cannot be
+probed for whether a reservation exists.
+
+**References:** `server/app/services/marketing_consent_service.py`,
+`server/app/routers/public_privacy.py`, `server/app/services/sms_service.py`,
+`server/tests/integration/test_guest_privacy.py`
+
+## 2026-08-26 — Reports name three value figures and add none of them together
+
+**Context:** Stage 6 added the first reporting surface over orders and tabs.
+`PRODUCT.md` requires ordered value, open-tab value and externally settled value
+to stay distinguishable and forbids labelling any of them revenue, accounting or
+fiscal output. The tempting shape — one "total" tile — would have been both
+easier to build and wrong, because Crowbar is not the payment or fiscal
+authority and the three figures answer different questions.
+
+**Decision:** The value report returns the three side by side and never a sum.
+Externally settled value reads `tab_settlement_events.total_snapshot`, the
+immutable amount captured when the venue's register took payment, and is never
+recomputed from orders — a later order correction must not rewrite what was
+asserted. A test asserts no response *field* is named revenue, accounting,
+fiscal, profit or income, and that the disclosure explicitly says none of them is
+revenue.
+
+**Consequences:** A comp applied at the register makes the settled figure differ
+from the order sum, and both are reported truthfully rather than reconciled.
+Adding a money figure to any report means deciding which of the three it is; if
+it is none of them, it probably should not ship. Rates return `null` rather than
+zero when there is nothing to divide by, so "no bookings" and "no no-shows" never
+render identically — the same honesty rule stage 5 set for cost figures.
+
+**References:** `server/app/services/reporting_service.py`,
+`server/app/routers/reports.py`, `server/tests/integration/test_reports.py`
+
+## 2026-08-26 — An absent ML service degrades a dashboard and says so
+
+**Context:** The ML service holds its results in process memory, so an ordinary
+restart emptied the Insights page. Every panel returned 503 in that state, which
+reads to an operator as a Crowbar fault rather than an optional dependency being
+away. `ml_predictions` had also existed since migration 002 with no ORM model, so
+`Base.metadata.create_all` never created it and
+`analytics_service.get_high_risk_reservations` failed with a missing relation in
+any test that reached it.
+
+**Decision:** FastAPI snapshots each successful Insights read into
+`ml_result_snapshots`, one row per tenant and resource. An unreachable service is
+served the snapshot marked `stale: true` with its `captured_at`, or an honest
+empty state when there is nothing remembered. An error *response* from a
+reachable service is passed through unchanged, because it is a real answer and
+hiding it behind a stale figure would mask a genuine fault. `POST
+/api/insights/run` keeps its 503 — there is nothing honest to remember about a
+run that never started. `ml_predictions`, `business_daily_metrics` and
+`ml_result_snapshots` are now mapped.
+
+**Consequences:** A UI may not render a snapshot without rendering its age; a
+stale figure shown as live is the defect this exists to prevent. Minimum-data
+floors are module constants a venue cannot lower, and a model below its floor
+returns no metric rather than one computed from a handful of rows.
+`get_high_risk_reservations` returns an empty list because nothing writes
+cancellation-risk rows — that gap is recorded in `TODO.md` rather than papered
+over with a number.
+
+**References:** `server/app/routers/insights.py`,
+`server/app/services/ml_snapshot_service.py`, `server/app/models/ml.py`,
+`ml/CONTEXT.md`, `server/tests/integration/test_insights_resilience.py`
+
+## 2026-08-26 — A reservation may have no guest email, and demo data uses a domain email validators accept
+
+**Context:** Two failures with one root. `example.invalid` is an IANA reserved
+special-use TLD; Pydantic's `EmailStr` rejects it outright. The demo seed used
+`@example.invalid` for all 56 addresses, so `POST /api/auth/login` answered 422
+for every seeded account before authentication ran — no demo identity could sign
+in, which blocked any verification needing a real session. Separately,
+`accept_waitlist_offer` built a `ReservationCreate` with
+`email=customer.email or "guest@example.invalid"`, whose `email` was a required
+`EmailStr`; the fallback existed precisely for the null case — a guest
+anonymised through the CRM retention or consent-withdrawal path while holding a
+live waitlist entry — and constructing it raised `ValidationError`, turning that
+case into a 500.
+
+**Decision:** The seed uses `@example.com`, reserved by RFC 2606 for
+documentation and owned by nobody, so demo data still cannot reach a real
+mailbox but validates cleanly. The waitlist fallback was removed rather than
+replaced: `ReservationCreate.email` is now `EmailStr | None` and the waitlist
+passes `customer.email` through unchanged. A placeholder was rejected because
+`create_reservation` feeds the address into `upsert_customer`, so a fabricated
+value would have written a fake email back onto the customer record the
+withdrawal path had just cleared, and would then have been handed to the
+confirmation-email sender. Optional is also what the rest of the surface already
+said: `reservations.email` and `customers.email` are nullable, and
+`ReservationUpdate` and `ReservationResponse` already type it `str | None`.
+`PublicReservationCreate.email` stays required — a guest booking themselves in
+still gives an address.
+
+**Consequences:** Staff-side reservation creation now accepts a guest with no
+email, which is correct for walk-ins and anonymised guests; the staff form still
+asks for one. `_send_reservation_email` skips when there is no address, matching
+the `bool(reservation.email)` guard the reminder job and waitlist offer sender
+already used — a null address must never reach the provider. Demo addresses must
+not be moved to a reserved special-use TLD (`.invalid`, `.test`, `.example`,
+`.localhost`) however non-deliverable it looks;
+`server/tests/unit/test_seed_credentials.py` reads the seed file and asserts
+every address in it passes `LoginRequest`, so that regression fails the suite.
+
+**References:** `server/db/seeds/001_seed_puzzles.sql`,
+`server/app/schemas/reservation.py`,
+`server/app/services/reservation_waitlist_service.py`,
+`server/app/routers/reservations.py`,
+`server/tests/unit/test_seed_credentials.py`, `server/DATABASE.md`
+
+## 2026-08-26 — User-level skills are in scope, and stage 7 reopens the direction
+
+**Context:** A catalogue of user-level design and taste skills was installed
+under `~/.claude/skills/`. Nothing technically blocked them, but three
+repository documents steered an agent away from them in prose. The
+`frontend-design` skill said the aesthetic direction was "already committed. Do
+not pick a new one", listed introducing a new palette or "bolder direction" as
+an anti-pattern, and routed generic design skills to work *outside* this
+repository. `docs/SKILLS.md` described the installed thirteen as a closed world
+and warned against installing a catalogue. `AGENTS.md` repeated the closed set.
+That guidance also contradicted `docs/DESIGN.md`, which states it only
+*describes* what exists, and `docs/TODO.md` stage 7, whose deliverable is
+promoting `DESIGN.md` into a contract — a pass that cannot run if the direction
+is already closed. Stage 6 closed the same day, so stage 7 is next.
+
+**Decision:** User-level skills are in scope for Crowbar work and compose with
+the project set. On design work the division is explicit: user-level design and
+taste skills own aesthetic direction and craft — palette and type proposals,
+hierarchy, motion, component API shape, accessibility and performance review —
+while `frontend-design` owns what must stay true in this codebase: the token
+mechanism, mandatory empty and module-disabled states, the canonical
+money/time/unit helpers, and the compliance copy. The SRM taproom palette and
+the Libre Caslon / Hanken Grotesk / Spline Sans Mono stack are named the stage 7
+*baseline*, not a closed decision.
+
+**Consequences:** A direction is adopted by changing token values in
+`client/app/globals.css` and `docs/DESIGN.md` together in one pass, never by a
+component diverging from the rest — two simultaneous design languages is the
+failure stage 7 exists to prevent, and it is now the anti-pattern the skill
+names. "Tokens, never hex" survives a change of direction unchanged: a new
+palette means new token *values*, and call sites should not have to know. Two
+constraints remain outside any skill's reach because `docs/RULES.md` and
+`docs/PRODUCT.md` outrank all of them — the settlement and revenue vocabulary,
+and honest empty, disabled, and failure states. `docs/SKILLS.md`'s bar for
+adding a skill is now scoped to skills *committed to this repository*; it never
+governed the user's own environment, and a user-level skill that already covers
+the ground is a reason not to write a project one.
+
+**References:** `.claude/skills/frontend-design/SKILL.md`, `docs/SKILLS.md`,
+`AGENTS.md`, `docs/RULES.md`, `docs/DESIGN.md`, `docs/TODO.md` (stage 7)
 
 ## Entry Template
 

@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.errors import ErrorCode, api_error
+from app.core.permissions import CAPABILITIES, has_capability
 from app.database import get_db
 from app.models.business import Business
 from app.models.user import User
@@ -114,15 +115,39 @@ async def get_current_business(
     return business
 
 
-def require_roles(*roles: str):
+def current_staff_role(current_user: User) -> str | None:
+    """The role the current user holds in the business they are acting for.
+
+    One-business tenancy makes `staff_assignments[0]` unambiguous, and
+    `get_current_business` derives the tenant from the same index, so the two
+    cannot disagree. Generalizing this to multi-business accounts is an open
+    decision in `docs/TODO.md`, not something to do incidentally.
     """
-    Dependency factory: require the current user to have one of the given roles.
+    if not current_user.staff_assignments:
+        return None
+    return current_user.staff_assignments[0].role
+
+
+def require_capability(capability: str):
+    """
+    Dependency factory: require the current user's role to hold `capability`.
+
+    This is the guard nearly every protected route should use. It states what
+    the route does rather than who may reach it, so the role matrix lives in one
+    place (`app/core/permissions.py`) instead of being re-derived at each call
+    site.
 
     Usage:
-        @router.delete("/{id}", dependencies=[Depends(require_roles("owner", "manager"))])
+        @router.post("/purchase-orders", dependencies=[
+            Depends(require_capability("purchasing.order.create"))
+        ])
     """
+    if capability not in CAPABILITIES:
+        raise ValueError(f"Unknown capability: {capability}")
+
     async def dependency(current_user: User = Depends(get_current_user)) -> User:
-        if not current_user.staff_assignments:
+        role = current_staff_role(current_user)
+        if role is None:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={
@@ -131,14 +156,16 @@ def require_roles(*roles: str):
                     "details": None,
                 },
             )
-        staff = current_user.staff_assignments[0]
-        if staff.role not in roles:
+        if not has_capability(role, capability):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={
                     "code": ErrorCode.FORBIDDEN,
-                    "message": f"Role '{staff.role}' is not permitted. Required: {list(roles)}",
-                    "details": {"required_roles": list(roles), "current_role": staff.role},
+                    "message": f"Role '{role}' is not permitted to perform this action.",
+                    "details": {
+                        "required_capability": capability,
+                        "current_role": role,
+                    },
                 },
             )
         return current_user

@@ -1,4 +1,8 @@
 // Base user types
+import type { Capability, StaffRole } from "@/lib/permissions";
+
+export type { Capability, StaffRole };
+
 export interface User {
   id: string;
   email: string;
@@ -15,7 +19,7 @@ export interface Customer extends User {
 export interface Staff extends User {
   type: "staff";
   businessId: string;
-  role: "owner" | "manager" | "staff";
+  role: StaffRole;
 }
 
 // Auth
@@ -86,8 +90,10 @@ export interface MeContext {
   business: Pick<Business, "id" | "name" | "slug" | "enabledModules" | "onboardingComplete" | "notificationChannels"> & {
     locations: Array<{ id: string; name: string; address?: string; is_primary: boolean }>;
   };
-  role: "owner" | "manager" | "staff";
-  permissions: string[];
+  role: StaffRole | null;
+  /** The server's own capability list for this role. Authoritative; the
+   * mirror in `lib/permissions.ts` is for server components and first paint. */
+  capabilities: Capability[];
   enabledModules: string[];
 }
 
@@ -733,6 +739,280 @@ export interface MenuItemStockInfo {
   menuItemId: string;
   hasLowStockIngredient: boolean;
   servingsRemaining: number | null;
+}
+
+// ─── Purchasing and cost control ──────────────────────────────────────────────
+
+// Order and receipt quantities count PACKS and their prices are per pack. Only
+// PriceHistoryEntry.unitCostPerBaseUnit is per canonical base unit (each/ml/g).
+
+export interface Supplier {
+  id: string;
+  businessId: string;
+  name: string;
+  contactName?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  notes?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SupplierProduct {
+  id: string;
+  businessId: string;
+  supplierId: string;
+  inventoryItemId: string;
+  supplierSku?: string;
+  productName: string;
+  packConversionId?: string;
+  leadTimeDays: number;
+  lastPrice?: number; // per pack
+  currencyCode: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PackConversion {
+  id: string;
+  businessId: string;
+  inventoryItemId: string;
+  label: string;
+  packUnit: "case" | "each" | "bottle" | "keg" | "kilogram" | "litre" | "millilitre";
+  baseQuantity: number; // canonical base units in one pack
+  isDefaultReceivingUnit: boolean;
+}
+
+// `closed_short` ends an order the supplier will not complete; unlike
+// `cancelled` it does not claim that nothing was received.
+export type PurchaseOrderStatus =
+  | "draft"
+  | "approved"
+  | "ordered"
+  | "partially_received"
+  | "received"
+  | "closed_short"
+  | "cancelled";
+
+export interface PurchaseOrderLine {
+  id: string;
+  inventoryItemId: string;
+  supplierProductId?: string;
+  description: string;
+  orderedQuantity: number; // packs
+  receivedQuantity: number; // packs
+  packConversionId: string;
+  unitPrice: number; // per pack
+  currencyCode: string;
+}
+
+export interface PurchaseOrder {
+  id: string;
+  businessId: string;
+  supplierId: string;
+  locationId?: string;
+  status: PurchaseOrderStatus;
+  reference?: string;
+  expectedOn?: string;
+  note?: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  orderedAt?: string;
+  closedAt?: string;
+  closedBy?: string;
+  closureReason?: string;
+  lines: PurchaseOrderLine[];
+}
+
+export interface PurchaseReceiptLine {
+  id: string;
+  purchaseOrderLineId: string;
+  inventoryItemId: string;
+  receivedQuantity: number; // packs
+  unitPrice: number; // per pack
+  currencyCode: string;
+  substitutionNote?: string;
+  discrepancyReason?: string;
+  stockMovementId?: string;
+}
+
+export interface PurchaseReceipt {
+  id: string;
+  businessId: string;
+  purchaseOrderId: string;
+  deliveryReference?: string;
+  invoiceReference?: string;
+  receivedAt: string;
+  note?: string;
+  purchaseOrderStatus: PurchaseOrderStatus; // the status this delivery left the order in
+  lines: PurchaseReceiptLine[];
+}
+
+export interface PriceHistoryEntry {
+  id: string;
+  inventoryItemId: string;
+  supplierProductId?: string;
+  receiptLineId?: string;
+  unitCostPerBaseUnit: number; // per each/ml/g, NOT per pack
+  currencyCode: string;
+  observedAt: string;
+}
+
+export interface PurchaseOrderAttachment {
+  id: string;
+  purchaseOrderId: string;
+  filename: string;
+  contentType?: string;
+  byteSize?: number;
+  uploadedBy?: string;
+  createdAt: string;
+}
+
+// ─── Count sessions ───────────────────────────────────────────────────────────
+
+export type CountSessionStatus = "open" | "reconciled" | "cancelled";
+
+// What the counter actually keyed, preserved alongside the converted base-unit
+// figure so a stocktake stays auditable.
+export type CountEntryMode = "base_unit" | "pack" | "keg_level";
+
+export interface CountLine {
+  id: string;
+  inventoryItemId: string;
+  itemName: string;
+  baseUnit: string;
+  bookQuantity: number;
+  countedQuantity: number;
+  varianceQuantity: number; // counted - book, computed at reconcile
+  shrinkageReason?: string;
+  note?: string;
+  movementId?: string;
+  entryMode: CountEntryMode;
+  entryValue?: number; // the raw keyed figure when entryMode is not 'base_unit'
+  entryPackConversionId?: string;
+}
+
+export interface CountSessionSummary {
+  id: string;
+  businessId: string;
+  locationId?: string;
+  kind: "stocktake" | "cycle_count";
+  status: CountSessionStatus;
+  note?: string;
+  openedBy?: string;
+  reconciledBy?: string;
+  reconciledAt?: string;
+  createdAt: string;
+}
+
+export interface CountSession extends CountSessionSummary {
+  lines: CountLine[];
+}
+
+// ─── Cost control ─────────────────────────────────────────────────────────────
+
+// Every cost payload carries `complete` plus the reason it is not, so a partial
+// figure is never rendered as a confident one.
+
+export interface ValuationItem {
+  itemId: string;
+  name: string;
+  baseUnit: string;
+  quantity: number;
+  unitCost?: number;
+  value: number;
+  costed: boolean;
+}
+
+export interface InventoryValuation {
+  items: ValuationItem[];
+  totalValue: number;
+  currencyCode: string;
+  itemsWithoutCost: string[];
+  complete: boolean;
+}
+
+export interface ReorderSuggestion {
+  itemId: string;
+  itemName: string;
+  baseUnit: string;
+  suggestedQuantity: number;
+  explanation: {
+    parQuantity: number;
+    averageConsumedPerDay: number;
+    leadTimeDays: number | null;
+    leadTimeCover: number;
+    targetQuantity: number;
+    onHand: number;
+    outstandingOnOrder: number;
+    lookbackDays: number;
+    formula: string;
+    leadTimeKnown: boolean;
+  };
+}
+
+export interface CostControlOverview {
+  valuation: InventoryValuation;
+  reorderSuggestions: ReorderSuggestion[];
+  disclosure: string; // render verbatim; states these are not fiscal records
+}
+
+export interface MenuMarginRow {
+  menuItemId: string;
+  menuItemName: string;
+  price: number;
+  ingredientCost: number;
+  grossMargin: number | null; // null when the recipe or a cost is missing
+  grossMarginPercent: number | null;
+  pourCostPercent: number | null;
+  complete: boolean;
+  incompleteReason: string | null;
+}
+
+export interface MenuMargins {
+  items: MenuMarginRow[];
+  currencyCode: string;
+  disclosure: string;
+}
+
+export interface WasteByReason {
+  reason: string;
+  quantity: number;
+}
+
+export interface ConsumptionVarianceRow {
+  itemId: string;
+  name: string;
+  baseUnit: string;
+  soldQuantity: number;
+  wasteQuantity: number;
+  wasteByReason: WasteByReason[];
+  wasteValue: number | null;
+  costed: boolean;
+}
+
+export interface ConsumptionVariance {
+  items: ConsumptionVarianceRow[];
+  currencyCode: string;
+  start: string;
+  end: string;
+  totalWasteValue: number;
+  disclosure: string;
+}
+
+export interface ControllableCogs {
+  start: string;
+  end: string;
+  currencyCode: string;
+  soldCost: number;
+  wasteCost: number;
+  total: number;
+  movementsWithoutCost: number;
+  complete: boolean;
+  disclosure: string;
 }
 
 export interface Reservation {

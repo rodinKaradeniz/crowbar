@@ -3,12 +3,18 @@ import { getCurrentUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { fetchBusiness, fetchBusinessVisitors, fetchServiceTypesByBusiness } from "@/lib/api";
 import { fetchMLSegmentation } from "@/lib/ml-api";
+import { RoleRestricted } from "@/components/role-restricted";
+import { hasCapability } from "@/lib/permissions";
 
 export default async function BusinessCustomers() {
   const user = await getCurrentUser();
 
   if (!user || user.type !== "staff") {
     redirect("/auth/login");
+  }
+
+  if (!hasCapability(user.role, "customers.view")) {
+    return <RoleRestricted surface="Guests" role={user.role} />;
   }
 
   const businessId = user.businessId;

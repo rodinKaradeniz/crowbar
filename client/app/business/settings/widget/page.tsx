@@ -2,6 +2,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { fetchBusiness } from "@/lib/api";
 import { redirect } from "next/navigation";
 import WidgetSnippetClient from "./widget-snippet-client";
+import { hasCapability } from "@/lib/permissions";
 
 export default async function WidgetSettingsPage() {
   const user = await getCurrentUser();
@@ -9,7 +10,7 @@ export default async function WidgetSettingsPage() {
   if (!user || user.type !== "staff") {
     redirect("/auth/login");
   }
-  if (user.role === "staff") redirect("/business/overview");
+  if (!hasCapability(user.role, "business.configure")) redirect("/business/overview");
 
   const business = await fetchBusiness(user.businessId);
 

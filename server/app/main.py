@@ -35,9 +35,11 @@ from app.routers import (
     insights,
     inventory,
     purchasing,
+    reports,
     notifications,
     ordering,
     public_capabilities,
+    public_privacy,
     queue,
     reservations,
     service_types,
@@ -234,8 +236,10 @@ app.include_router(analytics.router)
 app.include_router(queue.router)
 app.include_router(ordering.router)
 app.include_router(public_capabilities.router)
+app.include_router(public_privacy.router)
 app.include_router(inventory.router)
 app.include_router(purchasing.router)
+app.include_router(reports.router)
 app.include_router(tabs.router)
 app.include_router(tabs.ws_router)
 app.include_router(tax.router)

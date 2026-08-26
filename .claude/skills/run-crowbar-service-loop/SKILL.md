@@ -91,29 +91,63 @@ Walk it in order. Each step names the surface and what proves it happened.
 
 ## What is not implemented today
 
-Do not claim a step that cannot run. Verified gaps as of migrations 001–037:
+Do not claim a step that cannot run.
 
-- **Settlement is still simulated.** `POST /api/tabs/{tab_id}/close` records a
-  `settled_method` label and closes the tab; `tab_service.py` says so in its own
-  docstring. The audited `settled_externally` state with `settled_at`,
-  `settled_by`, an immutable total snapshot, and an external-register reference
-  is **stage 4 work that does not exist yet**. Walk step 9 as "close the tab",
-  and report the shape gap rather than describing an audited assertion.
-- **Preparation stations are hard-coded.** `orders.routing_tag` defaults to
-  `kitchen`; tenant-configurable stations, station timing, and audited order
-  edits/cancellation are stage 4.
-- **Queue is not open/closed or capacity aware.** Staff-created walk-ins with
-  reasons, duplicate protection, and wait estimates are stage 3.
-- **Waitlist lifecycle is partial.** Offers and acceptance work; decline,
-  cancel, expiry, removal, and active/history filtering are stage 3.
-- **No purchasing.** Suppliers, purchase orders, receiving, stock counts,
-  valuation, recipe cost, and margin are stage 5. "Inspect cost history" today
-  means movements, discrepancies, and low-stock only.
-- **No operational reports.** Stage 6.
+> Re-verified against source at migration 049. The settlement, station, queue and
+> waitlist bullets that used to sit here were stale — all four described gaps
+> that stages 3 and 4 had already closed — and have been removed rather than
+> carried forward. What follows is what genuinely does not exist.
+
+- **Purchasing and cost control ship as of migration 048.** Suppliers, supplier
+  products with lead times, purchase orders, partial receiving, pack
+  conversions, count sessions with CSV round-trip, purchase-price history,
+  attachments, valuation, recipe cost, margin, pour cost, consumption variance
+  and controllable COGS are all reachable. "Inspect cost history" now means the
+  movement ledger plus `/api/inventory/{business_id}/cost-control` and its
+  margins, variance and cogs sub-resources.
+- **Location transfers do not exist and are not coming for the pilot.** The
+  schema in migrations 046/047 is dormant and no route reaches it. Do not walk a
+  transfer step; see the deferred entry in `docs/TODO.md`.
+- **Reports ship as of stage 6**, at `/business/reports` and `/api/reports/*`.
+  Bookings and no-shows, queue wait and seating conversion, table utilization and
+  turn time, ordered items by station with ticket timing, the three separate
+  ordered / open-tab / externally-settled value figures, stock movement and
+  waste, purchasing spend, and staff actions — each over a chosen date range,
+  each with a CSV export. Reading a report and reconciling it against the ledger
+  by hand is now part of walking the loop. **No fiscal or accounting report
+  exists and none is coming**; do not describe any figure as revenue.
+- **Staff actions reporting is not an audit log.** It reports over the actor
+  columns that already exist — who approved a purchase order, reconciled a
+  count, recorded a settlement, marked a no-show. A platform-wide audit explorer
+  is deferred; do not claim one.
 - **`inventory.*` events have no WebSocket projection** — inventory changes do
   not push to a connected client.
-- **The canonical seed does not contain the full stage 7 pilot scenario**, so a
+- **The canonical seed does not contain the full stage 8 pilot scenario**, so a
   seeded database does not prove the complete demo journey.
+
+## Which role can walk which step
+
+Since stage 6 the loop is role-aware, so "it worked" depends on who you were.
+The seed provides one account per role — `owner@`, `manager@`, `host@`, `bar@`
+and `inventory@example.invalid`. `docs/permission-matrix.md` is generated from
+`server/app/core/permissions.py` and is the authority; the short version:
+
+| Step | Role that owns it |
+| --- | --- |
+| Book, reschedule, mark a no-show | host / server |
+| Run the queue, seat a party, close a seating | host / server |
+| Take and fulfill an order, 86 an item | bar / kitchen, host / server |
+| Open a tab, record external settlement | bar / kitchen, host / server |
+| Reopen a settled tab | manager |
+| Count stock, receive a delivery, draft an order | inventory operator |
+| Approve a purchase order | manager |
+| Read cost, margin or any report | manager |
+| Configure tables, menus, prices, stations, staff | manager |
+
+Walking the whole loop as an owner proves the workflow, not the matrix. To claim
+the matrix works, sign in as each role and confirm that what it can reach
+matches its row **and** that a direct API call to something it lacks returns
+403 — the UI hiding a control is not the boundary, the server is.
 
 ## What the stack does not exercise
 

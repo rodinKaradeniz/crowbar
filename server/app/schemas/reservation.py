@@ -14,7 +14,11 @@ class ReservationCreate(AppBaseModel):
     time: datetime
     name: str = Field(min_length=1, max_length=255)
     phone: str
-    email: EmailStr
+    # Optional because the reservation row, the customer row, and every read
+    # schema already allow a null address: a guest can reach a staff-side
+    # booking with no email (walk-in, or anonymised through a CRM withdrawal
+    # while holding a live waitlist entry). Public booking still requires one.
+    email: EmailStr | None = None
     note: str | None = None
     guests: int = Field(default=1, ge=1)
     availability_override_reason: str | None = Field(

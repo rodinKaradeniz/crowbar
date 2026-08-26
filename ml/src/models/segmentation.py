@@ -31,10 +31,16 @@ SEGMENT_LABELS = {
 }
 
 
+#: Guests with visit history needed before segments are produced.
+MIN_CUSTOMERS = 20
+
+
 class CustomerSegmentationModel:
     """K-Means customer segmentation on operational booking features."""
 
     def __init__(self, n_clusters: int = 4, random_state: int = 42):
+        #: Set when a floor was not met; None after a successful fit.
+        self.insufficient_reason: str | None = None
         self.n_clusters = n_clusters
         self.random_state = random_state
         self.scaler = StandardScaler()
@@ -58,6 +64,19 @@ class CustomerSegmentationModel:
         """
         feature_cols = ["recency", "frequency", "engagement"]
         X = rfm[feature_cols].copy()
+
+        # Minimum-data floor. Clustering a handful of guests produces segment
+        # labels — "Champions", "At Risk" — that read as findings but describe
+        # three people. The caller checks `insufficient_reason` before showing
+        # any of it.
+        if len(X) < MIN_CUSTOMERS:
+            self.insufficient_reason = (
+                f"{len(X)} guest(s) with visit history; at least "
+                f"{MIN_CUSTOMERS} are needed before segments mean anything."
+            )
+            logger.info("Segmentation skipped: %s", self.insufficient_reason)
+            return rfm.iloc[0:0].copy()
+        self.insufficient_reason = None
 
         # Handle edge case: fewer customers than clusters
         actual_clusters = min(self.n_clusters, len(X))

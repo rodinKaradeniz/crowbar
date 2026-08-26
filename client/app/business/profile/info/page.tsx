@@ -2,6 +2,7 @@ import { fetchBusiness } from "@/lib/api";
 import { getCurrentUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import BusinessInfoClient from "./business-info-client";
+import { hasCapability } from "@/lib/permissions";
 
 export default async function BusinessInfo() {
   const user = await getCurrentUser();
@@ -9,7 +10,7 @@ export default async function BusinessInfo() {
   if (!user || user.type !== "staff") {
     redirect("/auth/login");
   }
-  if (user.role === "staff") redirect("/business/overview");
+  if (!hasCapability(user.role, "business.configure")) redirect("/business/overview");
 
   const businessId = user.businessId;
   const business = await fetchBusiness(businessId);

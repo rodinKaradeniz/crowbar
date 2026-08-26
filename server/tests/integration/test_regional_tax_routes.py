@@ -42,7 +42,7 @@ async def test_german_defaults_are_editable_and_tax_management_is_tenant_and_rol
     db_session.add(staff_user)
     await db_session.flush()
     staff_user_id = staff_user.id
-    db_session.add(Staff(user_id=staff_user_id, business_id=business_id, role="staff"))
+    db_session.add(Staff(user_id=staff_user_id, business_id=business_id, role="host_server"))
     await db_session.commit()
     staff_headers = {
         "Authorization": f"Bearer {create_access_token(str(staff_user_id), 'staff')}"

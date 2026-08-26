@@ -17,6 +17,7 @@ import { consumeCapabilityFragment } from "@/lib/capability-fragment";
 import type { Availability, Reservation } from "@/types";
 import type { Business } from "@/types";
 import { formatBusinessDateTime, formatBusinessTime } from "@/lib/business-time";
+import { GuestPrivacySection } from "./guest-privacy-section";
 
 export default function ManageReservationClient() {
   const [reservation, setReservation] = useState<Reservation | null>(null);
@@ -93,5 +94,6 @@ export default function ManageReservationClient() {
       <div className="mt-4 flex flex-wrap gap-3"><Input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="w-auto" /><Input type="number" min="1" value={guests} onChange={(event) => setGuests(Number(event.target.value))} className="w-24" aria-label="Guests" /><Button variant="outline" onClick={() => void loadAvailability()} disabled={action !== null}><CalendarClock /> {action === "slots" ? "Loading…" : "Find times"}</Button></div>
       {availability && <div className="mt-4 flex flex-wrap gap-2">{slots.length ? slots.map((slot) => <Button key={slot.startsAt} size="sm" variant="outline" disabled={action !== null} onClick={() => void reschedule(slot.startsAt)}>{formatBusinessTime(slot.startsAt, business?.timezone ?? "UTC", business?.locale)}</Button>) : <p className="text-sm text-muted-foreground">No times are available that day.</p>}</div>}
     </section>}
+    <GuestPrivacySection />
   </section></main>;
 }

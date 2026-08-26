@@ -175,6 +175,8 @@ async def notify_after_reservation_patch(
             channels,
             new.phone,
             f"Crowbar: {sms_body}",
+            # The guest is being told about the booking they made.
+            message_class="operational",
         )
 
 
@@ -233,6 +235,7 @@ def send_reschedule_sms(
         notification_channels,
         phone,
         f"Crowbar: Your reservation at {business_name} was rescheduled to {_fmt_time(reservation_time, timezone_name)}.",
+        message_class="operational",
     )
 
 
@@ -259,4 +262,5 @@ async def notify_after_reservation_delete(
             channels,
             reservation.phone,
             f"Crowbar: Your booking for {_fmt_time(reservation.time, reservation.business.timezone or 'UTC')} was cancelled.",
+            message_class="operational",
         )

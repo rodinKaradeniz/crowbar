@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import forbidden, not_found
 from app.database import get_db
-from app.dependencies import get_current_business, get_current_user, require_roles
+from app.dependencies import get_current_business, get_current_user, require_capability
 from app.models.business import Business
 from app.models.user import User
 from app.schemas.customer import (
@@ -33,7 +33,9 @@ async def _customer_or_404(db: AsyncSession, business: Business, customer_id: UU
     return customer
 
 
-@router.get("/business/{business_id}", response_model=list[CustomerResponse])
+@router.get("/business/{business_id}", response_model=list[CustomerResponse],
+    dependencies=[Depends(require_capability("customers.view"))],
+)
 async def list_business_customers(
     business_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -44,7 +46,9 @@ async def list_business_customers(
     return await customer_service.get_customers_by_business(db, business_id)
 
 
-@router.get("/business/{business_id}/visitors")
+@router.get("/business/{business_id}/visitors",
+    dependencies=[Depends(require_capability("customers.view"))],
+)
 async def list_business_visitors(
     business_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -55,7 +59,9 @@ async def list_business_visitors(
     return await customer_service.get_all_visitors(db, business_id)
 
 
-@router.get("", response_model=list[CustomerResponse])
+@router.get("", response_model=list[CustomerResponse],
+    dependencies=[Depends(require_capability("customers.view"))],
+)
 async def list_guests(
     db: AsyncSession = Depends(get_db),
     business: Business = Depends(get_current_business),
@@ -63,7 +69,9 @@ async def list_guests(
     return await customer_service.get_customers_by_business(db, business.id)
 
 
-@router.get("/{customer_id}", response_model=CustomerProfileResponse)
+@router.get("/{customer_id}", response_model=CustomerProfileResponse,
+    dependencies=[Depends(require_capability("customers.view"))],
+)
 async def get_customer(
     customer_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -77,7 +85,9 @@ async def get_customer(
     return profile
 
 
-@router.patch("/{customer_id}", response_model=CustomerProfileResponse)
+@router.patch("/{customer_id}", response_model=CustomerProfileResponse,
+    dependencies=[Depends(require_capability("customers.manage"))],
+)
 async def update_customer(
     customer_id: UUID,
     body: CustomerProfileUpdate,
@@ -97,7 +107,9 @@ async def update_customer(
     return profile
 
 
-@router.post("/{customer_id}/tags", response_model=CustomerTagResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/{customer_id}/tags", response_model=CustomerTagResponse, status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_capability("customers.manage"))],
+)
 async def add_tag(
     customer_id: UUID, body: CustomerTagCreate,
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user), business: Business = Depends(get_current_business),
@@ -108,7 +120,9 @@ async def add_tag(
     return tag
 
 
-@router.delete("/{customer_id}/tags/{tag_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{customer_id}/tags/{tag_id}", status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_capability("customers.manage"))],
+)
 async def remove_tag(
     customer_id: UUID, tag_id: UUID,
     db: AsyncSession = Depends(get_db), business: Business = Depends(get_current_business),
@@ -120,7 +134,9 @@ async def remove_tag(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/{customer_id}/notes", response_model=CustomerNoteResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/{customer_id}/notes", response_model=CustomerNoteResponse, status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_capability("customers.manage"))],
+)
 async def add_note(
     customer_id: UUID, body: CustomerNoteCreate,
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user), business: Business = Depends(get_current_business),
@@ -131,7 +147,9 @@ async def add_note(
     return note
 
 
-@router.patch("/{customer_id}/notes/{note_id}", response_model=CustomerNoteResponse)
+@router.patch("/{customer_id}/notes/{note_id}", response_model=CustomerNoteResponse,
+    dependencies=[Depends(require_capability("customers.manage"))],
+)
 async def update_note(
     customer_id: UUID, note_id: UUID, body: CustomerNoteUpdate,
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user), business: Business = Depends(get_current_business),
@@ -144,7 +162,9 @@ async def update_note(
     return note
 
 
-@router.delete("/{customer_id}/notes/{note_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{customer_id}/notes/{note_id}", status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_capability("customers.manage"))],
+)
 async def delete_note(
     customer_id: UUID, note_id: UUID,
     db: AsyncSession = Depends(get_db), business: Business = Depends(get_current_business),
@@ -156,11 +176,12 @@ async def delete_note(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/{customer_id}/merge", response_model=CustomerProfileResponse)
+@router.post("/{customer_id}/merge", response_model=CustomerProfileResponse,
+    dependencies=[Depends(require_capability("customers.privacy"))],
+)
 async def merge_customer(
     customer_id: UUID, body: CustomerMergeRequest,
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user), business: Business = Depends(get_current_business),
-    _: User = Depends(require_roles("owner", "manager")),
 ):
     target = await _customer_or_404(db, business, customer_id)
     try:
@@ -174,11 +195,12 @@ async def merge_customer(
     return profile
 
 
-@router.get("/{customer_id}/export")
+@router.get("/{customer_id}/export",
+    dependencies=[Depends(require_capability("customers.privacy"))],
+)
 async def export_customer(
     customer_id: UUID,
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user), business: Business = Depends(get_current_business),
-    _: User = Depends(require_roles("owner", "manager")),
 ):
     profile = await customer_service.export_customer_data(db, business_id=business.id, customer_id=customer_id, actor_id=user.id)
     if profile is None:
@@ -187,11 +209,12 @@ async def export_customer(
     return profile
 
 
-@router.post("/{customer_id}/data-requests", response_model=CustomerDataRequestResponse)
+@router.post("/{customer_id}/data-requests", response_model=CustomerDataRequestResponse,
+    dependencies=[Depends(require_capability("customers.privacy"))],
+)
 async def process_data_request(
     customer_id: UUID, body: CustomerDataRequestCreate,
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user), business: Business = Depends(get_current_business),
-    _: User = Depends(require_roles("owner", "manager")),
 ):
     customer = await _customer_or_404(db, business, customer_id)
     if body.request_type == "deletion":

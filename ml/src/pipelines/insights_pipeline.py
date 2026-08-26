@@ -152,6 +152,14 @@ class InsightsPipeline:
                 n_clusters=min(4, len(rfm))
             )
             segments = model.fit_predict(rfm)
+            # Below the minimum-data floor the model returns nothing and says
+            # why. Reporting "success" with an empty result would put an empty
+            # donut chart on the dashboard as though it were a finding.
+            if model.insufficient_reason:
+                return {
+                    "status": "insufficient_data",
+                    "reason": model.insufficient_reason,
+                }
             summary = model.get_summary()
 
             segment_counts = segments["segment_label"].value_counts().to_dict()
@@ -186,6 +194,11 @@ class InsightsPipeline:
                 }
 
             result = model.train_and_evaluate(df)
+            if result.status == "insufficient_data":
+                return {
+                    "status": "insufficient_data",
+                    "reason": result.insufficient_reason,
+                }
 
             return {
                 "status": "success",
@@ -227,11 +240,22 @@ class InsightsPipeline:
                         ["date", "predicted_reservations", "is_weekend"]
                     ].to_dict(orient="records")
 
+            # A venue with no forecast is below the history floor, not broken.
+            # Reporting why lets the panel say "14 days needed, 6 so far"
+            # instead of showing an empty chart.
+            if not forecasts_dict and result.insufficient_reasons:
+                return {
+                    "status": "insufficient_data",
+                    "reason": next(iter(result.insufficient_reasons.values())),
+                    "insufficient_reasons": result.insufficient_reasons,
+                }
+
             return {
                 "status": "success",
                 "metrics": metrics_dict,
                 "feature_importance": result.feature_importance,
                 "forecasts": forecasts_dict,
+                "insufficient_reasons": result.insufficient_reasons,
             }
         except Exception as e:
             logger.error(f"Demand forecast failed: {e}")

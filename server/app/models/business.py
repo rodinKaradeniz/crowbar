@@ -62,22 +62,22 @@ class Business(Base, UUIDMixin, TimestampMixin):
     bot_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     staff: Mapped[list["Staff"]] = relationship(
-        back_populates="business", lazy="selectin"
+        back_populates="business", lazy="selectin", passive_deletes="all"
     )
     service_types: Mapped[list["ServiceType"]] = relationship(
-        back_populates="business", lazy="selectin"
+        back_populates="business", lazy="selectin", passive_deletes="all"
     )
     booking_schedules: Mapped[list["BookingSchedule"]] = relationship(
         back_populates="business", lazy="selectin", passive_deletes="all"
     )
     reservations: Mapped[list["Reservation"]] = relationship(
-        back_populates="business", lazy="selectin"
+        back_populates="business", lazy="selectin", passive_deletes="all"
     )
     locations: Mapped[list["Location"]] = relationship(
-        back_populates="business", lazy="selectin"
+        back_populates="business", lazy="selectin", passive_deletes="all"
     )
     queue_entries: Mapped[list["QueueEntry"]] = relationship(
-        back_populates="business", lazy="selectin"
+        back_populates="business", lazy="selectin", passive_deletes="all"
     )
 
 

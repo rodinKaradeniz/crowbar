@@ -4,6 +4,22 @@ This is the durable design contract for Crowbar's current web experience.
 Implementation details remain authoritative in `client/app/globals.css` and the
 components named below.
 
+**Status:** this file currently *describes* what the interface already does.
+`TODO.md` stage 7 promotes it into a committed contract — a settled token set,
+type scale, spacing, density, operational status treatment, state coverage, and
+breakpoints that every surface derives from, and that stage 11's mobile client
+reuses. Until then, treat it as the floor: do not contradict it, and do not
+assume it is complete.
+
+Because stage 7 is the pass that settles the direction rather than applies a
+settled one, the visual identity below is **the current baseline, not a closed
+decision**. A design or taste skill — including a user-level one — may propose
+a different palette, type scale, density, or motion language, and stage 7 is
+where that argument belongs. A proposal is adopted by changing the token values
+in `client/app/globals.css` and this file together, in one pass. It is never
+adopted by one component diverging from the rest; two design languages running
+at once is the outcome stage 7 exists to prevent.
+
 ## Visual Identity
 
 Crowbar uses a warm taproom palette based on the SRM beer-color scale:
@@ -74,7 +90,8 @@ The landing page is photography-led and uses:
 - A shared lager-to-dubbel panel behind two operational story sections.
 - A five-card, right-anchored sticky feature deck on desktop.
 - An accessible numbered FAQ.
-- One night-theme CTA/footer with an inline contact form.
+- One night-theme CTA/footer. The inline contact form was removed in stage 1
+  and has no delivery path to reintroduce it through.
 
 The staff overview is a figure-led operational mosaic. The schedule is a
 three-day ledger with an inline calendar and booking-type legend, rather than
@@ -98,5 +115,10 @@ behavior, and functional data/actions.
 - Contact forms, placeholder reviews, and pricing claims without authoritative
   workflows were removed in Stage 1. Reintroducing them requires real delivery,
   moderation, or approved commercial state plus honest failure handling.
+- "ML Insights" is engineer-facing naming that operators do not use; stage 7
+  owns the rename and the surrounding copy pass.
+- The Reports workspace has a range picker driving every panel, but the
+  Overview and Insights charts still render one fixed window with no
+  time-range control.
 
 These gaps belong in `docs/TODO.md` until resolved.

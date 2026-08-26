@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  ClipboardCheck,
   LayoutDashboard,
   Calendar,
   User,
@@ -18,6 +19,7 @@ import {
   Info,
   CalendarCog,
   UserCircle,
+  BarChart3,
   BrainCircuit,
   BookOpen,
   Code2,
@@ -57,6 +59,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useMounted } from "@/hooks/use-mounted";
 import { clientGetBusiness, clientGetQueueActiveCount } from "@/lib/client-api";
 import { hasModule as _hasModule, ModuleKey } from "@/lib/modules";
+import { hasCapability, type Capability } from "@/lib/permissions";
 import { useEffect, useRef, useState } from "react";
 import { Business } from "@/types";
 
@@ -68,7 +71,17 @@ function BusinessSidebarContentInner() {
   const router = useRouter();
   const { user, meContext, logout } = useAuth();
   const currentRole = meContext?.role ?? (user?.type === "staff" ? user.role : undefined);
-  const canManageBusiness = currentRole === "owner" || currentRole === "manager";
+
+  // Capabilities come from /me/context when it has loaded, so a role change
+  // reaches the nav without a re-login; the mirrored map covers first paint.
+  // Unlike modules, this does NOT default to showing everything while loading —
+  // a nav item that flashes and then disappears is a control the API would
+  // reject, which is exactly what the mirror exists to prevent.
+  const can = (capability: Capability) =>
+    meContext?.capabilities
+      ? meContext.capabilities.includes(capability)
+      : hasCapability(currentRole, capability);
+  const canManageBusiness = can("business.configure");
 
   // Default to showing all items while meContext is still loading
   const hasModule = (m: ModuleKey) =>
@@ -185,7 +198,7 @@ function BusinessSidebarContentInner() {
         </SidebarGroup>
 
         {/* Reservations — guarded by "reservations" module */}
-        {hasModule("reservations") && (
+        {hasModule("reservations") && can("reservations.view") && (
           <SidebarGroup>
             <SidebarGroupLabel>Reservations</SidebarGroupLabel>
             <SidebarGroupContent>
@@ -214,7 +227,8 @@ function BusinessSidebarContentInner() {
         )}
 
         {/* Floor — shared operational board for reservation, queue, and ordering work */}
-        {(hasModule("reservations") || hasModule("queue") || hasModule("ordering")) && (
+        {(hasModule("reservations") || hasModule("queue") || hasModule("ordering")) &&
+          can("floor.view") && (
           <SidebarGroup>
             <SidebarGroupLabel>Service</SidebarGroupLabel>
             <SidebarGroupContent>
@@ -237,7 +251,7 @@ function BusinessSidebarContentInner() {
         )}
 
         {/* Queue — guarded by "queue" module */}
-        {hasModule("queue") && (
+        {hasModule("queue") && can("queue.view") && (
           <SidebarGroup>
             <SidebarGroupLabel>Queue</SidebarGroupLabel>
             <SidebarGroupContent>
@@ -265,7 +279,7 @@ function BusinessSidebarContentInner() {
         )}
 
         {/* Ordering — guarded by "ordering" module */}
-        {hasModule("ordering") && (
+        {hasModule("ordering") && can("orders.view") && (
           <SidebarGroup>
             <SidebarGroupLabel>Ordering</SidebarGroupLabel>
             <SidebarGroupContent>
@@ -324,7 +338,7 @@ function BusinessSidebarContentInner() {
         )}
 
         {/* Inventory — guarded by "inventory" module */}
-        {hasModule("inventory") && (
+        {hasModule("inventory") && can("inventory.view") && (
           <SidebarGroup>
             <SidebarGroupLabel>Inventory</SidebarGroupLabel>
             <SidebarGroupContent>
@@ -341,13 +355,50 @@ function BusinessSidebarContentInner() {
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname.startsWith("/business/inventory/counts")}
+                    tooltip="Counts"
+                  >
+                    <Link href="/business/inventory?tab=counts">
+                      <ClipboardCheck />
+                      <span>Counts</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {/* Reports — capability-gated, not module-gated: bookings and tables
+            exist for every venue, and each tab inside is gated by the module
+            that owns its data. */}
+        {can("reports.service") && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Reports</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname.startsWith("/business/reports")}
+                    tooltip="Reports"
+                  >
+                    <Link href="/business/reports">
+                      <BarChart3 />
+                      <span>Reports</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
         )}
 
         {/* Insights — guarded by "insights" module */}
-        {hasModule("insights") && (
+        {hasModule("insights") && can("insights.view") && (
           <SidebarGroup>
             <SidebarGroupLabel>Insights</SidebarGroupLabel>
             <SidebarGroupContent>
@@ -374,6 +425,7 @@ function BusinessSidebarContentInner() {
           <SidebarGroupLabel>Workspace</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
+              {can("staff.view") && (
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
@@ -386,7 +438,9 @@ function BusinessSidebarContentInner() {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              )}
 
+              {can("customers.view") && (
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
@@ -399,6 +453,7 @@ function BusinessSidebarContentInner() {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              )}
 
               <SidebarMenuItem>
                 <SidebarMenuButton

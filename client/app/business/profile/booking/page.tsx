@@ -8,6 +8,7 @@ import { redirect } from "next/navigation";
 import BusinessBookingClient from "./business-booking-client";
 import { ModuleDisabled } from "@/components/module-disabled";
 import { hasModule, MODULE_KEYS } from "@/lib/modules";
+import { hasCapability } from "@/lib/permissions";
 
 export default async function BusinessBooking() {
   const user = await getCurrentUser();
@@ -48,7 +49,7 @@ export default async function BusinessBooking() {
       initialBusiness={business}
       serviceTypes={serviceTypes}
       initialSchedules={schedules}
-      canEdit={user.role === "owner" || user.role === "manager"}
+      canEdit={hasCapability(user.role, "reservations.configure")}
     />
   );
 }

@@ -35,9 +35,17 @@ cd server && python -m venv venv && venv/bin/pip install -r requirements.lock &&
 ```
 
 The web app starts at `http://localhost:3000`; the API defaults to
-`http://localhost:8000`. Demo data is optional and separate from migrations.
+`http://localhost:8000`. `dev.sh` applies migrations but does not seed. Demo
+data is optional and separate from migrations:
+
+```bash
+SEED_DATA=true ./scripts/dev.sh
+```
+
 The local-only seeder requires a unique `DEMO_ADMIN_PASSWORD` of at least 12
-characters and refuses non-local database hosts.
+characters and refuses non-local database hosts. `dev.sh` generates a throwaway
+value per run and prints it; export your own `DEMO_ADMIN_PASSWORD` first to pin
+a login you can reuse.
 
 Useful checks:
 

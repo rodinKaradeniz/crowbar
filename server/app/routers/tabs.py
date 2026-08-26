@@ -6,7 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events import DomainEvent, publish
 from app.database import get_db
-from app.dependencies import get_current_business, get_current_user, require_module, require_roles
+from app.dependencies import (
+    get_current_business,
+    get_current_user,
+    require_capability,
+    require_module,
+)
 from app.models.business import Business
 from app.models.tab import Tab
 from app.models.user import User
@@ -52,7 +57,9 @@ async def _tab_response(db: AsyncSession, tab: Tab) -> TabResponse:
     )
 
 
-@router.post("", response_model=TabResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=TabResponse, status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_capability("tabs.operate"))],
+)
 async def open_tab(
     body: TabOpenRequest,
     db: AsyncSession = Depends(get_db),
@@ -99,7 +106,9 @@ async def open_tab(
     return await _tab_response(db, tab)
 
 
-@router.post("/seatings/{seating_id}", response_model=TabResponse)
+@router.post("/seatings/{seating_id}", response_model=TabResponse,
+    dependencies=[Depends(require_capability("tabs.operate"))],
+)
 async def open_seating_tab(
     seating_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -130,7 +139,9 @@ async def open_seating_tab(
     return await _tab_response(db, tab)
 
 
-@router.get("", response_model=list[TabResponse])
+@router.get("", response_model=list[TabResponse],
+    dependencies=[Depends(require_capability("tabs.view"))],
+)
 async def list_tabs(
     status: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
@@ -142,7 +153,9 @@ async def list_tabs(
     return [await _tab_response(db, tab) for tab in tabs]
 
 
-@router.get("/{tab_id}", response_model=TabResponse)
+@router.get("/{tab_id}", response_model=TabResponse,
+    dependencies=[Depends(require_capability("tabs.view"))],
+)
 async def get_tab(
     tab_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -159,6 +172,7 @@ async def get_tab(
     "/{tab_id}/orders",
     response_model=OrderResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_capability("tabs.operate"))],
 )
 async def add_order_to_tab(
     tab_id: UUID,
@@ -206,7 +220,9 @@ async def add_order_to_tab(
     return order
 
 
-@router.post("/{tab_id}/settle-externally", response_model=TabResponse)
+@router.post("/{tab_id}/settle-externally", response_model=TabResponse,
+    dependencies=[Depends(require_capability("tabs.settle"))],
+)
 async def settle_tab_externally(
     tab_id: UUID,
     body: TabSettleExternallyRequest,
@@ -239,7 +255,7 @@ async def settle_tab_externally(
 @router.post(
     "/{tab_id}/reopen",
     response_model=TabResponse,
-    dependencies=[Depends(require_roles("owner", "manager"))],
+    dependencies=[Depends(require_capability("tabs.reopen"))],
 )
 async def reopen_tab(
     tab_id: UUID,

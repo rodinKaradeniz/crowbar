@@ -31,29 +31,16 @@ For focused work, also read:
 - Deployment: `docs/deployment.md` (verified runbook and partial rollout state;
   deployment remains an explicit user-authorized activity)
 - MVP implementation or release verification: `docs/MVP_ACCEPTANCE.md`
-  (surface dispositions, risk register, and stage 1–7 evidence contract)
+  (surface dispositions, risk register, and stage 1–8 evidence contract)
 - Product UI or visual language: `docs/DESIGN.md`
 - Project-specific agent skills: `docs/SKILLS.md`
 
-`README.md` is the human quick start. [docs/README.md](docs/README.md) is the
-documentation map. When documentation disagrees with executable source,
+`README.md` is the human quick start. This file is the only document ownership
+map and reading order. When documentation disagrees with executable source,
 inspect the source and update the owning document.
 
-## Confirmation Before Development
-
-- Do not silently assume missing product behavior, scope, user experience,
-  architecture, data semantics, or acceptance criteria.
-- Read-only investigation is allowed before confirmation. Do not begin
-  implementation while a material ambiguity or unresolved choice remains.
-- When the user proposes a possible implementation shape rather than a fixed
-  requirement (for example, a modal or sidebar), compare it with modern
-  alternatives such as a dropdown, popover, sheet, inline flow, command menu,
-  or dedicated page. Explain the recommendation and material tradeoffs, then
-  ask the user to confirm the direction before editing code.
-- Treat a clear, explicit user instruction as confirmation. Do not ask the user
-  to reconfirm facts or choices they have already specified.
-- Ask focused questions in one batch where practical. State what is known, what
-  is unknown, and which answers would change the implementation.
+`docs/RULES.md` owns the confirmation gate, scope discipline, and verification
+rules. Read it rather than looking for a second copy here.
 
 ## Project in One Minute
 
@@ -67,8 +54,11 @@ Crowbar is a multi-tenant operations platform for bars and restaurants:
   against the main PostgreSQL database.
 - `server/db/migrations/`: ordered SQL migrations run by a custom migrator; no
   Alembic.
-- `scripts/dev.sh`: starts PostgreSQL, Redis, and ML in Docker, then starts the
-  backend and frontend natively. It does not run scheduled jobs.
+- `scripts/dev.sh`: starts PostgreSQL, Redis, and ML in Docker, applies pending
+  migrations, then starts the backend and frontend natively. It does not run
+  scheduled jobs and does not seed demo data unless invoked with
+  `SEED_DATA=true`, which is a data mutation — see
+  [server/DATABASE.md](server/DATABASE.md).
 - `server/docker-compose.yml` declares the Compose project as `crowbar`; do not
   remove that name or local containers can collide with unrelated repositories
   whose Compose directory is also named `server`.
@@ -93,7 +83,7 @@ docs/                durable project knowledge, by owner
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Present technical system shape and request/data flows |
 | [`docs/HISTORY.md`](docs/HISTORY.md) | Durable decisions, rationale, and meaningful discovered pitfalls |
 | [`docs/TODO.md`](docs/TODO.md) | Deliberately deferred work, known gaps, and delivery order |
-| [`docs/MVP_ACCEPTANCE.md`](docs/MVP_ACCEPTANCE.md) | MVP route inventory, authority trace, risk register, and stage 1–7 acceptance evidence |
+| [`docs/MVP_ACCEPTANCE.md`](docs/MVP_ACCEPTANCE.md) | MVP route inventory, authority trace, risk register, and stage 1–8 acceptance evidence |
 | [`docs/DESIGN.md`](docs/DESIGN.md) | Current visual and interaction system |
 | [`docs/SKILLS.md`](docs/SKILLS.md) | Project-local workflow-module strategy |
 
@@ -127,12 +117,40 @@ operational foundation. The guest-to-table and ordering/external-settlement
 loops are complete and hardened with exchanged capability cookies, staff-
 approved per-browser table sessions, exact public projections, authenticated
 WebSocket frames, hashed bearer persistence, and composite tenant constraints.
-The next stage is purchasing/cost control, followed by staff/CRM/reporting and
-the local release gate. [docs/TODO.md](docs/TODO.md)
-owns the exact 0–9 order, exit gates, and post-MVP deferrals.
 
-Migrations 023–043 are local only. Railway remains at migrations 001–022; its
-partially provisioned rollout is intentionally paused until stages 0–7 pass
+Stage 5 (stock, purchasing, cost control) is complete locally through migration
+048. Suppliers, supplier products, purchase orders, partial receiving, pack
+conversions, count sessions with CSV round-trip, purchase-price history,
+attachments, and cost control run on one movement ledger with a staff UI and
+PostgreSQL-backed tests. Location transfers were deliberately cut and are
+deferred with a trigger; migrations 046/047 stay dormant.
+
+Stage 6 (staff permissions, CRM, operational reporting) is complete locally
+through migration 049. Authorization is a fixed five-role capability matrix in
+`server/app/core/permissions.py` — `owner`, `manager`, `host_server`,
+`bar_kitchen`, `inventory_operator` — asked for as
+`require_capability("...")` rather than by naming roles, mirrored to
+`client/lib/permissions.ts` and recorded route-by-route in
+[docs/permission-matrix.md](docs/permission-matrix.md). It is hard-coded, not
+tenant-editable; a tenant-configurable RBAC module is a deferred evaluation.
+Guests raise their own access, correction, deletion and consent-withdrawal
+requests through the reservation link they already hold, and withdrawal now
+actually suppresses marketing at the send boundary while leaving operational
+messages alone. `/business/reports` and `/api/reports/*` cover bookings and
+no-shows, queue wait and seating conversion, table utilization and turn time,
+station throughput and ticket timing, the three separate ordered / open-tab /
+externally-settled value figures, stock and waste, purchasing spend and staff
+actions — each over a chosen range with CSV export, and none of them a fiscal
+or accounting report. Insights survives an ML restart by serving its last
+result marked stale.
+
+After stage 6 come the interface redesign pass (7), the local release gate (8),
+deployment (9), the supervised pilot (10), and a mobile client (11).
+[docs/TODO.md](docs/TODO.md) owns the exact 0–11 order, exit gates, and
+post-MVP deferrals.
+
+Migrations 023–049 are local only. Railway remains at migrations 001–022; its
+partially provisioned rollout is intentionally paused until stages 0–8 pass
 locally and the user explicitly authorizes deployment. The user plans to use
 Railway, but that intent is not authorization to mutate it.
 [docs/deployment.md](docs/deployment.md) owns the verified resume point.
@@ -140,8 +158,11 @@ Railway, but that intent is not authorization to mutate it.
 ## Commands
 
 ```bash
-# Full development stack from the repository root
+# Full development stack from the repository root (migrates, does not seed)
 ./scripts/dev.sh
+
+# Same, plus replace the synthetic demo tenant (data mutation)
+SEED_DATA=true ./scripts/dev.sh
 
 # Frontend
 cd client
@@ -210,6 +231,12 @@ skills. They load on a matching task; they add process
 and cannot weaken [docs/RULES.md](docs/RULES.md) or
 [docs/PRODUCT.md](docs/PRODUCT.md).
 
+User-level skills under `~/.claude/skills/` are in scope for this repository's
+work and compose with the project set — most usefully on design work, where
+they supply direction and craft while `frontend-design` supplies the Crowbar
+constraint. Like project skills they add process and cannot weaken
+[docs/RULES.md](docs/RULES.md) or [docs/PRODUCT.md](docs/PRODUCT.md).
+
 [docs/SKILLS.md](docs/SKILLS.md) owns the strategy: the accepted location, the
 installed set and its division of labor, the skills planned but not yet
 written, and the quality bar for adding one. Read it before creating or
@@ -217,8 +244,13 @@ editing a skill.
 
 ## Verification status of this document
 
-Last reconciled 2026-08-18 against the installed `.claude/skills/` set; before
-that, on 2026-08-14 against the confirmed supervised-pilot boundary, repository
-layout, architecture, history, ordered roadmap, and stage-0 release
-inventory/acceptance map. These documentation changes ran no application
-runtime checks.
+Last reconciled 2026-08-26 against the completed stage 6: the migration set
+through 049, the capability matrix and every route's guard, the reports and
+public-privacy routers and services, the staff UI under
+`client/app/business/reports/`, and a live role-by-role HTTP walk plus a
+by-hand reconciliation of each report against its ledger on a disposable
+seeded database. Earlier reconciliations: 2026-08-25 against the completed
+stage 5 and its order → receive → count → reconcile → cost journey, 2026-08-25 against the documentation
+consolidation and the 0–11 stage sequence, 2026-08-18 against the installed
+`.claude/skills/` set, and 2026-08-14 against the supervised-pilot boundary and
+stage-0 acceptance map.

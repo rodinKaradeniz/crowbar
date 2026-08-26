@@ -7,7 +7,7 @@ from app.core.errors import forbidden, not_found
 from app.core.public_access import has_required_privacy_contact
 from app.core.rate_limit import enforce_public_read_limit
 from app.database import get_db
-from app.dependencies import get_current_business, require_roles
+from app.dependencies import get_current_business, get_current_user, require_capability
 from app.models.business import Business
 from app.models.user import User
 from app.schemas.business import BusinessResponse, BusinessUpdate, PublicBusinessResponse
@@ -61,13 +61,15 @@ async def get_business_by_slug(slug: str, db: AsyncSession = Depends(get_db)):
     return business
 
 
-@router.patch("/{business_id}", response_model=BusinessResponse)
+@router.patch("/{business_id}", response_model=BusinessResponse,
+    dependencies=[Depends(require_capability("business.configure"))],
+)
 async def update_business(
     business_id: UUID,
     data: BusinessUpdate,
     db: AsyncSession = Depends(get_db),
     current_business: Business = Depends(get_current_business),
-    actor: User = Depends(require_roles("owner", "manager")),
+    actor: User = Depends(get_current_user),
 ):
     """Update own business. Requires owner or manager role."""
     if current_business.id != business_id:
@@ -83,24 +85,26 @@ async def update_business(
     return business
 
 
-@router.get("/{business_id}/regional-audit", response_model=list[RegionalAuditResponse])
+@router.get("/{business_id}/regional-audit", response_model=list[RegionalAuditResponse],
+    dependencies=[Depends(require_capability("business.configure"))],
+)
 async def get_regional_audit(
     business_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_business: Business = Depends(get_current_business),
-    _: User = Depends(require_roles("owner", "manager")),
 ):
     if current_business.id != business_id:
         raise forbidden("Not authorized for this business")
     return await business_service.list_regional_audits(db, business_id)
 
 
-@router.delete("/{business_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{business_id}", status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_capability("business.delete"))],
+)
 async def delete_business(
     business_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_business: Business = Depends(get_current_business),
-    _: User = Depends(require_roles("owner")),
 ):
     """Delete own business. Requires owner role."""
     if current_business.id != business_id:
@@ -110,12 +114,13 @@ async def delete_business(
         raise not_found("Business")
 
 
-@router.patch("/{business_id}/onboarding-complete", response_model=BusinessResponse)
+@router.patch("/{business_id}/onboarding-complete", response_model=BusinessResponse,
+    dependencies=[Depends(require_capability("business.onboarding"))],
+)
 async def complete_onboarding(
     business_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_business: Business = Depends(get_current_business),
-    _: User = Depends(require_roles("owner")),
 ):
     """Mark onboarding as complete for the authenticated business. Owner only."""
     if current_business.id != business_id:

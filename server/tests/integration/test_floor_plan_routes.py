@@ -197,7 +197,7 @@ async def test_staff_capacity_override_is_forbidden(
     )
     db_session.add(staff_user)
     await db_session.flush()
-    db_session.add(Staff(user_id=staff_user.id, business_id=business.id, role="staff"))
+    db_session.add(Staff(user_id=staff_user.id, business_id=business.id, role="host_server"))
     queue_entry = QueueEntry(
         business_id=business.id,
         location_id=location.id,
@@ -524,7 +524,7 @@ async def test_settings_are_manager_owned_and_service_day_is_business_local(
     db_session.add(staff_user)
     await db_session.flush()
     db_session.add(
-        Staff(user_id=staff_user.id, business_id=business.id, role="staff")
+        Staff(user_id=staff_user.id, business_id=business.id, role="host_server")
     )
     await db_session.commit()
     staff_headers = {

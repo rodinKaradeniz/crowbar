@@ -90,7 +90,8 @@ InsightsPipeline(business_id).run()
   ├── Step 3: CustomerSegmentationModel.fit_predict(rfm)
   ├── Step 4: CancellationPredictionModel.train_and_evaluate(df)
   ├── Step 5: DemandForecastModel.train_and_evaluate(demand_ts)
-  └── Step 6: _store_results() → INSERT INTO ml_predictions, business_daily_metrics
+  └── Step 6: _store_results() → INSERT INTO ml_predictions (segmentation only),
+                                 UPSERT business_daily_metrics
 ```
 
 ## API Endpoints (port 8001)
@@ -112,8 +113,23 @@ All business endpoints require `X-ML-Internal-Token` outside development.
 
 Defined in `server/db/migrations/002_ml_tables.sql`:
 
-- **`ml_predictions`** — Flexible JSONB store for all model outputs (entity_type + entity_id pattern)
-- **`business_daily_metrics`** — Pre-aggregated daily stats per business (reservations, guests, revenue, utilization, peak hour). UNIQUE on (business_id, date).
+- **`ml_predictions`** — Flexible JSONB store for model outputs (entity_type +
+  entity_id pattern). **Only customer segmentation is written today**
+  (`model_name='customer_segmentation'`, `entity_type='customer'`). Cancellation
+  and demand results are evaluated but not persisted per-entity, so
+  `analytics_service.get_high_risk_reservations` — which queries
+  `model_name='cancellation'` — returns an empty list for every tenant. That gap
+  is recorded in `docs/TODO.md` under Data and ML; the route returns an honest
+  empty answer rather than a failure.
+- **`business_daily_metrics`** — Pre-aggregated daily stats per business. UNIQUE
+  on (business_id, date). `no_show_count` and `total_revenue` are columns from
+  the original schema that nothing writes; `total_revenue` in particular must
+  not be revived — `docs/PRODUCT.md` forbids labelling an uncollected total as
+  revenue. Reporting reads the operational ledgers directly.
+- **`ml_result_snapshots`** (migration 049, owned by the main app, not by ML) —
+  the last successful dashboard payload per tenant and resource. Written by
+  FastAPI on each successful read, served with `stale: true` when this service
+  is unreachable. See "Failure is a degradation" below.
 
 ## Frontend Integration
 
@@ -126,12 +142,81 @@ Defined in `server/db/migrations/002_ml_tables.sql`:
 - **Sidebar**: "Insights" link with `BrainCircuit` icon, placed between Overview and Operations
 - **Search**: Indexed in command palette under Navigation group
 
+## Model Policy
+
+These rules are the stage-6 answer to "when is an ML result fit to show an
+operator". They are deliberately short and enforced by tests rather than by a
+platform — `docs/TODO.md` keeps a full MLOps stack out of the MVP.
+
+### Minimum data
+
+A model that has not seen enough history produces a confident number about
+nothing. Each model declares its own floor and reports `status` plus the reason
+when it is not met, rather than returning a figure:
+
+| Model | Constant | Floor | Below it |
+|---|---|---|---|
+| Customer segmentation | `segmentation.MIN_CUSTOMERS` | 20 guests with visit history | empty frame, `model.insufficient_reason` says the count seen |
+| Cancellation prediction | `cancellation.MIN_TRAINING_SAMPLES` | 30 terminal reservations **and** both outcomes present | no model trained; `result.status == "insufficient_data"` with the reason |
+| Demand forecast | `demand_forecast.MIN_HISTORY_DAYS` | 14 days of usable history per venue | no forecast for that venue; `result.insufficient_reasons[business_id]` says why |
+
+The floors are module constants rather than configuration. A venue cannot lower
+its own floor to make a chart appear.
+
+A floor that is not met is an ordinary, expected state for a new venue — the
+pilot venue will sit below all three for weeks. It is never an error.
+
+### Reproducibility
+
+Every model that fits takes a fixed `random_state`, and the pipeline records
+`model_version` as `run_{run_id}` on each stored row. Re-running the pipeline
+over an unchanged database must produce the same segments; a test asserts this
+rather than trusting the seeds.
+
+### Leakage
+
+Features must be computable at prediction time. Concretely: no feature may read
+a column written *by* the outcome it predicts. Cancellation features must not
+touch `cancelled_at`, `cancelled_by`, `cancelled_late`, `no_show_at` or
+`status`; demand features use only lags strictly before the day being forecast.
+A leakage regression test builds a frame and asserts the outcome columns are
+absent from the feature matrix — a near-perfect score on a real dataset is a
+symptom, not a success.
+
+### Drift and versioning
+
+Each stored prediction carries `model_version` and `computed_at`, so a
+suspicious figure can be traced to the run that produced it. There is no
+automated drift monitor in the MVP; the manual check is that the segmentation
+distribution and the cancellation base rate are reported on every run, so a
+sudden shift is visible on the page rather than only in a metric nobody reads.
+
+### Scheduling
+
+The pipeline is trigger-driven: `POST /api/insights/run`, guarded by the
+`insights.run` capability. There is no cron. A scheduled run is deferred until a
+venue has enough history for the floors above to be met, because a nightly job
+over insufficient data produces a nightly "insufficient data".
+
+### Failure is a degradation, never a block
+
+The operational loop must not depend on this service. If it is unreachable:
+
+- Insights serves the last remembered result, marked `stale: true` with its
+  `captured_at`, or an honest empty state when there is nothing remembered.
+- `POST /api/insights/run` still returns 503, because there is nothing honest to
+  remember about a run that never started.
+- No reservation, order, tab, count or purchase order is affected in any way.
+
+`server/tests/integration/test_insights_resilience.py` holds this contract.
+
 ## Key Design Decisions
 
 1. **Sync engine for pipeline** — Pandas `read_sql` requires synchronous connections. The async engine is only used for FastAPI health checks.
-2. **Tenant-keyed in-memory results** — `_latest_results` is keyed by business.
-   Results are lost on restart; durable result-summary restoration is tracked
-   in `docs/TODO.md`.
+2. **Tenant-keyed in-memory results** — `_latest_results` is keyed by business
+   and is lost on restart. Since stage 6 that no longer empties the Insights
+   page: FastAPI snapshots each successful read into `ml_result_snapshots` and
+   serves the snapshot marked stale while this service is away.
 3. **Per-business pipeline** — Data loading, segmentation, cancellation, and
    demand forecasting are scoped to the gateway-supplied business.
 4. **Recursive forecasting** — Demand forecast uses a recursive approach: predict day N, use that prediction as a lag feature for day N+1.

@@ -15,13 +15,14 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events import DomainEvent, publish
+from app.core.permissions import has_capability
 from app.database import get_db
 from app.dependencies import (
     get_current_business,
     get_current_user,
     require_any_module,
+    require_capability,
     require_module,
-    require_roles,
 )
 from app.models.business import Business
 from app.models.table_combination import TableCombination
@@ -70,9 +71,15 @@ async def floor_plan_error_handler(request: Request, exc: FloorPlanError) -> JSO
 
 
 def _can_override(user: User, business_id: UUID) -> bool:
+    """Whether this user may seat a party over a table's stated capacity.
+
+    Overriding capacity is a venue-configuration judgement rather than an
+    ordinary seating action, so it asks for `floor.configure` — a host seats,
+    a manager decides the rules bend.
+    """
     return any(
         assignment.business_id == business_id
-        and assignment.role in {"owner", "manager"}
+        and has_capability(assignment.role, "floor.configure")
         for assignment in user.staff_assignments
     )
 
@@ -146,7 +153,9 @@ def _assignment_response(source_type, source, rows, capacity):
     )
 
 
-@router.get("/settings", response_model=FloorPlanSettingsResponse)
+@router.get("/settings", response_model=FloorPlanSettingsResponse,
+    dependencies=[Depends(require_capability("floor.view"))],
+)
 async def get_settings(
     business: Business = Depends(get_current_business),
 ):
@@ -156,12 +165,13 @@ async def get_settings(
     )
 
 
-@router.put("/settings", response_model=FloorPlanSettingsResponse)
+@router.put("/settings", response_model=FloorPlanSettingsResponse,
+    dependencies=[Depends(require_capability("floor.configure"))],
+)
 async def update_settings(
     body: FloorPlanSettingsUpdate,
     db: AsyncSession = Depends(get_db),
     business: Business = Depends(get_current_business),
-    _: User = Depends(require_roles("owner", "manager")),
 ):
     business.service_day_cutoff = body.service_day_cutoff
     await db.commit()
@@ -172,7 +182,9 @@ async def update_settings(
     )
 
 
-@router.get("/board", response_model=FloorPlanBoardResponse)
+@router.get("/board", response_model=FloorPlanBoardResponse,
+    dependencies=[Depends(require_capability("floor.view"))],
+)
 async def get_board(
     service_date: date | None = None,
     location_id: UUID | None = None,
@@ -187,7 +199,9 @@ async def get_board(
     )
 
 
-@router.get("/areas", response_model=list[AreaResponse])
+@router.get("/areas", response_model=list[AreaResponse],
+    dependencies=[Depends(require_capability("floor.view"))],
+)
 async def list_areas(
     db: AsyncSession = Depends(get_db),
     business: Business = Depends(get_current_business),
@@ -195,12 +209,13 @@ async def list_areas(
     return await floor_plan_service.list_areas(db, business.id)
 
 
-@router.post("/areas", response_model=AreaResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/areas", response_model=AreaResponse, status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_capability("floor.configure"))],
+)
 async def create_area(
     body: AreaCreate,
     db: AsyncSession = Depends(get_db),
     business: Business = Depends(get_current_business),
-    _: User = Depends(require_roles("owner", "manager")),
 ):
     area = await floor_plan_service.create_area(
         db,
@@ -216,13 +231,14 @@ async def create_area(
     return area
 
 
-@router.patch("/areas/{area_id}", response_model=AreaResponse)
+@router.patch("/areas/{area_id}", response_model=AreaResponse,
+    dependencies=[Depends(require_capability("floor.configure"))],
+)
 async def update_area(
     area_id: UUID,
     body: AreaUpdate,
     db: AsyncSession = Depends(get_db),
     business: Business = Depends(get_current_business),
-    _: User = Depends(require_roles("owner", "manager")),
 ):
     area = await floor_plan_service.update_area(
         db, business.id, area_id, body.model_dump(exclude_unset=True)
@@ -234,12 +250,13 @@ async def update_area(
     return area
 
 
-@router.delete("/areas/{area_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/areas/{area_id}", status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_capability("floor.configure"))],
+)
 async def archive_area(
     area_id: UUID,
     db: AsyncSession = Depends(get_db),
     business: Business = Depends(get_current_business),
-    _: User = Depends(require_roles("owner", "manager")),
 ):
     await floor_plan_service.archive_area(db, business.id, area_id)
     await db.commit()
@@ -247,7 +264,9 @@ async def archive_area(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/tables", response_model=list[TableResponse])
+@router.get("/tables", response_model=list[TableResponse],
+    dependencies=[Depends(require_capability("floor.view"))],
+)
 async def list_tables(
     db: AsyncSession = Depends(get_db),
     business: Business = Depends(get_current_business),
@@ -255,12 +274,13 @@ async def list_tables(
     return await floor_plan_service.list_tables(db, business.id)
 
 
-@router.post("/tables", response_model=TableResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/tables", response_model=TableResponse, status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_capability("floor.configure"))],
+)
 async def create_table(
     body: TableCreate,
     db: AsyncSession = Depends(get_db),
     business: Business = Depends(get_current_business),
-    _: User = Depends(require_roles("owner", "manager")),
 ):
     table = await floor_plan_service.create_table(
         db, business.id, **body.model_dump()
@@ -275,13 +295,14 @@ async def create_table(
     return table
 
 
-@router.patch("/tables/{table_id}", response_model=TableResponse)
+@router.patch("/tables/{table_id}", response_model=TableResponse,
+    dependencies=[Depends(require_capability("floor.configure"))],
+)
 async def update_table(
     table_id: UUID,
     body: TableUpdate,
     db: AsyncSession = Depends(get_db),
     business: Business = Depends(get_current_business),
-    _: User = Depends(require_roles("owner", "manager")),
 ):
     table = await floor_plan_service.update_table(
         db, business.id, table_id, body.model_dump(exclude_unset=True)
@@ -296,12 +317,13 @@ async def update_table(
     return table
 
 
-@router.delete("/tables/{table_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/tables/{table_id}", status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_capability("floor.configure"))],
+)
 async def archive_table(
     table_id: UUID,
     db: AsyncSession = Depends(get_db),
     business: Business = Depends(get_current_business),
-    _: User = Depends(require_roles("owner", "manager")),
 ):
     await floor_plan_service.archive_table(db, business.id, table_id)
     await db.commit()
@@ -309,7 +331,9 @@ async def archive_table(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.put("/tables/{table_id}/state", response_model=TableResponse)
+@router.put("/tables/{table_id}/state", response_model=TableResponse,
+    dependencies=[Depends(require_capability("floor.operate"))],
+)
 async def set_table_state(
     table_id: UUID,
     body: TableStateUpdate,
@@ -350,22 +374,24 @@ async def _table_qr_response(
     )
 
 
-@router.get("/tables/{table_id}/qr", response_model=TableQrResponse)
+@router.get("/tables/{table_id}/qr", response_model=TableQrResponse,
+    dependencies=[Depends(require_capability("floor.configure"))],
+)
 async def get_table_qr(
     table_id: UUID,
     db: AsyncSession = Depends(get_db),
     business: Business = Depends(get_current_business),
-    _: User = Depends(require_roles("owner", "manager")),
 ):
     return await _table_qr_response(db, business, table_id)
 
 
-@router.post("/tables/{table_id}/qr/rotate", response_model=TableQrResponse)
+@router.post("/tables/{table_id}/qr/rotate", response_model=TableQrResponse,
+    dependencies=[Depends(require_capability("floor.configure"))],
+)
 async def rotate_table_qr(
     table_id: UUID,
     db: AsyncSession = Depends(get_db),
     business: Business = Depends(get_current_business),
-    _: User = Depends(require_roles("owner", "manager")),
 ):
     response = await _table_qr_response(db, business, table_id, rotate=True)
     await table_guest_session_service.revoke_for_table(
@@ -394,7 +420,7 @@ def _staff_table_guest_session_response(row) -> StaffTableGuestSessionResponse:
 @router.get(
     "/table-guest-sessions",
     response_model=list[StaffTableGuestSessionResponse],
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("floor.view"))],
 )
 async def list_table_guest_sessions(
     status_filter: str | None = Query(default=None, alias="status", pattern="^(pending|approved|denied|revoked)$"),
@@ -442,7 +468,7 @@ async def _decide_table_guest_session(
 @router.post(
     "/table-guest-sessions/{session_id}/approve",
     response_model=StaffTableGuestSessionResponse,
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("floor.operate"))],
 )
 async def approve_table_guest_session(
     session_id: UUID,
@@ -462,7 +488,7 @@ async def approve_table_guest_session(
 @router.post(
     "/table-guest-sessions/{session_id}/deny",
     response_model=StaffTableGuestSessionResponse,
-    dependencies=[Depends(require_module("ordering"))],
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("floor.operate"))],
 )
 async def deny_table_guest_session(
     session_id: UUID,
@@ -479,7 +505,9 @@ async def deny_table_guest_session(
     )
 
 
-@router.get("/combinations", response_model=list[CombinationResponse])
+@router.get("/combinations", response_model=list[CombinationResponse],
+    dependencies=[Depends(require_capability("floor.view"))],
+)
 async def list_combinations(
     db: AsyncSession = Depends(get_db),
     business: Business = Depends(get_current_business),
@@ -492,12 +520,12 @@ async def list_combinations(
     "/combinations",
     response_model=CombinationResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_capability("floor.configure"))],
 )
 async def create_combination(
     body: CombinationCreate,
     db: AsyncSession = Depends(get_db),
     business: Business = Depends(get_current_business),
-    _: User = Depends(require_roles("owner", "manager")),
 ):
     combination = await floor_plan_service.create_combination(
         db, business.id, **body.model_dump()
@@ -512,13 +540,14 @@ async def create_combination(
     return await _combination_response(db, combination)
 
 
-@router.patch("/combinations/{combination_id}", response_model=CombinationResponse)
+@router.patch("/combinations/{combination_id}", response_model=CombinationResponse,
+    dependencies=[Depends(require_capability("floor.configure"))],
+)
 async def update_combination(
     combination_id: UUID,
     body: CombinationUpdate,
     db: AsyncSession = Depends(get_db),
     business: Business = Depends(get_current_business),
-    _: User = Depends(require_roles("owner", "manager")),
 ):
     combination = await floor_plan_service.update_combination(
         db, business.id, combination_id, body.model_dump(exclude_unset=True)
@@ -536,7 +565,7 @@ async def update_combination(
 @router.get(
     "/reservations/{reservation_id}/tables",
     response_model=TableAssignmentResponse,
-    dependencies=[Depends(require_module("reservations"))],
+    dependencies=[Depends(require_module("reservations")), Depends(require_capability("floor.view"))],
 )
 async def get_reservation_assignment(
     reservation_id: UUID,
@@ -555,7 +584,7 @@ async def get_reservation_assignment(
 @router.put(
     "/reservations/{reservation_id}/tables",
     response_model=TableAssignmentResponse,
-    dependencies=[Depends(require_module("reservations"))],
+    dependencies=[Depends(require_module("reservations")), Depends(require_capability("floor.operate"))],
 )
 async def assign_reservation_tables(
     reservation_id: UUID,
@@ -596,7 +625,7 @@ async def assign_reservation_tables(
 @router.delete(
     "/reservations/{reservation_id}/tables",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_module("reservations"))],
+    dependencies=[Depends(require_module("reservations")), Depends(require_capability("floor.operate"))],
 )
 async def remove_reservation_assignment(
     reservation_id: UUID,
@@ -621,7 +650,7 @@ async def remove_reservation_assignment(
 @router.get(
     "/queue/{entry_id}/tables",
     response_model=TableAssignmentResponse,
-    dependencies=[Depends(require_module("queue"))],
+    dependencies=[Depends(require_module("queue")), Depends(require_capability("floor.view"))],
 )
 async def get_queue_assignment(
     entry_id: UUID,
@@ -637,7 +666,7 @@ async def get_queue_assignment(
 @router.put(
     "/queue/{entry_id}/tables",
     response_model=TableAssignmentResponse,
-    dependencies=[Depends(require_module("queue"))],
+    dependencies=[Depends(require_module("queue")), Depends(require_capability("floor.operate"))],
 )
 async def assign_queue_tables(
     entry_id: UUID,
@@ -678,7 +707,7 @@ async def assign_queue_tables(
 @router.delete(
     "/queue/{entry_id}/tables",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_module("queue"))],
+    dependencies=[Depends(require_module("queue")), Depends(require_capability("floor.operate"))],
 )
 async def remove_queue_assignment(
     entry_id: UUID,
@@ -696,7 +725,8 @@ async def remove_queue_assignment(
 
 
 @router.post(
-    "/seatings", response_model=SeatingResponse, status_code=status.HTTP_201_CREATED
+    "/seatings", response_model=SeatingResponse, status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_capability("floor.operate"))],
 )
 async def open_seating(
     body: SeatingOpen,
@@ -733,7 +763,9 @@ async def open_seating(
     return _seating_response(seating)
 
 
-@router.post("/seatings/{seating_id}/close", response_model=SeatingResponse)
+@router.post("/seatings/{seating_id}/close", response_model=SeatingResponse,
+    dependencies=[Depends(require_capability("floor.operate"))],
+)
 async def close_seating(
     seating_id: UUID,
     db: AsyncSession = Depends(get_db),

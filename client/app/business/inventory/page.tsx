@@ -1,9 +1,11 @@
 import { getCurrentUser } from "@/lib/auth";
 import { fetchBusiness } from "@/lib/api";
 import { redirect } from "next/navigation";
-import { InventoryManagementClient } from "./inventory-management-client";
+import { InventoryWorkspaceClient } from "./inventory-workspace-client";
 import { ModuleDisabled } from "@/components/module-disabled";
 import { hasModule, MODULE_KEYS } from "@/lib/modules";
+import { RoleRestricted } from "@/components/role-restricted";
+import { hasCapability } from "@/lib/permissions";
 
 export default async function InventoryPage() {
   const user = await getCurrentUser();
@@ -22,5 +24,18 @@ export default async function InventoryPage() {
     return <ModuleDisabled moduleName="Inventory" />;
   }
 
-  return <InventoryManagementClient businessId={business.id} businessTimezone={business.timezone ?? "UTC"} />;
+  if (!hasCapability(user.role, "inventory.view")) {
+    return <RoleRestricted surface="Inventory" role={user.role} />;
+  }
+
+  return (
+    <InventoryWorkspaceClient
+      businessId={business.id}
+      businessTimezone={business.timezone ?? "UTC"}
+      canManageCounts={hasCapability(user.role, "inventory.counts.manage")}
+      canManagePurchasing={hasCapability(user.role, "purchasing.suppliers.manage")}
+      canApproveOrders={hasCapability(user.role, "purchasing.order.approve")}
+      canViewCost={hasCapability(user.role, "inventory.cost.view")}
+    />
+  );
 }

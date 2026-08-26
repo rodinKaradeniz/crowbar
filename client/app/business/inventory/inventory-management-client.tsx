@@ -66,6 +66,8 @@ import { useRegionalSettings } from "@/contexts/regional-context";
 interface Props {
   businessId: string;
   businessTimezone: string;
+  /** Rendered inside the inventory tab shell, which supplies the page chrome. */
+  embedded?: boolean;
 }
 
 type ItemFormState = {
@@ -158,7 +160,7 @@ function movementDeltaDisplay(movement: StockMovement) {
   );
 }
 
-export function InventoryManagementClient({ businessId, businessTimezone }: Props) {
+export function InventoryManagementClient({ businessId, businessTimezone, embedded = false }: Props) {
   const { currencyCode, locale } = useRegionalSettings();
   const money = (value: number | string) => formatMoney(value, currencyCode, locale);
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -451,11 +453,15 @@ export function InventoryManagementClient({ businessId, businessTimezone }: Prop
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div className="page-container">
+    <div className={embedded ? "flex flex-col gap-6" : "page-container"}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="page-title">Inventory</h1>
+          {embedded ? (
+            <h2 className="section-title">Stock</h2>
+          ) : (
+            <h1 className="page-title">Inventory</h1>
+          )}
           <p className="text-sm text-muted-foreground mt-0.5">
             Track stock levels and record movements
           </p>

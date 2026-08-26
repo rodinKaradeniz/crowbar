@@ -10,6 +10,8 @@ import {
 import { fetchMLSegmentation } from "@/lib/ml-api";
 import { ModuleDisabled } from "@/components/module-disabled";
 import { hasModule, MODULE_KEYS } from "@/lib/modules";
+import { hasCapability } from "@/lib/permissions";
+import { RoleRestricted } from "@/components/role-restricted";
 
 export default async function Requests() {
   const user = await getCurrentUser();
@@ -37,6 +39,10 @@ export default async function Requests() {
     return <ModuleDisabled moduleName="Reservations" />;
   }
 
+  if (!hasCapability(user.role, "reservations.view")) {
+    return <RoleRestricted surface="Booking requests" role={user.role} />;
+  }
+
   if (!business.onboardingComplete) {
     redirect("/business/onboarding");
   }
@@ -58,7 +64,7 @@ export default async function Requests() {
       businessTimezone={business.timezone ?? "UTC"}
       businessMaxGuests={business.maxGuests}
       currentTime={new Date().toISOString()}
-      canOverride={user.role === "owner" || user.role === "manager"}
+      canOverride={hasCapability(user.role, "reservations.override")}
     />
   );
 }

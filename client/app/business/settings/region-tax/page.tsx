@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { fetchBusiness } from "@/lib/api";
 import { RegionTaxSettingsClient } from "./region-tax-settings-client";
+import { hasCapability } from "@/lib/permissions";
 
 export default async function RegionTaxSettingsPage() {
   const user = await getCurrentUser();
@@ -10,6 +11,6 @@ export default async function RegionTaxSettingsPage() {
   const business = await fetchBusiness(user.businessId);
   if (!business) redirect("/auth/login");
   if (!business.onboardingComplete) redirect("/business/onboarding");
-  if (user.role === "staff") redirect("/business/settings/profile");
+  if (!hasCapability(user.role, "business.configure")) redirect("/business/settings/profile");
   return <RegionTaxSettingsClient business={business} />;
 }

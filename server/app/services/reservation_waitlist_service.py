@@ -501,7 +501,7 @@ async def accept_waitlist_offer(
             time=reservation_time,
             name=customer.name or "Guest",
             phone=customer.phone or "",
-            email=customer.email or "guest@example.invalid",
+            email=customer.email,
             guests=entry.guests,
         ),
     )

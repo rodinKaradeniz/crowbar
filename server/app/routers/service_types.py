@@ -8,8 +8,8 @@ from app.core.errors import forbidden, not_found
 from app.dependencies import (
     get_current_business,
     get_optional_user,
+    require_capability,
     require_module,
-    require_roles,
 )
 from app.core.rate_limit import enforce_public_read_limit
 from app.core.public_access import has_required_privacy_contact
@@ -84,12 +84,13 @@ async def get_service_type(
     return PublicServiceTypeResponse.model_validate(service_type)
 
 
-@router.post("", response_model=ServiceTypeResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ServiceTypeResponse, status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_capability("reservations.configure"))],
+)
 async def create_service_type(
     data: ServiceTypeCreate,
     db: AsyncSession = Depends(get_db),
     business: Business = Depends(get_current_business),
-    _: User = Depends(require_roles("owner", "manager")),
     __: None = Depends(require_module("reservations")),
 ):
     if data.business_id != business.id:
@@ -104,13 +105,14 @@ async def create_service_type(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@router.patch("/{service_type_id}", response_model=ServiceTypeResponse)
+@router.patch("/{service_type_id}", response_model=ServiceTypeResponse,
+    dependencies=[Depends(require_capability("reservations.configure"))],
+)
 async def update_service_type(
     service_type_id: UUID,
     data: ServiceTypeUpdate,
     db: AsyncSession = Depends(get_db),
     business: Business = Depends(get_current_business),
-    _: User = Depends(require_roles("owner", "manager")),
     __: None = Depends(require_module("reservations")),
 ):
     try:
@@ -127,12 +129,13 @@ async def update_service_type(
     return service_type
 
 
-@router.delete("/{service_type_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{service_type_id}", status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_capability("reservations.configure"))],
+)
 async def delete_service_type(
     service_type_id: UUID,
     db: AsyncSession = Depends(get_db),
     business: Business = Depends(get_current_business),
-    _: User = Depends(require_roles("owner", "manager")),
     __: None = Depends(require_module("reservations")),
 ):
     deleted = await service_type_service.delete_service_type(

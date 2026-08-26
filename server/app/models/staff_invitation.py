@@ -12,7 +12,8 @@ class StaffInvitation(Base, UUIDMixin):
     __tablename__ = "staff_invitations"
     __table_args__ = (
         CheckConstraint(
-            "role IN ('owner', 'manager', 'staff')",
+            "role IN ('owner', 'manager', 'host_server', 'bar_kitchen', "
+            "'inventory_operator')",
             name="ck_staff_invitations_role",
         ),
         CheckConstraint(
@@ -27,7 +28,7 @@ class StaffInvitation(Base, UUIDMixin):
         nullable=False,
     )
     email: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[str] = mapped_column(String(20), default="staff", nullable=False)
+    role: Mapped[str] = mapped_column(String(20), default="host_server", nullable=False)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

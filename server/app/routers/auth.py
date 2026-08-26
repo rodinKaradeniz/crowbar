@@ -13,6 +13,7 @@ from app.core.rate_limit import (
     enforce_rate_limits,
     get_client_ip,
 )
+from app.core.permissions import capabilities_for
 from app.core.regional import RegionalValidationError
 from app.database import get_db
 from app.dependencies import get_current_business, get_current_user
@@ -177,28 +178,13 @@ async def get_me_context(
     """
     staff_list = await staff_service.get_staff_by_user_id(db, current_user.id)
     staff = staff_list[0] if staff_list else None
-    role = staff.role if staff else "staff"
+    role = staff.role if staff else None
 
-    # Derive permissions from role
-    _all_permissions = [
-        "can_manage_reservations",
-        "can_manage_staff",
-        "can_manage_service_types",
-        "can_manage_business_profile",
-        "can_view_analytics",
-        "can_manage_modules",
-        "can_delete_business",
-        "can_change_billing",
-    ]
-    _manager_permissions = [p for p in _all_permissions if p not in ("can_delete_business", "can_change_billing")]
-    _staff_permissions = ["can_view_reservations", "can_manage_own_schedule"]
-
-    if role == "owner":
-        permissions = _all_permissions
-    elif role == "manager":
-        permissions = _manager_permissions
-    else:
-        permissions = _staff_permissions
+    # The capability list is the server's own matrix, not a second vocabulary
+    # invented here. The client mirrors the same map in `lib/permissions.ts` for
+    # server-component page gating; this response is what keeps a session that is
+    # already open in agreement with the server after a role change.
+    capabilities = sorted(capabilities_for(role))
 
     locations = [
         {"id": str(loc.id), "name": loc.name, "address": loc.address, "is_primary": loc.is_primary}
@@ -224,7 +210,7 @@ async def get_me_context(
             "locations": locations,
         },
         "role": role,
-        "permissions": permissions,
+        "capabilities": capabilities,
         "enabled_modules": current_business.enabled_modules or [],
     }
 

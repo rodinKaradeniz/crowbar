@@ -59,13 +59,25 @@ class CancellationModelMetrics:
     classification_report: str = ""
 
 
+#: Terminal reservations needed before a cancellation model is trained.
+#: Below this the metrics describe the sample, not the venue.
+MIN_TRAINING_SAMPLES = 30
+
+
 @dataclass
 class CancellationModelResult:
-    """Complete result of a cancellation model training run."""
+    """Complete result of a cancellation model training run.
+
+    `status` is `"insufficient_data"` when a minimum-data floor was not met.
+    That is an ordinary state for a new venue, not an error — see the Model
+    Policy section of `ml/CONTEXT.md`.
+    """
 
     metrics: CancellationModelMetrics = field(default_factory=CancellationModelMetrics)
     feature_importance: dict[str, float] = field(default_factory=dict)
     predictions: pd.DataFrame = field(default_factory=pd.DataFrame)
+    status: str = "success"
+    insufficient_reason: str | None = None
 
 
 class CancellationPredictionModel:
@@ -143,8 +155,30 @@ class CancellationPredictionModel:
         """
         result = CancellationModelResult()
 
-        if len(df) < 10:
-            logger.warning(f"Only {len(df)} samples — too few for meaningful training")
+        # Minimum-data floor. Below it there is no model, and the caller is told
+        # why rather than being handed a metric computed from a handful of rows.
+        # A confident AUC over nine reservations is worse than no AUC, because
+        # the dashboard renders it identically to a real one.
+        if len(df) < MIN_TRAINING_SAMPLES:
+            result.status = "insufficient_data"
+            result.insufficient_reason = (
+                f"{len(df)} terminal reservation(s); at least "
+                f"{MIN_TRAINING_SAMPLES} are needed before a cancellation model "
+                "is meaningful."
+            )
+            logger.info("Cancellation model skipped: %s", result.insufficient_reason)
+            return result
+
+        # Both outcomes have to be present. A dataset where nothing was ever
+        # cancelled trains a model that predicts "never" perfectly and tells the
+        # venue nothing.
+        if df[TARGET_COLUMN].nunique() < 2:
+            result.status = "insufficient_data"
+            result.insufficient_reason = (
+                "Every reservation in the training window had the same outcome, "
+                "so there is nothing to distinguish."
+            )
+            logger.info("Cancellation model skipped: %s", result.insufficient_reason)
             return result
 
         X = df[self.feature_columns].copy()

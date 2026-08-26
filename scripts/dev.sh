@@ -94,9 +94,22 @@ ok "Backend dependencies installed"
 log "Ensuring database exists..."
 docker compose exec -T postgres createdb -U postgres crowbar 2>/dev/null || true
 
-log "Running migrations + seeding test data..."
-SEED_DATA=true python -m db.migrate
-ok "Database migrated and seeded"
+if [[ "${SEED_DATA:-false}" == "true" ]]; then
+  # The seeder refuses to run without a unique, non-reusable password. Generate a
+  # throwaway one per run unless the caller pinned a value they want to log in with.
+  if [[ -z "${DEMO_ADMIN_PASSWORD:-}" ]]; then
+    DEMO_ADMIN_PASSWORD="$(openssl rand -hex 16)"
+    warn "DEMO_ADMIN_PASSWORD not set; generated a one-time value for this run:"
+    warn "  $DEMO_ADMIN_PASSWORD"
+  fi
+  log "Running migrations + seeding demo data..."
+  SEED_DATA=true DEMO_ADMIN_PASSWORD="$DEMO_ADMIN_PASSWORD" python -m db.migrate
+  ok "Database migrated and seeded"
+else
+  log "Running migrations..."
+  python -m db.migrate
+  ok "Database migrated (no demo data; re-run with SEED_DATA=true to seed)"
+fi
 
 # --- 3. Frontend ---
 log "Setting up frontend..."

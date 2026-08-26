@@ -4,6 +4,7 @@ import BusinessTypesClient from "./business-types-client";
 import { fetchBusiness, fetchServiceTypesByBusiness } from "@/lib/api";
 import { ModuleDisabled } from "@/components/module-disabled";
 import { hasModule, MODULE_KEYS } from "@/lib/modules";
+import { hasCapability } from "@/lib/permissions";
 
 export default async function BusinessTypes() {
   const user = await getCurrentUser();
@@ -30,7 +31,7 @@ export default async function BusinessTypes() {
     <BusinessTypesClient
       businessId={user.businessId}
       initialServiceTypes={serviceTypes}
-      canEdit={user.role === "owner" || user.role === "manager"}
+      canEdit={hasCapability(user.role, "reservations.configure")}
     />
   );
 }

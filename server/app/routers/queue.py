@@ -18,7 +18,7 @@ from app.core.rate_limit import (
 )
 from app.core.regional import RegionalValidationError, normalize_phone
 from app.database import get_db
-from app.dependencies import get_current_business, get_current_user, require_module
+from app.dependencies import require_capability, get_current_business, get_current_user, require_module
 from app.models.business import Business
 from app.models.user import User
 from app.schemas.queue_entry import (
@@ -215,7 +215,7 @@ async def get_queue_status(
 @router.get(
     "/api/queue/service-day",
     response_model=QueueServiceDayResponse,
-    dependencies=[Depends(require_module("queue"))],
+    dependencies=[Depends(require_module("queue")), Depends(require_capability("queue.view"))],
 )
 async def get_staff_queue_service_day(
     db: AsyncSession = Depends(get_db),
@@ -231,7 +231,7 @@ async def get_staff_queue_service_day(
 @router.put(
     "/api/queue/service-day",
     response_model=QueueServiceDayResponse,
-    dependencies=[Depends(require_module("queue"))],
+    dependencies=[Depends(require_module("queue")), Depends(require_capability("queue.configure"))],
 )
 async def update_staff_queue_service_day(
     body: QueueServiceDayUpdate,
@@ -266,12 +266,12 @@ async def update_staff_queue_service_day(
 @router.get(
     "/api/queue/entries",
     response_model=list[QueueEntryResponse],
-    dependencies=[Depends(require_module("queue"))],
+    dependencies=[Depends(require_module("queue")), Depends(require_capability("queue.view"))],
 )
 @router.get(
     "/api/queue/{business_id}/entries",
     response_model=list[QueueEntryResponse],
-    dependencies=[Depends(require_module("queue"))],
+    dependencies=[Depends(require_module("queue")), Depends(require_capability("queue.view"))],
     include_in_schema=False,
 )
 async def list_queue_entries(
@@ -296,7 +296,7 @@ async def list_queue_entries(
     "/api/queue/entries",
     response_model=QueueStatusResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_module("queue"))],
+    dependencies=[Depends(require_module("queue")), Depends(require_capability("queue.manage"))],
 )
 async def create_staff_walk_in(
     body: QueueJoinRequest,
@@ -339,12 +339,12 @@ async def create_staff_walk_in(
 @router.post(
     "/api/queue/entries/{entry_id}/call",
     response_model=QueueEntryResponse,
-    dependencies=[Depends(require_module("queue"))],
+    dependencies=[Depends(require_module("queue")), Depends(require_capability("queue.manage"))],
 )
 @router.post(
     "/api/queue/{business_id}/entries/{entry_id}/notify",
     response_model=QueueEntryResponse,
-    dependencies=[Depends(require_module("queue"))],
+    dependencies=[Depends(require_module("queue")), Depends(require_capability("queue.manage"))],
     include_in_schema=False,
 )
 async def call_queue_entry(
@@ -392,7 +392,7 @@ async def call_queue_entry(
 @router.post(
     "/api/queue/entries/{entry_id}/delivery/retry",
     response_model=QueueEntryResponse,
-    dependencies=[Depends(require_module("queue"))],
+    dependencies=[Depends(require_module("queue")), Depends(require_capability("queue.manage"))],
 )
 async def retry_queue_delivery(
     entry_id: UUID,
@@ -422,7 +422,7 @@ async def retry_queue_delivery(
 @router.post(
     "/api/queue/entries/{entry_id}/remove",
     response_model=QueueEntryResponse,
-    dependencies=[Depends(require_module("queue"))],
+    dependencies=[Depends(require_module("queue")), Depends(require_capability("queue.manage"))],
 )
 async def remove_queue_entry(
     entry_id: UUID,

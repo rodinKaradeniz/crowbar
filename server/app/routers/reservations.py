@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ErrorCode, api_error, forbidden, not_found
+from app.core.permissions import has_capability
 from app.core.rate_limit import (
     PUBLIC_IDENTITY_WRITE_LIMIT,
     PUBLIC_WRITE_IP_LIMIT,
@@ -17,8 +18,8 @@ from app.database import get_db
 from app.dependencies import (
     get_current_business,
     get_current_user,
+    require_capability,
     require_module,
-    require_roles,
 )
 from app.models.business import Business
 from app.models.user import User
@@ -91,7 +92,7 @@ def _availability_http_error(exc: AvailabilityError):
 
 def _send_reservation_email(
     *,
-    to_email: str,
+    to_email: str | None,
     customer_name: str,
     business_name: str,
     service_type_name: str,
@@ -105,6 +106,8 @@ def _send_reservation_email(
     message_kind: str = "created",
     management_url: str | None = None,
 ) -> None:
+    if not to_email:
+        return
     email_service.send_reservation_confirmation(
         to_email=to_email,
         customer_name=customer_name,
@@ -172,12 +175,14 @@ def _reservation_duration_minutes(reservation) -> int:
 def _can_override_availability(user: User, business_id: UUID) -> bool:
     return any(
         assignment.business_id == business_id
-        and assignment.role in {"owner", "manager"}
+        and has_capability(assignment.role, "reservations.override")
         for assignment in user.staff_assignments
     )
 
 
-@router.get("/business/{business_id}", response_model=list[ReservationResponse])
+@router.get("/business/{business_id}", response_model=list[ReservationResponse],
+    dependencies=[Depends(require_capability("reservations.view"))],
+)
 async def list_business_reservations(
     business_id: UUID,
     status_filter: str | None = Query(None, alias="status"),
@@ -193,7 +198,9 @@ async def list_business_reservations(
     )
 
 
-@router.get("/availability", response_model=AvailabilityResponse)
+@router.get("/availability", response_model=AvailabilityResponse,
+    dependencies=[Depends(require_capability("reservations.view"))],
+)
 async def get_staff_reservation_availability(
     service_type_id: UUID = Query(...),
     start_date: date = Query(...),
@@ -216,7 +223,9 @@ async def get_staff_reservation_availability(
         raise _availability_http_error(exc) from exc
 
 
-@router.get("/override-times", response_model=AvailabilityResponse)
+@router.get("/override-times", response_model=AvailabilityResponse,
+    dependencies=[Depends(require_capability("reservations.override"))],
+)
 async def get_staff_override_times(
     service_type_id: UUID = Query(...),
     local_date: date = Query(...),
@@ -224,7 +233,6 @@ async def get_staff_override_times(
     db: AsyncSession = Depends(get_db),
     business: Business = Depends(get_current_business),
     _: None = Depends(require_module("reservations")),
-    __: User = Depends(require_roles("owner", "manager")),
 ):
     try:
         return await get_override_times(
@@ -238,7 +246,9 @@ async def get_staff_override_times(
         raise _availability_http_error(exc) from exc
 
 
-@router.get("/waitlist", response_model=list[ReservationWaitlistResponse])
+@router.get("/waitlist", response_model=list[ReservationWaitlistResponse],
+    dependencies=[Depends(require_capability("reservations.view"))],
+)
 async def list_reservation_waitlist(
     view: str = Query(default="active", pattern="^(active|history)$"),
     db: AsyncSession = Depends(get_db),
@@ -254,7 +264,9 @@ async def list_reservation_waitlist(
     return [await _waitlist_response(db, entry) for entry in entries]
 
 
-@router.get("/{reservation_id}", response_model=ReservationResponse)
+@router.get("/{reservation_id}", response_model=ReservationResponse,
+    dependencies=[Depends(require_capability("reservations.view"))],
+)
 async def get_reservation(
     reservation_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -640,7 +652,9 @@ async def cancel_public_waitlist_entry(
     return await _waitlist_response(db, entry)
 
 
-@router.post("/waitlist", response_model=ReservationWaitlistResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/waitlist", response_model=ReservationWaitlistResponse, status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_capability("reservations.manage"))],
+)
 async def create_staff_waitlist_entry(
     data: ReservationWaitlistCreate,
     db: AsyncSession = Depends(get_db),
@@ -665,7 +679,9 @@ async def create_staff_waitlist_entry(
     return await _waitlist_response(db, entry)
 
 
-@router.post("/waitlist/{entry_id}/offer", response_model=ReservationWaitlistResponse)
+@router.post("/waitlist/{entry_id}/offer", response_model=ReservationWaitlistResponse,
+    dependencies=[Depends(require_capability("reservations.manage"))],
+)
 async def offer_reservation_waitlist_entry(
     entry_id: UUID,
     data: ReservationWaitlistOffer,
@@ -804,6 +820,7 @@ async def accept_public_waitlist_offer(
 @router.post(
     "/waitlist/{entry_id}/remove",
     response_model=ReservationWaitlistResponse,
+    dependencies=[Depends(require_capability("reservations.manage"))],
 )
 async def remove_waitlist_entry(
     entry_id: UUID,
@@ -837,6 +854,7 @@ async def remove_waitlist_entry(
 @router.post(
     "/waitlist/{entry_id}/delivery/retry",
     response_model=ReservationWaitlistResponse,
+    dependencies=[Depends(require_capability("reservations.manage"))],
 )
 async def retry_waitlist_delivery(
     entry_id: UUID,
@@ -885,7 +903,9 @@ async def retry_waitlist_delivery(
     return await _waitlist_response(db, entry)
 
 
-@router.post("", response_model=ReservationResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ReservationResponse, status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_capability("reservations.manage"))],
+)
 async def create_reservation(
     data: ReservationCreate,
     background_tasks: BackgroundTasks,
@@ -955,6 +975,7 @@ async def create_reservation(
 @router.get(
     "/{reservation_id}/availability",
     response_model=AvailabilityResponse,
+    dependencies=[Depends(require_capability("reservations.view"))],
 )
 async def get_reschedule_availability(
     reservation_id: UUID,
@@ -989,6 +1010,7 @@ async def get_reschedule_availability(
 @router.post(
     "/{reservation_id}/reschedule",
     response_model=ReservationResponse,
+    dependencies=[Depends(require_capability("reservations.manage"))],
 )
 async def reschedule_reservation(
     reservation_id: UUID,
@@ -1092,7 +1114,9 @@ async def reschedule_reservation(
     return reservation
 
 
-@router.patch("/{reservation_id}", response_model=ReservationResponse)
+@router.patch("/{reservation_id}", response_model=ReservationResponse,
+    dependencies=[Depends(require_capability("reservations.manage"))],
+)
 async def update_reservation(
     reservation_id: UUID,
     data: ReservationUpdate,
@@ -1159,7 +1183,9 @@ async def update_reservation(
     return reservation
 
 
-@router.post("/{reservation_id}/no-show", response_model=ReservationResponse)
+@router.post("/{reservation_id}/no-show", response_model=ReservationResponse,
+    dependencies=[Depends(require_capability("reservations.manage"))],
+)
 async def mark_reservation_no_show(
     reservation_id: UUID,
     data: ReservationNoShow,
@@ -1188,7 +1214,9 @@ async def mark_reservation_no_show(
     return reservation
 
 
-@router.delete("/{reservation_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{reservation_id}", status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_capability("reservations.manage"))],
+)
 async def delete_reservation(
     reservation_id: UUID,
     db: AsyncSession = Depends(get_db),

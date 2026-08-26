@@ -3,6 +3,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { fetchBusiness } from "@/lib/api";
 import { ModuleDisabled } from "@/components/module-disabled";
 import FloorClient from "./floor-client";
+import { hasCapability } from "@/lib/permissions";
+import { RoleRestricted } from "@/components/role-restricted";
 
 export default async function FloorPage() {
   const user = await getCurrentUser();
@@ -16,10 +18,14 @@ export default async function FloorPage() {
   );
   if (!hasOperationalModule) return <ModuleDisabled moduleName="Floor" />;
 
+  if (!hasCapability(user.role, "floor.view")) {
+    return <RoleRestricted surface="Floor" role={user.role} />;
+  }
+
   return (
     <FloorClient
       businessId={business.id}
-      canManage={user.role === "owner" || user.role === "manager"}
+      canManage={hasCapability(user.role, "floor.configure")}
       hasReservations={business.enabledModules.includes("reservations")}
       hasQueue={business.enabledModules.includes("queue")}
       businessTimezone={business.timezone ?? "UTC"}

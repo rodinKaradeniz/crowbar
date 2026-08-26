@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ErrorCode, api_error, not_found
 from app.database import get_db
-from app.dependencies import get_current_business, require_module, require_roles
+from app.dependencies import get_current_business, require_capability, require_module
 from app.models.business import Business
 from app.models.user import User
 from app.schemas.booking_schedule import (
@@ -32,7 +32,9 @@ def _configuration_missing():
     )
 
 
-@router.get("", response_model=BookingScheduleCollectionResponse)
+@router.get("", response_model=BookingScheduleCollectionResponse,
+    dependencies=[Depends(require_capability("reservations.view"))],
+)
 async def list_schedules(
     db: AsyncSession = Depends(get_db),
     business: Business = Depends(get_current_business),
@@ -56,12 +58,13 @@ async def list_schedules(
     )
 
 
-@router.put("/default", response_model=BookingScheduleResponse)
+@router.put("/default", response_model=BookingScheduleResponse,
+    dependencies=[Depends(require_capability("reservations.configure"))],
+)
 async def replace_default_schedule(
     data: BookingScheduleReplace,
     db: AsyncSession = Depends(get_db),
     business: Business = Depends(get_current_business),
-    _: User = Depends(require_roles("owner", "manager")),
 ):
     schedule = await booking_schedule_service.replace_default_schedule(
         db,
@@ -77,6 +80,7 @@ async def replace_default_schedule(
 @router.get(
     "/default/operating-hours-preview",
     response_model=BookingScheduleOperatingHoursPreview,
+    dependencies=[Depends(require_capability("reservations.configure"))],
 )
 async def preview_operating_hours_copy(
     db: AsyncSession = Depends(get_db),
@@ -94,11 +98,11 @@ async def preview_operating_hours_copy(
 @router.post(
     "/default/copy-operating-hours",
     response_model=BookingScheduleResponse,
+    dependencies=[Depends(require_capability("reservations.configure"))],
 )
 async def copy_operating_hours_to_default(
     db: AsyncSession = Depends(get_db),
     business: Business = Depends(get_current_business),
-    _: User = Depends(require_roles("owner", "manager")),
 ):
     schedule = await booking_schedule_service.copy_operating_hours_to_default(
         db,
@@ -113,13 +117,13 @@ async def copy_operating_hours_to_default(
 @router.put(
     "/service-types/{service_type_id}",
     response_model=BookingScheduleResponse,
+    dependencies=[Depends(require_capability("reservations.configure"))],
 )
 async def replace_service_schedule(
     service_type_id: UUID,
     data: BookingScheduleReplace,
     db: AsyncSession = Depends(get_db),
     business: Business = Depends(get_current_business),
-    _: User = Depends(require_roles("owner", "manager")),
 ):
     schedule = await booking_schedule_service.replace_service_schedule(
         db,
@@ -136,12 +140,12 @@ async def replace_service_schedule(
 @router.delete(
     "/service-types/{service_type_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_capability("reservations.configure"))],
 )
 async def delete_service_schedule(
     service_type_id: UUID,
     db: AsyncSession = Depends(get_db),
     business: Business = Depends(get_current_business),
-    _: User = Depends(require_roles("owner", "manager")),
 ):
     deleted = await booking_schedule_service.delete_service_schedule(
         db,

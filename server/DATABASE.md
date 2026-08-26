@@ -14,6 +14,10 @@ than Alembic. Run commands from `server/` with `venv/` activated.
 | `docker compose down` | Stop local containers while keeping volumes |
 | `../scripts/verify-fresh-db.sh` | Recreate a name-restricted disposable database, run every migration, repeat the canonical seed, and assert current invariants |
 
+`../scripts/dev.sh` applies migrations without seeding. Pass `SEED_DATA=true`
+to it to seed as well; it forwards an existing `DEMO_ADMIN_PASSWORD` or
+generates and prints a throwaway one for that run.
+
 Seeding is a data mutation. The seed deletes and recreates its fixed synthetic
 tenant. The runner refuses non-local database hosts and database names that do
 not identify disposable development/test data, and it requires a fresh password
@@ -89,9 +93,15 @@ Local demo staff identities are:
 
 | Role | Email |
 | --- | --- |
-| Owner | `owner@example.invalid` |
-| Manager | `manager@example.invalid` |
-| Staff | `staff@example.invalid` |
+| Owner | `owner@example.com` |
+| Manager | `manager@example.com` |
+| Host / server | `host@example.com` |
+| Bar / kitchen | `bar@example.com` |
+| Inventory operator | `inventory@example.com` |
+
+One account per role, so the permission matrix in
+[`../docs/permission-matrix.md`](../docs/permission-matrix.md) can be checked by
+signing in rather than by reading a table.
 
 The seed stores no password. Supply a one-time local value through
 `DEMO_ADMIN_PASSWORD`; the seed runner rejects known reusable demo passwords.

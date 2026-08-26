@@ -9,6 +9,7 @@ from app.models.reservation import Reservation
 from app.models.user import User
 from app.services import staff_service
 from app.services import sms_service
+from app.services.marketing_consent_service import MessageClass
 
 
 async def count_reservations_for_customer_at_business(
@@ -177,11 +178,24 @@ def send_sms_if_enabled(
     notification_channels: list,
     phone: str | None,
     body: str,
+    *,
+    message_class: MessageClass,
 ) -> None:
     """
     Send an SMS if 'sms' is in the business's notification_channels.
     Fires-and-forgets (sync call to sms_service). Does not raise on failure.
+
+    `message_class` is required and has no default. Every caller has to say
+    whether this message is operational — something the guest asked for — or
+    marketing. Marketing sends must additionally clear
+    `marketing_consent_service.is_suppressed` before reaching here; this
+    function has no database session and so cannot check consent itself, which
+    is why the argument is mandatory rather than merely advisory.
+
+    See `app/services/marketing_consent_service.py` for the rule.
     """
+    if message_class not in ("operational", "marketing"):
+        raise ValueError(f"Unknown message class: {message_class}")
     if "sms" not in notification_channels:
         return
     if not phone:

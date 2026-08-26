@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.permissions import ROLE_LABELS, manageable_roles
 from app.models.staff_invitation import StaffInvitation
 from app.models.staff import Staff
 from app.models.user import User
@@ -62,12 +63,24 @@ async def get_assignment(
 def assert_can_manage_role(
     actor_role: str, target_role: str | None, new_role: str | None = None
 ) -> None:
-    if actor_role == "owner":
-        return
-    if actor_role != "manager":
+    """Guard who may invite, edit, or remove whom.
+
+    Holding `staff.manage` opens the Staff page; it does not say which roles you
+    may hand out. An owner manages anyone. A manager manages only the three
+    operational roles, so a manager can neither promote someone to manager or
+    owner nor edit a peer — which is the privilege-escalation path this exists to
+    close. Authority comes from `app.core.permissions`, not from a second list.
+    """
+    allowed = manageable_roles(actor_role)
+    if not allowed:
         raise StaffAuthorityError("Only an owner or manager can manage staff")
-    if target_role not in (None, "staff") or new_role not in (None, "staff"):
-        raise StaffAuthorityError("Managers can manage staff members only")
+
+    for role in (target_role, new_role):
+        if role is not None and role not in allowed:
+            raise StaffAuthorityError(
+                f"A {ROLE_LABELS.get(actor_role, actor_role).lower()} cannot manage "
+                f"the {ROLE_LABELS.get(role, role).lower()} role"
+            )
 
 
 async def get_staff_by_user_id(db: AsyncSession, user_id: UUID) -> list[Staff]:

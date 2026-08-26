@@ -9,6 +9,8 @@ import {
 } from "@/lib/api";
 import { ModuleDisabled } from "@/components/module-disabled";
 import { hasModule, MODULE_KEYS } from "@/lib/modules";
+import { hasCapability } from "@/lib/permissions";
+import { RoleRestricted } from "@/components/role-restricted";
 
 export default async function BusinessSchedule() {
   const user = await getCurrentUser();
@@ -34,6 +36,10 @@ export default async function BusinessSchedule() {
     return <ModuleDisabled moduleName="Reservations" />;
   }
 
+  if (!hasCapability(user.role, "reservations.view")) {
+    return <RoleRestricted surface="Schedule" role={user.role} />;
+  }
+
   if (!business.onboardingComplete) {
     redirect("/business/onboarding");
   }
@@ -45,7 +51,7 @@ export default async function BusinessSchedule() {
       serviceTypes={serviceTypes}
       customers={customers}
       currentTime={new Date().toISOString()}
-      canOverride={user.role === "owner" || user.role === "manager"}
+      canOverride={hasCapability(user.role, "reservations.override")}
     />
   );
 }

@@ -96,17 +96,86 @@ class InventoryPackConversionResponse(AppBaseModel):
     is_default_receiving_unit: bool
 
 
-class TransferReceiveLine(AppBaseModel):
-    transfer_line_id: UUID
-    received_quantity: Decimal = Field(gt=0)
-    discrepancy_reason: str | None = None
+class CountSessionCreate(AppBaseModel):
+    kind: str = Field(pattern="^(stocktake|cycle_count)$")
+    location_id: UUID | None = None
+    note: str | None = None
+    # Omit to count every active item; name items for a targeted cycle count.
+    item_ids: list[UUID] | None = None
 
 
-class CountReconcileLine(AppBaseModel):
+class CountLineUpdate(AppBaseModel):
+    """One counted line. Supply exactly one of the three entry forms.
+
+    `counted_quantity` is in the item's canonical base unit. `pack_quantity`
+    counts packs (a part-bottle is a fraction, so 3.4 bottles is valid), and
+    `keg_level_percent` reads a keg gauge. The service converts the latter two
+    to base units and records which form was keyed.
+    """
+
     count_line_id: UUID
-    counted_quantity: Decimal = Field(ge=0)
+    counted_quantity: Decimal | None = Field(default=None, ge=0)
+    pack_conversion_id: UUID | None = None
+    pack_quantity: Decimal | None = Field(default=None, ge=0)
+    keg_level_percent: Decimal | None = Field(default=None, ge=0, le=100)
     shrinkage_reason: str | None = Field(default=None, max_length=32)
     note: str | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one_entry_form(self) -> "CountLineUpdate":
+        supplied = [
+            self.counted_quantity is not None,
+            self.pack_quantity is not None,
+            self.keg_level_percent is not None,
+        ]
+        if sum(supplied) != 1:
+            raise ValueError(
+                "Supply exactly one of counted_quantity, pack_quantity or keg_level_percent"
+            )
+        return self
+
+
+class CountLineResponse(AppBaseModel):
+    id: UUID
+    inventory_item_id: UUID
+    item_name: str
+    base_unit: str
+    book_quantity: Decimal
+    counted_quantity: Decimal
+    variance_quantity: Decimal
+    shrinkage_reason: str | None = None
+    note: str | None = None
+    movement_id: UUID | None = None
+    entry_mode: str
+    entry_value: Decimal | None = None
+    entry_pack_conversion_id: UUID | None = None
+
+
+class CountSessionResponse(AppBaseModel):
+    id: UUID
+    business_id: UUID
+    location_id: UUID | None = None
+    kind: str
+    status: str
+    note: str | None = None
+    opened_by: UUID | None = None
+    reconciled_by: UUID | None = None
+    reconciled_at: datetime | None = None
+    created_at: datetime
+    lines: list[CountLineResponse]
+
+
+class CountSessionSummary(AppBaseModel):
+    id: UUID
+    business_id: UUID
+    location_id: UUID | None = None
+    kind: str
+    status: str
+    note: str | None = None
+    opened_by: UUID | None = None
+    reconciled_by: UUID | None = None
+    reconciled_at: datetime | None = None
+    created_at: datetime
 
 
 
@@ -173,4 +242,8 @@ class StockMovementResponse(AppBaseModel):
     alert_triggered: bool
     unit_cost_snapshot: Decimal | None = None
     cost_currency_code: str | None = None
+    # Attributes a movement to what caused it: a purchase receipt, a count
+    # reconciliation, or an order line.
+    reference_type: str | None = None
+    reference_id: UUID | None = None
     created_at: datetime

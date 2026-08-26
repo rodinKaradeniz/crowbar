@@ -8,12 +8,17 @@ from app.schemas.base import AppBaseModel
 from app.services.auth_service import validate_password
 
 
-StaffRole = Literal["owner", "manager", "staff"]
+# Mirrors `app.core.permissions.ROLES` and the `ck_staff_role` constraint added
+# in migration 049. Pydantic rejects anything outside it with a 422 before a
+# handler runs, so this is the first of three layers guarding the role column.
+StaffRole = Literal[
+    "owner", "manager", "host_server", "bar_kitchen", "inventory_operator"
+]
 
 
 class StaffCreate(AppBaseModel):
     user_id: UUID
-    role: StaffRole = "staff"
+    role: StaffRole = "host_server"
 
 
 class StaffUpdate(AppBaseModel):
@@ -43,7 +48,7 @@ class StaffWithUserResponse(AppBaseModel):
 
 class StaffInviteRequest(AppBaseModel):
     email: EmailStr
-    role: StaffRole = "staff"
+    role: StaffRole = "host_server"
 
 
 class StaffInviteResponse(AppBaseModel):

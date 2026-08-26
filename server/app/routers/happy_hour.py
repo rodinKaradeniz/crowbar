@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_business, get_current_user, require_module
+from app.dependencies import require_capability, get_current_business, get_current_user, require_module
 from app.models.business import Business
 from app.models.user import User
 from app.schemas.happy_hour import (
@@ -22,7 +22,9 @@ router = APIRouter(
 )
 
 
-@router.get("/windows", response_model=list[HappyHourWindowResponse])
+@router.get("/windows", response_model=list[HappyHourWindowResponse],
+    dependencies=[Depends(require_capability("menu.view"))],
+)
 async def list_windows(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -35,6 +37,7 @@ async def list_windows(
     "/windows",
     response_model=HappyHourWindowResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_capability("happyhour.manage"))],
 )
 async def create_window(
     body: HappyHourWindowCreate,
@@ -47,7 +50,9 @@ async def create_window(
     return window
 
 
-@router.patch("/windows/{window_id}", response_model=HappyHourWindowResponse)
+@router.patch("/windows/{window_id}", response_model=HappyHourWindowResponse,
+    dependencies=[Depends(require_capability("happyhour.manage"))],
+)
 async def update_window(
     window_id: UUID,
     body: HappyHourWindowUpdate,
@@ -64,7 +69,9 @@ async def update_window(
     return window
 
 
-@router.delete("/windows/{window_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/windows/{window_id}", status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_capability("happyhour.manage"))],
+)
 async def delete_window(
     window_id: UUID,
     db: AsyncSession = Depends(get_db),
