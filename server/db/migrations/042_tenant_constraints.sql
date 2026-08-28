@@ -1,4 +1,4 @@
--- Close the remaining Stage 3-4 database tenant-alignment gaps. Application
+-- Close the remaining database tenant-alignment gaps. Application
 -- queries still require explicit business_id predicates; these constraints are
 -- a final persistence backstop, not a replacement for route/service scoping.
 

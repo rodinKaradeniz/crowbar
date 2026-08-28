@@ -1,0 +1,138 @@
+CROWBAR — LOCAL CHEATSHEET
+Repo: /Users/rodinkaradeniz/projects/crowbar
+Local development only. Nothing here applies to Railway.
+
+
+────────────────────────────────────────────────────────────────────────
+1. DEMO CREDENTIALS
+────────────────────────────────────────────────────────────────────────
+
+All five accounts belong to the seeded demo tenant "Example Lantern"
+(slug: example-lantern). Sign in at http://localhost:3000/auth/login
+
+  EMAIL                    PASSWORD     ROLE                NAME
+  owner@example.com        password123  owner               Demo Owner
+  manager@example.com      password123  manager             Demo Manager
+  host@example.com         password123  host_server         Demo Host / Server
+  bar@example.com          password123  bar_kitchen         Demo Bartender
+  inventory@example.com    password123  inventory_operator  Demo Inventory Operator
+
+These exist only after seeding (section 4). A migrate-only run creates no
+users at all.
+
+To use a different password, set DEMO_ADMIN_PASSWORD before seeding. The
+plaintext is never written to a seed file — only its bcrypt hash is
+substituted in.
+
+
+────────────────────────────────────────────────────────────────────────
+2. RUN THE WHOLE APP
+────────────────────────────────────────────────────────────────────────
+
+  cd /Users/rodinkaradeniz/projects/crowbar
+  ./scripts/dev.sh
+
+Starts Docker (postgres, redis, ml), installs backend deps, runs pending
+migrations, then starts backend and frontend in the foreground.
+Does NOT seed.
+
+  Frontend    http://localhost:3000
+  Backend     http://localhost:8000
+  API docs    http://localhost:8000/docs
+  ML          http://localhost:8001
+  PostgreSQL  localhost:5432
+  Redis       localhost:6379
+
+Leave the terminal open — Ctrl+C stops backend and frontend.
+
+Only one copy can run at a time. A second run collides on ports 3000/8000
+and falls back to 3001, which is not what the app expects. If that happens,
+see section 5.
+
+
+────────────────────────────────────────────────────────────────────────
+3. STOP THE APP
+────────────────────────────────────────────────────────────────────────
+
+  Ctrl+C                  in the dev.sh terminal — stops backend + frontend,
+                          leaves Docker running
+
+  ./scripts/stop.sh       stops Docker too
+
+Note: stop.sh runs `docker compose down`, which REMOVES the containers, not
+just stops them. Your data survives — postgres lives in the external volume
+crowbar_postgres_data — but the containers are recreated on the next
+dev.sh run. If `docker ps` shows no crowbar-* containers, this is why.
+
+Docker only, without the script:
+
+  cd server && docker compose stop     # keep containers, just stop them
+  cd server && docker compose down     # remove containers (same as stop.sh)
+  cd server && docker compose up -d    # bring them back
+
+
+────────────────────────────────────────────────────────────────────────
+4. SEED / RESET DEMO DATA
+────────────────────────────────────────────────────────────────────────
+
+Seeding IS the reset. The seed file first deletes the demo business — which
+cascades to every child table — and the demo users, then re-inserts
+everything. There is no separate reset command.
+
+Full stack, seeded:
+
+  cd /Users/rodinkaradeniz/projects/crowbar
+  SEED_DATA=true ./scripts/dev.sh
+
+Reseed only, without restarting the app (Docker must be up):
+
+  cd /Users/rodinkaradeniz/projects/crowbar/server
+  SEED_DATA=true venv/bin/python -m db.migrate
+
+Migrations only, no data touched:
+
+  cd /Users/rodinkaradeniz/projects/crowbar/server
+  venv/bin/python -m db.migrate
+
+Custom password:
+
+  SEED_DATA=true DEMO_ADMIN_PASSWORD='your-password' ./scripts/dev.sh
+
+Seeding refuses to run against any non-local database. That guard is what
+keeps demo data away from anything real — leave it alone.
+
+WARNING: this destroys whatever you were working on in the demo tenant.
+
+
+────────────────────────────────────────────────────────────────────────
+5. KILL A PROCESS ON A PORT
+────────────────────────────────────────────────────────────────────────
+
+See what is holding a port:
+
+  lsof -i :3000
+
+Just the PIDs:
+
+  lsof -ti :3000
+
+Kill it (graceful):
+
+  lsof -ti :3000 | xargs kill
+
+Force, only if it will not die:
+
+  lsof -ti :3000 | xargs kill -9
+
+Crowbar's two ports in one go (each port needs its own -i):
+
+  lsof -ti :3000 -i :8000 | xargs kill
+
+If the port is free, `lsof -ti` prints nothing and xargs runs kill with no
+arguments — harmless, but you can add `-r` to skip it entirely:
+
+  lsof -ti :3000 | xargs -r kill
+
+Do not blanket-kill by name. `pkill -f "next dev"` will also kill other
+projects' dev servers, which is easy to do by accident when several are
+running. Target the port instead.

@@ -44,13 +44,55 @@ except Exception:
   exit 1
 }
 
-# Cleanup: kill background processes on exit
+# PIDs of anything listening on a TCP port (empty when free)
+port_listeners() { lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null || true; }
+
+# Refuse to start on an occupied port. A leftover uvicorn --reload keeps serving
+# stale code while this run's backend silently fails to bind, so this is fatal
+# unless KILL_STALE=true asks us to reclaim the port.
+require_free_port() {
+  local port=$1 name=$2 pids
+  pids=$(port_listeners "$port")
+  [[ -z "$pids" ]] && return 0
+
+  if [[ "${KILL_STALE:-false}" == "true" ]]; then
+    warn "$name port $port in use — stopping PID(s) $(echo $pids) (KILL_STALE=true)"
+    kill $pids 2>/dev/null || true
+    for _ in $(seq 1 10); do
+      [[ -z "$(port_listeners "$port")" ]] && break
+      sleep 1
+    done
+    pids=$(port_listeners "$port")
+    [[ -n "$pids" ]] && kill -9 $pids 2>/dev/null || true
+    sleep 1
+    if [[ -n "$(port_listeners "$port")" ]]; then
+      err "$name port $port is still in use after kill -9"
+      exit 1
+    fi
+    ok "$name port $port reclaimed"
+    return 0
+  fi
+
+  err "$name port $port is already in use:"
+  ps -o pid,command -p $(echo $pids | tr ' ' ',') 2>/dev/null | sed '1d' | sed 's/^/    /'
+  err "Stop it, or re-run with: KILL_STALE=true ./scripts/dev.sh"
+  exit 1
+}
+
+# Each background service gets its own process group so cleanup can take down
+# its children too (uvicorn --reload forks a worker that outlives its parent).
+set -m
+
+# Cleanup: kill background process groups on exit
 cleanup() {
+  local status=$?
   trap - SIGINT SIGTERM EXIT 2>/dev/null
   log "Shutting down..."
-  pids=$(jobs -p 2>/dev/null)
-  [[ -n "$pids" ]] && kill $pids 2>/dev/null || true
-  exit 0
+  for pid in ${BACKEND_PID:-} ${FRONTEND_PID:-}; do
+    kill -TERM -"$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+  done
+  wait 2>/dev/null || true
+  exit $status
 }
 trap cleanup SIGINT SIGTERM EXIT
 
@@ -59,6 +101,10 @@ echo "=========================================="
 echo "  Crowbar - Development Startup"
 echo "=========================================="
 echo ""
+
+# --- 0. Port preflight (app ports only; 5432/6379 belong to Docker) ---
+require_free_port 8000 "Backend"
+require_free_port 3000 "Frontend"
 
 # --- 1. Docker ---
 log "Starting Docker containers (postgres, redis, ml)..."
@@ -95,15 +141,10 @@ log "Ensuring database exists..."
 docker compose exec -T postgres createdb -U postgres crowbar 2>/dev/null || true
 
 if [[ "${SEED_DATA:-false}" == "true" ]]; then
-  # The seeder refuses to run without a unique, non-reusable password. Generate a
-  # throwaway one per run unless the caller pinned a value they want to log in with.
-  if [[ -z "${DEMO_ADMIN_PASSWORD:-}" ]]; then
-    DEMO_ADMIN_PASSWORD="$(openssl rand -hex 16)"
-    warn "DEMO_ADMIN_PASSWORD not set; generated a one-time value for this run:"
-    warn "  $DEMO_ADMIN_PASSWORD"
-  fi
+  # The demo tenant seeds with a known local-only password unless
+  # DEMO_ADMIN_PASSWORD pins something else. The seeder prints it.
   log "Running migrations + seeding demo data..."
-  SEED_DATA=true DEMO_ADMIN_PASSWORD="$DEMO_ADMIN_PASSWORD" python -m db.migrate
+  SEED_DATA=true python -m db.migrate
   ok "Database migrated and seeded"
 else
   log "Running migrations..."
@@ -136,8 +177,9 @@ cd "$ROOT/client"
 npm run dev &
 FRONTEND_PID=$!
 
-# Give services time to start
-sleep 5
+# Confirm both actually bound their ports before reporting them as running
+wait_for_port 8000 "Backend"
+wait_for_port 3000 "Frontend"
 
 # --- 5. Status report ---
 echo ""

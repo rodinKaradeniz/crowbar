@@ -190,9 +190,10 @@ cd server
 venv/bin/python -m app.jobs.reservation_reminders
 ```
 
-Do not run `python -m db.migrate reset`, delete Docker volumes, or seed shared
-databases unless the user explicitly requests it. Repository state belongs to
-the user; [docs/RULES.md](docs/RULES.md) owns the Git restriction.
+Do not run `SEED_DATA=true` seeding (it deletes and re-creates the demo
+tenant), delete Docker volumes, or seed shared databases unless the user
+explicitly requests it. Repository state belongs to the user;
+[docs/RULES.md](docs/RULES.md) owns the Git restriction.
 
 ## Canonical conventions
 

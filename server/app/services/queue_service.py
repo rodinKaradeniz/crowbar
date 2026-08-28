@@ -346,7 +346,13 @@ async def get_status_by_token(
 
 
 async def get_active_entries(db: AsyncSession, business_id: UUID) -> list[QueueEntry]:
-    _, location, service_date = await _context(db, business_id)
+    business = await _business(db, business_id)
+    location = await get_primary_location(db, business_id)
+    if location is None:
+        # A tenant without a primary location cannot hold entries. Reads report
+        # the empty queue; only join/open demand a location (see _context).
+        return []
+    service_date, _, _ = resolve_service_window(business)
     rows = await db.scalars(
         select(QueueEntry)
         .where(

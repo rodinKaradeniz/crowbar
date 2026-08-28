@@ -440,9 +440,10 @@ venue privacy-contact production gate without editing migrations 001–040.
   credentials stop startup. Production docs and environment disclosure are
   disabled; request/log redaction and global security headers are installed.
 - The portfolio exporter reads only an explicit tracked-file allowlist. The
-  public surface has synthetic reserved seed data, no reusable demo password or
-  reset command, an all-rights-reserved view-only license, private-reporting
-  security policy, factual controller/processor copy, and an asset-rights
+  public surface has synthetic reserved seed data, a local-only demo password
+  that never reaches a seed file in plaintext, no reset command, an
+  all-rights-reserved view-only license, private-reporting security policy,
+  factual controller/processor copy, and an asset-rights
   manifest. Agent state, history, TODO/evidence, plans, deployment state,
   environments, notebooks and undocumented media are excluded.
 

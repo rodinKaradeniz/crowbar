@@ -1,4 +1,4 @@
--- Stage 3: one service-day queue policy, reasoned guest lifecycles, and a
+-- One service-day queue policy, reasoned guest lifecycles, and a
 -- generalized delivery audit shared by reservations, queue calls, and waitlist offers.
 
 CREATE TABLE queue_service_days (

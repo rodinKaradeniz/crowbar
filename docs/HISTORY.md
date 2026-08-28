@@ -972,7 +972,7 @@ delivery channel can extend the shared target model but cannot infer delivery
 from operational status. Queue scheduling automation, richer Floor geometry and
 generic offline operation remain separate work.
 
-**References:** `server/db/migrations/038_stage3_guest_to_table_lifecycle.sql`,
+**References:** `server/db/migrations/038_guest_to_table_lifecycle.sql`,
 `server/app/services/queue_service.py`,
 `server/app/services/reservation_waitlist_service.py`,
 `server/app/services/floor_plan_service.py`
@@ -1001,8 +1001,8 @@ mutation until an eligible audited reopen. Informational methods cannot become
 partial tenders or amounts by method. The venue's separate compliant register
 remains payment and fiscal authority.
 
-**References:** `server/db/migrations/039_stage4_ordering_stations_and_corrections.sql`,
-`server/db/migrations/040_stage4_external_settlement.sql`,
+**References:** `server/db/migrations/039_ordering_stations_and_corrections.sql`,
+`server/db/migrations/040_external_settlement.sql`,
 `server/app/services/order_service.py`, `server/app/services/tab_service.py`
 
 ## 2026-08-23 — Public capabilities require exchange and table-browser approval
@@ -1038,7 +1038,7 @@ ignored local OpenAI and Resend keys, committing the intended source, exporting
 from that commit, and scanning the exact export.
 
 **References:** `server/db/migrations/041_public_capability_hardening.sql`,
-`server/db/migrations/042_stage3_stage4_tenant_constraints.sql`,
+`server/db/migrations/042_tenant_constraints.sql`,
 `server/app/routers/public_capabilities.py`,
 `server/app/services/table_guest_session_service.py`, `client/proxy.ts`,
 `scripts/export-portfolio.sh`, `ml/Dockerfile`

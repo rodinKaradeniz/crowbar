@@ -281,7 +281,10 @@ async def list_queue_entries(
 ):
     if business_id is not None and business_id != business.id:
         raise api_error(404, "NOT_FOUND", "Queue not found")
-    entries = await queue_service.get_active_entries(db, business.id)
+    try:
+        entries = await queue_service.get_active_entries(db, business.id)
+    except queue_service.QueuePolicyError as exc:
+        raise _queue_error(exc) from exc
     waiting_position = 1
     result = []
     for entry in entries:
@@ -464,7 +467,14 @@ async def queue_websocket(
         return
     bid = str(business_id)
     await manager.connect(bid, ws)
-    entries = await queue_service.get_active_entries(db, business_id)
+    try:
+        entries = await queue_service.get_active_entries(db, business_id)
+    except queue_service.QueuePolicyError:
+        # Nothing to stream yet (no location, missing business); close cleanly
+        # instead of tearing the socket down with an unhandled error.
+        manager.disconnect(bid, ws)
+        await ws.close()
+        return
     waiting_position = 1
     payload = []
     for entry in entries:

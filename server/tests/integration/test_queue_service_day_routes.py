@@ -2,6 +2,7 @@ import asyncio
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.services import queue_service
@@ -9,12 +10,12 @@ from app.services import queue_service
 
 async def _owner(client: AsyncClient):
     registered = await client.post("/api/auth/register-business", json={
-        "email": "stage3-queue@example.com",
+        "email": "queue-service-day@example.com",
         "password": "password1234",
         "name": "Queue Owner",
         "phone": "+4915111111111",
-        "business_name": "Stage 3 Queue",
-        "business_slug": "stage-3-queue",
+        "business_name": "Queue Service Day",
+        "business_slug": "queue-service-day",
     })
     assert registered.status_code == 201, registered.text
     token = registered.json()["access_token"]
@@ -122,3 +123,31 @@ async def test_simultaneous_joins_serialize_at_the_final_cover(
     )
     assert sorted(item[0] for item in outcomes) == ["QUEUE_FULL", "created"]
     assert sum(item[1] for item in outcomes) == 1
+
+
+@pytest.mark.asyncio
+async def test_entries_read_survives_a_business_without_a_primary_location(
+    client: AsyncClient, db_session: AsyncSession
+):
+    """A tenant with no location has no queue, and reads must say so with an
+    empty list rather than the 500 that QUEUE_LOCATION_REQUIRED used to cause."""
+    business_id, headers = await _owner(client)
+    await db_session.execute(
+        text("DELETE FROM locations WHERE business_id = :bid"), {"bid": business_id}
+    )
+    await db_session.commit()
+
+    entries = await client.get("/api/queue/entries", headers=headers)
+    assert entries.status_code == 200, entries.text
+    assert entries.json() == []
+
+    legacy = await client.get(f"/api/queue/{business_id}/entries", headers=headers)
+    assert legacy.status_code == 200, legacy.text
+    assert legacy.json() == []
+
+    # Writes still refuse: opening a service day needs a location.
+    opened = await client.put("/api/queue/service-day", headers=headers, json={
+        "status": "open", "max_waiting_covers": 2,
+    })
+    assert opened.status_code == 409
+    assert opened.json()["code"] == "QUEUE_LOCATION_REQUIRED"

@@ -67,6 +67,10 @@ finished beats general, configurable, and half-built.
 - Commit database state before publishing an event that causes a projection.
 - Add a new migration for every schema change and keep ORM, schemas, and types
   aligned.
+- Name migrations, modules, and symbols after the functionality they carry,
+  never after the roadmap stage that introduced them. A stage number is
+  scheduling metadata that stops being true, while the functionality it
+  shipped keeps the same name for as long as the code lives.
 - Preserve error response shape, meaningful HTTP status codes, and API
   snake_case; convert once at the frontend boundary.
 - Reuse canonical helpers for money, cart pricing, units, days, modules, and
@@ -87,6 +91,10 @@ finished beats general, configurable, and half-built.
   external writes without explicit authorization. Treat `SEED_DATA=true` as
   demo-data mutation, not a harmless read.
 - Do not edit, reorder, or rename an applied SQL migration.
+- Do not leave behind files or folders that existed only to serve one
+  session. Scratch output, audit captures, handoff notes, and generated
+  reports are deleted by the work that created them once they have been
+  read.
 - Do not present inferred requirements as confirmed requirements.
 - Do not trust `business_id`, `user_id`, price, discount, age, status, or
   inventory effects supplied by a browser when the server can derive them.

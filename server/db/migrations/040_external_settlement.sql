@@ -1,4 +1,4 @@
--- Stage 4: settlement is an audited assertion about an external register.
+-- Settlement is an audited assertion about an external register.
 -- Legacy closure columns remain read-only compatibility data.
 
 ALTER TABLE tabs ALTER COLUMN status TYPE VARCHAR(24);

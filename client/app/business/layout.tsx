@@ -9,10 +9,6 @@ import { BusinessRouteGuard } from "@/components/business-route-guard";
 import { fetchBusiness } from "@/lib/api";
 import { RegionalSettingsProvider } from "@/contexts/regional-context";
 
-// Paints a stored dark preference before hydration so the dashboard doesn't
-// flash light. Mirrors the storage key in components/staff-theme.tsx.
-const THEME_BOOT_SCRIPT = `try{if(localStorage.getItem("crowbar-staff-theme")==="dark")document.documentElement.classList.add("dark")}catch(e){}`;
-
 export default async function BusinessLayout({
   children,
 }: {
@@ -42,7 +38,6 @@ export default async function BusinessLayout({
       taxLabel: business?.taxLabel,
     }}>
     <SidebarProvider defaultOpen={false}>
-      <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
       <StaffThemeInit />
       <BusinessSidebar />
       <SidebarInset>

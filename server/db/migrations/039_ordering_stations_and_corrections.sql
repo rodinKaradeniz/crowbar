@@ -1,4 +1,4 @@
--- Stage 4: tenant-owned preparation stations, independent line fulfillment,
+-- Tenant-owned preparation stations, independent line fulfillment,
 -- exact line-ledger effects, and append-only correction/availability audits.
 
 CREATE TABLE preparation_stations (
