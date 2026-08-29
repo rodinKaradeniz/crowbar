@@ -2,26 +2,22 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import {
-  Armchair,
-  CheckCircle2,
-  ChevronRight,
-  CircleAlert,
-  Copy,
-  Loader2,
-  Plus,
-  ReceiptText,
-  Sparkles,
-  Users,
-  Wifi,
-  WifiOff,
-  Wrench,
-} from "lucide-react";
+import { Armchair, ChevronRight, Copy, Loader2, Plus, Wrench } from "lucide-react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/empty-state";
+import { OfflineBar } from "@/components/offline-bar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { FloorPlanSeatingSheet } from "@/components/floor-plan-seating-sheet";
 import { useFloorPlanSocket } from "@/hooks/use-floor-plan-socket";
@@ -73,13 +69,27 @@ function formatVenueTime(value: string | undefined, businessTimezone: string) {
   );
 }
 
+/**
+ * Table state is NEUTRAL. All five of them.
+ *
+ * This used to be a five-colour map — green available, amber reserved, brown
+ * occupied, brass cleaning, red out of service. Under §08 none of it qualifies:
+ * a table being occupied is not a thing to handle before the night ends, and a
+ * red tile beside a genuinely late ticket makes the two look equally urgent.
+ * See `tableStateSeverity()`.
+ *
+ * The states are told apart by GROUND and WORD instead: a table with a party on
+ * it sits one surface step up and names who is there; a table out of service is
+ * dimmed and says why. Both are readable across a dark room, which colour at
+ * 10% opacity was not.
+ */
 function stateTone(state: FloorPlanBoardTable["displayState"]) {
   return {
-    available: "border-lager/50 bg-lager/10 hover:border-lager",
-    reserved: "border-marzen/50 bg-marzen/10 hover:border-marzen",
-    occupied: "border-dubbel/50 bg-dubbel/10 hover:border-dubbel",
-    cleaning: "border-brass/50 bg-brass/10 hover:border-brass",
-    out_of_service: "border-oxblood/50 bg-oxblood/10 hover:border-oxblood",
+    available: "border-border bg-card hover:border-border-strong",
+    reserved: "border-border bg-secondary hover:border-border-strong",
+    occupied: "border-border-strong bg-accent hover:border-primary",
+    cleaning: "border-border bg-card hover:border-border-strong",
+    out_of_service: "border-border bg-card opacity-60 hover:opacity-100",
   }[state];
 }
 
@@ -110,7 +120,15 @@ function PartyCard({
           <p className="mt-0.5 text-xs text-muted-foreground">
             <span className="figures">{party.partySize}</span> guests · {party.sourceType === "queue" ? party.status : formatVenueTime(party.startsAt, businessTimezone)}
           </p>
-          {party.guestContext?.dietaryDetails && <p className="mt-2 flex items-center gap-1 text-xs font-medium text-oxblood"><CircleAlert className="size-3" /> {party.guestContext.dietaryDetails}</p>}
+          {/* Neutral. §08 names dietary notes as the case that does NOT
+              qualify for a severity — it is information the host needs before
+              seating, carried by weight and a word, not by red. */}
+          {party.guestContext?.dietaryDetails && (
+            <p className="mt-2 text-[13px] text-foreground">
+              <span className="type-micro mr-1.5 text-muted-foreground">Note</span>
+              {party.guestContext.dietaryDetails}
+            </p>
+          )}
           {party.guestContext?.tags.length ? <p className="mt-1 truncate text-xs text-muted-foreground">{party.guestContext.tags.join(" · ")}</p> : null}
         </div>
         <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium capitalize">
@@ -135,19 +153,21 @@ function TableCard({ table, onClick, businessTimezone }: { table: FloorPlanBoard
       type="button"
       onClick={onClick}
       className={cn(
-        "min-h-32 rounded-xl border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+        "min-h-[var(--tile-floor)] rounded-[var(--radius-3)] border p-3 text-left transition-colors",
         stateTone(table.displayState),
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="figures text-lg font-bold">{table.label}</span>
-        <span className="rounded-full bg-background/70 px-1.5 py-0.5 text-[10px] font-medium capitalize">
-          {stateLabel(table.displayState)}
+        <span className="font-mono text-[17px] font-semibold tabular-nums">
+          {table.label}
         </span>
+        <Badge tone="neutral">{stateLabel(table.displayState)}</Badge>
       </div>
-      <p className="figures mt-1 text-xs text-muted-foreground">{table.capacity} seats</p>
+      <p className="mt-1 font-mono text-[12px] tabular-nums text-muted-foreground">
+        {table.capacity} seats
+      </p>
       {detail ? (
-        <div className="mt-4 border-t border-foreground/10 pt-2">
+        <div className="mt-4 border-t border-surface-3 pt-2">
           <p className="truncate text-sm font-medium">{detail.name}</p>
           <p className="text-xs text-muted-foreground">
             {table.activeSeating ? "Seated" : table.activeAssignment ? "At table" : `Next ${formatVenueTime(detail.startsAt, businessTimezone)}`}
@@ -314,7 +334,7 @@ export default function FloorClient({ businessId, canManage, hasReservations, ha
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
-  const { connected } = useFloorPlanSocket(businessId, () => void refresh());
+  const { connected, lastContactAt } = useFloorPlanSocket(businessId, () => void refresh());
   const allTables = useMemo(() => board?.areas.flatMap((area) => area.tables) ?? [], [board]);
   const availableParties = useMemo(() => [
     ...(hasReservations ? board?.unassignedReservations ?? [] : []),
@@ -423,21 +443,35 @@ export default function FloorClient({ businessId, canManage, hasReservations, ha
   if (loading) return <div className="page-pad flex min-h-80 items-center justify-center text-sm text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading host board…</div>;
 
   return (
-    <div className="page-pad">
+    <>
+      <OfflineBar
+        connected={connected}
+        lastContactAt={lastContactAt}
+        surface="The floor map"
+        onRetry={() => void refresh()}
+      />
+
+      <div className="px-[clamp(16px,2.5vw,32px)] py-6">
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="eyebrow">Service day · {board?.serviceDate}</p>
-          <h1 className="page-title">Floor</h1>
-          <p className="page-description">Live tables, arrivals, and walk-ins for this service day.</p>
+          <p className="type-label text-muted-foreground">
+            Service day · {board?.serviceDate ?? "—"}
+          </p>
+          <h1 className="type-t1 mt-1">Floor map</h1>
+          <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
+            Live tables, arrivals and walk-ins for this service day.
+          </p>
         </div>
-        <div className="flex items-center gap-2 text-xs font-medium">
-          {connected ? <Wifi className="h-4 w-4 text-lager" /> : <WifiOff className="h-4 w-4 text-muted-foreground" />}
-          <span className={connected ? "text-lager" : "text-muted-foreground"}>{connected ? "Live" : "Reconnecting"}</span>
-          <Button size="sm" variant="outline" onClick={() => void refresh()}>Refresh</Button>
-        </div>
+        <Button size="filter" variant="secondary" onClick={() => void refresh()}>
+          Refresh
+        </Button>
       </div>
 
-      {error && <div className="mb-5 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div>}
+      {error ? (
+        <div className="mb-5 border-l-2 border-critical-fill bg-critical-tint px-4 py-3 text-[length:var(--ui-size)] text-critical-text">
+          {error}
+        </div>
+      ) : null}
       <Tabs defaultValue="board">
         <TabsList><TabsTrigger value="board"><Armchair /> Host board</TabsTrigger>{canManage && <TabsTrigger value="setup"><Wrench /> Floor setup</TabsTrigger>}</TabsList>
         <TabsContent value="board" className="mt-6">
@@ -445,7 +479,14 @@ export default function FloorClient({ businessId, canManage, hasReservations, ha
             <div className="grid gap-7 xl:grid-cols-[minmax(0,1fr)_20rem]">
               <div className="space-y-7">
                 {board.areas.length === 0 ? (
-                  <div className="rounded-xl border border-dashed p-10 text-center"><Armchair className="mx-auto h-8 w-8 text-muted-foreground" /><p className="mt-3 font-medium">No tables configured</p><p className="mt-1 text-sm text-muted-foreground">{canManage ? "Use Floor setup to add your first area and table." : "Ask a manager to configure the floor."}</p></div>
+                  <EmptyState
+                    title="No tables yet"
+                    description={
+                      canManage
+                        ? "Draw your room once — areas, then tables and their seats — and the floor map, the QR codes and seating all work from it."
+                        : "A manager needs to draw the room before this board can seat anyone."
+                    }
+                  />
                 ) : board.areas.map((area) => (
                   <section key={area.id}>
                     <div className="mb-3 flex items-baseline justify-between"><h2 className="text-lg font-semibold">{area.name}</h2><span className="figures text-xs text-muted-foreground">{area.tables.length} tables</span></div>
@@ -463,22 +504,228 @@ export default function FloorClient({ businessId, canManage, hasReservations, ha
         {canManage && <TabsContent value="setup" className="mt-6"><SetupPanel onChanged={refresh} /></TabsContent>}
       </Tabs>
 
-      {selectedTable && (
-        <div className="fixed inset-0 z-40 flex items-end bg-black/40 p-0 sm:items-center sm:justify-center sm:p-4" role="presentation" onMouseDown={() => setSelectedTable(null)}>
-          <div role="dialog" aria-modal="true" aria-label={`Table ${selectedTable.label}`} className="w-full rounded-t-xl border bg-background p-5 shadow-lg sm:max-w-md sm:rounded-xl" onMouseDown={(event) => event.stopPropagation()}>
-            <div className="flex items-start justify-between gap-3"><div><p className="eyebrow">{stateLabel(selectedTable.displayState)}</p><h2 className="mt-1 text-xl font-semibold">Table {selectedTable.label}</h2><p className="figures text-sm text-muted-foreground">{selectedTable.capacity} seats</p></div><Button variant="ghost" size="sm" onClick={() => setSelectedTable(null)}>Close</Button></div>
-            <div className="mt-5 space-y-3">
-              {selectedTable.activeSeating ? <><p className="text-sm"><span className="font-medium">{selectedTable.activeSeating.source.name}</span> is currently seated here.</p><Button className="w-full" variant="outline" onClick={() => void openSeatingTab(selectedTable.activeSeating!.seatingId)} disabled={actionLoading}><ReceiptText /> {selectedTable.activeSeating.openTabId ? "Open tab" : "Start tab"}</Button>{selectedTable.activeSeating.openTabId ? <p className="rounded-lg bg-muted/40 p-3 text-sm text-muted-foreground">Settle the open tab before ending this seating.</p> : <Button className="w-full" onClick={() => setCloseTarget(selectedTable)}><CheckCircle2 /> Close seating</Button>}</> : selectedTable.activeAssignment ? <><p className="text-sm"><span className="font-medium">{selectedTable.activeAssignment.name}</span> is assigned here.</p><Button className="w-full" onClick={() => startSelection(selectedTable.activeAssignment!, "seat", selectedTable.activeAssignment!.assignedTableIds)}><Users /> Seat party</Button></> : selectedTable.displayState === "cleaning" ? <><p className="text-sm text-muted-foreground">This table needs a quick reset before it can be seated.</p><Button className="w-full" onClick={() => void updateTableState(selectedTable, "ready")} disabled={actionLoading}><Sparkles /> Mark ready</Button></> : selectedTable.displayState === "out_of_service" ? <><p className="text-sm text-muted-foreground">{selectedTable.operationalStateReason || "Temporarily unavailable"}</p><Button className="w-full" onClick={() => void updateTableState(selectedTable, "ready")} disabled={actionLoading}>Return to service</Button></> : <><p className="text-sm text-muted-foreground">Choose an unassigned arrival or walk-in to seat here.</p>{availableParties.length ? <div className="space-y-2">{availableParties.map((party) => <Button key={party.sourceId} variant="outline" className="w-full justify-between" onClick={() => startSelection(party, "seat", [selectedTable.id])}><span className="truncate">{party.name}</span><ChevronRight /></Button>)}</div> : <p className="rounded-lg bg-muted/40 p-3 text-sm text-muted-foreground">No unassigned parties are waiting.</p>}</>}
-              {canManage && <details className="rounded-lg border p-3"><summary className="cursor-pointer text-sm font-medium">Guest QR code</summary><p className="mt-2 text-xs text-muted-foreground">Guests can order only while this table has an active seating.</p><div className="mt-3 flex gap-2"><Button variant="outline" size="sm" onClick={() => void showTableQr(selectedTable.id)} disabled={actionLoading}>Show link</Button><Button variant="outline" size="sm" onClick={() => setQrRotateTarget(selectedTable)} disabled={actionLoading}>Rotate</Button></div>{qrUrl && <div className="mt-3 flex gap-2"><Input value={qrUrl} readOnly aria-label="Guest QR link" /><Button size="icon" variant="outline" aria-label="Copy guest QR link" onClick={() => void navigator.clipboard.writeText(qrUrl).then(() => toast.success("QR link copied."))}><Copy /></Button></div>}</details>}
-              {selectedTable.operationalState === "ready" && !selectedTable.activeSeating && <details className="rounded-lg border p-3"><summary className="cursor-pointer text-sm font-medium">More table actions</summary><div className="mt-3 flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => void updateTableState(selectedTable, "cleaning")} disabled={actionLoading}><Sparkles /> Mark needs reset</Button></div><Textarea value={outOfServiceReason} onChange={(event) => setOutOfServiceReason(event.target.value)} className="mt-3 min-h-20" placeholder="Reason for temporary closure" /><Button variant="destructive" size="sm" className="mt-2" onClick={() => void updateTableState(selectedTable, "out_of_service")} disabled={actionLoading || !outOfServiceReason.trim()}><CircleAlert /> Take out of service</Button></details>}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* The table detail is a SIDE PANEL, per §06 — not a modal pinned to the
+          bottom of the viewport. It never takes the floor away from the host,
+          which is the point: you seat a party while looking at the room. */}
+      <Sheet
+        open={selectedTable !== null}
+        onOpenChange={(open) => !open && setSelectedTable(null)}
+      >
+        <SheetContent side="right" className="flex flex-col">
+          {selectedTable ? (
+            <>
+              <SheetHeader>
+                <p className="type-label text-muted-foreground">
+                  {stateLabel(selectedTable.displayState)}
+                </p>
+                <SheetTitle>Table {selectedTable.label}</SheetTitle>
+                <SheetDescription>
+                  {selectedTable.capacity} seats
+                </SheetDescription>
+              </SheetHeader>
+
+              <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
+                {selectedTable.activeSeating ? (
+                  <>
+                    <p className="text-[length:var(--ui-size)]">
+                      <span className="font-medium">
+                        {selectedTable.activeSeating.source.name}
+                      </span>{" "}
+                      is seated here.
+                    </p>
+                    <Button
+                      variant="secondary"
+                      onClick={() =>
+                        void openSeatingTab(selectedTable.activeSeating!.seatingId)
+                      }
+                      disabled={actionLoading}
+                    >
+                      {selectedTable.activeSeating.openTabId
+                        ? "Open tab"
+                        : "Start tab"}
+                    </Button>
+                    {selectedTable.activeSeating.openTabId ? (
+                      <p className="border-l-2 border-border-strong bg-secondary px-3 py-2.5 text-[13px] text-muted-foreground">
+                        The tab has to be settled externally before this seating
+                        can close.
+                      </p>
+                    ) : (
+                      <Button onClick={() => setCloseTarget(selectedTable)}>
+                        Close seating
+                      </Button>
+                    )}
+                  </>
+                ) : selectedTable.activeAssignment ? (
+                  <>
+                    <p className="text-[length:var(--ui-size)]">
+                      <span className="font-medium">
+                        {selectedTable.activeAssignment.name}
+                      </span>{" "}
+                      is assigned here.
+                    </p>
+                    <Button
+                      onClick={() =>
+                        startSelection(
+                          selectedTable.activeAssignment!,
+                          "seat",
+                          selectedTable.activeAssignment!.assignedTableIds,
+                        )
+                      }
+                    >
+                      Seat party
+                    </Button>
+                  </>
+                ) : selectedTable.displayState === "cleaning" ? (
+                  <>
+                    <p className="text-[length:var(--ui-size)] text-muted-foreground">
+                      Needs a reset before it can take a party.
+                    </p>
+                    <Button
+                      onClick={() => void updateTableState(selectedTable, "ready")}
+                      disabled={actionLoading}
+                    >
+                      Mark ready
+                    </Button>
+                  </>
+                ) : selectedTable.displayState === "out_of_service" ? (
+                  <>
+                    <p className="text-[length:var(--ui-size)] text-muted-foreground">
+                      {selectedTable.operationalStateReason ||
+                        "Out of service for now."}
+                    </p>
+                    <Button
+                      onClick={() => void updateTableState(selectedTable, "ready")}
+                      disabled={actionLoading}
+                    >
+                      Return to service
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[length:var(--ui-size)] text-muted-foreground">
+                      Pick an arrival or a walk-in to seat here.
+                    </p>
+                    {availableParties.length ? (
+                      <div className="flex flex-col gap-2">
+                        {availableParties.map((party) => (
+                          <Button
+                            key={party.sourceId}
+                            variant="secondary"
+                            className="justify-between"
+                            onClick={() =>
+                              startSelection(party, "seat", [selectedTable.id])
+                            }
+                          >
+                            <span className="truncate">{party.name}</span>
+                            <ChevronRight />
+                          </Button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="border-l-2 border-border-strong bg-secondary px-3 py-2.5 text-[13px] text-muted-foreground">
+                        Nobody is waiting to be seated.
+                      </p>
+                    )}
+                  </>
+                )}
+
+                {canManage ? (
+                  <details className="border border-border p-3">
+                    <summary className="cursor-pointer text-[length:var(--ui-size)] font-medium">
+                      Guest QR code
+                    </summary>
+                    <p className="mt-2 text-[13px] text-muted-foreground">
+                      Guests can only order while this table has a party seated
+                      on it.
+                    </p>
+                    <div className="mt-3 flex gap-2">
+                      <Button
+                        variant="secondary"
+                        size="filter"
+                        onClick={() => void showTableQr(selectedTable.id)}
+                        disabled={actionLoading}
+                      >
+                        Show link
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="filter"
+                        onClick={() => setQrRotateTarget(selectedTable)}
+                        disabled={actionLoading}
+                      >
+                        Rotate
+                      </Button>
+                    </div>
+                    {qrUrl ? (
+                      <div className="mt-3 flex gap-2">
+                        <Input value={qrUrl} readOnly aria-label="Guest QR link" />
+                        <Button
+                          size="icon-md"
+                          variant="secondary"
+                          aria-label="Copy guest QR link"
+                          onClick={() =>
+                            void navigator.clipboard
+                              .writeText(qrUrl)
+                              .then(() => toast.success("QR link copied."))
+                          }
+                        >
+                          <Copy />
+                        </Button>
+                      </div>
+                    ) : null}
+                  </details>
+                ) : null}
+
+                {selectedTable.operationalState === "ready" &&
+                !selectedTable.activeSeating ? (
+                  <details className="border border-border p-3">
+                    <summary className="cursor-pointer text-[length:var(--ui-size)] font-medium">
+                      More table actions
+                    </summary>
+                    <Button
+                      variant="secondary"
+                      size="filter"
+                      className="mt-3"
+                      onClick={() =>
+                        void updateTableState(selectedTable, "cleaning")
+                      }
+                      disabled={actionLoading}
+                    >
+                      Mark needs reset
+                    </Button>
+                    <Textarea
+                      value={outOfServiceReason}
+                      onChange={(event) =>
+                        setOutOfServiceReason(event.target.value)
+                      }
+                      className="mt-3 min-h-20"
+                      placeholder="Why is it coming out of service?"
+                    />
+                    {/* Quiet outline in red text — the risky choice, not the
+                        loud one. */}
+                    <Button
+                      variant="destructive-quiet"
+                      size="filter"
+                      className="mt-2"
+                      onClick={() =>
+                        void updateTableState(selectedTable, "out_of_service")
+                      }
+                      disabled={actionLoading || !outOfServiceReason.trim()}
+                    >
+                      Take out of service
+                    </Button>
+                  </details>
+                ) : null}
+              </div>
+            </>
+          ) : null}
+        </SheetContent>
+      </Sheet>
 
       <FloorPlanSeatingSheet key={`${selectedParty?.sourceId ?? "no-party"}-${selectionMode}-${selectionInitialTableIds.join("-")}`} open={seatingOpen} onOpenChange={setSeatingOpen} party={selectedParty} tables={allTables} initialTableIds={selectionInitialTableIds} canOverride={canManage} mode={selectionMode} submitting={actionLoading} onConfirm={(tableIds, reason) => void submitSelection(tableIds, reason)} />
       <ConfirmationDialog open={closeTarget !== null} onOpenChange={(open) => !open && setCloseTarget(null)} title="Close seating?" description="This completes the visit and returns each table to ready." confirmLabel="Close seating" onConfirm={() => void confirmCloseSeating()} />
-      <ConfirmationDialog open={qrRotateTarget !== null} onOpenChange={(open) => !open && setQrRotateTarget(null)} title="Rotate this table QR code?" description="The previously printed code will stop working immediately." confirmLabel="Rotate QR code" variant="destructive" onConfirm={() => void rotateTableQr()} />
-    </div>
+      <ConfirmationDialog open={qrRotateTarget !== null} onOpenChange={(open) => !open && setQrRotateTarget(null)} title="Rotate this table QR code?" description="The code printed on the table stops working the moment you do. Anyone holding a menu from the old code will have to scan again." confirmLabel="Rotate the code" variant="destructive" onConfirm={() => void rotateTableQr()} />
+      </div>
+    </>
   );
 }
