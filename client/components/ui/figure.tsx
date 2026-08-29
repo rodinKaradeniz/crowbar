@@ -30,6 +30,13 @@ import { cn } from "@/lib/utils"
 
 const figureSizes = {
   tablet: "text-[66px] leading-[0.94] tracking-[-0.038em] font-extrabold",
+  /**
+   * The figure band, at both targets: 66px at arm's length on a tablet, 52px
+   * at a desk. One size that knows about the two screens the product is
+   * designed for, so a band does not need a responsive class at every call
+   * site — and so nobody invents a third size in between.
+   */
+  band: "text-[66px] leading-[0.94] tracking-[-0.038em] font-extrabold desktop:text-[52px] desktop:leading-[1] desktop:tracking-[-0.036em]",
   headline: "text-[52px] leading-[1] tracking-[-0.036em] font-extrabold",
   panel: "text-[26px] leading-[1.05] tracking-[-0.028em] font-bold",
   table: "font-mono text-[length:var(--data-size)] leading-[var(--data-lh)] font-normal",

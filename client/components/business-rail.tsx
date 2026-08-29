@@ -2,18 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/use-auth";
-import { clientGetQueueActiveCount } from "@/lib/client-api";
-import { hasModule, type ModuleKey } from "@/lib/modules";
-import { isNavItemActive, visibleNavGroups } from "@/lib/nav";
-import { hasCapability, roleLabel, type Capability } from "@/lib/permissions";
+import { isNavItemActive, type NavGroup } from "@/lib/nav";
+import { roleLabel } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
 /**
- * The 228px rail — §05 of the Dashboard canvas.
+ * The 228px rail — §05 of the Dashboard canvas. Desktop only; below
+ * `--bp-desktop` the bottom bar takes over.
  *
  * Text only. No icons: the badge is the only status object in the system, and a
  * second visual language in the nav would be a second one. Active is a raised
@@ -25,28 +23,20 @@ import { cn } from "@/lib/utils";
  * exists anywhere in `server/app/`, so it is not built — a button that ends a
  * shift must do what it says. Recorded in `docs/TODO.md` §7a.
  */
-export function BusinessRail() {
+export function BusinessRail({
+  groups,
+  queueCount,
+}: {
+  groups: NavGroup[];
+  queueCount: number | null;
+}) {
   const pathname = usePathname();
   const { user, meContext } = useAuth();
   const currentRole =
     meContext?.role ?? (user?.type === "staff" ? user.role : undefined);
 
-  // Both gates fail closed while /me/context is loading. An entry that appears
-  // and then vanishes is a control the API would have rejected anyway, and on a
-  // disabled module it briefly shows a tenant something they have not bought.
-  const can = (capability: Capability) =>
-    meContext?.capabilities
-      ? meContext.capabilities.includes(capability)
-      : hasCapability(currentRole, capability);
-
-  const moduleEnabled = (module: ModuleKey) =>
-    meContext ? hasModule(meContext.enabledModules, module) : false;
-
-  const groups = visibleNavGroups(moduleEnabled, can);
-  const queueCount = useQueueCount(moduleEnabled("queue"));
-
   return (
-    <aside className="sticky top-0 flex h-svh w-[var(--rail)] shrink-0 flex-col border-r border-border bg-sidebar">
+    <aside className="sticky top-0 hidden h-svh w-[var(--rail)] shrink-0 flex-col border-r border-border bg-sidebar desktop:flex">
       <div className="flex shrink-0 items-center gap-[9px] border-b border-border px-[18px] pt-[18px] pb-4">
         <span className="mkt-logo-mark block bg-primary" aria-hidden />
         <span className="font-display text-[17px] font-extrabold tracking-[-0.035em]">
@@ -102,10 +92,7 @@ export function BusinessRail() {
         ))}
       </nav>
 
-      <RailIdentity
-        name={user?.name ?? null}
-        role={currentRole}
-      />
+      <RailIdentity name={user?.name ?? null} role={currentRole} />
     </aside>
   );
 }
@@ -133,47 +120,6 @@ function RailIdentity({
       </span>
     </div>
   );
-}
-
-/**
- * The one live count in the rail.
- *
- * The canvas also badges Tickets, Reservations and Inventory. No count endpoint
- * exists for those, and adding three more 30-second polls to every screen is a
- * change to how the app loads, not a presentation change. Recorded in
- * `docs/TODO.md` §7a.
- *
- * It is neutral, not critical. The canvas fills the Tickets badge with
- * `--critical-fill`, which under the rank means "a ticket is past its target" —
- * and no target is stored anywhere, so that fill cannot be earned.
- */
-function useQueueCount(enabled: boolean): number | null {
-  const { user } = useAuth();
-  const [count, setCount] = useState<number | null>(null);
-  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const businessId = user?.type === "staff" ? user.businessId : null;
-
-  useEffect(() => {
-    if (!enabled || !businessId) return;
-
-    const refresh = () => {
-      clientGetQueueActiveCount(businessId)
-        .then(setCount)
-        .catch(() => {});
-    };
-
-    refresh();
-    timer.current = setInterval(refresh, 30_000);
-    return () => {
-      if (timer.current) clearInterval(timer.current);
-    };
-  }, [enabled, businessId]);
-
-  // Gated on read rather than cleared in the effect: a stale count must never
-  // outlive the module being switched off, and clearing it in the effect body
-  // is a cascading render for a value nobody is going to see.
-  return enabled ? count : null;
 }
 
 function initials(name: string): string {

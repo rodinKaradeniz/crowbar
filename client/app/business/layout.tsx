@@ -1,8 +1,7 @@
 import { redirect } from "next/navigation";
 
-import { BusinessRail } from "@/components/business-rail";
 import { BusinessRouteGuard } from "@/components/business-route-guard";
-import { BusinessTopbar } from "@/components/business-topbar";
+import { BusinessShell } from "@/components/business-shell";
 import { DashboardErrorBoundary } from "@/components/dashboard-error-boundary";
 import { Ground } from "@/components/ground";
 import { RegionalSettingsProvider } from "@/contexts/regional-context";
@@ -53,22 +52,14 @@ export default async function BusinessLayout({
           from auth, which would otherwise leave the workspace on paper. */}
       <Ground ground="ink" />
 
-      <div className="flex min-h-svh items-stretch bg-background text-foreground">
-        <BusinessRail />
-
-        <div className="flex min-w-0 flex-1 flex-col">
-          <BusinessTopbar
-            businessName={business?.name ?? "Your venue"}
-            docsAssistantEnabled={docsAssistantEnabled}
-          />
-
-          <DashboardErrorBoundary>
-            <main className="flex-1">
-              <BusinessRouteGuard>{children}</BusinessRouteGuard>
-            </main>
-          </DashboardErrorBoundary>
-        </div>
-      </div>
+      <BusinessShell
+        businessName={business?.name ?? "Your venue"}
+        docsAssistantEnabled={docsAssistantEnabled}
+      >
+        <DashboardErrorBoundary>
+          <BusinessRouteGuard>{children}</BusinessRouteGuard>
+        </DashboardErrorBoundary>
+      </BusinessShell>
     </RegionalSettingsProvider>
   );
 }

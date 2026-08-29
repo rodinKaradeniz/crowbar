@@ -6,15 +6,12 @@ import { useEffect, useState } from "react";
 import { DashboardHeaderTrailing } from "@/components/dashboard-header-trailing";
 import { DashboardSearch } from "@/components/dashboard-search";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/hooks/use-auth";
 import { useServiceClock } from "@/hooks/use-service-clock";
 import { useRegionalSettings } from "@/contexts/regional-context";
 import {
   formatBusinessServiceDay,
   formatBusinessTime,
 } from "@/lib/business-time";
-import { hasModule } from "@/lib/modules";
-import { hasCapability, type Capability } from "@/lib/permissions";
 
 /**
  * The workspace header — §05 of the Dashboard canvas.
@@ -34,24 +31,14 @@ import { hasCapability, type Capability } from "@/lib/permissions";
 export function BusinessTopbar({
   businessName,
   docsAssistantEnabled,
+  canSeatWalkIn,
 }: {
   businessName: string;
   docsAssistantEnabled: boolean;
+  /** Desktop only — on tablet this action moves to the bottom-right corner. */
+  canSeatWalkIn: boolean;
 }) {
   const [searchOpen, setSearchOpen] = useState(false);
-  const { user, meContext } = useAuth();
-  const currentRole =
-    meContext?.role ?? (user?.type === "staff" ? user.role : undefined);
-
-  const can = (capability: Capability) =>
-    meContext?.capabilities
-      ? meContext.capabilities.includes(capability)
-      : hasCapability(currentRole, capability);
-
-  const canSeatWalkIn =
-    Boolean(meContext) &&
-    hasModule(meContext?.enabledModules ?? [], "queue") &&
-    can("queue.manage");
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -82,10 +69,11 @@ export function BusinessTopbar({
           <button
             type="button"
             onClick={() => setSearchOpen(true)}
-            className="flex h-10 w-[min(280px,44vw)] items-center gap-2 rounded-[var(--radius-3)] border border-border bg-sidebar px-3 text-left text-[length:var(--ui-size)] text-muted-foreground transition-colors hover:border-border-strong"
+            className="flex h-[var(--control-desktop)] w-[min(280px,44vw)] items-center gap-2 rounded-[var(--radius-3)] border border-border bg-sidebar px-3 text-left text-[length:var(--ui-size)] text-muted-foreground transition-colors hover:border-border-strong"
           >
             <span className="flex-1 truncate">Find a guest, table or item</span>
-            <span className="type-micro shrink-0 rounded-[var(--radius-2)] border border-border px-1.5 py-0.5 tracking-[0.06em]">
+            {/* The shortcut hint is desktop-only: a tablet has no ⌘. */}
+            <span className="type-micro hidden shrink-0 rounded-[var(--radius-2)] border border-border px-1.5 py-0.5 tracking-[0.06em] desktop:inline">
               ⌘K
             </span>
           </button>
@@ -97,8 +85,10 @@ export function BusinessTopbar({
             />
           </div>
 
+          {/* Desktop only. On a tablet this lives in the bottom-right corner,
+              where the hand already is — see TabletPrimaryAction. */}
           {canSeatWalkIn ? (
-            <Button asChild>
+            <Button asChild className="hidden desktop:inline-flex">
               <Link href="/business/queue">Seat a walk-in</Link>
             </Button>
           ) : null}

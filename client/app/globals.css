@@ -434,6 +434,43 @@
   --breakpoint-desktop: 1280px;
 }
 
+/* ── The tablet target · 1024×768 ────────────────────────────────────────────
+ * A real second layout, and this is the half of it that belongs in the token
+ * block: below the desktop breakpoint the whole system steps up to arm's
+ * length in a dark room.
+ *
+ * Every value here is already declared above — nothing new enters, the tablet
+ * ones simply take over. Because the product reads its sizes through these
+ * tokens rather than through literals, this one rule moves every control
+ * height, every table row and all UI text at once, on every screen.
+ *
+ *   --control-tablet-min is a FLOOR, not a preference. §07: "nothing on a
+ *   tablet surface is smaller than 48px", and a 34px filter chip is exactly
+ *   the control someone misses while holding a tray.
+ *
+ * The other half — the bottom bar replacing the rail, and the primary action
+ * moving into the arc of a right thumb — is structural and lives in
+ * `components/business-bottom-bar.tsx`.
+ */
+@media (width < 1280px) {
+  :root,
+  .ground-ink {
+    --ui-size: 15px;                              /* was 14 */
+    --data-size: 15px;                            /* was 13.5 */
+    --row-desktop: var(--row-tablet);             /* 44 → 56 */
+    --control-desktop: var(--control-tablet-min); /* 44 → 48 */
+    --control-desktop-min: var(--control-tablet-min); /* 34 → 48 */
+  }
+
+  /* Nothing on a tablet may depend on hover to be discoverable. Hover styles
+     still apply on a device that has a pointer; they are never load-bearing. */
+  @media (hover: none) {
+    * {
+      transition: none;
+    }
+  }
+}
+
 @layer base {
   * {
     @apply border-border;

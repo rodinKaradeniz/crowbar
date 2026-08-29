@@ -82,37 +82,27 @@ export default function BusinessOverviewClient({
 
   return (
     <div className="pb-[clamp(32px,4vw,56px)]">
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] border-b border-border">
+      {/* TWO figures on tablet, four on desktop — §07: "at arm's length in a
+          dark room, 66px is the size that reads without looking. Two per
+          screen, not four." The two that survive are the two the canvas keeps:
+          how many people are coming, and what has been ordered. The other two
+          are not deleted, they are desktop-only. */}
+      <div className="grid grid-cols-2 border-b border-border desktop:grid-cols-[repeat(auto-fit,minmax(190px,1fr))]">
         <FigureCell>
           <Figure
-            size="headline"
+            size="band"
             label="Guests expected"
             value={stats.today_guest_count || null}
             comparison={`${stats.today_reservations} bookings on the book`}
           />
         </FigureCell>
 
-        {ops.orders_today !== undefined ? (
-          <FigureCell>
-            <Figure
-              size="headline"
-              label="Orders placed"
-              value={ops.orders_today || null}
-              comparison={
-                ops.open_tabs !== undefined
-                  ? `${ops.open_tabs} tabs still open`
-                  : undefined
-              }
-            />
-          </FigureCell>
-        ) : null}
-
         {ops.ordered_value_today !== undefined ? (
-          <FigureCell>
+          <FigureCell className="desktop:order-3">
             {/* "Ordered today", never "revenue": nothing here has been
                 collected, and Crowbar does not take the money. */}
             <Figure
-              size="headline"
+              size="band"
               label="Ordered today"
               value={
                 ops.ordered_value_today
@@ -128,7 +118,22 @@ export default function BusinessOverviewClient({
           </FigureCell>
         ) : null}
 
-        <FigureCell last>
+        {ops.orders_today !== undefined ? (
+          <FigureCell className="hidden desktop:order-2 desktop:block">
+            <Figure
+              size="headline"
+              label="Orders placed"
+              value={ops.orders_today || null}
+              comparison={
+                ops.open_tabs !== undefined
+                  ? `${ops.open_tabs} tabs still open`
+                  : undefined
+              }
+            />
+          </FigureCell>
+        ) : null}
+
+        <FigureCell last className="hidden desktop:order-4 desktop:block">
           <Figure
             size="headline"
             label="Next 7 nights"
@@ -167,15 +172,18 @@ export default function BusinessOverviewClient({
 function FigureCell({
   children,
   last = false,
+  className,
 }: {
   children: React.ReactNode;
   last?: boolean;
+  className?: string;
 }) {
   return (
     <div
       className={cn(
         "px-[clamp(16px,2.5vw,32px)] py-[22px]",
         !last && "border-r border-border",
+        className,
       )}
     >
       {children}
