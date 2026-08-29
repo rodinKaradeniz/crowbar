@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { SocketStatus } from "@/hooks/socket-status";
 import type { QueueEntry } from "@/types";
 
 function toQueueEntryFromWS(e: Record<string, unknown>): QueueEntry {
@@ -61,8 +62,9 @@ const MAX_DELAY = 30_000;
 export function useQueueSocket(
   businessId: string,
   onUpdate: (entries: QueueEntry[]) => void,
-): { connected: boolean } {
+): SocketStatus {
   const [connected, setConnected] = useState(false);
+  const [lastContactAt, setLastContactAt] = useState<number | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const delayRef = useRef(BASE_DELAY);
@@ -85,12 +87,14 @@ export function useQueueSocket(
     wsRef.current = ws;
 
     ws.onopen = () => {
+      setLastContactAt(Date.now());
       ws.send(JSON.stringify({ type: "authenticate", token: jwt }));
       setConnected(true);
       delayRef.current = BASE_DELAY;
     };
 
     ws.onmessage = (event) => {
+      setLastContactAt(Date.now());
       try {
         const msg = JSON.parse(event.data as string);
         if (msg.type === "queue_updated" && Array.isArray(msg.entries)) {
@@ -137,5 +141,5 @@ export function useQueueSocket(
     };
   }, [connect]);
 
-  return { connected };
+  return { connected, lastContactAt };
 }

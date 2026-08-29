@@ -4,59 +4,138 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * ONE primary signature everywhere in the product: the accent fills it — deep
+ * green with paper text on paper, lit green with ink text on ink. That is what
+ * `--primary` / `--primary-foreground` resolve to per ground, so `primary`
+ * needs no ground-specific classes. Ink-black is never a primary button; it is
+ * the page.
+ *
+ * Radius 3, and a 1px border ALWAYS, so the silhouette survives on both
+ * grounds.
+ *
+ * SEVERITY DESCRIBES THE ITEM, NEVER THE CONTROL THAT RESOLVES IT. A late
+ * ticket gets a red rail, a red badge and a red timer — and a standard primary
+ * "Served". `destructive` is critical-filled and belongs only inside a dialog
+ * or on a critical surface; putting it on a routine row control is a defect,
+ * not a style preference.
+ */
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
+  [
+    "inline-flex items-center justify-center gap-2 whitespace-nowrap shrink-0",
+    "border rounded-[var(--radius-3)] font-sans font-medium",
+    "text-[length:var(--ui-size)] leading-[var(--ui-lh)]",
+    "transition-colors",
+    // Disabled is FLAT — no border contrast, no fill, no hover (§06). A
+    // translucent primary still reads as the primary action and invites the
+    // click; this reads as "not yet".
+    "disabled:pointer-events-none disabled:bg-control-disabled",
+    "disabled:text-control-disabled-foreground disabled:border-border",
+    "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+    "outline-none focus-visible:outline-2 focus-visible:outline-offset-1",
+    "aria-invalid:border-field-invalid",
+  ],
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        destructive:
-          "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
-        outline:
-          "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50",
+        primary:
+          "bg-primary text-primary-foreground border-primary hover:bg-primary-hover hover:border-primary-hover",
+        /** Transparent with a hairline that darkens on hover. */
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+          "bg-transparent text-foreground border-border hover:border-border-strong hover:bg-accent",
+        /** Quiet — no border until hover. Not a third signature, a demotion. */
         ghost:
-          "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
-        link: "text-primary underline-offset-4 hover:underline",
+          "bg-transparent text-foreground border-transparent hover:bg-accent",
+        /** Dialogs and critical surfaces only. Never a routine control. */
+        destructive:
+          "bg-critical-fill text-critical-on-fill border-critical-fill hover:opacity-90",
+        /** The risky choice in a dialog: a quiet outline in red text. */
+        "destructive-quiet":
+          "bg-transparent text-critical-text border-border hover:border-critical-text",
+        link: "bg-transparent border-transparent text-primary underline-offset-4 hover:underline",
       },
+      /**
+       * The height ladder. Tablet is a hard floor, not a preference:
+       * --control-tablet-min is 48px and every control on a tablet surface
+       * must clear it.
+       */
       size: {
-        default: "h-9 px-4 py-2 has-[>svg]:px-3",
-        sm: "h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5",
-        lg: "h-10 rounded-md px-6 has-[>svg]:px-4",
-        icon: "size-9",
-        "icon-sm": "size-8",
-        "icon-lg": "size-10",
+        auth: "h-[50px] px-6",      // auth + marketing
+        tablet: "h-[var(--control-tablet-min)] px-5",
+        default: "h-[var(--control-desktop)] px-4", // 44 — desktop primary
+        md: "h-10 px-4",
+        filter: "h-[var(--control-desktop-min)] px-3 gap-1.5", // 34
+        icon: "size-[var(--control-desktop)]",
+        "icon-md": "size-10",
+        "icon-sm": "size-[var(--control-desktop-min)]",
       },
     },
     defaultVariants: {
-      variant: "default",
+      variant: "primary",
       size: "default",
     },
   }
 )
 
+/**
+ * Retired shadcn names. `default` was the brand fill and maps straight to
+ * `primary`; `outline` was the hairline and maps to `secondary`. Kept so the
+ * ~200 unported call sites compile and render legally during the port.
+ * REMOVED IN PHASE 7.
+ */
+const RETIRED_VARIANTS = {
+  default: "primary",
+  outline: "secondary",
+} as const
+
+const RETIRED_SIZES = {
+  sm: "filter",
+  lg: "md",
+} as const
+
+type ButtonVariant = NonNullable<VariantProps<typeof buttonVariants>["variant"]>
+type ButtonSize = NonNullable<VariantProps<typeof buttonVariants>["size"]>
+
+type ButtonProps = React.ComponentProps<"button"> & {
+  variant?: ButtonVariant | keyof typeof RETIRED_VARIANTS
+  size?: ButtonSize | keyof typeof RETIRED_SIZES
+  asChild?: boolean
+}
+
+/** Maps a possibly-retired variant name onto a live one. Exported for the few
+ *  places that call `buttonVariants()` directly rather than rendering <Button>. */
+function resolveButtonVariant(
+  variant: ButtonVariant | keyof typeof RETIRED_VARIANTS | null | undefined
+): ButtonVariant {
+  if (!variant) return "primary"
+  return (RETIRED_VARIANTS[variant as keyof typeof RETIRED_VARIANTS] ??
+    variant) as ButtonVariant
+}
+
 function Button({
   className,
-  variant = "default",
+  variant = "primary",
   size = "default",
   asChild = false,
   ...props
-}: React.ComponentProps<"button"> &
-  VariantProps<typeof buttonVariants> & {
-    asChild?: boolean
-  }) {
+}: ButtonProps) {
   const Comp = asChild ? Slot : "button"
+  const resolvedVariant = resolveButtonVariant(variant)
+  const resolvedSize = (RETIRED_SIZES[size as keyof typeof RETIRED_SIZES] ??
+    size) as ButtonSize
 
   return (
     <Comp
       data-slot="button"
-      data-variant={variant}
-      data-size={size}
-      className={cn(buttonVariants({ variant, size, className }))}
+      data-variant={resolvedVariant}
+      data-size={resolvedSize}
+      className={cn(
+        buttonVariants({ variant: resolvedVariant, size: resolvedSize, className })
+      )}
       {...props}
     />
   )
 }
 
-export { Button, buttonVariants }
+export { Button, buttonVariants, resolveButtonVariant }
+export type { ButtonVariant, ButtonSize }

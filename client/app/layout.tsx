@@ -1,32 +1,43 @@
 import type { Metadata } from "next";
-import { Libre_Caslon_Text, Hanken_Grotesk, Spline_Sans_Mono } from "next/font/google";
+import { Archivo, Instrument_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/auth-context";
 import { Toaster } from "sonner";
 
-const displayFace = Libre_Caslon_Text({
+// next/font self-hosts the woff2 at build time, which is how the design's
+// "no third-party font CDN at request time" requirement is met without
+// hand-rolled @font-face. The three variable names are stable; only the
+// families changed (Libre Caslon / Hanken Grotesk / Spline Sans Mono →
+// Archivo / Instrument Sans / IBM Plex Mono). All three are SIL OFL 1.1.
+// latin-ext is required: the product's copy and data are German.
+const displayFace = Archivo({
   variable: "--font-display-face",
-  subsets: ["latin"],
-  weight: ["400", "700"],
-  style: ["normal", "italic"],
+  subsets: ["latin", "latin-ext"],
+  weight: ["700", "800"], // D1/D2 are 800; D3/T1/T2 are 700
 });
 
-const bodyFace = Hanken_Grotesk({
+const bodyFace = Instrument_Sans({
   variable: "--font-body-face",
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
+  weight: ["400", "600"],
 });
 
-const dataFace = Spline_Sans_Mono({
+const dataFace = IBM_Plex_Mono({
   variable: "--font-data-face",
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
+  weight: ["400", "500", "600"], // data 400; label/micro 500; badge 600
 });
 
-// Paints a stored dark preference before hydration so the dashboard doesn't
-// flash light. Mirrors the storage key in components/staff-theme.tsx.
+// The two grounds are fixed by surface, not chosen: paper for marketing, auth
+// and public guest pages; ink for the staff product. Set on <html> so
+// portalled dialogs, popovers and toasts inherit the tokens, and painted
+// before hydration so /business never flashes paper.
+//
 // Must live in the root layout, not app/business/layout.tsx: a nested layout
 // renders on the client during soft navigation, and React never executes
-// script elements it creates in a client render.
-const THEME_BOOT_SCRIPT = `try{if(location.pathname.startsWith("/business")&&localStorage.getItem("crowbar-staff-theme")==="dark")document.documentElement.classList.add("dark")}catch(e){}`;
+// script elements it creates in a client render. (That constraint shaped the
+// retired theme boot script; the mechanism outlived the preference it served.)
+const GROUND_BOOT_SCRIPT = `try{if(location.pathname.startsWith("/business"))document.documentElement.classList.add("ground-ink")}catch(e){}`;
 
 export const metadata: Metadata = {
   title: "Crowbar",
@@ -39,15 +50,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
+    // `lang` is a neutral default here: the root layout has no tenant. Surfaces
+    // that resolve one set it from the venue's configured locale via
+    // <DocumentLocale /> — see components/document-locale.tsx.
     <html lang="en" className="min-h-screen bg-background">
       <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: GROUND_BOOT_SCRIPT }} />
       </head>
       <body
         className={`${displayFace.variable} ${bodyFace.variable} ${dataFace.variable} antialiased min-h-screen m-0 p-0 bg-background`}
       >
         <AuthProvider>{children}</AuthProvider>
-        <Toaster richColors position="top-right" />
+        {/* `richColors` is deliberately off: it paints its own green/red
+            palette from outside the token system, and a green success toast is
+            exactly the pattern the settlement rules forbid. */}
+        <Toaster position="top-right" />
       </body>
     </html>
   );

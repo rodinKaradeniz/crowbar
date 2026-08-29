@@ -2,7 +2,6 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { BusinessSidebar } from "@/components/business-sidebar";
 import { DashboardLayoutWrapper } from "@/components/dashboard-layout-wrapper";
 import { DashboardErrorBoundary } from "@/components/dashboard-error-boundary";
-import { StaffThemeInit } from "@/components/staff-theme";
 import { getCurrentUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { BusinessRouteGuard } from "@/components/business-route-guard";
@@ -38,7 +37,6 @@ export default async function BusinessLayout({
       taxLabel: business?.taxLabel,
     }}>
     <SidebarProvider defaultOpen={false}>
-      <StaffThemeInit />
       <BusinessSidebar />
       <SidebarInset>
         <DashboardLayoutWrapper

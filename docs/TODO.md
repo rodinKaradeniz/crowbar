@@ -435,6 +435,125 @@ the surface honest — do not grow stage 7 into stage 5 or 6 work.
   responsive behavior after the pass, not before it.
 - Keep the area-based Floor board unless the audit produces evidence against
   it. Geometry and drag-and-drop remain a separate later decision.
+### 7a. Backend gaps the rev-3 design assumes — surfaced by the stage 7 port
+
+The design canvases assume operational state the backend does not supply.
+Stage 7 is a presentation stage and does not add features, so each of these
+ships **honest** rather than simulated, and lands here with its trigger.
+`docs/DESIGN.md` carries the same table next to the severity rank it affects.
+
+- **Ticket target time.** `Order` has `placed_at` and a `status_timeline`, so
+  ticket *age* is computable, but nothing configures a target: no field on
+  `PreparationStation`, no business setting. Age therefore renders as a neutral
+  figure and the ageing rank cannot be applied. **This removes one of the four
+  exhaustive critical cases.** *Trigger:* a pilot venue states a service
+  standard it wants boards to hold to.
+- **Per-party quoted wait.** `queue_service.measured_wait_estimate` is a live
+  board-level median; `QueueEntry` stores no quote-at-join, and the quote moves
+  during service. Comparing a party's wait to the board's *current* estimate is
+  a different claim, so it is not made. **Removes a second critical case.**
+  *Trigger:* the queue needs to answer "is this guest past what we promised
+  them".
+- **Offline outbox.** The four socket hooks now report `connected` and
+  `lastContactAt`, so the offline bar shows real time-since-contact. There is
+  no local queue of work held while disconnected, so the bar omits the "held on
+  this device" count rather than inventing it. *Trigger:* staff devices need to
+  keep taking orders through a drop.
+- **"Right now" activity feed.** No live event feed exists.
+  `reporting_service.staff_actions` is a range report and is deliberately not a
+  general audit log — a platform-wide audit explorer is already deferred
+  post-MVP in `docs/PRODUCT.md`. The Overview feed panel ships empty or is
+  composed only from existing endpoints. *Trigger:* the audit explorer is
+  scheduled, or the overview is judged unusable without it.
+- **"Close the night".** No service-day close action exists anywhere in
+  `server/app/`. The sidebar-foot control and its dialog are not built.
+  *Trigger:* a pilot venue needs the night's figures written and boards stopped
+  as one action.
+- **Trial countdown.** No subscription or trial model on `Business`; omitted
+  from the zero state. *Trigger:* commercial terms exist.
+- **First-sign-in orientation panel.** No per-staff "seen orientation" flag.
+  *Trigger:* onboarding evidence says new staff need it.
+- **Account lockout and attempts remaining.** The Auth canvas's credential
+  ladder names attempts left and then locks the account for 15 minutes. There is
+  no lockout model: `auth_login_identity` in `server/app/core/rate_limit.py` is a
+  10-per-10-minute limit keyed on IP plus email, and a 401 carries no counter.
+  The sign-in screen ships rungs 1 and 2 (generic failure, then reveal the
+  password) and the locked rung against the real 429, counting down from the
+  server's own `Retry-After`. **"Two attempts left" is not shown** — the client
+  does not hold that counter, and a wrong number told to someone under pressure
+  is worse than none. *Trigger:* a venue reports credential-stuffing, or the
+  ladder is judged incomplete without the count.
+- **"Keep me signed in on this device".** The canvas puts this checkbox on its
+  own 44px row. `setTokenCookie` always issues a 7-day cookie, so the control
+  would change nothing. It is not rendered. *Trigger:* the session length needs
+  to differ between a shared bar laptop and a personal device — which is the
+  real reason to want it.
+- **Menu import.** The canvas's register panel and landing FAQ both said "upload
+  the menu as a spreadsheet". No import endpoint exists; the menu is entered in
+  the menu editor. Both copies were corrected. *Trigger:* onboarding evidence
+  says typing a full menu is the thing that stalls a new venue.
+- **Ticket printers.** The canvas's hardware FAQ said "ticket printers still
+  work if you want them". There is no printer integration anywhere. The claim
+  was removed. *Trigger:* a pilot venue will not drop its printer.
+- **Password reset expiry time.** The canvas's sent state names the wall-clock
+  expiry ("the link expires at 20:24"). `forgot-password` returns nothing about
+  the token, so the screen states the window ("works for one hour") instead.
+  *Trigger:* the endpoint returns an expiry.
+
+Consequence worth stating plainly: **three of the four exhaustive critical
+cases are not currently derivable.** Only "a live board that has lost its
+connection" is. Critical therefore appears on very few surfaces until targets
+and quotes exist. That is the correct honest outcome of the rank, not a defect
+in the port.
+
+### 7b. Open design questions from the rev-3 port
+
+Raised rather than answered locally, per rule zero — a value that is needed and
+missing is a design question, not an implementation choice.
+
+- **Categorical chart palette.** `crowbar-tokens.css` declares no multi-series
+  chart colours. `/business/insights` renders five guest segments and several
+  multi-series bars on raw Tailwind hex. `--chart-1..5` are aliased to brand
+  plus the neutral ramp as a provisional stand-in; Insights' own series colours
+  are held on raw hex as the one documented exception to the raw-hex check.
+- **Phone.** The product is designed at 1280+ and 1024×768 only. Stage 7's exit
+  gate below requires each pilot role to complete its core task on a phone
+  during service; there is no phone canvas, so **that clause is currently
+  unmet** and is carried here deliberately rather than quietly dropped.
+- **440px side-panel breakpoint.** Stated in §06 prose but absent from the token
+  block; used as an arbitrary variant in `components/ui/sheet.tsx`.
+- **`--field-invalid-ink` (`#D98B78`).** Added during the port because
+  `--field-invalid` measured 1.84:1 on ink and had no dark-ground pair, while
+  the product has forms on dark surfaces. Confirm it lands in the canonical
+  `crowbar-tokens.css` so the design file and the codebase do not diverge.
+- **Password strength and the attend colour.** The Auth canvas's notes say
+  "amber is a password that isn't strong enough yet". §08 of the System canvas
+  puts exactly that case on the form-validation channel instead — "'Too short —
+  10 characters minimum' is this, not attend". The two boards disagree, and §08
+  governs, so the strength meter uses the validation colour and a neutral, never
+  attend: a password hint must not read as a service alarm. Confirm which board
+  is authoritative.
+- **Password minimum: 10 or 12.** The canvas says 10 characters throughout;
+  `PASSWORD_MIN_LENGTH` and the server both enforce 12. The screens ship 12,
+  because a form promising a laxer rule than the API fails at submit instead of
+  at the field. Align the canvas or the server.
+- **Marketing measurements outside the token block.** The Landing canvas uses 31
+  distinct `clamp()` expressions and a set of editorial type sizes (14.5, 15.5,
+  16.5, 19, 20, 22px) that sit between the ten declared steps. They are
+  transcribed verbatim into a marketing layer in `client/app/globals.css` rather
+  than inlined, so nothing enters the codebase that the design did not set — but
+  they are not tokens, and the marketing surface is the one place where sizes
+  live outside `:root`. Confirm this is intended, or promote them.
+- **Terms, privacy and Impressum.** The canvas footer links all three; the
+  product has terms only as a dialog inside registration, and no privacy or
+  Impressum page. The links are not rendered rather than pointing nowhere. A
+  German GmbH operating a public site will need at least an Impressum.
+- **`bar_kitchen` navigation breadth.** The States canvas shows a bartender with
+  a three-item nav; the real role also holds `customers.view`, `floor.view`,
+  `queue.view`, `reservations.view`, `menu.edit` and `overview.view`. The nav
+  renders from the real capability matrix. Narrowing the role is a stage-6
+  permissions change, not a design one.
+
 - **Exit gate:** every retained surface follows one documented design contract,
   each pilot role can complete its core task on a phone during service, no
   screen carries a placeholder or dishonest state, and no functional behavior

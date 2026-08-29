@@ -144,8 +144,18 @@ actions — each over a chosen range with CSV export, and none of them a fiscal
 or accounting report. Insights survives an ML restart by serving its last
 result marked stale.
 
-After stage 6 come the interface redesign pass (7), the local release gate (8),
-deployment (9), the supervised pilot (10), and a mobile client (11).
+Stage 7, the interface redesign pass, is in progress. The design direction is
+now **closed**: [docs/DESIGN.md](docs/DESIGN.md) is the committed contract,
+ported from the locked rev-3 deliverable, and it owns the token layer, the
+three-tier severity rank and its qualification test, the primitive set, the six
+mandatory states, and the two fixed grounds. `client/lib/severity.ts` encodes
+the rank as a procedure — do not classify a severity inside a component. The
+retired dark-mode toggle is gone; grounds are fixed by surface. Backend gaps the
+design assumes, and the open design questions, are recorded in
+[docs/TODO.md](docs/TODO.md) §7a and §7b.
+
+After stage 7 come the local release gate (8), deployment (9), the supervised
+pilot (10), and a mobile client (11).
 [docs/TODO.md](docs/TODO.md) owns the exact 0–11 order, exit gates, and
 post-MVP deferrals.
 

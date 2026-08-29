@@ -13,7 +13,7 @@ import {
 } from "react-day-picker"
 
 import { cn } from "@/lib/utils"
-import { Button, buttonVariants } from "@/components/ui/button"
+import { Button, buttonVariants, resolveButtonVariant } from "@/components/ui/button"
 
 function Calendar({
   className,
@@ -56,12 +56,12 @@ function Calendar({
           defaultClassNames.nav
         ),
         button_previous: cn(
-          buttonVariants({ variant: buttonVariant }),
+          buttonVariants({ variant: resolveButtonVariant(buttonVariant) }),
           "size-(--cell-size) aria-disabled:opacity-50 p-0 select-none",
           defaultClassNames.button_previous
         ),
         button_next: cn(
-          buttonVariants({ variant: buttonVariant }),
+          buttonVariants({ variant: resolveButtonVariant(buttonVariant) }),
           "size-(--cell-size) aria-disabled:opacity-50 p-0 select-none",
           defaultClassNames.button_next
         ),

@@ -1474,6 +1474,74 @@ the ground is a reason not to write a project one.
 **References:** `.claude/skills/frontend-design/SKILL.md`, `docs/SKILLS.md`,
 `AGENTS.md`, `docs/RULES.md`, `docs/DESIGN.md`, `docs/TODO.md` (stage 7)
 
+## 2026-08-29 — The design direction closed on rev 3, and severity became a rank
+
+**Context:** Stage 7's stated deliverable was promoting `DESIGN.md` from a
+description of what exists into a committed contract. A completed external
+design — *Crowbar UI color and severity system*, rev 3, locked after three
+review passes — arrived to fill that slot: a token file plus six canvases
+(System, Landing, Auth, Dashboard, Tablet, States). The 2026-08-26 entry
+"stage 7 reopens the direction" is superseded by this one: the direction is
+now closed.
+
+**Decision:** The warm SRM "taproom" palette and its Libre Caslon / Hanken
+Grotesk / Spline Sans Mono typography are retired in favour of a bottle-green
+identity on a fixed paper/ink ground pair, with Archivo / Instrument Sans /
+IBM Plex Mono. Three consequences are load-bearing beyond the repaint:
+
+1. **Severity is a rank with an exhaustive qualification test**, not a palette.
+   Critical means a time-critical service failure happening now; attend means
+   before the night ends; neutral is the default and covers everything a day
+   away — par levels, variance, forecasts, and any number being lower than
+   someone hoped. The rank is encoded as a procedure in
+   `client/lib/severity.ts` so a tier is a function call against real backend
+   state rather than a per-component decision. Severity describes the item,
+   never the control that resolves it.
+2. **Grounds are fixed by surface, not chosen.** Paper for marketing, auth and
+   public guest pages; ink for the staff product. The `.dark` / `.theme-night`
+   dual-entry-point dark mode, the `crowbar-staff-theme` preference and its
+   header toggle were removed — a user-visible feature removal. The boot-script
+   mechanism survived because its original constraint still holds: a nested
+   layout renders on the client during soft navigation and React never executes
+   script elements it creates in a client render.
+3. **Rule zero.** No colour, size, spacing value, radius or duration may enter
+   the codebase that is not declared in the `:root` block. A value that is
+   needed and missing is a design question to raise, not an implementation
+   choice.
+
+One token was added to the locked set: `--field-invalid-ink` `#D98B78`.
+`--field-invalid` `#7A2414` measures 9.14:1 on paper but **1.84:1 on ink** and
+shipped with no dark-ground pair. Nothing rendered wrong, because it was only
+used on the paper auth screens — but the product has forms on dark surfaces
+(settings, side panels, dialogs, menu editor, filter bars) where validation
+would have been invisible. It is deliberately muted against
+`--critical-text-ink` `#F2604F` so a field error never reads as a service alarm
+on the same screen.
+
+**Consequences:** `docs/DESIGN.md` is now an authority to obey rather than a
+baseline to argue with, and `.claude/skills/frontend-design` was rewritten in
+the same change so it cannot contradict it. Aesthetic direction is no longer an
+open proposal for design or taste skills; they own craft *within* the system.
+
+Three of the four exhaustive critical cases — ticket past target, guest past
+quoted wait, device that cannot send orders — are **not derivable from the
+current schema**, so critical legitimately appears on very few surfaces. That
+is the honest outcome of the rank, not a gap in the port; `docs/TODO.md` §7a
+carries each with a trigger. Do not approximate them into existence: an
+approximated red is a lie about the night.
+
+Retired token names (`--brass`, `--lager`, `--dubbel`, `--porter`, `--oxblood`,
+`--marzen`, `--amber-pour`, `--chart-1..5`) survive briefly as **aliases onto
+new tokens**, not as old values, so the surfaces not yet rebuilt render in the
+new palette rather than transparently. They are deleted as each surface is
+ported. The severity-shaped ones alias to neutral on purpose: aliasing
+`--oxblood` to a red would have injected alarm colour the rank forbids onto
+count variance and dietary notes.
+
+**References:** `client/app/globals.css`, `client/lib/severity.ts`,
+`client/components/ui/`, `docs/DESIGN.md`,
+`.claude/skills/frontend-design/SKILL.md`, `docs/TODO.md` (§7, §7a, §7b)
+
 ## Entry Template
 
 ```markdown

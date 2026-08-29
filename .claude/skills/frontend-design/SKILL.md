@@ -1,6 +1,6 @@
 ---
 name: frontend-design
-description: Applies Crowbar's design contract when building or changing UI in this repo — the token layer, Radix/shadcn primitives, figure-first operational hierarchy, mandatory module-disabled and empty states, and the canonical formatting and copy rules. Use when adding pages, components, dialogs, sheets, or visual states to client/. Composes with user-level design and taste skills rather than excluding them: they own aesthetic direction and craft, this skill owns what must stay true in this codebase.
+description: Applies Crowbar's committed design contract when building or changing UI in this repo — rule zero (the token block), the three-tier severity rank and its qualification test, the primitive set, the six mandatory states, the two grounds, and the canonical formatting and copy rules. Use when adding pages, components, dialogs, sheets, or visual states to client/. Composes with user-level design and taste skills: they own craft within the system, this skill owns what must stay true in this codebase.
 ---
 
 # Frontend Design (Crowbar)
@@ -8,182 +8,235 @@ description: Applies Crowbar's design contract when building or changing UI in t
 `docs/DESIGN.md` is the authority; this skill is how you apply it while writing
 components. When the two disagree, DESIGN.md wins and you update this skill.
 
-**The aesthetic direction is open.** Stage 6 closed on 2026-08-26, which puts
-the repository at stage 7 — the interface redesign pass in `docs/TODO.md` whose
-stated deliverable is promoting `DESIGN.md` from a description of what exists
-into the committed contract. A different palette, type scale, density, or
-motion language is therefore a legitimate proposal, not a violation. What is
-**not** open is drifting into one per component: a direction changes in the
-token layer and in `DESIGN.md`, in one deliberate pass, or it does not change.
+**The aesthetic direction is settled.** The system is the locked Claude Design
+deliverable *Crowbar UI color and severity system*, rev 3, after three review
+passes. Stage 7 promoted `DESIGN.md` from a description of what exists into the
+committed contract, and this is that contract. Changing palette, type scale,
+density or motion is now a change to a settled system — argued, then landed in
+the token layer and `DESIGN.md` together, in one pass. It is never adopted by
+one component diverging from the rest.
 
-Outside that pass the job is unchanged — make new UI indistinguishable from UI
-that was always here.
+The job is to make new UI indistinguishable from UI that was always here.
 
-## Composing with user-level design skills
+## Rule zero, before anything else
 
-User-level skills installed under `~/.claude/skills/` are in scope for Crowbar
-work and are not overridden by this file. Compose them:
+The `:root` block in `client/app/globals.css` is the only source of truth.
 
-| They own | This skill owns |
-| --- | --- |
-| Aesthetic direction, palette and type proposals, layout and hierarchy craft, motion feel, component API shape, accessibility and performance review | The token mechanism, the state coverage that cannot be skipped, the canonical formatting helpers, the tenancy/module gate, and the compliance copy |
+> No colour, size, spacing value, radius or duration may enter the codebase
+> that is not declared in it. A raw hex, a magic px, an ad-hoc easing: all
+> three are bugs.
 
-Load whichever ones fit the task — direction and taste skills for a redesign or
-a greenfield surface, review and best-practice skills for a polish pass — then
-run the rules below over the result. The rules constrain *how* a direction is
-expressed in this codebase, not *which* direction is chosen.
+**A value that is needed and missing is a design question to raise, not an
+implementation choice.** Say so and stop; do not derive one that looks close.
 
-Two things they may never relax, because `docs/RULES.md` and `docs/PRODUCT.md`
-outrank every skill: the settlement and revenue vocabulary owned by
-`write-crowbar-operational-copy`, and honest empty, disabled, and failure
-states. A prettier screen that implies Crowbar processed a payment, or that
-hides an unimplemented capability behind convincing chrome, is a defect
-regardless of how good it looks.
+## The severity rank — the part that is easy to get wrong
+
+This is a semantic system, not a palette. It decides what a manager looks at
+first during service. A misapplied tier makes the product worse at its job than
+no colour at all, so this is the highest-risk thing you can touch.
+
+**The test, and nothing else picks the level:**
+
+> What does a bartender do about it, and when?
+
+Do not answer it by hand — the rank is encoded in `client/lib/severity.ts`.
+Call it. Add a derivation there, with its reasoning, rather than classifying
+inside a component.
+
+- **critical** — act now, this shift. Exhaustively: a ticket past its target
+  time, a guest waiting past the time they were quoted, a live board that has
+  lost its connection, a device that cannot send orders. Plus: a thing that is
+  broken right now (failed sign-in, dead link, a request that will not
+  complete).
+- **attend** — before the night ends, not in the next two minutes: a party with
+  no table assigned, a tab open past close, an item that will run out during
+  service, a ticket approaching target, a booking running late.
+- **neutral** — **the default**. Par levels, ordering, forecasts, variance,
+  counts, comparisons. Weight and position carry it; it gets no hue.
+
+**Never critical:** stock, money, next week, or a number being lower than
+someone hoped. A busy night is not critical. Three reds on one screen is
+already a lot; a fourth means the rank is being abused.
+
+**Never attend:** par levels and ordering.
+
+**If it does not clearly qualify, it is neutral.**
+
+Two rules that constrain layout, not just colour:
+
+1. **Severity describes the item, never the control that resolves it.** A late
+   ticket gets a red rail, a red badge and a red timer — and a standard primary
+   "Served".
+2. **Attend is subordinate.** Never above a critical item in a list, never a
+   full row background.
+
+Off the ladder entirely: **form validation** (`--field-invalid` on paper,
+`--field-invalid-ink` on ink — never a severity token) and **brand** (identity,
+primary action, active nav, live-and-healthy — green never means "good news
+about a number").
+
+Colour is never the sole carrier of meaning: pair every tone with a word.
+
+## Grounds
+
+Two, fixed by surface, never a preference: `paper` for landing, auth and public
+guest surfaces; `ink` (`.ground-ink`, set on `<html>`) for the staff product.
+Semantic roles (`--background`, `--muted-foreground`, `--critical-text`, …)
+re-resolve per ground, so a component almost never needs to know which one it
+is on. Do not reintroduce a dark-mode toggle; `.dark` is retired and inert.
 
 ## Service context — read this before laying anything out
 
-Staff surfaces are used **one-handed, mid-service, on a phone, standing up,
-with interruptions**. That is the design constraint that outranks elegance:
+Staff surfaces are used **mid-service, in low light, by someone being spoken
+to**. That constraint outranks elegance:
 
-- The primary action on a staff screen is reachable with a thumb and is not the
-  smallest target on the page.
-- A task interrupted halfway must survive. Do not build multi-step flows that
-  lose state when the host walks away and comes back.
+- The primary action is reachable without aiming and is not the smallest target
+  on the page. On tablet it sits bottom-right, inside the arc of a thumb.
+- A task interrupted halfway must survive.
 - The screen answers "what do I do next" in one glance — figures and status,
   not paragraphs.
-- Destructive or irreversible actions get confirmation, because a mistap during
-  a rush is the normal case, not the edge case.
+- Destructive or irreversible actions confirm, because a mistap during a rush
+  is the normal case.
+- **Nothing depends on hover.**
 
-Guest surfaces (`/reserve`, `/queue`, `/menu`, `/order`) are the opposite
-context: one-off, unfamiliar, often on a poor connection. Optimize them for
-clarity on first read.
-
-## The current direction — the stage 7 baseline
-
-This is what the app looks like today. Treat it as the starting point a
-redesign argues against, and as binding whenever you are not doing the
-redesign.
-
-
-- **Palette:** the warm SRM taproom scale — `pilsner` and `foam` as light
-  grounds, `lager` → `marzen` → `dubbel` as the ordered gold-to-amber accent
-  range, `porter` as the dark ground, `brass` for rules and dot leaders,
-  `oxblood` for destructive. Tokens live in `client/app/globals.css`. The
-  green palette was retired deliberately; reintroducing it needs the same
-  argument as any other new direction, not a quiet revert.
-- **Type:** Libre Caslon Text is the display face (`--font-display-face`, used
-  by `.page-title` / `.page-title-lg` / `.page-title-xl`); Hanken Grotesk is
-  the body face; Spline Sans Mono carries operational figures, prices, counts,
-  and times via `.figures`. All three are wired in `client/app/layout.tsx`.
-- **Primitives:** Radix + shadcn/ui with Tailwind 4, in
-  `client/components/ui/` (button, dialog, sheet, popover, select, table, tabs,
-  card, sidebar, chart, calendar, command, …). Reuse these before writing a new
-  primitive.
-- **Themes:** one dark visual language, two entry points. `.theme-night` is
-  forced on public guest pages by `client/components/night-theme.tsx`; `.dark`
-  is the staff-dashboard preference owned by
-  `client/components/staff-theme.tsx`, persisted as `crowbar-staff-theme` and
-  applied before hydration so there is no light flash. Both read the same warm
-  dark token block — do not introduce a second dark-mode concept.
-- **Shared motifs:** `.page-container` / `.page-pad` for page roots,
-  `.page-title` for dashboard headings, `.leader-dots` for paired
-  name/value rows (menu lines, totals, hours), plus `.eyebrow`,
-  `.rule-double`, `.coaster`, `.glow-pulse`, and `.fade-rise`. Reach for these
-  before inventing an equivalent.
-- **Charts:** `var(--chart-1)` through `var(--chart-5)`. Service-type colors are
-  tenant data and are never replaced by chart tokens.
-
-Operational hierarchy is **figure-first**: numbers and charts dominate, chrome
-recedes, labels stay short. Do not put explanatory prose next to a figure when
-a label or accessible description does the job.
+Guest surfaces (`/reserve`, `/queue`, `/menu`, `/order`) are the opposite: one
+-off, unfamiliar, often on a poor connection. Optimise for clarity on first
+read.
 
 ## Rules
 
-1. **Tokens, never hex.** No literal colors and no arbitrary Tailwind values
-   (`bg-[#f4f1ea]`) where a semantic token exists. A new tone is added to
-   `globals.css` under a semantic name, never inlined at a call site. This rule
-   survives a change of direction unchanged — a new palette means new token
-   *values*, and the call sites should not have to know it happened.
+1. **Tokens, never hex.** No literal colours, no arbitrary Tailwind values
+   (`bg-[#f4f1ea]`, `p-[13px]`) where a token exists. A new tone is a design
+   question, not a call-site decision. Prefer a canonical utility
+   (`text-text-muted`) over `text-[var(--text-muted)]` — if the token is not in
+   the `@theme` bridge in `globals.css` and you need it, add it there.
 
-2. **Every staff surface needs a module-disabled state.** Subscribable features
-   are gated on the backend route *and* the staff page. Render
-   `client/components/module-disabled.tsx` — do not invent a second "not
-   enabled" treatment, and do not let a disabled module render an empty
-   dashboard that looks broken.
+   The **marketing and auth surfaces** are the one exception, and a bounded one:
+   the Landing and Auth canvases set fluid sizes that sit between the ten
+   declared type steps. Those live transcribed in the `.mkt-*` / `.auth-*` layer
+   of `globals.css`, never inline. Product surfaces never use those classes.
 
-3. **Every collection needs an empty state.** Use
-   `client/components/empty-state.tsx` with an honest title, and only an action
-   the user can actually complete. A blank panel is a bug report waiting to
-   happen. Never fake data to avoid designing this.
+2. **Reuse the primitives.** `client/components/ui/` holds the implementation
+   of §06 — button, input, label, badge, table, figure, sheet (side panel),
+   dialog, skeleton. Each carries its spec in a header comment. Do not write a
+   second status object: the **badge is the only one**, and there are no dots
+   in nav, no coloured pills, no icon badges.
 
-4. **Format through the canonical helpers, never raw values.** Money goes
-   through `client/lib/money.ts` (`formatMoney`, `toMoney`); dates and times go
-   through `client/lib/business-time.ts` (`formatBusinessTime`,
-   `formatBusinessDate`, `formatBusinessDateTime`) with the **business
-   timezone**, not the browser's; quantities go through `client/lib/units.ts`
-   (`bottle` and `keg` are milliliters — never special-case one of them).
-   Tenant country, currency, locale, timezone, and tax label come from
-   `client/contexts/regional-context.tsx`; do not hard-code EUR, `de-DE`, or
-   `Europe/Berlin` into a reusable component.
+3. **All six states, every data surface.** Loading, empty, module-disabled,
+   permission-denied, error, offline. A surface missing any is unfinished. Use
+   `empty-state.tsx`, `module-disabled.tsx`, `role-restricted.tsx` — and keep
+   module-disabled and permission-denied distinct, because "your venue has not
+   bought this" and "your job does not include this" are different answers.
 
-5. **Accessible interaction patterns replaced the browser dialogs.**
-   Destructive product actions use
-   `client/components/confirmation-dialog.tsx`. Native `alert()` and
-   `confirm()` were deliberately removed in Stage 1 and must not return. Keep
-   semantic controls, labels, visible focus, keyboard operation, correct ARIA
-   state, and legible contrast.
+4. **Honest emptiness.** Empty figures are **em-dashes, never zeroes** — a zero
+   is a claim about a night that has not happened. Never fake data to avoid
+   designing an empty state. Never simulate a capability that does not exist;
+   the MVP hides unsupported states rather than faking them.
+
+   This extends to **copy, including marketing copy**: a page may not claim a
+   capability the product lacks. It is the same rule as the settlement
+   vocabulary, applied to features, and it outranks the canvas. When the design
+   shows a state the backend cannot supply — a countdown, a count, an
+   "attempts remaining" — ship the surface without it and record the gap in
+   `docs/TODO.md` §7a. Several landing and auth strings were corrected on
+   exactly this ground; do not restore them from the canvas.
+
+5. **Format through the canonical helpers.** Money via `client/lib/money.ts`;
+   dates and times via `client/lib/business-time.ts` with the **business
+   timezone**, not the browser's; quantities via `client/lib/units.ts`
+   (`bottle` and `keg` are milliliters). Tenant country, currency, locale,
+   timezone and tax label come from `client/contexts/regional-context.tsx`. Do
+   not hard-code EUR, `de-DE` or `Europe/Berlin` into a reusable component —
+   the German formatting the design shows is *output*, not a literal.
 
 6. **Server Components by default.** `"use client"` only at genuinely
    interactive boundaries; authenticated initial data is fetched server-side.
 
-7. **Motion is restrained and reversible.** Scroll-linked effects update refs
-   rather than React state per frame, and everything becomes static under
-   `prefers-reduced-motion`. Reuse `.fade-rise` / `.glow-pulse` before adding
-   keyframes.
+7. **Motion is the declared five, and nothing else.** 120ms hover/press, 180ms
+   enter, 2s live pulse, 1.4s skeleton breathe, 2s offline alarm. All off under
+   `prefers-reduced-motion`. Scroll-linked effects update refs, not state.
 
-8. **Mobile may simplify, not omit.** A layout can degrade a desktop
-   interaction into a plain list or a sheet (Floor does exactly this), but the
-   underlying action must remain reachable.
+8. **Two targets, not three.** Desktop 1280+ with the 228px rail; tablet
+   1024×768 with bottom-bar nav and a **48px floor on every control**. There is
+   no phone design — if a task needs one, that is a design question.
+
+9. **Destructive actions are placed, not just styled.** Never adjacent to a
+   frequent action, and always confirmed via
+   `client/components/confirmation-dialog.tsx`. Native `alert()`/`confirm()`
+   were removed in Stage 1 and must not return.
 
 ## Copy rules that are not negotiable
 
 Settlement copy is **Settle externally** / **Settled externally**. Never
-"payment successful", card-terminal imagery, receipt or fiscal language, or any
-cue implying Crowbar moved money. Never label uncollected order totals
-"revenue". `write-crowbar-operational-copy` owns this in full — load it when
-writing user-facing strings.
+"payment successful", card-terminal or receipt imagery, fiscal language, or any
+cue implying Crowbar moved money — and **no green success-tick pattern**. Never
+label an uncollected order total "revenue"; money the venue took is **sales
+value**, the dashboard figure is **ordered today**.
 
-## When NOT to use
+Staff roles are `owner`, `manager`, `host_server` ("Host / server"),
+`bar_kitchen` ("Bar / kitchen"), `inventory_operator` — never an invented set,
+including in marketing copy.
 
-- Design work in another repository, where only the user-level design skills apply.
-- Pure logic, data, or API changes with no visual surface.
+`write-crowbar-operational-copy` owns this in full — load it when writing
+user-facing strings. It and `docs/RULES.md` / `docs/PRODUCT.md` outrank every
+skill, including this one.
+
+## Composing with user-level design skills
+
+User-level skills under `~/.claude/skills/` are in scope and are not overridden
+by this file.
+
+| They own | This skill owns |
+| --- | --- |
+| Layout and hierarchy craft within the system, composition, information design, accessibility and performance review, component API shape | Rule zero, the severity rank, the primitive set, the state coverage that cannot be skipped, the canonical formatting helpers, the tenancy/module gate, and the compliance copy |
+
+What changed with stage 7: they no longer own *aesthetic direction*. The
+palette, type scale, spacing, radius, elevation and motion are settled. They
+own how well a screen is composed inside those constraints.
 
 ## Anti-patterns
 
-- Changing a font, color, or spacing scale inside one component instead of in
-  `globals.css` and `docs/DESIGN.md`. Two design languages running at once is
-  the failure mode, not ambition.
+- Inventing a colour, size or duration because the token block lacks one.
+- Classifying a severity inside a component instead of in `lib/severity.ts`.
+- Red on a declining figure, on below-par stock, or on a count variance.
+- A severity-coloured button on the item it resolves.
+- A second status object — a dot, a pill, a chip.
 - Bespoke modal/menu/table implementations when `components/ui/` has one.
-- Inline hex or arbitrary Tailwind values where a token exists.
 - Rendering a raw `Date`, a raw currency number, or a browser-local time.
-- Shipping the happy path with no empty state and no module-disabled state.
-- A confirmation-free destructive action, or a native `confirm()`.
+- A zero where nothing has happened yet.
+- Shipping the happy path with no empty and no module-disabled state.
+- Reintroducing a dark-mode toggle, or a second dark concept.
 - Prose padding around an operational figure.
-- Simulating a capability that does not exist yet. The MVP hides unsupported
-  states rather than faking them (`docs/HISTORY.md`, 2026-08-14).
+- Copying a claim out of a canvas without checking the backend supports it.
+- A disabled control drawn as a faded version of the enabled one.
 
 ## Verifying
 
 ```bash
-cd client && npm run lint && npm run test:run && npm run build
+cd client
+npm run lint && npm run test:run && npm run build
+
+# Rule zero — the check that proves the system held rather than drifted.
+grep -rEn "#[0-9a-fA-F]{3,8}\b" --include="*.tsx" --include="*.ts" --include="*.css" \
+  app components lib contexts hooks | grep -v "app/globals.css"
 ```
 
-Run `npm run build` whenever routing, server/client boundaries, or config could
-be affected. Drive the surface in `./scripts/dev.sh` at a phone width before
+The only sanctioned exception is the held chart-series colours in
+`app/business/insights/` — see the open design questions in `docs/DESIGN.md`.
+
+Drive the surface in `./scripts/dev.sh` at **1280 and at 1024×768** before
 claiming a staff screen works.
+
+## When NOT to use
+
+- Design work in another repository, where only the user-level design skills
+  apply.
+- Pure logic, data, or API changes with no visual surface.
 
 ## Reference
 
-`docs/DESIGN.md` (authority), `client/app/globals.css` (tokens and utilities),
-`docs/PRODUCT.md` (vocabulary and what must not be implied),
-`docs/TODO.md` (known content gaps — the landing FAQ copy is still draft).
+`docs/DESIGN.md` (authority) · `client/app/globals.css` (tokens) ·
+`client/lib/severity.ts` (the rank as a procedure) ·
+`client/components/ui/` (the primitives, each with its spec) ·
+`docs/PRODUCT.md` (vocabulary and what must not be implied) ·
+`docs/TODO.md` (backend gaps the design assumes).

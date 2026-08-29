@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { SocketStatus } from "@/hooks/socket-status";
 
 function getWsBase(): string {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -36,8 +37,9 @@ const MAX_DELAY = 30_000;
 export function useFloorPlanSocket(
   businessId: string,
   onInvalidate: () => void,
-): { connected: boolean } {
+): SocketStatus {
   const [connected, setConnected] = useState(false);
+  const [lastContactAt, setLastContactAt] = useState<number | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const delayRef = useRef(BASE_DELAY);
@@ -56,11 +58,13 @@ export function useFloorPlanSocket(
     socketRef.current = socket;
 
     socket.onopen = () => {
+      setLastContactAt(Date.now());
       socket.send(JSON.stringify({ type: "authenticate", token }));
       setConnected(true);
       delayRef.current = BASE_DELAY;
     };
     socket.onmessage = (event) => {
+      setLastContactAt(Date.now());
       try {
         const message = JSON.parse(event.data as string) as { type?: string };
         if (message.type === "floor_plan_updated") onInvalidateRef.current();
@@ -95,5 +99,5 @@ export function useFloorPlanSocket(
     };
   }, [connect]);
 
-  return { connected };
+  return { connected, lastContactAt };
 }

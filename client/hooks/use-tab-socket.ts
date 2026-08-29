@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { SocketStatus } from "@/hooks/socket-status";
 
 function wsBase(): string {
   const configured = process.env.NEXT_PUBLIC_API_URL;
@@ -17,8 +18,9 @@ async function fetchToken(): Promise<string | null> {
   } catch { return null; }
 }
 
-export function useTabSocket(businessId: string, onInvalidate: () => void): { connected: boolean } {
+export function useTabSocket(businessId: string, onInvalidate: () => void): SocketStatus {
   const [connected, setConnected] = useState(false);
+  const [lastContactAt, setLastContactAt] = useState<number | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const delayRef = useRef(1000);
@@ -32,12 +34,16 @@ export function useTabSocket(businessId: string, onInvalidate: () => void): { co
     const socket = new WebSocket(`${wsBase()}/ws/tabs/${businessId}`);
     socketRef.current = socket;
     socket.onopen = () => {
+      setLastContactAt(Date.now());
       socket.send(JSON.stringify({ type: "authenticate", token }));
       setConnected(true);
       delayRef.current = 1000;
       callbackRef.current();
     };
-    socket.onmessage = () => callbackRef.current();
+    socket.onmessage = () => {
+      setLastContactAt(Date.now());
+      callbackRef.current();
+    };
     socket.onclose = () => {
       setConnected(false);
       socketRef.current = null;
@@ -61,5 +67,5 @@ export function useTabSocket(businessId: string, onInvalidate: () => void): { co
     };
   }, [connect]);
 
-  return { connected };
+  return { connected, lastContactAt };
 }

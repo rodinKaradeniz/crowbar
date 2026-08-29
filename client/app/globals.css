@@ -1,365 +1,838 @@
 @import "tailwindcss";
+
+/* REMOVED IN PHASE 2, with the primitives that use it. The 64 live
+   animate-in / fade- / zoom- / slide- classes are all overlay enter/exit on
+   shadcn dialog, sheet, popover, select and tooltip — surfaces §06 rebuilds on
+   `--dur-enter` / `--ease-enter`. Kept until then so unported overlays keep
+   their transitions; it introduces no new value into work written here. */
 @import "tw-animate-css";
 
+/* The retired `.dark` class is never applied to <html> any more — the two
+   grounds are fixed by surface, not chosen. This variant is kept deliberately
+   INERT so the 72 remaining `dark:` utilities (which carry retired-palette
+   intent, e.g. `dark:text-yellow-500`) match nothing and are deleted with
+   their surfaces. Removing the line instead would hand `dark:` back to
+   Tailwind's built-in prefers-color-scheme and silently re-activate the old
+   dark styling on any machine set to dark. */
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * ════════════════════════════════════════════════════════════════════════════
+ * Crowbar design system — rev 3 · "the paper it replaces"
+ *
+ * The `:root` block below is a verbatim port of `crowbar-tokens.css` from the
+ * locked Claude Design deliverable, plus exactly one addition
+ * (`--field-invalid-ink`, see the Form-validation group).
+ *
+ * RULE ZERO — no colour, size, spacing value, radius or duration may enter
+ * this codebase that is not declared in the `:root` block. A raw hex, a magic
+ * px, an ad-hoc easing: all three are bugs. A value that is needed and missing
+ * is a DESIGN QUESTION to raise, not an implementation choice.
+ *
+ * `docs/DESIGN.md` is the authority and carries the severity rank, the
+ * component specs and the contrast measurements. Read it before changing
+ * anything here.
+ *
+ * TWO GROUNDS, FIXED BY SURFACE — not a user preference:
+ *   :root        paper (#F6F4EE) — marketing, auth, public guest surfaces.
+ *                The owner researches this at 2pm at a desk.
+ *   .ground-ink  ink   (#14140F) — the staff product under /business.
+ *                The staff use it at 1am in a room lit by candles.
+ * The class is set on <html> (so portalled dialogs, popovers and toasts
+ * inherit it) by the boot script in app/layout.tsx, keyed on pathname. It
+ * replaces the retired `.dark` / `.theme-night` toggle — see docs/HISTORY.md.
+ * ════════════════════════════════════════════════════════════════════════════
+ */
+
+/* ═══ CROWBAR TOKENS · the only source of truth ═══════════════════════════ */
+:root {
+  /* ── Grounds ───────────────────────────────────────────────────────────── */
+  --ink: #14140f;              /* product ground; marketing type              */
+  --ink-deep: #0f0f0b;         /* deepest well, below ground                  */
+  --ink-shade: #181811;        /* inset trough                                */
+  --surface: #1b1b14;          /* panels, rail, tables                        */
+  --surface-2: #20201a;        /* raised one step                             */
+  --surface-3: #26261e;        /* row hover; also the faintest ink hairline   */
+  --surface-4: #2a2a22;
+  --surface-raised: #33332a;   /* active nav item                             */
+  --paper: #f6f4ee;            /* marketing + auth ground                     */
+  --paper-raised: #fbfaf6;
+  --paper-tint: #efede5;
+  --paper-tint-2: #f1efe7;
+  --white: #ffffff;
+  --white-warm: #fffdf8;       /* input field ground                          */
+
+  /* ── Text on ink ───────────────────────────────────────────────────────── */
+  --text-on-ink: #f6f4ee;      /* 15.6:1 on ink                               */
+  --text-on-ink-2: #d8d6c8;
+  --text-on-ink-muted: #b8b6a8;/* 9.06:1 on ink · 8.48:1 on surface           */
+  --text-on-ink-faint: #7a7a6e;
+  --text-on-ink-dim: #5a5a4a;
+  --text-on-ink-dimmer: #55554a;
+
+  /* ── Text on paper ─────────────────────────────────────────────────────── */
+  --text: #14140f;
+  --text-body: #3c3b31;
+  --text-secondary: #4a4a3f;
+  --text-muted: #6b6a5e;       /* 4.96:1 on paper                             */
+  --text-faint: #8a8878;
+  --text-faintest: #a5a296;
+
+  /* ── Lines ─────────────────────────────────────────────────────────────── */
+  --line: #dcd8cc;
+  --line-soft: #e7e4da;
+  --line-soft-2: #e2dfd4;
+  --line-dust: #ddd9cd;
+  --line-shell: #e6e3d9;
+  --line-strong: #c9c4b4;
+  --line-ink: #2e2e25;
+  --line-ink-strong: #3a3a2f;
+
+  /* ── Brand · identity and primary action, never a severity ─────────────── */
+  --brand-deep: #0c5238;       /* paper text on it: 8.38:1                    */
+  --brand-deep-hover: #14764f;
+  --brand-deep-alt: #175e52;
+  --brand-lit: #7cc9a0;        /* ink text on it: 9.43:1                      */
+  --brand-lit-hover: #96d8b4;
+  --brand-lit-soft: #9cc4af;
+  --brand-lit-faint: #bfd8ca;
+  --brand-wash: #f1f6f2;
+  --brand-wash-2: #eaf2ed;
+  --brand-tint-ink: #2a3b33;
+  --brand-veil: rgba(241, 246, 242, 0.4);
+  --focus-ring-paper: rgba(124, 201, 160, 0.55);
+  --focus-ring-ink: rgba(124, 201, 160, 0.24);
+
+  /* ── Severity · critical · "act now" ───────────────────────────────────── */
+  --critical-fill: #c42918;       /* badge + bar fills, both grounds          */
+  --critical-on-fill: #fff1ee;    /* 5.19:1 on critical-fill                  */
+  --critical-text-ink: #f2604f;   /* 5.77:1 ink · 5.41:1 surface              */
+  --critical-text-paper: #c42918; /* 5.19:1 on paper                          */
+  --critical-tint-ink: #221310;
+  --critical-tint-ink-2: #331914;
+  --critical-line-ink: #4a1c14;
+  --critical-wash-paper: #fbeeea;
+
+  /* ── Severity · attend · "before the night ends" ────────────────────────── */
+  --attend-fill: #d98a2b;         /* badge fills, both grounds                */
+  --attend-on-fill: #1a1206;      /* 6.73:1 on attend-fill                    */
+  --attend-text-ink: #e5a24e;     /* 8.45:1 ink · 7.92:1 surface              */
+  --attend-text-paper: #a2600f;   /* 4.53:1 paper · 4.90:1 white              */
+  --attend-tint-ink: #3a2c16;
+  --attend-tint-ink-soft: #1e1710;
+  --attend-line-ink: #6a4a1e;
+
+  /* ── Form validation · a form state, NOT a severity rank ───────────────── */
+  --field-invalid: #7a2414;       /* 8.62:1 on paper · 9.15:1 on white        */
+  /* Added while porting: --field-invalid has no dark-ground pair (1.84:1 on
+     ink), and the product has forms on ink and surface — settings, side
+     panels, dialogs, the menu editor, filter bars — where validation would be
+     invisible. Deliberately muted against --critical-text-ink (#F2604F) so a
+     field error never reads as a service alarm on the same screen. */
+  --field-invalid-ink: #d98b78;   /* ink 6.96:1 · surface 6.52:1              */
+  --field-invalid-wash: #fbeeea;
+  --field-invalid-ring: rgba(122, 36, 20, 0.35);
+
+  /* ── Scrims and elevation ──────────────────────────────────────────────── */
+  --scrim-55: rgba(10, 10, 7, 0.55);
+  --scrim-60: rgba(10, 10, 7, 0.6);
+  --scrim-70: rgba(0, 0, 0, 0.7);
+  --scrim-75: rgba(0, 0, 0, 0.75);
+  --scrim-80: rgba(0, 0, 0, 0.8);
+  --scrim-ink: rgba(20, 20, 15, 0.94);
+  --paper-veil: rgba(246, 244, 238, 0.93);
+  --paper-veil-30: rgba(246, 244, 238, 0.3);
+  --e0: none;
+  --e1: 0 24px 60px -12px rgba(20, 20, 15, 0.28);
+
+  /* ── Type · families ───────────────────────────────────────────────────── */
+  /* The three -face variables are injected by next/font/google in
+     app/layout.tsx, which self-hosts the woff2 at build time — that is how the
+     design's "no third-party font CDN at request time" requirement is met.
+     Every family keeps its declared fallback stack so a failed load degrades
+     rather than breaks. */
+  --font-display: var(--font-display-face), "Helvetica Neue", Arial, sans-serif;
+  --font-ui: var(--font-body-face), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-data: var(--font-data-face), ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* ── Type · the ten steps (family / size / line-height / tracking / weight) */
+  --d1-family: var(--font-display); --d1-size: 92px;     --d1-lh: 0.94; --d1-ls: -0.038em; --d1-weight: 800;
+  --d2-family: var(--font-display); --d2-size: 60px;     --d2-lh: 1;    --d2-ls: -0.036em; --d2-weight: 800;
+  --d3-family: var(--font-display); --d3-size: 32px;     --d3-lh: 1.05; --d3-ls: -0.028em; --d3-weight: 700;
+  --t1-family: var(--font-display); --t1-size: 21px;     --t1-lh: 1.15; --t1-ls: -0.026em; --t1-weight: 700;
+  --t2-family: var(--font-display); --t2-size: 16px;     --t2-lh: 1.25; --t2-ls: -0.02em;  --t2-weight: 700;
+  --body-family: var(--font-ui);    --body-size: 16px;   --body-lh: 1.5;  --body-ls: 0;      --body-weight: 400;
+  --ui-family: var(--font-ui);      --ui-size: 14px;     --ui-lh: 1.45;   --ui-ls: 0;        --ui-weight: 400;
+  --data-family: var(--font-data);  --data-size: 13.5px; --data-lh: 1.4;  --data-ls: 0;      --data-weight: 400;
+  --label-family: var(--font-data); --label-size: 10.5px; --label-lh: 1.2; --label-ls: 0.14em; --label-weight: 500;
+  --micro-family: var(--font-data); --micro-size: 9.5px;  --micro-lh: 1.2; --micro-ls: 0.16em; --micro-weight: 500;
+
+  /* ── Space · base 4, named by role ─────────────────────────────────────── */
+  --space-4: 4px;    /* icon to label                */
+  --space-8: 8px;    /* inside a badge               */
+  --space-12: 12px;  /* table cell gap               */
+  --space-16: 16px;  /* panel padding (product)      */
+  --space-24: 24px;  /* block separation             */
+  --space-32: 32px;  /* content gutter               */
+  --space-48: 48px;  /* section break (product)      */
+  --space-96: 96px;  /* section break (marketing)    */
+
+  /* ── Radius · a radius means you can act on it ─────────────────────────── */
+  --radius-0: 0;      /* surfaces, rows         */
+  --radius-2: 2px;    /* badges                 */
+  --radius-3: 3px;    /* inputs, buttons, tiles */
+  --radius-4: 4px;    /* overlays               */
+  --radius-full: 999px;
+
+  /* ── Motion · off entirely under prefers-reduced-motion ────────────────── */
+  --dur-press: 120ms;   --ease-press: ease;
+  --dur-enter: 180ms;   --ease-enter: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-breathe: 1400ms;
+  --dur-pulse: 2000ms;
+  --dur-alarm: 2000ms;
+
+  /* ── Targets ───────────────────────────────────────────────────────────── */
+  --control-desktop-min: 34px;
+  --control-desktop: 44px;
+  --control-tablet-min: 48px;   /* floor for every tablet control */
+  --row-desktop: 44px;
+  --row-tablet: 56px;
+  --tile-floor: 118px;
+  --ticket-clear: 60px;
+  --bottom-nav: 76px;
+  --rail: 228px;
+  --side-panel: 400px;
+  --offline-bar: 38px;
+  --grid-marketing: 1360px;
+  --bp-desktop: 1280px;
+}
+
+/*
+ * ── Semantic roles · PAPER ground ───────────────────────────────────────────
+ * These are role names, not new values — every one resolves to a token above.
+ * They exist so the ~37k LOC of existing Tailwind call sites (`bg-background`,
+ * `text-muted-foreground`, `border-border`, …) keep working while surfaces are
+ * ported one at a time, and so a surface never has to know which ground it is
+ * on. Redefined wholesale under `.ground-ink` below.
+ */
+:root {
+  --background: var(--paper);
+  --foreground: var(--text);
+  --card: var(--paper-raised);
+  --card-foreground: var(--text);
+  --popover: var(--paper-raised);
+  --popover-foreground: var(--text);
+  --primary: var(--brand-deep);
+  --primary-hover: var(--brand-deep-hover);
+  --primary-foreground: var(--paper);
+  --secondary: var(--paper-tint);
+  --secondary-foreground: var(--text);
+  --muted: var(--paper-tint-2);
+  --muted-foreground: var(--text-muted);
+  --accent: var(--paper-tint);
+  --accent-foreground: var(--text);
+  --border: var(--line);
+  --border-strong: var(--line-strong);
+  --input: var(--line-strong);
+  --input-background: var(--white-warm);
+  --ring: var(--focus-ring-paper);
+  --scrim: var(--scrim-55);
+  /* Disabled is flat: no border contrast, no fill, no hover — §06. Never a
+     translucent version of the enabled control. */
+  --control-disabled: var(--line-shell);
+  --control-disabled-foreground: var(--text-faintest);
+
+  /* Severity, resolved for this ground. `--destructive` is an alias kept for
+     unported shadcn call sites; new work uses the severity names and must
+     pass the qualification test in docs/DESIGN.md first. */
+  --critical-text: var(--critical-text-paper);
+  --critical-tint: var(--critical-wash-paper);
+  --attend-text: var(--attend-text-paper);
+  --attend-tint: var(--paper-tint);
+  --field-invalid-text: var(--field-invalid);
+  --destructive: var(--critical-fill);
+  --destructive-foreground: var(--critical-on-fill);
+
+  --sidebar: var(--paper-tint);
+  --sidebar-foreground: var(--text);
+  --sidebar-primary: var(--brand-deep);
+  --sidebar-primary-foreground: var(--paper);
+  --sidebar-accent: var(--paper-tint-2);
+  --sidebar-accent-foreground: var(--text);
+  --sidebar-border: var(--line);
+  --sidebar-ring: var(--focus-ring-paper);
+}
+
+/*
+ * ── Semantic roles · INK ground (the staff product) ─────────────────────────
+ * Set on <html> for /business so portalled overlays inherit it.
+ */
+.ground-ink {
+  --background: var(--ink);
+  --foreground: var(--text-on-ink);
+  --card: var(--surface);
+  --card-foreground: var(--text-on-ink);
+  --popover: var(--surface-2);
+  --popover-foreground: var(--text-on-ink);
+  --primary: var(--brand-lit);
+  --primary-hover: var(--brand-lit-hover);
+  --primary-foreground: var(--ink);
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--text-on-ink);
+  --muted: var(--surface-3);
+  --muted-foreground: var(--text-on-ink-muted);
+  --accent: var(--surface-3);
+  --accent-foreground: var(--text-on-ink);
+  --border: var(--line-ink);
+  --border-strong: var(--line-ink-strong);
+  --input: var(--line-ink-strong);
+  --input-background: var(--ink-shade);
+  --ring: var(--focus-ring-ink);
+  --scrim: var(--scrim-70);
+  --control-disabled: var(--surface-2);
+  --control-disabled-foreground: var(--text-on-ink-dim);
+
+  --critical-text: var(--critical-text-ink);
+  --critical-tint: var(--critical-tint-ink);
+  --attend-text: var(--attend-text-ink);
+  --attend-tint: var(--attend-tint-ink);
+  --field-invalid-text: var(--field-invalid-ink);
+  --destructive: var(--critical-fill);
+  --destructive-foreground: var(--critical-on-fill);
+
+  --sidebar: var(--surface);
+  --sidebar-foreground: var(--text-on-ink);
+  --sidebar-primary: var(--brand-lit);
+  --sidebar-primary-foreground: var(--ink);
+  --sidebar-accent: var(--surface-raised);
+  --sidebar-accent-foreground: var(--text-on-ink);
+  --sidebar-border: var(--line-ink);
+  --sidebar-ring: var(--focus-ring-ink);
+}
+
+/*
+ * ── Retired token names · REMOVED IN PHASE 7 ────────────────────────────────
+ * 87 call sites across 21 unported files still name the retired "taproom"
+ * tokens. They are ALIASED onto new tokens rather than left undefined: an
+ * undefined var() renders transparent, so deleting the names outright would
+ * have quietly broken 21 surfaces that this pass has not reached yet.
+ *
+ * This is not a compatibility shim — no retired VALUE survives anywhere. Each
+ * alias resolves to a role that re-resolves per ground, so an unported surface
+ * renders in the new palette rather than the old one. They are deleted in
+ * Phase 7 as each surface is rebuilt; `grep -rn "brass\|lager\|dubbel" client`
+ * is the removal checklist.
+ *
+ * The severity-shaped ones are mapped to NEUTRAL on purpose. `--oxblood` marks
+ * count variance and dietary notes today; under the rev-3 rank neither is a
+ * time-critical service failure, and §08 is explicit that anything not clearly
+ * qualifying is neutral. Aliasing it to a red would inject alarm colour the
+ * rank forbids, ahead of the Phase 2.3 audit that assigns real tiers.
+ */
+:root {
+  --brass: var(--muted-foreground);
+  --brass-deep: var(--muted-foreground);
+  --lager: var(--primary);        /* was "available" / live-and-healthy → brand */
+  --marzen: var(--muted-foreground);
+  --dubbel: var(--primary);       /* was the interactive primary on light */
+  --porter: var(--ink);
+  --oxblood: var(--muted-foreground);
+  --amber-pour: var(--muted-foreground);
+  --linen: var(--paper);
+  --walnut: var(--surface);
+  --radius: var(--radius-3);
+
+  /* Provisional. The token file declares no categorical chart palette, which
+     is an open DESIGN QUESTION (see docs/DESIGN.md). These five are declared
+     tokens only — brand plus the neutral ramp — so the overview breakdown
+     renders legibly without inventing colour. They are not a sanctioned
+     series palette and must not be reused. */
+  --chart-1: var(--brand-deep);
+  --chart-2: var(--brand-lit-soft);
+  --chart-3: var(--line-strong);
+  --chart-4: var(--text-muted);
+  --chart-5: var(--text-faint);
+}
+
+/*
+ * ── Tailwind 4 theme bridge ─────────────────────────────────────────────────
+ * `inline` matters: utilities emit `var(--role)` rather than a frozen value,
+ * so `.ground-ink` re-resolves every utility at runtime. This is a NAME
+ * bridge, not a compatibility shim — the values are the new ones from day one
+ * and there is no path where an unported surface renders in the old palette.
+ */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-body-face);
-  --font-mono: var(--font-data-face);
-  --font-display: var(--font-display-face);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-ring: var(--ring);
+  --color-scrim: var(--scrim);
+  --color-control-disabled: var(--control-disabled);
+  --color-control-disabled-foreground: var(--control-disabled-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  /* Brand — identity, primary action, active nav, live-and-healthy.
+     NEVER a severity, never "good news about a number". */
+  --color-brand-deep: var(--brand-deep);
+  --color-brand-lit: var(--brand-lit);
+  --color-brand-wash: var(--brand-wash);
+  --color-brand-tint-ink: var(--brand-tint-ink);
+
+  /* Severity — read docs/DESIGN.md before reaching for any of these. */
+  --color-critical-fill: var(--critical-fill);
+  --color-critical-on-fill: var(--critical-on-fill);
+  --color-critical-text: var(--critical-text);
+  --color-critical-tint: var(--critical-tint);
+  --color-critical-line-ink: var(--critical-line-ink);
+  --color-attend-fill: var(--attend-fill);
+  --color-attend-on-fill: var(--attend-on-fill);
+  --color-attend-text: var(--attend-text);
+  --color-attend-tint: var(--attend-tint);
+  --color-attend-line-ink: var(--attend-line-ink);
+
+  /* Form validation — a form state, not an operational rank. */
+  --color-field-invalid: var(--field-invalid-text);
+  --color-field-invalid-wash: var(--field-invalid-wash);
+
+  /* Grounds, addressable directly where a surface must pin one. */
+  --color-ink: var(--ink);
+  --color-ink-deep: var(--ink-deep);
+  --color-ink-shade: var(--ink-shade);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-surface-raised: var(--surface-raised);
+  --color-paper: var(--paper);
+  --color-paper-raised: var(--paper-raised);
+  --color-paper-tint: var(--paper-tint);
+  --color-white-warm: var(--white-warm);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-line-strong: var(--line-strong);
+  --color-line-ink: var(--line-ink);
+  --color-text-on-ink: var(--text-on-ink);
+  --color-text-on-ink-muted: var(--text-on-ink-muted);
+  --color-text-on-ink-faint: var(--text-on-ink-faint);
+  --color-text-on-ink-2: var(--text-on-ink-2);
+  --color-text-body: var(--text-body);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-faint: var(--text-faint);
+  --color-text-faintest: var(--text-faintest);
+  --color-paper-tint-2: var(--paper-tint-2);
+  --color-line-soft-2: var(--line-soft-2);
+  --color-line-dust: var(--line-dust);
+  --color-brand-wash-2: var(--brand-wash-2);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Retired names — REMOVED IN PHASE 7 with the surfaces that use them. */
   --color-brass: var(--brass);
   --color-brass-deep: var(--brass-deep);
-  --color-amber-pour: var(--amber-pour);
   --color-lager: var(--lager);
   --color-marzen: var(--marzen);
   --color-dubbel: var(--dubbel);
   --color-porter: var(--porter);
   --color-oxblood: var(--oxblood);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 12px);
-  --radius-4xl: calc(var(--radius) + 16px);
-}
+  --color-amber-pour: var(--amber-pour);
 
-/*
- * Crowbar design tokens v2 — "measured in SRM".
- *
- * The palette is pinned to the SRM scale (beer's own color measurement)
- * plus the Phase-1 wood/brass constants — named referents, not generic
- * beige-and-brown: pilsner (SRM 3) is the daylight taproom ground, lager
- * (SRM 8) is the beer-gold accent, dubbel (SRM ~17) the interactive
- * primary on light, porter (SRM 35) the after-dark ground.
- *
- * Two themes, one world:
- *   :root        = taproom by day (staff dashboard light, landing)
- *   .dark        = after dark — SHARED with the guest-facing .theme-night
- *                  (one token block; the staff dark toggle and the guest
- *                  night atmosphere are the same candlelit room)
- *
- * Brand constants (identical in both themes):
- *   pilsner #F7F1E1  foam #FDFAF1  lager #E8B54A  dubbel #8A5A1C
- *   porter  #251811  ink  #2B2016  brass #C89B3C  oxblood #8C3A34
- */
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-data);
+  --font-display: var(--font-display);
 
-:root {
-  --radius: 0.5rem;
+  /* Radius means you can act on it. Structure stays square, which is why
+     nothing needs a shadow to look like a card. Everything above 4px collapses
+     to 4px on purpose — the system has no larger radius. */
+  --radius-xs: var(--radius-2);
+  --radius-sm: var(--radius-2);
+  --radius-md: var(--radius-3);
+  --radius-lg: var(--radius-4);
+  --radius-xl: var(--radius-4);
+  --radius-2xl: var(--radius-4);
+  --radius-3xl: var(--radius-4);
+  --radius-4xl: var(--radius-4);
 
-  /* Brand constants */
-  --brass: #c89b3c;
-  --brass-deep: #7d5f1f; /* brass legible on light grounds */
-  --lager: #e8b54a; /* SRM 8 — the beer-gold accent */
-  --marzen: #b98733; /* SRM ~12 — interpolated midpoint of lager→dubbel (feature deck step 3) */
-  --dubbel: #8a5a1c; /* SRM ~17 — interactive primary on light */
-  --porter: #251811; /* SRM 35 — after-dark ground */
-  --amber-pour: #e8b54a;
-  --oxblood: #8c3a34;
-  --walnut: #201914;
-  --linen: #f7f1e1;
+  /* Elevation means "over the room". E0 is flat — every panel, table and row.
+     E1 is dialogs, side panels, and the one floating action on tablet. */
+  --shadow-2xs: var(--e0);
+  --shadow-xs: var(--e0);
+  --shadow-sm: var(--e0);
+  --shadow-md: var(--e0);
+  --shadow-lg: var(--e1);
+  --shadow-xl: var(--e1);
+  --shadow-2xl: var(--e1);
+  --shadow-e1: var(--e1);
 
-  /* Taproom by day (staff / default) */
-  --background: #f7f1e1;
-  --foreground: #2b2016;
-  --card: #fdfaf1;
-  --card-foreground: #2b2016;
-  --popover: #fdfaf1;
-  --popover-foreground: #2b2016;
-  --primary: #8a5a1c;
-  --primary-foreground: #fdf8ec;
-  --secondary: #efe4cc;
-  --secondary-foreground: #2b2016;
-  --muted: #f1e8d4;
-  --muted-foreground: #6e6459;
-  --accent: #f3e3bc;
-  --accent-foreground: #2b2016;
-  --destructive: #8c3a34;
-  --border: #e3d6bc;
-  --input: #dccca9;
-  --ring: #b4762c;
-  --chart-1: #8a5a1c;
-  --chart-2: #e8b54a;
-  --chart-3: #8c3a34;
-  --chart-4: #6e6459;
-  --chart-5: #c89b3c;
-  --sidebar: #f1e8d2;
-  --sidebar-foreground: #2b2016;
-  --sidebar-primary: #8a5a1c;
-  --sidebar-primary-foreground: #fdf8ec;
-  --sidebar-accent: #e9ddc0;
-  --sidebar-accent-foreground: #2b2016;
-  --sidebar-border: #e3d6bc;
-  --sidebar-ring: #b4762c;
-}
+  /* 120ms for colour and border on hover and press is the system default. */
+  --default-transition-duration: var(--dur-press);
+  --default-transition-timing-function: var(--ease-press);
+  --ease-enter: var(--ease-enter);
 
-/*
- * After dark — ONE warm dark theme. `.theme-night` is applied to <html> by
- * the <NightTheme /> helper on guest pages; `.dark` is applied to <html> by
- * the staff dashboard theme toggle (see components/staff-theme.tsx). They
- * share this block on purpose: the staff dark mode and the guest night
- * atmosphere are the same room after the lights go down.
- */
-.theme-night,
-.dark {
-  --background: #251811;
-  --foreground: #f3ede3;
-  --card: #2f2015;
-  --card-foreground: #f3ede3;
-  --popover: #2f2015;
-  --popover-foreground: #f3ede3;
-  --primary: #e8b54a;
-  --primary-foreground: #251811;
-  --secondary: #3a2a1b;
-  --secondary-foreground: #f3ede3;
-  --muted: #322217;
-  --muted-foreground: #b6a78f;
-  --accent: #3a2a1b;
-  --accent-foreground: #f3ede3;
-  --destructive: #d96a5b;
-  --border: #c89b3c33;
-  --input: #c89b3c40;
-  --ring: #e8b54a;
-  --chart-1: #e8b54a;
-  --chart-2: #c89b3c;
-  --chart-3: #d96a5b;
-  --chart-4: #b6a78f;
-  --chart-5: #8ecbaa;
-  --sidebar: #2f2015;
-  --sidebar-foreground: #f3ede3;
-  --sidebar-primary: #e8b54a;
-  --sidebar-primary-foreground: #251811;
-  --sidebar-accent: #3a2a1b;
-  --sidebar-accent-foreground: #f3ede3;
-  --sidebar-border: #c89b3c33;
-  --sidebar-ring: #e8b54a;
+  --spacing-rail: var(--rail);
+  --spacing-side-panel: var(--side-panel);
+  --spacing-bottom-nav: var(--bottom-nav);
+  --spacing-offline-bar: var(--offline-bar);
+  --spacing-tile-floor: var(--tile-floor);
+  --spacing-ticket-clear: var(--ticket-clear);
+  --spacing-row-desktop: var(--row-desktop);
+  --spacing-row-tablet: var(--row-tablet);
+  --spacing-control-desktop: var(--control-desktop);
+  --spacing-control-tablet-min: var(--control-tablet-min);
+  --spacing-grid-marketing: var(--grid-marketing);
+
+  --breakpoint-desktop: var(--bp-desktop);
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
+
   html,
   body {
     margin: 0 !important;
     padding: 0 !important;
     @apply bg-background text-foreground min-h-screen;
   }
+
+  body {
+    font-family: var(--font-ui);
+    font-size: var(--ui-size);
+    line-height: var(--ui-lh);
+    /* Set once and inherited — figures are tabular everywhere in the system. */
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: var(--brand-lit);
+    color: var(--ink);
+  }
+
+  /* Every interactive element has a visible focus state using the declared
+     ring. `--ring` resolves per ground. */
+  :focus-visible {
+    outline: 2px solid var(--brand-deep);
+    outline-offset: 1px;
+  }
+  .ground-ink :focus-visible {
+    outline-color: var(--brand-lit);
+  }
 }
 
+/*
+ * ── Type scale · the ten steps ──────────────────────────────────────────────
+ * Set optically: each step up loses tracking, so a 92px headline and a 21px
+ * title look equally tight. Prefer these over ad-hoc Tailwind size utilities.
+ */
 @layer components {
-  /* Page Layout — generous horizontal breathing room, consistent everywhere */
+  .type-d1 { font-family: var(--d1-family); font-size: var(--d1-size); line-height: var(--d1-lh); letter-spacing: var(--d1-ls); font-weight: var(--d1-weight); }
+  .type-d2 { font-family: var(--d2-family); font-size: var(--d2-size); line-height: var(--d2-lh); letter-spacing: var(--d2-ls); font-weight: var(--d2-weight); }
+  .type-d3 { font-family: var(--d3-family); font-size: var(--d3-size); line-height: var(--d3-lh); letter-spacing: var(--d3-ls); font-weight: var(--d3-weight); }
+  .type-t1 { font-family: var(--t1-family); font-size: var(--t1-size); line-height: var(--t1-lh); letter-spacing: var(--t1-ls); font-weight: var(--t1-weight); }
+  .type-t2 { font-family: var(--t2-family); font-size: var(--t2-size); line-height: var(--t2-lh); letter-spacing: var(--t2-ls); font-weight: var(--t2-weight); }
+  .type-body { font-family: var(--body-family); font-size: var(--body-size); line-height: var(--body-lh); font-weight: var(--body-weight); }
+  .type-ui { font-family: var(--ui-family); font-size: var(--ui-size); line-height: var(--ui-lh); font-weight: var(--ui-weight); }
+  .type-data { font-family: var(--data-family); font-size: var(--data-size); line-height: var(--data-lh); font-weight: var(--data-weight); font-variant-numeric: tabular-nums; }
+  .type-label { font-family: var(--label-family); font-size: var(--label-size); line-height: var(--label-lh); letter-spacing: var(--label-ls); font-weight: var(--label-weight); text-transform: uppercase; }
+  .type-micro { font-family: var(--micro-family); font-size: var(--micro-size); line-height: var(--micro-lh); letter-spacing: var(--micro-ls); font-weight: var(--micro-weight); text-transform: uppercase; }
+}
+
+/*
+ * ── Marketing layer · the Landing canvas ────────────────────────────────────
+ * The product is fixed at two sizes on hardware the venue owns. Marketing is
+ * not: it renders on a phone in a kitchen, a laptop in an office and a 27"
+ * display in a co-working space. So its type and gutters interpolate where the
+ * product's step.
+ *
+ * Every value below is transcribed from `Crowbar Landing.dc.html`. None was
+ * chosen here. They live in this file rather than inline in the TSX for the
+ * same reason every other value does — so the raw-value grep in
+ * `docs/DESIGN.md` stays the proof that the system held rather than drifted.
+ *
+ * The near-duplicate section paddings (48/6vw/80, /88, /92) are the canvas's,
+ * kept apart rather than averaged: §04 of the System canvas makes the marketing
+ * grid "broken on purpose", and collapsing them would be a redesign.
+ *
+ * The editorial type sizes here (15.5, 16.5, 14.5, 19, 20, 22) sit BETWEEN the
+ * ten declared steps. That is deliberate in the canvas and confined to
+ * marketing. Product surfaces never use these classes — they use `.type-*` and
+ * the `--space-*` tokens.
+ */
+@layer components {
+  /* ── Shell ──────────────────────────────────────────────────────────── */
+  .mkt-shell {
+    max-width: var(--grid-marketing);
+    margin-inline: auto;
+    padding-inline: clamp(18px, 4vw, 56px);
+  }
+  /* A floor, not a fixed height: the nav wraps to a second line on a phone,
+     and a fixed 66px would clip it. Same value the canvas sets. */
+  .mkt-header-bar { min-height: 66px; }
+  .mkt-logo-mark { width: 11px; height: 11px; }
+  .mkt-logo-type { font-family: var(--font-display); font-weight: 800; font-size: 19px; letter-spacing: -0.035em; }
+
+  /* ── Fluid display steps ────────────────────────────────────────────── */
+  .mkt-d1 { font-family: var(--font-display); font-weight: 800; font-size: clamp(44px, 7.4vw, 92px); line-height: 0.94; letter-spacing: -0.038em; text-wrap: balance; }
+  .mkt-d2 { font-family: var(--font-display); font-weight: 800; font-size: clamp(32px, 5.4vw, 68px); line-height: 0.98; letter-spacing: -0.036em; }
+  .mkt-d2-cap { font-family: var(--font-display); font-weight: 800; font-size: clamp(30px, 4.2vw, 52px); line-height: 1; letter-spacing: -0.032em; }
+  .mkt-d2-faq { font-family: var(--font-display); font-weight: 800; font-size: clamp(30px, 4vw, 46px); line-height: 1; letter-spacing: -0.034em; }
+  .mkt-d2-cta { font-family: var(--font-display); font-weight: 800; font-size: clamp(34px, 6vw, 76px); line-height: 0.94; letter-spacing: -0.04em; }
+  .mkt-d3 { font-family: var(--font-display); font-weight: 700; font-size: clamp(24px, 2.6vw, 32px); line-height: 1.05; letter-spacing: -0.028em; }
+  .mkt-d3-lg { font-family: var(--font-display); font-weight: 700; font-size: clamp(26px, 3.4vw, 42px); line-height: 1.02; letter-spacing: -0.03em; }
+
+  /* ── Editorial type, between the declared steps ─────────────────────── */
+  .mkt-lead { font-size: clamp(16px, 1.5vw, 19px); line-height: 1.55; text-wrap: pretty; }
+  .mkt-body-lg { font-size: 16.5px; line-height: 1.5; text-wrap: pretty; }
+  .mkt-body { font-size: 15.5px; line-height: 1.5; text-wrap: pretty; }
+  .mkt-body-sm { font-size: 15px; line-height: 1.5; text-wrap: pretty; }
+  .mkt-note { font-size: 13.5px; }
+  .mkt-note-sm { font-size: 13px; }
+  .mkt-item { font-size: 14px; }
+  .mkt-item-lg { font-size: 14.5px; line-height: 1.5; }
+
+  /* Titles inside a panel or a strip. */
+  .mkt-strip-title { font-family: var(--font-display); font-weight: 700; font-size: 19px; letter-spacing: -0.022em; }
+  .mkt-step-title { font-family: var(--font-display); font-weight: 700; font-size: 20px; letter-spacing: -0.022em; }
+  .mkt-panel-title { font-family: var(--font-display); font-weight: 700; font-size: 22px; letter-spacing: -0.024em; }
+  .mkt-faq-q { font-family: var(--font-display); font-weight: 600; font-size: 18px; letter-spacing: -0.018em; }
+
+  /* Figures. Marketing runs its own sizes; the product's live in --d*/Figure. */
+  .mkt-fig-lg { font-family: var(--font-display); font-weight: 800; font-size: 52px; line-height: 0.85; letter-spacing: -0.04em; }
+  .mkt-fig-md { font-family: var(--font-display); font-weight: 800; font-size: 40px; line-height: 1; letter-spacing: -0.03em; }
+  .mkt-fig-sm { font-family: var(--font-display); font-weight: 800; font-size: 26px; letter-spacing: -0.03em; }
+
+  /* Mono eyebrows and stamps. `.type-label` covers the 10.5/.14em case. */
+  .mkt-eyebrow { font-family: var(--font-data); font-weight: 500; font-size: 11.5px; letter-spacing: 0.15em; text-transform: uppercase; }
+  .mkt-kicker { font-family: var(--font-data); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
+  .mkt-chip { font-family: var(--font-data); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .mkt-tag { font-family: var(--font-data); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
+  .mkt-num { font-family: var(--font-data); font-weight: 500; font-size: 13px; }
+  .mkt-stamp { font-family: var(--font-data); font-size: 12.5px; }
+  .mkt-stamp-sm { font-family: var(--font-data); font-size: 12px; }
+
+  /* ── Section rhythm. Named for the section, because they differ. ─────── */
+  .mkt-sec-hero { padding-top: clamp(44px, 7vw, 100px); }
+  .mkt-sec-night { margin-top: clamp(48px, 6vw, 80px); padding-block: clamp(48px, 6vw, 92px); padding-inline: clamp(18px, 4vw, 56px); }
+  .mkt-sec-cap { padding-top: clamp(52px, 7vw, 96px); }
+  .mkt-sec-ordering { margin-top: clamp(48px, 6vw, 80px); padding-block: clamp(44px, 5.5vw, 80px); padding-inline: clamp(18px, 4vw, 56px); }
+  .mkt-sec-inventory { padding-top: clamp(40px, 5vw, 72px); }
+  .mkt-sec-demand { padding-top: clamp(28px, 3.4vw, 44px); }
+  .mkt-sec-faq { padding-block: clamp(48px, 6vw, 88px); }
+  .mkt-sec-cta { padding-block: clamp(44px, 6vw, 84px); padding-inline: clamp(18px, 4vw, 56px); }
+  .mkt-sec-footer { padding-top: clamp(40px, 5vw, 68px); padding-bottom: 28px; padding-inline: clamp(18px, 4vw, 56px); }
+
+  .mkt-row { padding-block: clamp(24px, 3vw, 40px); }
+  .mkt-row-head { margin-bottom: clamp(24px, 3vw, 40px); }
+  .mkt-band-head { margin-bottom: clamp(32px, 4vw, 56px); }
+  .mkt-mt-strip { margin-top: clamp(44px, 6vw, 84px); }
+  .mkt-pb-row { padding-bottom: clamp(24px, 3vw, 40px); }
+
+  /* ── Gaps, named for the composition they hold together ─────────────── */
+  .mkt-gap-nav { gap: clamp(14px, 2.2vw, 28px); }
+  .mkt-gap-header { gap: clamp(16px, 4vw, 48px); }
+  .mkt-gap-cards { gap: clamp(16px, 2vw, 28px); }
+  .mkt-gap-split { gap: clamp(20px, 4vw, 56px); }
+  .mkt-gap-split-wide { gap: clamp(20px, 4vw, 64px); }
+  .mkt-gap-cta { gap: clamp(28px, 5vw, 64px); }
+  .mkt-gap-faq { gap: clamp(28px, 5vw, 80px); }
+  .mkt-gap-footer { gap: clamp(28px, 5vw, 72px); }
+  .mkt-gap-hero { gap: clamp(32px, 5vw, 72px); }
+  .mkt-gap-bars { gap: clamp(6px, 1.4vw, 14px); }
+
+  /* ── Panel padding ──────────────────────────────────────────────────── */
+  .mkt-cell { padding: 12px 14px; }
+  .mkt-cell-tall { padding: 16px 14px; }
+  .mkt-cell-tight { padding: 11px 12px; }
+  .mkt-cell-head { padding: 9px 12px; }
+  .mkt-cell-label { padding: 10px 14px; }
+  .mkt-pad { padding: 20px; }
+  .mkt-pad-wide { padding: 22px 20px; }
+  .mkt-pad-step { padding: 22px 20px 26px; }
+
+  /* ── Auth · the hinge between the two grounds ───────────────────────── */
+  .auth-page { padding: clamp(20px, 3vw, 44px) clamp(16px, 3vw, 44px) 80px; }
+  .auth-pane { padding: clamp(28px, 4vw, 64px) clamp(24px, 4vw, 60px); }
+  .auth-panel { padding: clamp(24px, 3vw, 40px); }
+  .auth-card { padding: clamp(24px, 3vw, 36px); }
+  .auth-title { font-family: var(--font-display); font-weight: 700; font-size: 28px; letter-spacing: -0.028em; line-height: 1.1; }
+  .auth-title-sm { font-family: var(--font-display); font-weight: 700; font-size: 24px; letter-spacing: -0.026em; line-height: 1.1; }
+  .auth-panel-h { font-family: var(--font-display); font-weight: 800; font-size: clamp(28px, 3.4vw, 42px); line-height: 0.98; letter-spacing: -0.036em; }
+  .auth-panel-h-sm { font-family: var(--font-display); font-weight: 800; font-size: clamp(28px, 3.2vw, 38px); line-height: 1; letter-spacing: -0.034em; }
+
+  /* ── Small fixed marks ──────────────────────────────────────────────── */
+  .mkt-dot { width: 7px; height: 7px; border-radius: var(--radius-full); }
+  .mkt-meter { width: 64px; height: 5px; }
+  .mkt-meter-val { width: 56px; }
+  .mkt-num-col { width: 58px; }
+
+  /* ── Flex bases the canvas sets per column ──────────────────────────── */
+  .mkt-col { min-width: min(100%, 300px); }
+}
+
+/*
+ * ── Legacy vernacular · REMOVED IN PHASE 7 ──────────────────────────────────
+ * These classes belong to the retired "taproom" system. They are repointed at
+ * the new tokens so no old value survives anywhere, and they stay only until
+ * every surface that references them has been rebuilt against §06 of the
+ * System canvas. Do not use them in new work — use the `.type-*` steps above
+ * and the primitives in components/ui/.
+ *
+ * Live counts at the start of the port: .figures 114, .eyebrow 63,
+ * .page-title 28, .fade-rise 22, .leader-dots 19, .page-container 18,
+ * .page-description 17, .page-pad 13, .contact-row 13, .rule-double 11.
+ * The unused timeline-*, .section-title-lg, .page-title-xl and
+ * .contact-icon-lg classes were already dead and are gone.
+ */
+@layer components {
   .page-pad {
-    @apply px-6 py-6 md:px-10 xl:px-14;
+    @apply px-6 py-6 md:px-8;
   }
 
   .page-container {
-    @apply flex flex-col gap-6 px-6 py-6 md:px-10 xl:px-14;
+    @apply flex flex-col gap-6 px-6 py-6 md:px-8;
   }
 
   .page-container-split {
-    @apply flex flex-col lg:flex-row gap-6 px-6 py-6 md:px-10 xl:px-14;
+    @apply flex flex-col lg:flex-row gap-6 px-6 py-6 md:px-8;
   }
 
-  /* Page Headers — display face carries the brand voice */
   .page-header {
     @apply mb-6;
   }
 
+  /* Screen title — T1 in the new scale. */
   .page-title {
-    @apply text-2xl font-bold;
-    font-family: var(--font-display-face);
+    font-family: var(--t1-family);
+    font-size: var(--t1-size);
+    line-height: var(--t1-lh);
+    letter-spacing: var(--t1-ls);
+    font-weight: var(--t1-weight);
   }
 
   .page-title-lg {
-    @apply text-3xl font-bold;
-    font-family: var(--font-display-face);
-  }
-
-  .page-title-xl {
-    @apply text-4xl font-bold;
-    font-family: var(--font-display-face);
+    font-family: var(--d3-family);
+    font-size: var(--d3-size);
+    line-height: var(--d3-lh);
+    letter-spacing: var(--d3-ls);
+    font-weight: var(--d3-weight);
   }
 
   .page-description {
-    @apply text-muted-foreground text-sm mt-1;
+    @apply text-muted-foreground mt-1;
+    font-size: var(--ui-size);
+    line-height: var(--ui-lh);
   }
 
-  /* Section Headers */
+  /* Panel header — T2. */
   .section-title {
-    @apply text-xl font-bold;
-    font-family: var(--font-display-face);
-  }
-
-  .section-title-lg {
-    @apply text-2xl font-bold;
-    font-family: var(--font-display-face);
+    font-family: var(--t2-family);
+    font-size: var(--t2-size);
+    line-height: var(--t2-lh);
+    letter-spacing: var(--t2-ls);
+    font-weight: var(--t2-weight);
   }
 
   .section-subtitle {
-    @apply text-sm text-muted-foreground;
+    @apply text-muted-foreground;
+    font-size: var(--ui-size);
+    line-height: var(--ui-lh);
   }
 
-  /* Preview Cards */
   .preview-label {
-    @apply text-xs text-muted-foreground mt-2 text-center;
+    @apply text-muted-foreground mt-2 text-center;
+    font-size: var(--micro-size);
   }
 
-  /* Contact Info */
   .contact-row {
-    @apply flex items-center gap-3 text-sm;
+    @apply flex items-center gap-3;
+    font-size: var(--ui-size);
   }
 
   .contact-icon {
     @apply h-4 w-4 text-muted-foreground;
   }
 
-  .contact-icon-lg {
-    @apply h-5 w-5;
-  }
-
-  /* Button Containers */
   .button-group-end {
     @apply flex justify-end;
   }
 
-  /* Card Styles */
   .preview-card {
-    @apply rounded-lg border bg-card p-6 space-y-4;
+    @apply border bg-card p-6 space-y-4;
+    border-radius: var(--radius-0);
   }
 
-  /* Timeline Styles */
-  .timeline-container {
-    @apply relative rounded-lg border bg-card p-6;
-  }
-
-  .timeline-hour {
-    @apply flex items-center gap-4 text-sm;
-    height: 60px;
-  }
-
-  .timeline-hour-label {
-    @apply w-20 text-muted-foreground font-medium shrink-0;
-  }
-
-  .timeline-line {
-    @apply flex-1 h-px bg-border relative;
-  }
-
-  .timeline-event {
-    @apply absolute rounded-md border bg-accent p-3 cursor-pointer hover:bg-accent/80 transition-colors shadow-sm;
-  }
-
-  .timeline-grid {
-    @apply grid gap-2;
-  }
-
-  .timeline-column {
-    @apply relative border-r border-border last:border-r-0;
-  }
-
-  .timeline-column-header {
-    @apply sticky top-0 z-10 bg-card border-b border-border text-center font-medium text-sm flex flex-col items-center justify-center;
-    height: 48px;
-  }
-
-  /* ── Crowbar print-menu vernacular ─────────────────────────────────── */
-
-  /* Small-caps letterpressed label (category names, card headers) */
+  /* Field label · badge · eyebrow — the Label step. */
   .eyebrow {
-    @apply text-[0.6875rem] font-semibold uppercase text-muted-foreground;
-    letter-spacing: 0.14em;
+    @apply text-muted-foreground;
+    font-family: var(--label-family);
+    font-size: var(--label-size);
+    line-height: var(--label-lh);
+    letter-spacing: var(--label-ls);
+    font-weight: var(--label-weight);
+    text-transform: uppercase;
   }
 
-  /* Signature: the dot leader connecting a name to its price.
-     Usage: <span>Name</span><span class="leader-dots" /><span>€12.00</span>
-     inside a flex row with items-baseline. */
+  /* Retired motif — the dot leader is not part of rev 3. Rendered as a plain
+     hairline rule until the surfaces using it are rebuilt. */
   .leader-dots {
     @apply flex-1 min-w-4 self-end;
     margin-bottom: 0.32em;
-    border-bottom: 2px dotted color-mix(in oklab, currentColor 32%, transparent);
+    border-bottom: 1px solid var(--border);
   }
 
-  /* Classic menu double rule */
+  /* Retired motif — the menu double rule is not part of rev 3. */
   .rule-double {
-    height: 4px;
-    border-top: 1px solid color-mix(in oklab, var(--brass) 55%, transparent);
-    border-bottom: 1px solid color-mix(in oklab, var(--brass) 35%, transparent);
+    height: 1px;
+    border-top: 1px solid var(--border);
   }
 
-  /* Numeric data set like register tape */
+  /* Operational figures — the Data step. */
   .figures {
-    font-family: var(--font-data-face);
+    font-family: var(--data-family);
     font-variant-numeric: tabular-nums;
   }
 
-  /* Queue position: coaster ring */
+  /* Retired motif — the coaster ring is not part of rev 3. */
   .coaster {
-    @apply rounded-full flex items-center justify-center;
-    border: 1px solid color-mix(in oklab, var(--brass) 55%, transparent);
-    box-shadow:
-      inset 0 0 0 5px var(--background),
-      inset 0 0 0 6px color-mix(in oklab, var(--brass) 40%, transparent);
+    @apply flex items-center justify-center;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--border-strong);
   }
 }
 
-/* ── Viewport-entrance reveal (landing) — applied by <Reveal />, fires once ── */
+/* ── Motion ─────────────────────────────────────────────────────────────────
+ * 120ms colour/border on hover and press; 180ms ease-out for anything that
+ * enters; 2s pulse for live-and-healthy only; 1.4s breathe for skeletons; 2s
+ * slow flash on the offline bar, the one alarm in the system. Nothing else
+ * moves.
+ */
 
-.reveal {
-  opacity: 0;
-  transform: translateY(14px);
-}
-
-.reveal.is-in {
-  opacity: 1;
-  transform: none;
-  transition:
-    opacity 0.6s ease,
-    transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .reveal {
-    opacity: 1;
-    transform: none;
-    transition: none;
-  }
-}
-
-/* ── Motion: one orchestrated load rise, staggered via animation-delay ── */
-
-@keyframes fade-rise {
+@keyframes enter-rise {
   from {
     opacity: 0;
     transform: translateY(8px);
@@ -370,29 +843,63 @@
   }
 }
 
-.fade-rise {
-  animation: fade-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+.enter-rise {
+  animation: enter-rise var(--dur-enter) var(--ease-enter) both;
 }
 
-@keyframes glow-pulse {
+/* Live-and-healthy. Brand, not severity — it means the connection is good. */
+@keyframes live-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in oklab, var(--amber-pour) 35%, transparent);
+    opacity: 1;
   }
   50% {
-    box-shadow: 0 0 0 10px transparent;
+    opacity: 0.45;
   }
+}
+
+.live-pulse {
+  animation: live-pulse var(--dur-pulse) var(--ease-press) infinite;
+}
+
+/* Skeletons breathe at 1.4s and mirror the row rhythm they replace. */
+@keyframes skeleton-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.skeleton-breathe {
+  animation: skeleton-breathe var(--dur-breathe) var(--ease-press) infinite;
+}
+
+/* The one alarm in the system: a live surface that has lost its connection. */
+@keyframes offline-alarm {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.72;
+  }
+}
+
+.offline-alarm {
+  animation: offline-alarm var(--dur-alarm) var(--ease-press) infinite;
+}
+
+/* Legacy entrance names — REMOVED IN PHASE 7. Repointed at the 180ms enter.
+   `.reveal` went with the landing rebuild in Phase 3. */
+.fade-rise {
+  animation: enter-rise var(--dur-enter) var(--ease-enter) both;
 }
 
 .glow-pulse {
-  animation: glow-pulse 2.4s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .fade-rise,
-  .glow-pulse {
-    animation: none;
-  }
+  animation: live-pulse var(--dur-pulse) var(--ease-press) infinite;
 }
 
 .scrollbar-hide {
@@ -402,4 +909,14 @@
 
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+/* All motion is off under prefers-reduced-motion — §07 of the System canvas. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }

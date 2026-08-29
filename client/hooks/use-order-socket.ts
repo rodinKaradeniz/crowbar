@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { SocketStatus } from "@/hooks/socket-status";
 import type { Order } from "@/types";
 import { toMoney } from "@/lib/money";
 
@@ -95,8 +96,9 @@ const MAX_DELAY = 30_000;
 export function useOrderSocket(
   businessId: string,
   onUpdate: (orders: Order[]) => void,
-): { connected: boolean } {
+): SocketStatus {
   const [connected, setConnected] = useState(false);
+  const [lastContactAt, setLastContactAt] = useState<number | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const delayRef = useRef(BASE_DELAY);
@@ -118,12 +120,14 @@ export function useOrderSocket(
     wsRef.current = ws;
 
     ws.onopen = () => {
+      setLastContactAt(Date.now());
       ws.send(JSON.stringify({ type: "authenticate", token: jwt }));
       setConnected(true);
       delayRef.current = BASE_DELAY;
     };
 
     ws.onmessage = (event) => {
+      setLastContactAt(Date.now());
       try {
         const msg = JSON.parse(event.data as string);
         if (msg.type === "order_updated" && Array.isArray(msg.orders)) {
@@ -170,5 +174,5 @@ export function useOrderSocket(
     };
   }, [connect]);
 
-  return { connected };
+  return { connected, lastContactAt };
 }

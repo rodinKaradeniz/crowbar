@@ -6,6 +6,16 @@ import { XIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * The side panel — the detail surface for every screen.
+ *
+ * 400px (`--side-panel`), full height, right edge, E1, 180ms slide. Scrim 55%;
+ * click-outside and Esc close. Under 440px it goes full width (§06).
+ *
+ * It always has the same structure, and screens should not invent another:
+ *   header (kind + name + close) → a two-cell figure band → a definition list
+ *   → history → actions in a bordered footer.
+ */
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />
 }
@@ -36,7 +46,7 @@ function SheetOverlay({
     <SheetPrimitive.Overlay
       data-slot="sheet-overlay"
       className={cn(
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/50",
+        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-scrim",
         className
       )}
       {...props}
@@ -61,11 +71,15 @@ function SheetContent({
       <SheetPrimitive.Content
         data-slot="sheet-content"
         className={cn(
-          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out fixed z-50 flex flex-col gap-4 shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500",
+          "bg-card text-card-foreground fixed z-50 flex flex-col shadow-e1",
+          "data-[state=open]:animate-in data-[state=closed]:animate-out",
+          "duration-[var(--dur-enter)] ease-[cubic-bezier(0.2,0.8,0.2,1)]",
           side === "right" &&
-            "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right inset-y-0 right-0 h-full w-3/4 border-l sm:max-w-sm",
+            // 440px is stated in §06 prose but is not in crowbar-tokens.css —
+            // flagged as a token-file completeness question in docs/DESIGN.md.
+            "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right inset-y-0 right-0 h-full w-full border-l min-[440px]:w-[var(--side-panel)]",
           side === "left" &&
-            "data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left inset-y-0 left-0 h-full w-3/4 border-r sm:max-w-sm",
+            "data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left inset-y-0 left-0 h-full w-full border-r min-[440px]:w-[var(--side-panel)]",
           side === "top" &&
             "data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top inset-x-0 top-0 h-auto border-b",
           side === "bottom" &&
@@ -88,7 +102,10 @@ function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="sheet-header"
-      className={cn("flex flex-col gap-1.5 p-4", className)}
+      className={cn(
+        "flex flex-col gap-[var(--space-4)] border-b p-[var(--space-16)]",
+        className
+      )}
       {...props}
     />
   )
@@ -98,7 +115,11 @@ function SheetFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="sheet-footer"
-      className={cn("mt-auto flex flex-col gap-2 p-4", className)}
+      // Actions live in a bordered footer, always.
+      className={cn(
+        "mt-auto flex flex-col gap-[var(--space-8)] border-t p-[var(--space-16)]",
+        className
+      )}
       {...props}
     />
   )
@@ -111,7 +132,11 @@ function SheetTitle({
   return (
     <SheetPrimitive.Title
       data-slot="sheet-title"
-      className={cn("text-foreground font-semibold", className)}
+      className={cn(
+        // T1 — the panel names the kind and the thing.
+        "text-foreground font-display text-[length:var(--t1-size)] leading-[var(--t1-lh)] tracking-[var(--t1-ls)] font-bold",
+        className
+      )}
       {...props}
     />
   )
