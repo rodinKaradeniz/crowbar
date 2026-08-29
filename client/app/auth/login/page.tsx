@@ -1,32 +1,68 @@
-import { GalleryVerticalEnd } from "lucide-react";
-import Link from "next/link";
-import { LoginForm } from "@/components/login-form";
-import { AuthVisual } from "@/components/auth-visual";
+import type { Metadata } from "next";
 
+import {
+  AuthMark,
+  AuthPage,
+  AuthPanel,
+  AuthSplit,
+} from "@/components/auth/auth-shell";
+import { LoginForm } from "@/components/login-form";
+
+export const metadata: Metadata = {
+  title: "Sign in · Crowbar",
+};
+
+/**
+ * The panel sells the product and names no venue. A sign-in page does not know
+ * who is arriving, and a venue's live status is not public.
+ */
 export default function LoginPage() {
   return (
-    <div className="flex min-h-svh w-full">
-      {/* Left side - Image */}
-      <div className="hidden w-1/2 items-center justify-center bg-muted lg:flex">
-        <AuthVisual />
-      </div>
+    <AuthPage>
+      <AuthSplit
+        panel={
+          <AuthPanel>
+            <AuthMark />
 
-      {/* Right side - Form */}
-      <div className="flex w-full flex-col gap-4 p-6 md:w-1/2 md:p-10">
-        <div className="flex justify-center gap-2 md:justify-start">
-          <Link href="/" className="flex items-center gap-2 font-medium">
-            <div className="bg-primary text-primary-foreground flex size-6 items-center justify-center rounded-md">
-              <GalleryVerticalEnd className="size-4" />
+            <div>
+              <h2 className="auth-panel-h mb-4">
+                One venue.
+                <br />
+                One workspace.
+              </h2>
+              <p className="mb-6 max-w-[34ch] text-[15.5px] leading-[1.5] text-muted-foreground">
+                The door, the boards, the stock and the book — in one place, for
+                the people working the room tonight.
+              </p>
+
+              <ul className="flex flex-col border-t border-border">
+                {[
+                  "Reservations · queue · tickets",
+                  "Stock to the pour",
+                  "Your register stays your register",
+                ].map((line, index) => (
+                  <li
+                    key={line}
+                    className={
+                      index === 2
+                        ? "mkt-eyebrow py-[11px] tracking-[0.08em] text-text-on-ink-faint"
+                        : "mkt-eyebrow border-b border-border py-[11px] tracking-[0.08em] text-text-on-ink-faint"
+                    }
+                  >
+                    {line}
+                  </li>
+                ))}
+              </ul>
             </div>
-            Crowbar
-          </Link>
-        </div>
-        <div className="flex flex-1 items-center justify-center">
-          <div className="w-full max-w-xs">
-            <LoginForm />
-          </div>
-        </div>
-      </div>
-    </div>
+
+            <p className="type-label text-[var(--text-on-ink-dimmer)]">
+              crowbar.co · Berlin
+            </p>
+          </AuthPanel>
+        }
+      >
+        <LoginForm />
+      </AuthSplit>
+    </AuthPage>
   );
 }

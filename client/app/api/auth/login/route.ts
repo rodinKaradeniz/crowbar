@@ -56,9 +56,15 @@ export async function POST(request: NextRequest) {
     );
   } catch (error: unknown) {
     if (error instanceof ApiError) {
+      // Forward the throttle window so the sign-in screen counts down from the
+      // server's own number instead of inventing a lockout duration.
+      const headers =
+        error.status === 429 && error.retryAfterSeconds !== undefined
+          ? { "Retry-After": String(error.retryAfterSeconds) }
+          : undefined;
       return NextResponse.json(
         { error: error.message },
-        { status: error.status }
+        { status: error.status, headers }
       );
     }
 

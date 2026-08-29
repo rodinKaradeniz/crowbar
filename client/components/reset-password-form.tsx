@@ -1,56 +1,63 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 
-import { Button } from "@/components/ui/button";
 import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
-import { clientExchangePublicCapability } from "@/lib/client-api";
+  AuthField,
+  AuthNotice,
+  RevealToggle,
+} from "@/components/auth/auth-field";
+import { AuthCard, AuthMark, BackToSignIn } from "@/components/auth/auth-shell";
+import {
+  gradePassword,
+  PASSWORD_MIN_LENGTH,
+  PasswordStrength,
+} from "@/components/auth/password-strength";
+import { Button } from "@/components/ui/button";
 import { consumeCapabilityFragment } from "@/lib/capability-fragment";
+import { clientExchangePublicCapability } from "@/lib/client-api";
 
-const PASSWORD_MIN_LENGTH = 12;
-
-export function ResetPasswordForm({ className, ...props }: React.ComponentProps<"form">) {
+/**
+ * Set a new password — §06 of the Auth canvas.
+ *
+ * The minimum is 12, not the canvas's 10: `PASSWORD_MIN_LENGTH` is what the
+ * server actually enforces, and a form that promises a laxer rule than the API
+ * fails the operator at submit rather than at the field.
+ */
+export function ResetPasswordForm() {
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
+  const [revealed, setRevealed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [complete, setComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [linkDead, setLinkDead] = useState(false);
   const [capabilityReady, setCapabilityReady] = useState(false);
 
   useEffect(() => {
     const token = consumeCapabilityFragment();
     if (!token) {
-      setError("This password reset link is incomplete or has expired.");
+      setLinkDead(true);
       return;
     }
     void clientExchangePublicCapability("password_reset", token)
       .then(() => setCapabilityReady(true))
-      .catch(() => setError("This password reset link is invalid or has expired."));
+      .catch(() => setLinkDead(true));
   }, []);
+
+  const verdict = gradePassword(password);
+  const mismatch = confirmation.length > 0 && confirmation !== password;
+  const canSubmit =
+    capabilityReady &&
+    !submitting &&
+    password.length >= PASSWORD_MIN_LENGTH &&
+    confirmation === password;
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
-    if (!capabilityReady) {
-      setError("This password reset link is incomplete.");
-      return;
-    }
-    if (password.length < PASSWORD_MIN_LENGTH) {
-      setError(`Password must be at least ${PASSWORD_MIN_LENGTH} characters.`);
-      return;
-    }
-    if (password !== confirmation) {
-      setError("Passwords do not match.");
-      return;
-    }
+    if (!canSubmit) return;
+
     setSubmitting(true);
     try {
       const response = await fetch("/api/backend/auth/reset-password", {
@@ -58,45 +65,136 @@ export function ResetPasswordForm({ className, ...props }: React.ComponentProps<
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ new_password: password }),
       });
-      const body = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setError(typeof body.detail === "string" ? body.detail : "This reset link is invalid or expired.");
+        const body = await response.json().catch(() => ({}));
+        setError(
+          typeof body.detail === "string"
+            ? body.detail
+            : "This link has already been used or has run out. Ask for a new one.",
+        );
         return;
       }
       setComplete(true);
     } catch {
-      setError("Could not reach Crowbar. Try again.");
+      setError(
+        "Crowbar is not answering from this device. Your password was not changed.",
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
-  return (
-    <form className={cn("flex flex-col gap-6", className)} onSubmit={handleSubmit} {...props}>
-      <FieldGroup>
-        <div className="flex flex-col items-center gap-1 text-center">
-          <h1 className="text-2xl font-bold">Reset your password</h1>
-          <p className="text-muted-foreground text-sm text-balance">Choose a new password for your staff account.</p>
+  if (linkDead) {
+    return (
+      <AuthCard ground="ink">
+        <AuthMark tone="critical" size="sm" />
+        <p className="type-label mt-9 mb-3.5 text-critical-text">
+          Link expired
+        </p>
+        <h1 className="auth-title-sm mb-3">
+          This reset link has already been used or has run out.
+        </h1>
+        <p className="mb-6 max-w-[40ch] text-[14.5px] text-muted-foreground">
+          Ask for a new one from the sign-in screen. It takes a few seconds and
+          the new link works for an hour.
+        </p>
+        <div className="mt-auto flex flex-wrap items-center gap-3">
+          <Button asChild size="tablet">
+            <a href="/auth/forgot-password">Request a new link</a>
+          </Button>
+          <BackToSignIn label="Sign in instead" />
         </div>
-        {complete ? (
-          <p className="rounded-md bg-primary/10 p-3 text-sm" role="status">Your password has been updated. All earlier sessions were signed out.</p>
-        ) : (
-          <>
-            <Field>
-              <FieldLabel htmlFor="password">New password</FieldLabel>
-              <Input id="password" type="password" autoComplete="new-password" minLength={PASSWORD_MIN_LENGTH} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} required />
-              <FieldDescription>Use {PASSWORD_MIN_LENGTH}–128 characters.</FieldDescription>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="confirmPassword">Confirm password</FieldLabel>
-              <Input id="confirmPassword" type="password" autoComplete="new-password" minLength={PASSWORD_MIN_LENGTH} maxLength={128} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} required />
-            </Field>
-          </>
-        )}
-        {error && <p className="rounded-md bg-destructive/15 p-3 text-sm text-destructive" role="alert">{error}</p>}
-        {!complete && <Field><Button type="submit" className="w-full" disabled={submitting || !capabilityReady}>{submitting ? "Resetting…" : "Reset password"}</Button></Field>}
-        <FieldDescription className="text-center"><Link href="/auth/login" className="underline underline-offset-4">Back to login</Link></FieldDescription>
-      </FieldGroup>
-    </form>
+      </AuthCard>
+    );
+  }
+
+  if (complete) {
+    return (
+      <AuthCard ground="brand">
+        <AuthMark tone="paper" size="sm" />
+        <p className="type-label mt-9 mb-3.5 text-[var(--brand-lit-soft)]">
+          Password saved
+        </p>
+        <h1 className="mb-3 font-display text-[clamp(26px,2.6vw,34px)] font-extrabold leading-none tracking-[-0.032em]">
+          You&apos;re in.
+        </h1>
+        <p className="mb-7 max-w-[34ch] text-[15px] text-[var(--brand-lit-faint)]">
+          Every other device signed in as you was signed out. Open the workspace
+          and carry on.
+        </p>
+        <div className="mt-auto flex flex-wrap items-center gap-3">
+          <Button
+            asChild
+            size="tablet"
+            className="border-paper bg-paper text-primary hover:bg-[var(--white)]"
+          >
+            <a href="/auth/login">Sign in</a>
+          </Button>
+        </div>
+      </AuthCard>
+    );
+  }
+
+  return (
+    <AuthCard>
+      <form onSubmit={handleSubmit} noValidate>
+        <AuthMark tone="brand" size="sm" />
+        <h1 className="auth-title-sm mt-8 mb-5">Set a new password</h1>
+
+        {error ? (
+          <AuthNotice>
+            <p className="text-[13.5px] leading-[1.45]">{error}</p>
+          </AuthNotice>
+        ) : null}
+
+        <div className="mb-4">
+          <AuthField
+            label="New password"
+            type={revealed ? "text" : "password"}
+            autoComplete="new-password"
+            placeholder={`At least ${PASSWORD_MIN_LENGTH} characters`}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+            maxLength={128}
+            disabled={submitting || !capabilityReady}
+            invalid={verdict.tone === "invalid"}
+            trailing={
+              password.length > 0 ? (
+                <RevealToggle
+                  shown={revealed}
+                  onToggle={() => setRevealed((shown) => !shown)}
+                />
+              ) : undefined
+            }
+          />
+          <PasswordStrength verdict={verdict} />
+        </div>
+
+        <AuthField
+          label="Confirm"
+          type={revealed ? "text" : "password"}
+          autoComplete="new-password"
+          placeholder="Repeat it"
+          value={confirmation}
+          onChange={(event) => setConfirmation(event.target.value)}
+          required
+          maxLength={128}
+          disabled={submitting || !capabilityReady}
+          invalid={mismatch}
+          hint={mismatch ? "The two don't match yet." : undefined}
+          className="mb-[22px]"
+        />
+
+        <Button
+          type="submit"
+          size="auth"
+          className="w-full text-[15.5px] font-semibold"
+          disabled={!canSubmit}
+        >
+          {submitting ? "Saving" : "Save and sign in"}
+        </Button>
+      </form>
+    </AuthCard>
   );
 }

@@ -3,23 +3,25 @@
 import { useState } from "react";
 import Link from "next/link";
 
+import { AuthField, AuthNotice } from "@/components/auth/auth-field";
+import { AuthMark, BackToSignIn } from "@/components/auth/auth-shell";
 import { Button } from "@/components/ui/button";
-import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
 
-export function ForgotPasswordForm({
-  className,
-  ...props
-}: React.ComponentProps<"form">) {
+/**
+ * Forgot password → link sent. Two states in one screen.
+ *
+ * The canvas's sent state names the address and both times ("Check
+ * marisol@zureiche.de · The link expires at 20:24"). The address is real — the
+ * operator just typed it. The expiry is NOT returned by the API, so the copy
+ * says the window rather than a wall-clock time it cannot know.
+ *
+ * The response is deliberately the same whether or not the address belongs to
+ * an account: telling a stranger which emails are staff accounts is a leak.
+ */
+export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [sentTo, setSentTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -33,48 +35,96 @@ export function ForgotPasswordForm({
         body: JSON.stringify({ email }),
       });
       if (!response.ok) {
-        setError(response.status === 429 ? "Too many requests. Try again later." : "Could not request a reset link.");
+        setError(
+          response.status === 429
+            ? "Too many requests from here. Wait a few minutes, then try once more."
+            : "Crowbar could not send the link. Try again in a moment.",
+        );
         return;
       }
-      setSubmitted(true);
+      setSentTo(email);
     } catch {
-      setError("Could not reach Crowbar. Try again.");
+      setError(
+        "Crowbar is not answering from this device. Check the connection and try again.",
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
-  return (
-    <form className={cn("flex flex-col gap-6", className)} onSubmit={handleSubmit} {...props}>
-      <FieldGroup>
-        <div className="flex flex-col items-center gap-1 text-center">
-          <h1 className="text-2xl font-bold">Forgot your password?</h1>
-          <p className="text-muted-foreground text-sm text-balance">
-            Enter your staff email. If an active account exists, we will send a single-use reset link.
-          </p>
+  if (sentTo) {
+    return (
+      <>
+        <AuthMark tone="brand" size="sm" />
+
+        <div className="mt-9 mb-6 border-l-2 border-primary bg-brand-wash-2 px-4 py-3.5">
+          <p className="type-label text-primary">Link sent</p>
         </div>
-        {submitted ? (
-          <p className="rounded-md bg-primary/10 p-3 text-sm" role="status">
-            Check your inbox if that address belongs to an active staff account.
-          </p>
-        ) : (
-          <Field>
-            <FieldLabel htmlFor="email">Email</FieldLabel>
-            <Input id="email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
-          </Field>
-        )}
-        {error && <p className="rounded-md bg-destructive/15 p-3 text-sm text-destructive" role="alert">{error}</p>}
-        {!submitted && (
-          <Field>
-            <Button type="submit" className="w-full" disabled={submitting}>
-              {submitting ? "Requesting…" : "Send reset link"}
-            </Button>
-          </Field>
-        )}
-        <FieldDescription className="text-center">
-          <Link href="/auth/login" className="underline underline-offset-4">Back to login</Link>
-        </FieldDescription>
-      </FieldGroup>
+
+        <h1 className="auth-title-sm mb-2.5">Check {sentTo}</h1>
+        <p className="mb-6 max-w-[40ch] text-[14.5px] text-text-secondary">
+          The link works once and expires an hour after it was sent. If it
+          hasn&apos;t arrived in two minutes, look in spam, then try again.
+        </p>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            size="tablet"
+            variant="secondary"
+            onClick={() => setSentTo(null)}
+          >
+            Send again
+          </Button>
+          <BackToSignIn label="Back to sign in" />
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} noValidate className="flex flex-1 flex-col">
+      <AuthMark tone="brand" size="sm" />
+
+      <h1 className="auth-title-sm mt-9 mb-2.5">Reset your password</h1>
+      <p className="mb-6 max-w-[38ch] text-[14.5px] text-text-secondary">
+        We&apos;ll send a link that works for one hour. Use the address you use
+        for the venue.
+      </p>
+
+      {error ? (
+        <AuthNotice>
+          <p className="text-[13.5px] leading-[1.45]">{error}</p>
+        </AuthNotice>
+      ) : null}
+
+      <AuthField
+        label="Email"
+        type="email"
+        autoComplete="email"
+        placeholder="du@lokal.de"
+        value={email}
+        onChange={(event) => setEmail(event.target.value)}
+        required
+        disabled={submitting}
+        className="mb-5"
+      />
+
+      <Button
+        type="submit"
+        size="auth"
+        className="w-full text-[15.5px] font-semibold"
+        disabled={submitting}
+      >
+        {submitting ? "Sending" : "Send the link"}
+      </Button>
+
+      <Link
+        href="/auth/login"
+        className="mt-auto inline-flex h-11 items-center pt-6 text-[length:var(--ui-size)] text-text-secondary hover:text-primary"
+      >
+        ← Back to sign in
+      </Link>
     </form>
   );
 }

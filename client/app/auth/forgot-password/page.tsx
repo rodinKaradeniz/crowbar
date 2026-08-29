@@ -1,32 +1,21 @@
-import { GalleryVerticalEnd } from "lucide-react";
-import Link from "next/link";
-import { ForgotPasswordForm } from "@/components/forgot-password-form";
-import { AuthVisual } from "@/components/auth-visual";
+import type { Metadata } from "next";
 
+import { AuthCard, AuthPage } from "@/components/auth/auth-shell";
+import { ForgotPasswordForm } from "@/components/forgot-password-form";
+
+export const metadata: Metadata = {
+  title: "Reset your password · Crowbar",
+};
+
+/** A single-column card — §04 of the canvas. No panel, nothing to sell here. */
 export default function ForgotPasswordPage() {
   return (
-    <div className="flex min-h-svh w-full">
-      {/* Left side - Form */}
-      <div className="flex w-full flex-col gap-4 p-6 md:w-1/2 md:p-10">
-        <div className="flex justify-center gap-2 md:justify-start">
-          <Link href="/" className="flex items-center gap-2 font-medium">
-            <div className="bg-primary text-primary-foreground flex size-6 items-center justify-center rounded-md">
-              <GalleryVerticalEnd className="size-4" />
-            </div>
-            Crowbar
-          </Link>
-        </div>
-        <div className="flex flex-1 items-center justify-center">
-          <div className="w-full max-w-xs">
-            <ForgotPasswordForm />
-          </div>
-        </div>
+    <AuthPage>
+      <div className="mx-auto w-full max-w-[440px]">
+        <AuthCard>
+          <ForgotPasswordForm />
+        </AuthCard>
       </div>
-
-      {/* Right side - Image */}
-      <div className="hidden w-1/2 items-center justify-center bg-muted lg:flex">
-        <AuthVisual />
-      </div>
-    </div>
+    </AuthPage>
   );
 }

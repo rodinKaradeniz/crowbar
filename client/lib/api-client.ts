@@ -26,9 +26,14 @@ async function apiFetch<T>(path: string, options: FetchOptions = {}): Promise<T>
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({}));
+    const retryAfter = response.headers.get("Retry-After");
+    const retryAfterSeconds = retryAfter
+      ? Number.parseInt(retryAfter, 10)
+      : Number.NaN;
     throw new ApiError(
       response.status,
-      errorBody.detail || response.statusText
+      errorBody.detail || response.statusText,
+      Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : undefined
     );
   }
 
@@ -40,7 +45,17 @@ async function apiFetch<T>(path: string, options: FetchOptions = {}): Promise<T>
 }
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string,
+    /**
+     * Seconds from the server's `Retry-After` header, when it sent one. Set on
+     * 429s from `app/core/rate_limit.py`, which is what the sign-in screen
+     * counts down from — the backend has no account-lockout model, so this is
+     * the only real "try again at" the client can be given.
+     */
+    public retryAfterSeconds?: number
+  ) {
     super(message);
     this.name = "ApiError";
   }
