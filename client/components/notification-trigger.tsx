@@ -79,28 +79,28 @@ function groupByDay(items: Notification[]) {
 
 function kindIcon(kind: string) {
   if (kind === "queue_join") {
-    return <Users className="h-4 w-4 shrink-0 text-blue-500" />;
+    return <Users className="h-4 w-4 shrink-0" />;
   }
   if (kind === "queue_leave") {
-    return <XCircle className="h-4 w-4 shrink-0 text-rose-400" />;
+    return <XCircle className="h-4 w-4 shrink-0" />;
   }
   if (kind === "queue_called") {
-    return <Bell className="h-4 w-4 shrink-0 text-amber-500" />;
+    return <Bell className="h-4 w-4 shrink-0" />;
   }
   if (kind === "queue_accepted") {
-    return <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />;
+    return <CheckCircle2 className="h-4 w-4 shrink-0" />;
   }
   if (kind.includes("reservation") || kind.includes("booking")) {
-    return <Calendar className="h-4 w-4 shrink-0 text-blue-500" />;
+    return <Calendar className="h-4 w-4 shrink-0" />;
   }
   if (kind.includes("confirmed") || kind.includes("approved")) {
-    return <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />;
+    return <CheckCircle2 className="h-4 w-4 shrink-0" />;
   }
   if (kind.includes("cancel") || kind.includes("rejected") || kind.includes("declined")) {
-    return <XCircle className="h-4 w-4 shrink-0 text-rose-500" />;
+    return <XCircle className="h-4 w-4 shrink-0" />;
   }
   if (kind.includes("remind") || kind.includes("upcoming")) {
-    return <Clock className="h-4 w-4 shrink-0 text-amber-500" />;
+    return <Clock className="h-4 w-4 shrink-0" />;
   }
   return <Info className="h-4 w-4 shrink-0 text-muted-foreground" />;
 }

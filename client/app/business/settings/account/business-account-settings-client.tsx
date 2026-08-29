@@ -317,7 +317,8 @@ export default function BusinessAccountSettingsClient({
                     Sent to {userEmail}. Email notifications are always enabled.
                   </p>
                 </div>
-                <span className="text-xs font-medium text-green-600 shrink-0">Always on</span>
+                {/* No green "on" tick. It is a fact, not good news. */}
+                <span className="type-micro shrink-0 text-muted-foreground">Always on</span>
               </div>
             </div>
 

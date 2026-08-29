@@ -6,6 +6,7 @@ import { Ban, Mail, Pencil, RefreshCw, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -181,21 +182,11 @@ export default function StaffClient({
     }
   };
 
-  const roleBadgeClass = (value: string) => {
-    if (value === "owner") {
-      return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200";
-    }
-    if (value === "manager") {
-      return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200";
-    }
-    if (value === "inventory_operator") {
-      return "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200";
-    }
-    if (value === "bar_kitchen") {
-      return "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200";
-    }
-    return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200";
-  };
+  /**
+   * Roles were five coloured pills — purple owner, blue manager, amber
+   * inventory, teal bar/kitchen, grey the rest. A role is not a severity and
+   * not a rank; it is a fact about a person, and the words say it. Neutral.
+   */
 
   const pendingInvitations = invitations.filter(
     (invitation) => !invitation.acceptedAt && !invitation.revokedAt,
@@ -239,9 +230,9 @@ export default function StaffClient({
                       {member.user_name || `Staff #${member.id.slice(0, 8)}`}
                       {member.user_id === currentUserId ? " (you)" : ""}
                     </h3>
-                    <span className={`rounded-full px-2 py-0.5 text-xs ${roleBadgeClass(member.role)}`}>
+                    <Badge tone="neutral">
                       {roleLabel(member.role)}
-                    </span>
+                    </Badge>
                   </div>
                 </div>
                 {canManageMember(member) && (
@@ -249,7 +240,8 @@ export default function StaffClient({
                     <Button size="icon" variant="outline" aria-label="Edit role" onClick={() => handleEdit(member)}>
                       <Pencil className="h-3 w-3" />
                     </Button>
-                    <Button size="icon" variant="destructive" aria-label="Remove staff access" onClick={() => setDeletingStaff(member)}>
+                    {/* Not destructive on the row. The confirmation owns the red. */}
+                    <Button size="icon" variant="secondary" aria-label="Remove staff access" onClick={() => setDeletingStaff(member)}>
                       <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>

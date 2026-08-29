@@ -115,7 +115,7 @@ export function FloorPlanSeatingSheet({
           </div>
 
           {needsOverride && (
-            <div className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
+            <div className="space-y-2 border-l-2 border-border-strong bg-secondary p-3">
               <p className="text-sm font-medium">Selected tables seat fewer guests than this party.</p>
               {canOverride ? (
                 <>

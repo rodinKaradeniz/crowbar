@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { clientGetPublicQueueService, clientJoinQueue, clientGetQueueStatus, clientLeaveQueue } from "@/lib/client-api";
 import type { Business, QueueServiceDay, QueueStatus } from "@/types";
-import { NightTheme } from "@/components/night-theme";
 
 const POLL_INTERVAL = 30_000;
 function formatWait(minutes?: number): string {
@@ -169,7 +168,6 @@ export function QueueJoinClient({ business }: { business: Business }) {
 
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 py-12">
-        <NightTheme />
         <div className="w-full max-w-sm space-y-8">
           {/* Business name */}
           <div className="text-center fade-rise">
@@ -261,7 +259,7 @@ export function QueueJoinClient({ business }: { business: Business }) {
             </Button>
           )}
           {stale && (
-            <p className="flex items-center justify-center gap-2 text-xs text-amber-700" role="status">
+            <p className="flex items-center justify-center gap-2 text-[13px] text-muted-foreground" role="status">
               <AlertCircle className="h-3.5 w-3.5" /> Updates are delayed. We&apos;ll keep retrying.
             </p>
           )}
@@ -290,7 +288,6 @@ export function QueueJoinClient({ business }: { business: Business }) {
   if (!service?.isOpen || service.isFull) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-6">
-        <NightTheme />
         <div className="max-w-sm space-y-4 text-center">
           <p className="eyebrow text-brass">{business.name}</p>
           <h1 className="font-display text-3xl">{service?.isFull ? "The queue is full" : "The queue is closed"}</h1>
@@ -307,7 +304,6 @@ export function QueueJoinClient({ business }: { business: Business }) {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 py-12">
-      <NightTheme />
       <div className="w-full max-w-sm space-y-8">
         {/* Header */}
         <div className="text-center fade-rise">

@@ -79,13 +79,13 @@ export function GuestPrivacySection() {
       </p>
 
       {result && (
-        <p className="mt-3 flex items-start gap-2 rounded-md border border-emerald-500/40 p-3 text-sm text-emerald-500">
+        <p className="mt-3 flex items-start gap-2 border-l-2 border-primary bg-brand-wash-2 p-3 text-[length:var(--ui-size)] text-primary">
           <ShieldCheck className="mt-0.5 size-4 shrink-0" />
           {result}
         </p>
       )}
       {error && (
-        <p role="alert" className="mt-3 rounded-md border border-oxblood/40 p-3 text-sm text-rose-500">
+        <p role="alert" className="mt-3 border-l-2 border-critical-fill bg-critical-tint p-3 text-[length:var(--ui-size)] text-critical-text">
           {error}
         </p>
       )}

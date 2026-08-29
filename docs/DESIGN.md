@@ -33,6 +33,18 @@ grep -rEn "#[0-9a-fA-F]{3,8}\b" --include="*.tsx" --include="*.ts" --include="*.
   app components lib contexts hooks | grep -v "app/globals.css"
 ```
 
+**Every hit that survives is one of four named things, and nothing else.** If a
+hit does not fall into one of these, it is a bug:
+
+| What | Where | Why it is there |
+| --- | --- | --- |
+| Held chart series | `app/business/insights/` | The token file declares no categorical palette. Open question 1; Insights ships its chrome ported and its series untouched. |
+| Tenant-chosen colours | `components/color-picker.tsx`, `profile/types/`, `schedule/`, `onboarding-wizard.tsx`, `lib/mock-data.ts` | A venue picks a service-type colour from a fixed palette of twelve. This is **tenant data**, not design tokens — but the palette sits entirely outside the system, and is the same open question as the chart series. Deleting it is a feature removal, so it is recorded rather than changed. |
+| Library selectors | `components/ui/chart.tsx` | Attribute selectors matching hexes that Recharts itself emits (`stroke='#ccc'`). These are matched, never declared. |
+| A hex in a placeholder | `components/color-picker.tsx` | The string `#000000` shown to a user typing a colour. |
+
+Anything else — a colour in a class, a fill, a style object — has drifted.
+
 ## The one idea
 
 **The paper it replaces.** Ruled lines, ledger rows, a ticket rail. Radius

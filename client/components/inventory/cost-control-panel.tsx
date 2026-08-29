@@ -79,7 +79,7 @@ export function CostControlPanel({ businessId }: Props) {
 
   if (error) {
     return (
-      <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+      <div className="border-l-2 border-critical-fill bg-critical-tint px-4 py-3 text-[length:var(--ui-size)] text-critical-text">
         {error}
       </div>
     );
@@ -110,7 +110,7 @@ export function CostControlPanel({ businessId }: Props) {
 
       {/* The disclosure is rendered verbatim: these are operational estimates,
           not accounting output. */}
-      <div className="flex items-start gap-2 rounded-lg border border-brass/40 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+      <div className="flex items-start gap-2 border-l-2 border-border-strong bg-secondary px-4 py-3 text-[length:var(--ui-size)] text-muted-foreground">
         <Info className="mt-0.5 h-4 w-4 shrink-0" />
         <span>{overview.disclosure}</span>
       </div>

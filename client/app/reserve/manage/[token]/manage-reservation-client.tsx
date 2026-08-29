@@ -84,8 +84,11 @@ export default function ManageReservationClient() {
     <h1 className="mt-2 font-display text-3xl">Manage your booking</h1>
     <p className="mt-4 text-sm text-muted-foreground">{formatBusinessDateTime(reservation.time, business?.timezone ?? "UTC", business?.locale)} · {reservation.guests} guests</p>
     <p className="mt-2 text-sm capitalize">Status: <strong>{reservation.status.replace("_", " ")}</strong>{reservation.cancelledLate ? " (late cancellation)" : ""}</p>
-    {reservation.reconfirmedAt && <p className="mt-2 flex items-center gap-2 text-sm text-emerald-500"><CheckCircle2 className="size-4" /> You&apos;re reconfirmed.</p>}
-    {error && <p role="alert" className="mt-4 rounded-md border border-oxblood/40 p-3 text-sm text-rose-500">{error}</p>}
+    {/* Brand, not a green tick — this is "we have you", not a success state. */}
+    {reservation.reconfirmedAt && (
+      <p className="mt-2 text-[length:var(--ui-size)] text-primary">You&apos;re reconfirmed.</p>
+    )}
+    {error && <p role="alert" className="mt-4 border-l-2 border-critical-fill bg-critical-tint p-3 text-[length:var(--ui-size)] text-critical-text">{error}</p>}
     {active && <div className="mt-6 flex flex-wrap gap-3">
       <Button onClick={() => void run("reconfirm")} disabled={action !== null}><CheckCircle2 /> {action === "reconfirm" ? "Saving…" : "I’m still coming"}</Button>
       <Button variant="outline" onClick={() => void run("cancel")} disabled={action !== null}><X /> {action === "cancel" ? "Cancelling…" : "Cancel reservation"}</Button>

@@ -18,7 +18,6 @@ import { Business, ServiceType } from "@/types";
 import { ReservationForm } from "@/components/reservation-form";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { NightTheme } from "@/components/night-theme";
 
 interface ReserveClientProps {
   business: Business;
@@ -61,7 +60,6 @@ export default function ReserveClient({ business, serviceTypes }: ReserveClientP
   if (!business.publicReservationsEnabled) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-6 text-center">
-        <NightTheme />
         <div className="max-w-md">
           <CalendarDays className="mx-auto size-10 text-brass" />
           <p className="eyebrow mt-5 text-brass">Reservations</p>
@@ -83,7 +81,6 @@ export default function ReserveClient({ business, serviceTypes }: ReserveClientP
   if (isWidget) {
     return (
       <div className="p-4">
-        <NightTheme />
         <ReservationForm
           businessId={business.id}
           businessTimezone={business.timezone ?? "UTC"}
@@ -97,7 +94,6 @@ export default function ReserveClient({ business, serviceTypes }: ReserveClientP
 
   return (
     <div className="min-h-screen bg-background">
-      <NightTheme />
       {/* Hero */}
       <div className="relative h-80 md:h-104 w-full overflow-hidden">
         {business.image ? (
@@ -109,10 +105,10 @@ export default function ReserveClient({ business, serviceTypes }: ReserveClientP
             priority
           />
         ) : (
-          <div className="absolute inset-0 bg-linear-to-br from-[#33281f] via-[#2a211a] to-[#201914]" />
+          <div className="absolute inset-0 bg-ink" />
         )}
         {/* Candlelit dim: settle the photo into the walnut ground */}
-        <div className="absolute inset-0 bg-linear-to-t from-[#201914] via-[#201914]/55 to-[#201914]/20" />
+        <div className="absolute inset-0 bg-linear-to-t from-ink via-ink/60 to-transparent" />
 
         {/* Crowbar branding */}
         <div className="absolute top-4 left-4">

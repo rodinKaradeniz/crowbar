@@ -103,7 +103,7 @@ export function CountsPanel({ businessId, businessTimezone, canManage }: Props) 
       </div>
 
       {error && (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="border-l-2 border-critical-fill bg-critical-tint px-4 py-3 text-[length:var(--ui-size)] text-critical-text">
           {error}
         </div>
       )}
@@ -135,7 +135,8 @@ export function CountsPanel({ businessId, businessTimezone, canManage }: Props) 
               </div>
               <Badge
                 variant="outline"
-                className={session.status === "open" ? "text-marzen" : "text-muted-foreground"}
+                /* A count in progress is a workflow position, not a severity. */
+                className="text-muted-foreground"
               >
                 {session.status === "open"
                   ? "Open"

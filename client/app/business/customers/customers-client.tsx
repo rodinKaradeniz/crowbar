@@ -11,10 +11,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { VisitorResponse, ServiceType } from "@/types";
-import { cn } from "@/lib/utils";
 import { Search } from "lucide-react";
 import { formatBusinessDate } from "@/lib/business-time";
 import { useRegionalSettings } from "@/contexts/regional-context";
@@ -26,19 +26,15 @@ interface CustomersClientProps {
   businessTimezone: string;
 }
 
-const SEGMENT_STYLES: Record<string, string> = {
-  Champions: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-  "Loyal Customers": "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-  "Potential Loyalists": "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
-  "At Risk": "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
-  "Lost Customers": "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-  Others: "bg-muted text-muted-foreground",
-};
-
-const SOURCE_STYLES = {
-  reservation: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-  walkin: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
-};
+/**
+ * Segments and sources used to be five and two coloured pills — green, blue,
+ * purple, yellow, red, amber. That is a categorical palette the token file does
+ * not declare, and it is a second status object competing with the badge.
+ *
+ * A guest's segment is NEUTRAL under the rank. How often someone visits has no
+ * deadline attached to it at all, and "At Risk" in amber beside a genuinely
+ * late booking would make the two look equally urgent. The words carry it.
+ */
 
 const SOURCE_LABELS = {
   reservation: "Reservation",
@@ -114,14 +110,7 @@ export default function CustomersClient({
                   <TableCell className="font-medium">{v.name}</TableCell>
 
                   <TableCell>
-                    <span
-                      className={cn(
-                        "text-xs px-2 py-1 rounded-full font-medium",
-                        SOURCE_STYLES[v.source],
-                      )}
-                    >
-                      {SOURCE_LABELS[v.source]}
-                    </span>
+                    <Badge tone="neutral">{SOURCE_LABELS[v.source]}</Badge>
                   </TableCell>
 
                   <TableCell>
@@ -161,15 +150,7 @@ export default function CustomersClient({
                   {hasSegments && (
                     <TableCell>
                       {customerSegments![v.id] ? (
-                        <span
-                          className={cn(
-                            "text-xs px-2 py-1 rounded-full font-medium whitespace-nowrap",
-                            SEGMENT_STYLES[customerSegments![v.id]] ||
-                              SEGMENT_STYLES.Others,
-                          )}
-                        >
-                          {customerSegments![v.id]}
-                        </span>
+                        <Badge tone="neutral">{customerSegments![v.id]}</Badge>
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}

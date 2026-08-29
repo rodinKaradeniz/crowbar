@@ -211,7 +211,7 @@ export default function BusinessInfoClient({
               </Field>
 
               {!privacyReady && (
-                <div className="flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                <div className="flex gap-2 border-l-2 border-border-strong bg-secondary p-3 text-[length:var(--ui-size)]">
                   <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                   <p>
                     Public booking, queue and ordering pages will not be served in

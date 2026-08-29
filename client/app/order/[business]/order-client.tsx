@@ -13,7 +13,6 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Trash2, CheckCircle2, Clock } from "lucide-react";
 import Link from "next/link";
-import { NightTheme } from "@/components/night-theme";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { formatMoney } from "@/lib/money";
@@ -30,7 +29,9 @@ const STATUS_LABEL: Record<string, string> = {
 const STATUS_COLOR: Record<string, string> = {
   received: "bg-secondary text-foreground",
   preparing: "bg-primary/15 text-primary",
-  ready: "bg-[#5f9c7e]/25 text-[#8ecbaa]",
+  // Brand, not a success colour: "ready" means the bar is holding it for
+  // you, which is the live-and-healthy channel, not good news about a number.
+  ready: "bg-primary/20 text-primary",
   served: "bg-muted text-muted-foreground",
   cancelled: "bg-destructive/15 text-destructive",
 };
@@ -184,7 +185,6 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
   if (placed) {
     return (
       <div className="min-h-screen bg-background p-6 max-w-md mx-auto">
-        <NightTheme />
         <div className="text-center mb-8 fade-rise">
           <CheckCircle2 className="h-10 w-10 text-primary mx-auto mb-3" />
           <h1 className="font-display text-2xl">Order placed</h1>
@@ -264,7 +264,6 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
 
   return (
     <div className="min-h-screen bg-background pb-32">
-      <NightTheme />
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b px-6 py-3 flex items-center gap-2">
         <Link href={`/menu/${businessSlug}`}
           className="eyebrow text-muted-foreground hover:text-primary transition-colors"

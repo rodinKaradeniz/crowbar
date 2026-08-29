@@ -221,8 +221,11 @@ grep -rEn "#[0-9a-fA-F]{3,8}\b" --include="*.tsx" --include="*.ts" --include="*.
   app components lib contexts hooks | grep -v "app/globals.css"
 ```
 
-The only sanctioned exception is the held chart-series colours in
-`app/business/insights/` — see the open design questions in `docs/DESIGN.md`.
+Every surviving hit must be one of the four named categories in
+`docs/DESIGN.md` under *Rule zero* — held Insights chart series, tenant-chosen
+service-type colours, Recharts attribute selectors, or the `#000000` placeholder
+in the colour picker. **Anything else has drifted.** Do not add a fifth
+category; raise it as a design question instead.
 
 Drive the surface in `./scripts/dev.sh` at **1280 and at 1024×768** before
 claiming a staff screen works.

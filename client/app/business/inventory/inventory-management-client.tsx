@@ -49,7 +49,6 @@ import {
   type UnitType,
 } from "@/lib/units";
 import {
-  AlertTriangle,
   ArrowDownCircle,
   ArrowUpCircle,
   History,
@@ -142,20 +141,22 @@ function movementTypeLabel(type: string) {
   return "Adjust";
 }
 
+/**
+ * A stock movement, in mono. NO COLOUR.
+ *
+ * Receiving stock was green, waste was red, adjustments amber. None of the
+ * three is a severity: waste that happened an hour ago is a record, not
+ * something to handle before the night ends, and green for "stock arrived" is
+ * the success-tick pattern this system does not have. The sign and the movement
+ * type already say which direction it went.
+ */
 function movementDeltaDisplay(movement: StockMovement) {
   const delta = movement.quantityDelta;
   const sign = delta > 0 ? "+" : "";
-  const colorClass =
-    movement.movementType === "receive"
-      ? "text-green-600"
-      : movement.movementType === "waste"
-        ? "text-red-600"
-        : delta >= 0
-          ? "text-amber-600"
-          : "text-amber-600";
   return (
-    <span className={`font-mono text-sm font-medium ${colorClass}`}>
-      {sign}{delta}
+    <span className="font-mono text-[length:var(--data-size)] font-medium tabular-nums">
+      {sign}
+      {delta}
     </span>
   );
 }
@@ -480,25 +481,35 @@ export function InventoryManagementClient({ businessId, businessTimezone, embedd
 
       {/* Low-stock alert strip */}
       {lowStockItems.length > 0 && (
-        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          <span>
-            <span className="font-medium">{lowStockItems.length}</span>{" "}
-            {lowStockItems.length === 1 ? "item is" : "items are"} below par level:{" "}
-            {lowStockItems.map((i) => i.name).join(", ")}
-          </span>
+        /* NEUTRAL, deliberately. §08 names par levels twice as the case that
+           does not qualify for a severity — "a note for Tuesday's order, not an
+           alarm during service". It was amber; a bartender mid-rush now sees it
+           sit quietly where it belongs. */
+        <div className="border-l-2 border-border-strong bg-secondary px-4 py-3">
+          <p className="type-label mb-1 text-foreground">Below par</p>
+          <p className="text-[length:var(--ui-size)] text-muted-foreground">
+            {lowStockItems.length}{" "}
+            {lowStockItems.length === 1 ? "item is" : "items are"} under par:{" "}
+            {lowStockItems.map((item) => item.name).join(", ")}. One for the next
+            order, not for tonight.
+          </p>
         </div>
       )}
 
       {discrepancies.length > 0 && (
-        <div className="flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <div>
-            <div className="font-medium">
-              {discrepancies.length} inventory integrity {discrepancies.length === 1 ? "incident needs" : "incidents need"} review
-            </div>
-            <div className="mt-1">{discrepancies.map((incident) => incident.details).join(" · ")}</div>
-          </div>
+        /* A stock record that disagrees with itself is a defect in the book,
+           not a service failure. It is stated plainly and prominently and takes
+           the critical TEXT colour without the fill — nothing here needs
+           handling in the next five minutes. */
+        <div className="border-l-2 border-critical-fill bg-critical-tint px-4 py-3" role="alert">
+          <p className="type-label mb-1 text-critical-text">
+            {discrepancies.length === 1
+              ? "One record does not add up"
+              : `${discrepancies.length} records do not add up`}
+          </p>
+          <p className="text-[length:var(--ui-size)] text-muted-foreground">
+            {discrepancies.map((incident) => incident.details).join(" · ")}
+          </p>
         </div>
       )}
 
@@ -524,11 +535,6 @@ export function InventoryManagementClient({ businessId, businessTimezone, embedd
               key={item.id}
               className="flex items-center gap-3 rounded-lg border px-4 py-3"
             >
-              {/* Low-stock icon */}
-              {item.isLowStock && (
-                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
-              )}
-
               {/* Name + meta */}
               <div className="flex-1 min-w-0">
                 <p className="font-medium truncate">{item.name}</p>
@@ -558,16 +564,12 @@ export function InventoryManagementClient({ businessId, businessTimezone, embedd
               )}
 
               {/* Quantity badge */}
-              <Badge
-                variant="outline"
-                className={
-                  item.isLowStock
-                    ? "border-red-300 bg-red-50 text-red-700"
-                    : "border-green-300 bg-green-50 text-green-700"
-                }
-              >
+              {/* Both states neutral. Below par is a purchasing fact; the
+                  badge says the words, and the quantity carries the rest. */}
+              <span className="font-mono text-[length:var(--data-size)] tabular-nums">
                 {item.currentQuantity} {item.unit}
-              </Badge>
+              </span>
+              {item.isLowStock ? <Badge tone="neutral">Below par</Badge> : null}
 
               {/* Actions */}
               <div className="flex gap-1 shrink-0">
@@ -601,7 +603,7 @@ export function InventoryManagementClient({ businessId, businessTimezone, embedd
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                  className="h-8 w-8 p-0"
                   title="Archive item"
                   onClick={() => deleteItem(item)}
                 >
@@ -850,19 +852,19 @@ export function InventoryManagementClient({ businessId, businessTimezone, embedd
                 <SelectContent>
                   <SelectItem value="receive">
                     <span className="flex items-center gap-2">
-                      <ArrowUpCircle className="h-3.5 w-3.5 text-green-600" />
+                      <ArrowUpCircle className="h-3.5 w-3.5" />
                       Receive (stock in)
                     </span>
                   </SelectItem>
                   <SelectItem value="waste">
                     <span className="flex items-center gap-2">
-                      <ArrowDownCircle className="h-3.5 w-3.5 text-red-600" />
+                      <ArrowDownCircle className="h-3.5 w-3.5" />
                       Waste (stock out)
                     </span>
                   </SelectItem>
                   <SelectItem value="adjust">
                     <span className="flex items-center gap-2">
-                      <RefreshCw className="h-3.5 w-3.5 text-amber-600" />
+                      <RefreshCw className="h-3.5 w-3.5" />
                       Adjust (manual correction)
                     </span>
                   </SelectItem>
@@ -1011,21 +1013,12 @@ export function InventoryManagementClient({ businessId, businessTimezone, embedd
                         {movementTypeLabel(m.movementType)}
                       </Badge>
                       {m.reason && (
-                        <Badge
-                          variant="outline"
-                          className="text-xs border-red-200 bg-red-50 text-red-700"
-                        >
+                        <Badge tone="neutral">
                           {WASTE_REASON_LABELS[m.reason]}
                         </Badge>
                       )}
                       {m.alertTriggered && (
-                        <Badge
-                          variant="outline"
-                          className="text-xs border-amber-300 bg-amber-50 text-amber-700"
-                        >
-                          <AlertTriangle className="h-3 w-3 mr-1" />
-                          Alert sent
-                        </Badge>
+                        <Badge tone="neutral">Alert sent</Badge>
                       )}
                     </div>
                     {m.notes && (

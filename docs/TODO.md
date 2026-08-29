@@ -511,6 +511,15 @@ in the port.
 Raised rather than answered locally, per rule zero — a value that is needed and
 missing is a design question, not an implementation choice.
 
+- **Per-tenant service-type colours.** A venue picks a colour for each service
+  type from a fixed palette of twelve arbitrary hues in
+  `client/components/color-picker.tsx`. Nothing in the token block governs them,
+  and they surface on the schedule and (until this port) as a dot beside every
+  booking. The dot is gone — it was a second status object competing with the
+  badge — but the colours are still stored and still shown on the schedule.
+  This is the same question as the chart palette: either the system declares a
+  categorical set, or per-tenant colour leaves the product. *Trigger:* the chart
+  palette question is answered.
 - **Categorical chart palette.** `crowbar-tokens.css` declares no multi-series
   chart colours. `/business/insights` renders five guest segments and several
   multi-series bars on raw Tailwind hex. `--chart-1..5` are aliased to brand

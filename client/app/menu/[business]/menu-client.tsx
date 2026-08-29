@@ -31,7 +31,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ShoppingCart, Plus, Minus, ChefHat } from "lucide-react";
 import Link from "next/link";
-import { NightTheme } from "@/components/night-theme";
 import { formatMoney } from "@/lib/money";
 import { useRegionalSettings } from "@/contexts/regional-context";
 
@@ -132,7 +131,6 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <NightTheme />
         <p className="eyebrow">Opening the menu…</p>
       </div>
     );
@@ -141,7 +139,6 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
   if (!menu) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <NightTheme />
         <div className="text-center px-6">
           <ChefHat className="h-10 w-10 mx-auto text-muted-foreground mb-4" />
           <p className="font-display text-xl">No menu available</p>
@@ -153,7 +150,6 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
 
   return (
     <div className="min-h-screen bg-background pb-32">
-      <NightTheme />
 
       {/* Masthead — set like the cover of a printed list */}
       <header className="px-6 pt-10 pb-6 text-center fade-rise">

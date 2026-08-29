@@ -1406,7 +1406,7 @@ function CategorySection({
                   {stockInfo.get(item.id)?.hasLowStockIngredient && (
                     <Badge
                       variant="outline"
-                      className="text-xs h-4 flex items-center gap-1 border-amber-300 bg-amber-50 text-amber-700"
+                      className="flex items-center gap-1"
                       title="A recipe ingredient is below par level"
                     >
                       <AlertTriangle className="h-3 w-3" />

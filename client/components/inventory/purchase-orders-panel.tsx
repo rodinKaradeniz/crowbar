@@ -55,13 +55,15 @@ const STATUS_LABELS: Record<PurchaseOrder["status"], string> = {
   cancelled: "Cancelled",
 };
 
-// Amber while the order is still owed, neutral once it is settled one way or
-// another. `closed_short` reads as a real outcome, not a failure.
+// All neutral. A purchase order still owed is next week's problem by
+// definition — §08 puts ordering on the neutral tier explicitly, and it is one
+// of the two cases it says NEVER qualifies as attend. Position and weight carry
+// which stage an order is at; `closed_short` is a real outcome, not a failure.
 const STATUS_CLASS: Record<PurchaseOrder["status"], string> = {
   draft: "text-muted-foreground",
-  approved: "text-marzen",
-  ordered: "text-marzen",
-  partially_received: "text-marzen",
+  approved: "text-foreground",
+  ordered: "text-foreground",
+  partially_received: "text-foreground",
   received: "text-foreground",
   closed_short: "text-muted-foreground",
   cancelled: "text-muted-foreground",
@@ -311,7 +313,7 @@ export function PurchaseOrdersPanel({ businessId, canManage, canApprove }: Props
       </div>
 
       {error && (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="border-l-2 border-critical-fill bg-critical-tint px-4 py-3 text-[length:var(--ui-size)] text-critical-text">
           {error}
         </div>
       )}
