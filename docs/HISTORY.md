@@ -1555,3 +1555,45 @@ count variance and dietary notes.
 
 **References:** Files, migration, issue, PR, or commit.
 ```
+
+## 2026-08-29 — The rev-3 port shipped: two grounds, one rank, two targets
+
+The redesign landed as one branch, `redesign/crowbar-rev3`. What actually
+changed, beyond the palette:
+
+**The severity rank replaced ad-hoc colour.** An audit of 170 red and amber
+call sites found that almost none of them qualified. Below-par stock, count
+variance, dietary notes, table states, order workflow positions, guest
+segments, staff roles, purchase-order stages, model fit statistics and
+month-over-month declines are all neutral now. One case moved the other way and
+it is the important one: a live board that has lost its connection was drawn in
+amber, and is critical — it gets a persistent bar that never self-dismisses.
+The rank lives in `client/lib/severity.ts` as a procedure so it is not
+re-litigated per file.
+
+**Two grounds replaced the dual-theme toggle.** Product is ink, marketing and
+auth are paper, fixed by surface rather than chosen. `staff-theme.tsx`,
+`night-theme.tsx` and the `crowbar-staff-theme` preference are gone — a
+user-visible feature removal, made because a preference cannot be reasoned
+about: a design that knows it renders on ink can measure its contrast, and one
+that might be either cannot.
+
+**A shell instead of a drawer.** The collapsed off-canvas sidebar became a
+permanent 228px rail on desktop and a 76px bottom bar on tablet. Both read from
+one nav model in `lib/nav.ts`, and both fail closed while capabilities load —
+the old sidebar defaulted to showing everything, which briefly showed tenants
+modules they had not bought.
+
+**Claims were corrected, not just restyled.** Several strings promised
+capabilities the product does not have: offline order-taking, spreadsheet menu
+import, printer support, an invented set of five role names, and an
+"attempts remaining" counter with no counter behind it. All were changed. The
+rule is the same one that governs the settlement vocabulary, applied to
+features: a page may not claim a capability the product lacks.
+
+**Two dev-only CSS bugs were found by running the stack rather than the build.**
+A `*/` inside a comment terminated it early, and `@media (width >= var(--x))`
+is not valid CSS. `next build` tolerated both; `next dev` did not.
+
+`docs/DESIGN.md` is now the committed contract stage 7 asked for, and the
+`frontend-design` skill was rewritten against it in the same change.

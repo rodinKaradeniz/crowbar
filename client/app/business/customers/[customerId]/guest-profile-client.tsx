@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, Download, GitMerge, Loader2, Plus, Save, Tags, Trash2 } from "lucide-react";
+import { ArrowLeft, Download, GitMerge, Loader2, Plus, Save, Tags, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";

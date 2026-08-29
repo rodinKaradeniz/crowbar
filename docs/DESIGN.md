@@ -153,6 +153,14 @@ stage 7 audit of 170 red/amber call sites; the reasoning lives in
 | Table state (free / seated / reserved / cleaning / out of service) | neutral | Workflow position. Seated tables carry a brand bar, not a hue. |
 | Order status (received / preparing / ready / served) | neutral | Workflow position. |
 | Guest dietary or allergy note | neutral | The Dashboard canvas shows "Note · shellfish" as plain neutral text. |
+| Guest segment (Champions, At Risk…) | neutral | A visit frequency has no deadline at all. Was five coloured pills on two screens. |
+| Staff role | neutral | A job title is a fact, not a rank. Was five more coloured pills. |
+| Purchase-order stage | neutral | §08 names ordering as one of two things that **never** qualify as attend. |
+| Stock movement (receive / waste / adjust) | neutral | A record of something that already happened. Green for "stock arrived" is the success-tick pattern this system does not have. |
+| Ordering paused by a manager | neutral | A deliberate setting is not a failure. Loud by position and weight. |
+| Stock record that disagrees with itself | critical **text**, no fill | A defect in the book. Stated plainly; nothing to do in the next five minutes. |
+| Model fit statistic / cancellation-risk score | neutral | A forecast about next week does not outrank a late ticket. |
+| Notification origin (staff / guest) | neutral | Was eight icons across five hues. |
 
 ## Type
 
@@ -275,27 +283,53 @@ unfinished.**
 | Module-disabled | `module-disabled.tsx` | The nav entry is **removed, not greyed**. "Your venue has not bought this." |
 | Permission-denied | `role-restricted.tsx` | "Your job does not include this." Deliberately a different answer from module-disabled — telling an operator the wrong one sends them to a settings page that cannot help. |
 | Error | `app/error.tsx`, `dashboard-error-boundary.tsx` | Critical, with a retry. |
-| Offline | offline bar | A persistent 38px band at the top of the viewport carrying the time since last contact, the count held on the device, and a retry. **Never a toast. Never self-dismissing.** It is the one alarm in the system. |
+| Offline | `offline-bar.tsx` | A persistent 38px band at the top of the viewport carrying the time since last contact and a retry. **Never a toast. Never self-dismissing.** It is the one alarm in the system. The count of work held on the device is **omitted** — there is no offline outbox, and claiming one would be a lie about what is safe. |
 
 ## Motion
 
 120ms for colour and border on hover and press; 180ms ease-out for anything
-that enters; 2s pulse for live-and-healthy only; 1.4s breathe for skeletons; 2s
-slow flash on the offline bar. **Nothing else moves**, and all of it is off
-under `prefers-reduced-motion`.
+that enters; 2s pulse for live-and-healthy only; 1.4s breathe for skeletons;
+2s slow flash on the offline bar. **Nothing else moves.**
+
+Overlay enter and exit are four keyframes in `globals.css`, driven by the
+`data-state` attributes Radix already sets: in on `--dur-enter` /
+`--ease-enter`, out on `--dur-press`. Getting out of the way should not be a
+performance. This replaced `tw-animate-css`, which carried its own durations
+and easings — values the token block does not declare.
+
+All motion is off under `prefers-reduced-motion`.
 
 ## Responsive
 
-The landing page is fluid — `clamp()` type, wrapping bands, ruled rows that
-stack in reading order.
+Two targets, and no others. There is no phone design; if a task needs one, that
+is a design question, and stage 7's phone exit gate is **recorded as unmet**.
 
-The product is designed **twice**: desktop at `--bp-desktop` 1280+ with the
-228px rail, and a real tablet layout at 1024×768 with its own bottom-bar
-navigation and a 48px floor on every control. **Nothing anywhere depends on
-hover.**
+| | Desktop | Tablet |
+| --- | --- | --- |
+| Width | ≥ `--bp-desktop` (1280) | 1024×768 |
+| Navigation | 228px rail, three groups | 76px bottom bar, four service screens + More |
+| Primary action | In the header | Bottom-right, 20px in — on screens whose corner is free |
+| Controls | 34–44px | **≥ 48px, a floor** |
+| Table rows | 44px | 56px |
+| UI text | 14px | 15px |
+| Figure band | 52px, four | 66px, **two** |
+| Hover | May refine | **Never load-bearing** |
 
-Below 1024 the tablet layout renders with whatever reflow falls out. There is
-no phone design — see Open design questions.
+The tablet half of this is one media query in `globals.css` that redefines five
+tokens below the breakpoint. Because the product reads its sizes through those
+tokens rather than through literals, that single rule moves every control
+height, every row and all UI text on every screen at once. Nothing new is
+declared — the tablet values simply take over.
+
+The structural half — bottom bar, thumb-reach action — lives in
+`components/business-bottom-bar.tsx` and `components/business-shell.tsx`. Both
+navigations are always in the tree and share `hooks/use-workspace-nav.ts`, so
+they can never disagree about what an operator may open.
+
+**One deliberate divergence from the canvas.** The floating action does not
+appear on every screen. The canvas floats it over a read-only feed; on a data
+table it sits permanently on top of one row's controls, which is a control you
+cannot reach rather than one you can. It renders where the corner is free.
 
 ## Language
 
@@ -368,7 +402,14 @@ than simulating it. Each is tracked in `docs/TODO.md`.
 | --- | --- | --- |
 | Ticket **target time** | `Order` has `placedAt` and a `statusTimeline`, so age is computable; no target threshold is configured anywhere. | Age renders neutral. Ageing colour cannot be applied. |
 | Per-party **quoted wait** | `measured_wait_estimate` is a board-level median; `QueueEntry` stores no quote-at-join, and the quote moves during service. | Wait renders neutral. |
-| Offline bar duration + held count | The four socket hooks return `{ connected }` only. No last-contact timestamp, no offline outbox. | Bar ships with connection state and retry; duration and held count omitted. |
+| Offline bar duration + held count | The hooks now also report `lastContactAt`, added during the port. There is still no offline outbox. | Bar shows real time-since-contact; the **held count is omitted**, because there is nothing held. |
+| Table assignment on the overview's arrivals list | `upcoming_reservations` carries no table id. | The table column is an em-dash for every row, and "no table" — a real attend case — cannot be shown there. |
+| Nav badge counts for Tickets, Reservations, Inventory | Only `clientGetQueueActiveCount` exists. | Only the queue badge ships. Three more 30-second polls is a change to how the app loads, not a presentation change. |
+| Header "Live · synced 2s ago" | The shell holds no socket; the four that exist belong to the boards. | Not shown. A header claiming a connection it is not watching is the failure the offline bar exists to prevent. The clock beside it **is** real, in the venue's own timezone. |
+| Account lockout and "attempts remaining" | `auth_login_identity` is a 10-per-10-minute rate limit keyed on IP + email; a 401 carries no counter. | The ladder ships rungs 1 and 2 and the locked rung against the real 429, counting down from the server's `Retry-After`. No attempt count is claimed. |
+| Password-reset link expiry time | `forgot-password` returns nothing about the token. | The screen states the window ("works for one hour"), not a wall-clock time. |
+| "Keep me signed in on this device" | Every session is a 7-day cookie. | Not rendered. The control would change nothing. |
+| Exact service-day cutoff on a tab | `service_day_cutoff` is not on the tab payload. | "Open since last night" compares business-local calendar days, documented at the call site. |
 | "Right now" activity feed | No live event feed. `staff_actions` is a range report and deliberately not an audit log. | Honest empty/unavailable, or composed only from existing endpoints. |
 | "Close the night" | No service-day close action exists. | Not built. |
 | Trial countdown | No subscription model on `Business`. | Omitted. |

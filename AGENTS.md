@@ -144,15 +144,29 @@ actions — each over a chosen range with CSV export, and none of them a fiscal
 or accounting report. Insights survives an ML restart by serving its last
 result marked stale.
 
-Stage 7, the interface redesign pass, is in progress. The design direction is
-now **closed**: [docs/DESIGN.md](docs/DESIGN.md) is the committed contract,
-ported from the locked rev-3 deliverable, and it owns the token layer, the
-three-tier severity rank and its qualification test, the primitive set, the six
-mandatory states, and the two fixed grounds. `client/lib/severity.ts` encodes
-the rank as a procedure — do not classify a severity inside a component. The
-retired dark-mode toggle is gone; grounds are fixed by surface. Backend gaps the
-design assumes, and the open design questions, are recorded in
-[docs/TODO.md](docs/TODO.md) §7a and §7b.
+Stage 7, the interface redesign pass, is **ported**. The design direction is
+closed: [docs/DESIGN.md](docs/DESIGN.md) is the committed contract, taken from
+the locked rev-3 deliverable, and it owns the token layer, the three-tier
+severity rank and its qualification test, the primitive set, the six mandatory
+states, and the two fixed grounds.
+
+Four things that will bite if you do not know them:
+
+- **Rule zero.** No colour, size, spacing value, radius or duration enters that
+  the `:root` block in `client/app/globals.css` does not declare. The raw-hex
+  grep in DESIGN.md is the check, and it names the only four categories of hit
+  that are allowed to survive.
+- **Severity is a procedure, not a judgement.** `client/lib/severity.ts` owns
+  it. Do not classify a severity inside a component, and do not reach for red
+  because something looks bad — the rank's whole job is to stop that.
+- **Grounds are fixed by surface**, not chosen. The dark-mode toggle is gone.
+- **Two targets only**: desktop 1280+ and tablet 1024×768. There is no phone
+  design; stage 7's phone exit gate is recorded as **unmet**.
+
+Backend gaps the design assumes, and the open design questions it raised, are in
+[docs/TODO.md](docs/TODO.md) §7a and §7b. Several are load-bearing: three of the
+four critical cases in the rank are not derivable yet, so critical legitimately
+appears on very few surfaces.
 
 After stage 7 come the local release gate (8), deployment (9), the supervised
 pilot (10), and a mobile client (11).
