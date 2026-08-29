@@ -53,7 +53,16 @@ export default function RootLayout({
     // `lang` is a neutral default here: the root layout has no tenant. Surfaces
     // that resolve one set it from the venue's configured locale via
     // <DocumentLocale /> — see components/document-locale.tsx.
-    <html lang="en" className="min-h-screen bg-background">
+    // `suppressHydrationWarning` covers exactly one thing: the boot script
+    // below adds `ground-ink` to this element before React hydrates, and
+    // `document-locale.tsx` rewrites `lang` from tenant config. Both are
+    // deliberate pre-hydration mutations of <html>, which is what this
+    // attribute is for. It does not extend to any child.
+    <html
+      lang="en"
+      className="min-h-screen bg-background"
+      suppressHydrationWarning
+    >
       <head>
         <script dangerouslySetInnerHTML={{ __html: GROUND_BOOT_SCRIPT }} />
       </head>

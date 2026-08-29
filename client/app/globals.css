@@ -504,7 +504,11 @@
   --spacing-control-tablet-min: var(--control-tablet-min);
   --spacing-grid-marketing: var(--grid-marketing);
 
-  --breakpoint-desktop: var(--bp-desktop);
+  /* A media query cannot read a custom property, so this is the one value in
+     the bridge that must be written literally. It MUST match --bp-desktop
+     above. (It is also Tailwind's own `xl`, which is not a coincidence — 1280
+     is where the 228px rail plus a readable table stops fitting.) */
+  --breakpoint-desktop: 1280px;
 }
 
 @layer base {
@@ -621,7 +625,8 @@
   .mkt-panel-title { font-family: var(--font-display); font-weight: 700; font-size: 22px; letter-spacing: -0.024em; }
   .mkt-faq-q { font-family: var(--font-display); font-weight: 600; font-size: 18px; letter-spacing: -0.018em; }
 
-  /* Figures. Marketing runs its own sizes; the product's live in --d*/Figure. */
+  /* Figures. Marketing runs its own sizes; the product's live in the --d1/--d2
+     steps and the Figure primitive. */
   .mkt-fig-lg { font-family: var(--font-display); font-weight: 800; font-size: 52px; line-height: 0.85; letter-spacing: -0.04em; }
   .mkt-fig-md { font-family: var(--font-display); font-weight: 800; font-size: 40px; line-height: 1; letter-spacing: -0.03em; }
   .mkt-fig-sm { font-family: var(--font-display); font-weight: 800; font-size: 26px; letter-spacing: -0.03em; }
