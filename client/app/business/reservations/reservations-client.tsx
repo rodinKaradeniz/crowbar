@@ -2,7 +2,9 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { ReservationAccordion } from "@/components/reservation-accordion";
+import { EmptyState } from "@/components/empty-state";
+import { ReservationPanel } from "@/components/reservation-panel";
+import { ReservationTable } from "@/components/reservation-table";
 import { ReservationSearchFilter } from "@/components/reservation-search-filter";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import {
@@ -13,7 +15,7 @@ import { StaffReservationDialog } from "@/components/staff-reservation-dialog";
 import { ReservationTablePlan } from "@/components/reservation-table-plan";
 import { ReservationWaitlistPanel } from "@/components/reservation-waitlist-panel";
 import { Button } from "@/components/ui/button";
-import { CalendarClock, Pencil, Plus, X } from "lucide-react";
+import { useServiceClock } from "@/hooks/use-service-clock";
 import type { Reservation, ReservationWaitlistEntry, ServiceType } from "@/types";
 import { CustomerResponse } from "@/lib/api-client";
 import { clientMarkReservationNoShow, clientUpdateReservation } from "@/lib/client-api";
@@ -55,6 +57,8 @@ export default function ReservationsClient({
   const [searchQuery, setSearchQuery] = useState("");
   const [serviceTypeFilter, setServiceTypeFilter] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [openReservation, setOpenReservation] = useState<Reservation | null>(null);
+  const { now, ready } = useServiceClock();
 
   // Build a lookup map for customers
   const customerMap = useMemo(() => {
@@ -143,17 +147,28 @@ export default function ReservationsClient({
     }
   };
 
+  const serviceTypeMap = useMemo(() => {
+    const map = new Map<string, ServiceType>();
+    serviceTypes.forEach((type) => map.set(type.id, type));
+    return map;
+  }, [serviceTypes]);
+
+  const panelReservation = openReservation
+    ? (reservations.find((item) => item.id === openReservation.id) ??
+      openReservation)
+    : null;
+
   return (
-    <div className="page-container">
+    <div className="flex flex-col gap-6 px-[clamp(16px,2.5vw,32px)] py-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="page-title">Reservations</h1>
-          <p className="page-description">
-            View confirmed reservations for your business
+          <h1 className="type-t1">Reservations</h1>
+          <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
+            The book, for every device and every shift.
           </p>
         </div>
         <Button type="button" onClick={() => setCreatingReservation(true)}>
-          <Plus /> New reservation
+          New reservation
         </Button>
       </div>
 
@@ -165,74 +180,112 @@ export default function ReservationsClient({
         serviceTypes={serviceTypes}
       />
 
-      <ReservationAccordion
-        reservations={reservations}
-        serviceTypes={serviceTypes}
-        customers={customers}
-        emptyMessage="No confirmed reservations found."
+      {initialReservations.length === 0 ? (
+        <EmptyState
+          title="Nothing on the book"
+          description="Bookings from your public page and from staff land here on one schedule, kept by everyone at once."
+          action={{
+            label: "Take a booking",
+            onClick: () => setCreatingReservation(true),
+          }}
+        />
+      ) : (
+        <ReservationTable
+          reservations={reservations}
+          serviceTypes={serviceTypes}
+          customers={customers}
+          businessTimezone={businessTimezone}
+          now={ready ? now : null}
+          onOpen={setOpenReservation}
+          emptyMessage="Nothing matches that search."
+          rowActions={(reservation) => (
+            <>
+              <Button
+                size="filter"
+                variant="secondary"
+                disabled={actionLoading === reservation.id}
+                onClick={() => handleEdit(reservation)}
+              >
+                Edit
+              </Button>
+              {isReservationReschedulable(reservation, currentTime) ? (
+                <Button
+                  size="filter"
+                  variant="secondary"
+                  disabled={actionLoading === reservation.id}
+                  onClick={() => setReschedulingReservation(reservation)}
+                >
+                  Move
+                </Button>
+              ) : null}
+              {/* Not destructive. Cancelling a booking is routine work; the
+                  red belongs on the confirmation, not on every row. */}
+              <Button
+                size="filter"
+                variant="secondary"
+                disabled={actionLoading === reservation.id}
+                onClick={() => handleCancel(reservation)}
+              >
+                Cancel
+              </Button>
+            </>
+          )}
+        />
+      )}
+
+      <ReservationPanel
+        reservation={panelReservation}
+        customer={
+          panelReservation
+            ? customerMap.get(panelReservation.customerId)
+            : undefined
+        }
+        serviceType={
+          panelReservation
+            ? serviceTypeMap.get(panelReservation.serviceTypeId)
+            : undefined
+        }
         businessTimezone={businessTimezone}
-        actionButtons={(reservation) => (
-          <>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={actionLoading === reservation.id}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleEdit(reservation);
-              }}
-            >
-              <Pencil className="h-4 w-4 mr-1" />
-              Edit
-            </Button>
-            {isReservationReschedulable(reservation, currentTime) && (
+        open={panelReservation !== null}
+        onOpenChange={(open) => !open && setOpenReservation(null)}
+        tablePlan={
+          panelReservation ? (
+            <ReservationTablePlan
+              reservation={panelReservation}
+              guestName={customerMap.get(panelReservation.customerId)?.name}
+              canOverride={canOverride}
+            />
+          ) : null
+        }
+        actions={
+          panelReservation ? (
+            <>
               <Button
-                size="sm"
-                variant="outline"
-                disabled={actionLoading === reservation.id}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setReschedulingReservation(reservation);
-                }}
+                size="filter"
+                onClick={() => handleEdit(panelReservation)}
               >
-                <CalendarClock className="h-4 w-4 mr-1" />
-                Reschedule
+                Edit
               </Button>
-            )}
-            <Button
-              size="sm"
-              variant="destructive"
-              disabled={actionLoading === reservation.id}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleCancel(reservation);
-              }}
-            >
-              <X className="h-4 w-4 mr-1" />
-              Cancel
-            </Button>
-            {reservation.status === "pending" || reservation.status === "confirmed" ? (
+              {panelReservation.status === "pending" ||
+              panelReservation.status === "confirmed" ? (
+                <Button
+                  size="filter"
+                  variant="secondary"
+                  onClick={() => setNoShowReservation(panelReservation)}
+                >
+                  No-show
+                </Button>
+              ) : null}
               <Button
-                size="sm"
-                variant="outline"
-                disabled={actionLoading === reservation.id}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setNoShowReservation(reservation);
-                }}
+                size="filter"
+                variant="destructive-quiet"
+                onClick={() => handleCancel(panelReservation)}
               >
-                No-show
+                Cancel booking
               </Button>
-            ) : null}
-          </>
-        )}
-        detailActions={(reservation) => (
-          <ReservationTablePlan
-            reservation={reservation}
-            guestName={customerMap.get(reservation.customerId)?.name}
-            canOverride={canOverride}
-          />
-        )}
+            </>
+          ) : null
+        }
       />
 
       <ReservationWaitlistPanel

@@ -1,22 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import {
-  Users,
-  Clock,
-  CheckCircle2,
-  XCircle,
-  Bell,
-  Copy,
-  Check,
-  Wifi,
-  WifiOff,
-  Plus,
-  RefreshCw,
-} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { EmptyState } from "@/components/empty-state";
+import { OfflineBar } from "@/components/offline-bar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useServiceClock } from "@/hooks/use-service-clock";
+import { deliverySeverity } from "@/lib/severity";
 import {
   clientCreateStaffWalkIn,
   clientGetQueueEntries,
@@ -30,12 +30,21 @@ import {
 } from "@/lib/client-api";
 import { useQueueSocket } from "@/hooks/use-queue-socket";
 import type { FloorPlanBoardTable, FloorPlanParty, QueueEntry, QueueServiceDay } from "@/types";
-import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { FloorPlanSeatingSheet } from "@/components/floor-plan-seating-sheet";
 
-function timeAgo(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime();
+/**
+ * How long a party has been waiting. NEUTRAL, always.
+ *
+ * "A guest waiting past the time they were quoted" is one of the four critical
+ * cases — and `QueueEntry` stores no quote-at-join. `measured_wait_estimate` is
+ * a live board-level median that moves during service, so comparing one party's
+ * wait to the CURRENT estimate would be a different claim than the design
+ * makes. The figure is shown; the colour is not earned. See
+ * `queueWaitSeverity()` and `docs/TODO.md` §7a.
+ */
+function waitedFor(iso: string, now: number): string {
+  const diffMs = now - new Date(iso).getTime();
   const diffMin = Math.floor(diffMs / 60_000);
   if (diffMin < 1) return "just now";
   if (diffMin === 1) return "1 min";
@@ -47,121 +56,133 @@ function timeAgo(iso: string): string {
 
 // ─── Entry card ───────────────────────────────────────────────────────────────
 
+function PartyRow({
+  entry,
+  now,
+  children,
+}: {
+  entry: QueueEntry;
+  now: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <article className="border border-border bg-card">
+      <div className="flex items-start justify-between gap-2 border-b border-surface-3 px-3.5 py-3">
+        <div className="min-w-0">
+          <p className="truncate font-medium">{entry.name}</p>
+          {entry.phone ? (
+            <p className="mt-0.5 font-mono text-[12.5px] text-muted-foreground">
+              {entry.phone}
+            </p>
+          ) : null}
+        </div>
+        <Badge tone="neutral">×{entry.partySize}</Badge>
+      </div>
+
+      <div className="px-3.5 py-3">
+        <p className="font-mono text-[12.5px] tabular-nums text-muted-foreground">
+          Waiting {waitedFor(entry.joinedAt, now)}
+        </p>
+        {children}
+      </div>
+    </article>
+  );
+}
+
 function WaitingEntryCard({
   entry,
+  now,
   onNotify,
   onSeat,
 }: {
   entry: QueueEntry;
+  now: number;
   onNotify: () => void;
   onSeat: () => void;
 }) {
   return (
-    <div className="rounded-xl border bg-card p-4 shadow-sm space-y-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="font-semibold text-foreground truncate">{entry.name}</p>
-          {entry.phone && (
-            <p className="text-xs text-muted-foreground mt-0.5">{entry.phone}</p>
-          )}
-        </div>
-        <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
-          <Users className="h-3 w-3" />
-          {entry.partySize}
-        </span>
-      </div>
-
-      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-        <Clock className="h-3 w-3 shrink-0" />
-        <span>Waiting {timeAgo(entry.joinedAt)}</span>
-      </div>
-
-      <div className="flex gap-2">
-        <Button size="sm" variant="outline" className="flex-1 gap-1.5" onClick={onNotify}>
-          <Bell className="h-3.5 w-3.5" />
+    <PartyRow entry={entry} now={now}>
+      <div className="mt-3 flex gap-2">
+        <Button size="filter" variant="secondary" className="flex-1" onClick={onNotify}>
           Call party
         </Button>
-        <Button
-          size="sm"
-          className="flex-1 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
-          onClick={onSeat}
-        >
-          <CheckCircle2 className="h-3.5 w-3.5" />
+        {/* A standard primary. The old board painted this emerald, which is a
+            second brand colour and a success cue the system does not have. */}
+        <Button size="filter" className="flex-1" onClick={onSeat}>
           Seat at table
         </Button>
       </div>
-    </div>
+    </PartyRow>
   );
 }
 
+/**
+ * A party that has been called and has not arrived yet.
+ *
+ * "Called · waiting for arrival" used to render in AMBER. It is the normal next
+ * step of the workflow, not something to handle before the night ends — a
+ * workflow position is never a severity. It is neutral.
+ *
+ * A FAILED message is the one attend case here, and it is real: the guest was
+ * told nothing and does not know their table is ready. Delivery that succeeded
+ * takes no colour at all — there is no green success pattern in this system.
+ */
 function CalledEntryCard({
   entry,
+  now,
   onSeat,
   onRemove,
   onRetry,
 }: {
   entry: QueueEntry;
+  now: number;
   onSeat: () => void;
   onRemove: () => void;
   onRetry: () => void;
 }) {
+  const failed = deliverySeverity(entry.delivery?.state) === "attend";
+
   return (
-    <div className="rounded-xl border bg-card p-4 shadow-sm space-y-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="font-semibold text-foreground truncate">{entry.name}</p>
-          {entry.phone && (
-            <p className="text-xs text-muted-foreground mt-0.5">{entry.phone}</p>
-          )}
-        </div>
-        <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
-          <Users className="h-3 w-3" />
-          {entry.partySize}
-        </span>
-      </div>
+    <PartyRow entry={entry} now={now}>
+      <p className="type-label mt-2 text-muted-foreground">
+        Called · waiting for arrival
+      </p>
 
-      <div className="space-y-1 text-xs">
-        <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
-        <Bell className="h-3 w-3 shrink-0" />
-          <span>Called · waiting for arrival</span>
-        </div>
-        <p className={cn(
-          entry.delivery?.state === "delivered" ? "text-emerald-600" :
-          entry.delivery?.state === "failed" ? "text-destructive" : "text-muted-foreground",
-        )}>
-          {entry.delivery?.state === "delivered" && `${entry.delivery.channel?.toUpperCase() ?? "Message"} delivered`}
-          {entry.delivery?.state === "pending" && "Message delivery pending"}
-          {entry.delivery?.state === "failed" && "Message failed — the party is still called"}
-          {(!entry.delivery || entry.delivery.state === "unavailable") && "No configured delivery channel"}
-        </p>
-        {entry.delivery?.retryable && (
-          <Button size="sm" variant="ghost" className="h-6 px-2" onClick={onRetry}>
-            <RefreshCw className="mr-1 h-3 w-3" /> Retry message
-          </Button>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {failed ? (
+          <Badge tone="attend">Message failed</Badge>
+        ) : (
+          <span className="text-[13px] text-muted-foreground">
+            {entry.delivery?.state === "delivered" &&
+              `${entry.delivery.channel?.toUpperCase() ?? "Message"} delivered`}
+            {entry.delivery?.state === "pending" && "Message sending"}
+            {(!entry.delivery || entry.delivery.state === "unavailable") &&
+              "No delivery channel set up"}
+          </span>
         )}
+
+        {failed ? (
+          <span className="text-[13px] text-muted-foreground">
+            The party is still called, but has not been told.
+          </span>
+        ) : null}
+
+        {entry.delivery?.retryable ? (
+          <Button size="filter" variant="ghost" onClick={onRetry}>
+            Send again
+          </Button>
+        ) : null}
       </div>
 
-      <div className="flex gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          className="flex-1 gap-1.5 border-emerald-500 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950"
-          onClick={onSeat}
-        >
-          <CheckCircle2 className="h-3.5 w-3.5" />
+      <div className="mt-3 flex gap-2">
+        <Button size="filter" className="flex-1" onClick={onSeat}>
           Seated
         </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="flex-1 gap-1.5 border-rose-400 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950"
-          onClick={onRemove}
-        >
-          <XCircle className="h-3.5 w-3.5" />
+        <Button size="filter" variant="secondary" className="flex-1" onClick={onRemove}>
           No-show
         </Button>
       </div>
-    </div>
+    </PartyRow>
   );
 }
 
@@ -179,25 +200,19 @@ function QueueColumn({
   children: (entry: QueueEntry) => React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          {title}
-        </h2>
-        {entries.length > 0 && (
-          <span className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
-            {entries.length}
-          </span>
-        )}
+    <section className="flex flex-col gap-3">
+      <div className="flex items-center gap-2 border-b border-border-strong pb-2">
+        <h2 className="type-micro flex-1 text-muted-foreground">{title}</h2>
+        {entries.length > 0 ? <Badge tone="neutral">{entries.length}</Badge> : null}
       </div>
       {entries.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed bg-muted/30 py-12 text-center">
-          <p className="text-sm text-muted-foreground">{emptyText}</p>
-        </div>
+        <p className="py-8 text-center text-[length:var(--ui-size)] text-text-on-ink-faint">
+          {emptyText}
+        </p>
       ) : (
-        entries.map((e) => <div key={e.id}>{children(e)}</div>)
+        entries.map((entry) => <div key={entry.id}>{children(entry)}</div>)
       )}
-    </div>
+    </section>
   );
 }
 
@@ -229,7 +244,8 @@ export function QueueBoardClient({
   const [floorTables, setFloorTables] = useState<FloorPlanBoardTable[]>([]);
   const [seatingLoading, setSeatingLoading] = useState(false);
 
-  const { connected } = useQueueSocket(businessId, (updated) => {
+  const { now } = useServiceClock();
+  const { connected, lastContactAt } = useQueueSocket(businessId, (updated) => {
     setEntries(updated);
   });
 
@@ -385,100 +401,136 @@ export function QueueBoardClient({
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            {connected ? (
-              <Wifi className="h-4 w-4 text-emerald-500" />
-            ) : (
-              <WifiOff className="h-4 w-4 text-muted-foreground" />
-            )}
-            <span
-              className={cn(
-                "text-xs font-medium",
-                connected ? "text-emerald-600" : "text-muted-foreground",
-              )}
-            >
-              {connected ? "Live" : "Connecting…"}
-            </span>
-          </div>
-          <span className="text-muted-foreground">·</span>
-          <span className="text-sm text-muted-foreground">
+    <>
+      {/* Critical. A queue board that has lost contact is showing a room that
+          may already have moved on. */}
+      <OfflineBar
+        connected={connected}
+        lastContactAt={lastContactAt}
+        surface="This queue"
+        onRetry={() => void refresh()}
+      />
+
+      <div className="flex flex-1 flex-col gap-6 px-[clamp(16px,2.5vw,32px)] py-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="type-t1">Walk-in queue</h1>
+          <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
             {waiting.length + called.length} active{" "}
             {waiting.length + called.length === 1 ? "party" : "parties"}
-          </span>
+          </p>
         </div>
 
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-2"
-          onClick={() => void handleCopy()}
-        >
-          {copied ? (
-            <Check className="h-3.5 w-3.5 text-emerald-500" />
-          ) : (
-            <Copy className="h-3.5 w-3.5" />
-          )}
-          {copied ? "Copied!" : "Copy queue link"}
+        <Button variant="secondary" size="filter" onClick={() => void handleCopy()}>
+          {copied ? "Link copied" : "Copy queue link"}
         </Button>
       </div>
 
-      {loadError && <p className="text-sm text-destructive">{loadError}</p>}
+      {loadError ? (
+        <div className="flex flex-wrap items-center gap-3 border-l-2 border-critical-fill bg-critical-tint px-4 py-3">
+          <p className="flex-1 text-[length:var(--ui-size)] text-critical-text">
+            {loadError}
+          </p>
+          <Button variant="secondary" size="filter" onClick={() => void refresh()}>
+            Retry
+          </Button>
+        </div>
+      ) : null}
 
-      <section className="grid gap-4 rounded-xl border bg-card p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-        <div className="space-y-3">
+      <section className="grid border border-border bg-card lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+        <div className="flex flex-col gap-3 border-b border-border p-4 lg:border-r lg:border-b-0">
           <div>
-            <p className="font-medium">Current service queue</p>
-            <p className="text-xs text-muted-foreground">{service?.serviceDate ?? "Loading…"} · {service?.waitingCovers ?? 0} waiting covers</p>
+            <p className="type-t2">This service day</p>
+            <p className="mt-1 font-mono text-[12.5px] tabular-nums text-muted-foreground">
+              {service?.serviceDate ?? "—"} · {service?.waitingCovers ?? 0} waiting
+              covers
+            </p>
           </div>
+
           <div className="flex items-end gap-2">
-            <div className="space-y-1">
-              <Label htmlFor="queue-cover-cap">Waiting-cover cap</Label>
-              <Input id="queue-cover-cap" type="number" min={1} max={1000} value={coverCap} onChange={(event) => setCoverCap(Number(event.target.value))} />
+            <div className="flex-1">
+              <Label htmlFor="queue-cover-cap" className="mb-[7px]">
+                Waiting-cover cap
+              </Label>
+              <Input
+                id="queue-cover-cap"
+                type="number"
+                min={1}
+                max={1000}
+                value={coverCap}
+                onChange={(event) => setCoverCap(Number(event.target.value))}
+              />
             </div>
-            <Button disabled={policySaving || coverCap < 1} onClick={() => void updatePolicy(service?.isOpen ? "closed" : "open")}>
+            <Button
+              size="md"
+              variant="secondary"
+              disabled={policySaving || coverCap < 1}
+              onClick={() => void updatePolicy(service?.isOpen ? "closed" : "open")}
+            >
               {service?.isOpen ? "Close queue" : "Open queue"}
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            {service?.isOpen ? (service.isFull ? "Open, but currently full." : "Open to new walk-ins.") : "Closed to new walk-ins; current parties remain operable."}
-            {service?.estimatedWaitMinutes !== undefined ? ` Measured estimate: ${service.estimatedWaitMinutes} min.` : " No measured estimate yet."}
+
+          {/* Neutral. Whether the queue is open, and how long the wait is
+              running, are facts about the night — not things to act on now. */}
+          <p className="text-[13px] text-muted-foreground">
+            {service?.isOpen
+              ? service.isFull
+                ? "Open, but at the cover cap."
+                : "Open to new walk-ins."
+              : "Closed to new walk-ins. Parties already in the queue still work normally."}{" "}
+            {service?.estimatedWaitMinutes !== undefined
+              ? `Measured wait, from tonight's own turn times: ${service.estimatedWaitMinutes} min.`
+              : "No measured wait yet tonight."}
           </p>
         </div>
-        <div className="space-y-3 border-t pt-4 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
-          <p className="font-medium">Add staff walk-in</p>
+
+        <div className="flex flex-col gap-3 p-4">
+          <p className="type-t2">Add a walk-in</p>
           <div className="grid gap-2 sm:grid-cols-[1fr_100px_1fr_auto]">
-            <Input aria-label="Guest name" placeholder="Guest name" value={walkInName} onChange={(event) => setWalkInName(event.target.value)} />
-            <Input aria-label="Party size" type="number" min={1} max={20} value={walkInPartySize} onChange={(event) => setWalkInPartySize(Number(event.target.value))} />
-            <Input aria-label="Phone, optional" placeholder="Phone (optional)" value={walkInPhone} onChange={(event) => setWalkInPhone(event.target.value)} />
-            <Button disabled={walkInSaving || !service?.isOpen || service?.isFull || !walkInName.trim()} onClick={() => void addWalkIn()}><Plus className="mr-1 h-4 w-4" />Add</Button>
+            <Input
+              aria-label="Guest name"
+              placeholder="Guest name"
+              value={walkInName}
+              onChange={(event) => setWalkInName(event.target.value)}
+            />
+            <Input
+              aria-label="Party size"
+              type="number"
+              min={1}
+              max={20}
+              value={walkInPartySize}
+              onChange={(event) => setWalkInPartySize(Number(event.target.value))}
+            />
+            <Input
+              aria-label="Phone, optional"
+              placeholder="Phone (optional)"
+              value={walkInPhone}
+              onChange={(event) => setWalkInPhone(event.target.value)}
+            />
+            <Button
+              size="md"
+              disabled={
+                walkInSaving ||
+                !service?.isOpen ||
+                service?.isFull ||
+                !walkInName.trim()
+              }
+              onClick={() => void addWalkIn()}
+            >
+              Add
+            </Button>
           </div>
         </div>
       </section>
 
-      {/* Empty state */}
-      {!loadError && waiting.length === 0 && called.length === 0 && (
-        <div className="flex flex-1 flex-col items-center justify-center py-20 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted mx-auto mb-4">
-            <Users className="h-8 w-8 text-muted-foreground" />
-          </div>
-          <p className="text-base font-medium">Queue is empty</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Share{" "}
-            <button
-              type="button"
-              className="text-primary underline underline-offset-2"
-              onClick={() => void handleCopy()}
-            >
-              the queue link
-            </button>{" "}
-            to get started.
-          </p>
-        </div>
-      )}
+      {!loadError && waiting.length === 0 && called.length === 0 ? (
+        <EmptyState
+          title="Nobody waiting"
+          description="Guests scan the code by the door and hold their place without an app. Parties appear here the moment they join, in the order they arrived."
+          action={{ label: "Copy the queue link", onClick: () => void handleCopy() }}
+        />
+      ) : null}
 
       {/* Board */}
       {(waiting.length > 0 || called.length > 0) && (
@@ -487,6 +539,7 @@ export function QueueBoardClient({
             {(entry) => (
               <WaitingEntryCard
                 entry={entry}
+                now={now}
                 onNotify={() => void handleNotify(entry)}
                 onSeat={() => void openSeating(entry)}
               />
@@ -497,6 +550,7 @@ export function QueueBoardClient({
             {(entry) => (
               <CalledEntryCard
                 entry={entry}
+                now={now}
                 onSeat={() => void openSeating(entry)}
                 onRemove={() => handleRemove(entry)}
                 onRetry={() => void retryDelivery(entry)}
@@ -506,16 +560,70 @@ export function QueueBoardClient({
         </div>
       )}
 
-      {removeTarget && (
-        <section className="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-lg space-y-3 rounded-xl border bg-background p-5 shadow-xl" role="dialog" aria-modal="true" aria-label="Remove queue party">
-          <div><p className="font-semibold">Remove {removeTarget.name}</p><p className="text-sm text-muted-foreground">Choose the operational reason. This is retained in queue history.</p></div>
-          <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={removeReason} onChange={(event) => setRemoveReason(event.target.value as typeof removeReason)}>
-            <option value="guest_left">Guest left</option><option value="no_show">No-show</option><option value="staff_removed">Staff removed</option>
-          </select>
-          <Input placeholder="Optional note" value={removeNote} onChange={(event) => setRemoveNote(event.target.value)} />
-          <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setRemoveTarget(null)}>Keep party</Button><Button variant="destructive" onClick={() => { void confirmRemove(removeTarget); setRemoveTarget(null); }}>Remove party</Button></div>
-        </section>
-      )}
+      {/* A real dialog, not a panel pinned to the bottom of the viewport.
+          Removing a party is a decision that cannot be undone from here. */}
+      <Dialog
+        open={removeTarget !== null}
+        onOpenChange={(open) => !open && setRemoveTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Take {removeTarget?.name} off the queue?
+            </DialogTitle>
+            <DialogDescription>
+              They lose their place, and the reason stays in the queue history
+              against your name.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-3">
+            <div>
+              <Label htmlFor="remove-reason" className="mb-[7px]">
+                Reason
+              </Label>
+              <select
+                id="remove-reason"
+                className="h-10 w-full rounded-[var(--radius-3)] border border-input bg-input-background px-[13px] text-[length:var(--ui-size)] text-foreground"
+                value={removeReason}
+                onChange={(event) =>
+                  setRemoveReason(event.target.value as typeof removeReason)
+                }
+              >
+                <option value="guest_left">Guest left</option>
+                <option value="no_show">No-show</option>
+                <option value="staff_removed">Staff removed</option>
+              </select>
+            </div>
+
+            <div>
+              <Label htmlFor="remove-note" className="mb-[7px]">
+                Note
+              </Label>
+              <Input
+                id="remove-note"
+                placeholder="Optional"
+                value={removeNote}
+                onChange={(event) => setRemoveNote(event.target.value)}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button onClick={() => setRemoveTarget(null)}>Keep the party</Button>
+            <Button
+              variant="destructive-quiet"
+              onClick={() => {
+                if (removeTarget) void confirmRemove(removeTarget);
+                setRemoveTarget(null);
+              }}
+            >
+              Take them off
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <FloorPlanSeatingSheet
         key={seatingTarget?.id ?? "no-queue-party"}
         open={seatingTarget !== null}
@@ -526,6 +634,7 @@ export function QueueBoardClient({
         submitting={seatingLoading}
         onConfirm={(tableIds, reason) => void confirmSeating(tableIds, reason)}
       />
-    </div>
+      </div>
+    </>
   );
 }

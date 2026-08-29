@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ReservationAccordion } from "@/components/reservation-accordion";
+import { EmptyState } from "@/components/empty-state";
+import { ReservationTable } from "@/components/reservation-table";
+import { Badge } from "@/components/ui/badge";
 import { ReservationSearchFilter } from "@/components/reservation-search-filter";
 import { Button } from "@/components/ui/button";
 import { StaffReservationDialog } from "@/components/staff-reservation-dialog";
@@ -10,7 +12,6 @@ import { Reservation, ServiceType } from "@/types";
 import { CustomerResponse } from "@/lib/api-client";
 import { clientUpdateReservation } from "@/lib/client-api";
 import { toast } from "sonner";
-import { CalendarClock } from "lucide-react";
 import { isReservationReschedulable } from "@/lib/availability";
 
 interface RequestsClientProps {
@@ -24,13 +25,17 @@ interface RequestsClientProps {
   canOverride: boolean;
 }
 
-const SEGMENT_HINT: Record<string, { icon: string; color: string }> = {
-  Champions: { icon: "⭐", color: "text-green-600 dark:text-green-400" },
-  "Loyal Customers": { icon: "💚", color: "text-blue-600 dark:text-blue-400" },
-  "Potential Loyalists": { icon: "🌱", color: "text-purple-600 dark:text-purple-400" },
-  "At Risk": { icon: "⚠️", color: "text-yellow-600 dark:text-yellow-400" },
-  "Lost Customers": { icon: "💤", color: "text-red-600 dark:text-red-400" },
-};
+/**
+ * Guest segments used to render as emoji in five different colours — green,
+ * blue, purple, yellow, red. That is a categorical palette the token file does
+ * not declare, a second status object competing with the badge, and colour
+ * standing in for words.
+ *
+ * More to the point, a guest's segment is NEUTRAL under the rank: how often
+ * someone visits is not something to handle before the night ends, and "At
+ * Risk" in amber next to a genuinely late booking would make the two look
+ * equally urgent. The segment is named, in the one badge form.
+ */
 
 export default function RequestsClient({
   initialReservations,
@@ -108,11 +113,11 @@ export default function RequestsClient({
   };
 
   return (
-    <div className="page-container">
+    <div className="flex flex-col gap-6 px-[clamp(16px,2.5vw,32px)] py-6">
       <div>
-        <h1 className="page-title">Requests</h1>
-        <p className="page-description">
-          Review and manage pending reservation requests
+        <h1 className="type-t1">Requests</h1>
+        <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
+          Bookings waiting on a yes or a no.
         </p>
       </div>
 
@@ -124,66 +129,56 @@ export default function RequestsClient({
         serviceTypes={serviceTypes}
       />
 
-      <ReservationAccordion
-        reservations={reservations}
-        serviceTypes={serviceTypes}
-        customers={customers}
-        emptyMessage="No pending requests found."
-        businessTimezone={businessTimezone}
-        actionButtons={(reservation) => {
-          const segment = customerSegments?.[reservation.customerId];
-          const hint = segment ? SEGMENT_HINT[segment] : null;
+      {initialReservations.length === 0 ? (
+        <EmptyState
+          title="Nothing waiting"
+          description="When a guest asks for a time you have set as request-only, it lands here for someone to accept."
+          action={{ label: "Booking settings", href: "/business/profile/booking" }}
+        />
+      ) : (
+        <ReservationTable
+          reservations={reservations}
+          serviceTypes={serviceTypes}
+          customers={customers}
+          businessTimezone={businessTimezone}
+          emptyMessage="Nothing matches that search."
+          rowActions={(reservation) => {
+            const segment = customerSegments?.[reservation.customerId];
 
-          return (
-            <>
-              {hint && (
-                <span
-                  className={`text-xs ${hint.color} whitespace-nowrap`}
-                  title={`Customer segment: ${segment}`}
-                >
-                  {hint.icon} {segment}
-                </span>
-              )}
-              {isReservationReschedulable(reservation, currentTime) && (
+            return (
+              <>
+                {segment ? <Badge tone="neutral">{segment}</Badge> : null}
+                {isReservationReschedulable(reservation, currentTime) ? (
+                  <Button
+                    size="filter"
+                    variant="secondary"
+                    disabled={actionLoading === reservation.id}
+                    onClick={() => setReschedulingReservation(reservation)}
+                  >
+                    Move
+                  </Button>
+                ) : null}
                 <Button
-                  size="sm"
-                  variant="outline"
+                  size="filter"
                   disabled={actionLoading === reservation.id}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setReschedulingReservation(reservation);
-                  }}
+                  onClick={() => handleAccept(reservation)}
                 >
-                  <CalendarClock className="h-4 w-4 mr-1" />
-                  Reschedule
+                  Accept
                 </Button>
-              )}
-              <Button
-                size="sm"
-                variant="default"
-                disabled={actionLoading === reservation.id}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleAccept(reservation);
-                }}
-              >
-                {actionLoading === reservation.id ? "..." : "Accept"}
-              </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                disabled={actionLoading === reservation.id}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleReject(reservation);
-                }}
-              >
-                {actionLoading === reservation.id ? "..." : "Reject"}
-              </Button>
-            </>
-          );
-        }}
-      />
+                {/* Declining a request is routine. The item is not in trouble. */}
+                <Button
+                  size="filter"
+                  variant="secondary"
+                  disabled={actionLoading === reservation.id}
+                  onClick={() => handleReject(reservation)}
+                >
+                  Decline
+                </Button>
+              </>
+            );
+          }}
+        />
+      )}
 
       <StaffReservationDialog
         reservation={reschedulingReservation}
