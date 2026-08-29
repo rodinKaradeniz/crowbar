@@ -85,9 +85,9 @@ export default function ModulesSettingsClient({ businessId }: Props) {
   }
 
   return (
-    <div className="space-y-8 page-pad max-w-2xl">
+    <div className="space-y-8 px-[clamp(16px,2.5vw,32px)] py-6 max-w-2xl">
       <div>
-        <h1 className="page-title">Modules</h1>
+        <h1 className="type-t1">Modules</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Enable or disable platform modules for your business.
         </p>

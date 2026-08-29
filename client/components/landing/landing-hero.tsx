@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
  * 7/5 split, panel flush right, and the "it replaces" strip beneath.
  *
  * The panel is an ILLUSTRATION of a night, not a live feed. It is the one place
- * in the port where figures are not read from the API, because there is no
+ * in the port where font-mono tabular-nums are not read from the API, because there is no
  * tenant here — a visitor to the marketing page has not signed in and has no
  * venue. The names and numbers are the canvas's own sample venue.
  */

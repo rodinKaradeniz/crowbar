@@ -65,32 +65,32 @@ export function ReservationDetailsDialog({
         <div className="space-y-4 py-4">
           {customer && (
             <div>
-              <div className="contact-row mb-2">
+              <div className="flex items-center gap-3 text-[length:var(--ui-size)] mb-2">
                 <div>
                   <h3 className="font-medium">{customer.name}</h3>
-                  <p className="section-subtitle">{customer.email}</p>
+                  <p className="text-[length:var(--ui-size)] text-muted-foreground">{customer.email}</p>
                   {customer.phone && (
-                    <p className="section-subtitle">{customer.phone}</p>
+                    <p className="text-[length:var(--ui-size)] text-muted-foreground">{customer.phone}</p>
                   )}
                 </div>
               </div>
             </div>
           )}
           <div className="space-y-3 pt-4 border-t">
-            <div className="contact-row">
-              <Clock className="contact-icon" />
+            <div className="flex items-center gap-3 text-[length:var(--ui-size)]">
+              <Clock className="h-4 w-4 text-muted-foreground" />
               <span>{formatBusinessTime(reservation.time, businessTimezone, locale)}</span>
             </div>
-            <div className="contact-row">
-              <Users className="contact-icon" />
+            <div className="flex items-center gap-3 text-[length:var(--ui-size)]">
+              <Users className="h-4 w-4 text-muted-foreground" />
               <span>
                 {reservation.guests}{" "}
                 {reservation.guests === 1 ? "guest" : "guests"}
               </span>
             </div>
             {serviceType && (
-              <div className="contact-row">
-                <Tag className="contact-icon" />
+              <div className="flex items-center gap-3 text-[length:var(--ui-size)]">
+                <Tag className="h-4 w-4 text-muted-foreground" />
                 <div className="flex items-center gap-2">
                   <div
                     className="w-3 h-3 rounded-full"
@@ -103,7 +103,7 @@ export function ReservationDetailsDialog({
                 </div>
               </div>
             )}
-            <div className="contact-row">
+            <div className="flex items-center gap-3 text-[length:var(--ui-size)]">
               <span className="px-2 py-1 text-xs font-medium rounded-full bg-accent text-accent-foreground">
                 {reservation.status}
               </span>
@@ -111,7 +111,7 @@ export function ReservationDetailsDialog({
             {reservation.note && (
               <div className="pt-2 border-t">
                 <p className="text-sm font-medium mb-1">Special Notes</p>
-                <p className="section-subtitle">{reservation.note}</p>
+                <p className="text-[length:var(--ui-size)] text-muted-foreground">{reservation.note}</p>
               </div>
             )}
             <ReservationOverrideNotice reservation={reservation} businessTimezone={businessTimezone} />
@@ -120,7 +120,7 @@ export function ReservationDetailsDialog({
           {canReschedule && (
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               className="w-full"
               onClick={() => onReschedule?.(reservation)}
             >

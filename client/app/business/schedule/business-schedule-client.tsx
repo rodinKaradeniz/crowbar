@@ -91,11 +91,11 @@ export default function BusinessScheduleClient({
   };
 
   return (
-    <div className="page-pad">
+    <div className="px-[clamp(16px,2.5vw,32px)] py-6">
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="page-title">Schedule</h1>
-          <p className="page-description">
+          <h1 className="type-t1">Schedule</h1>
+          <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
             View your daily schedule and reservations
           </p>
         </div>
@@ -116,7 +116,7 @@ export default function BusinessScheduleClient({
 
           {serviceTypes.length > 0 && (
             <div className="space-y-2">
-              <p className="eyebrow">Booking types</p>
+              <p className="type-label text-muted-foreground">Booking types</p>
               {serviceTypes.map((serviceType) => (
                 <div key={serviceType.id} className="flex items-center gap-2.5 text-sm">
                   <span
@@ -124,7 +124,7 @@ export default function BusinessScheduleClient({
                     style={{ backgroundColor: serviceType.color }}
                   />
                   <span className="text-muted-foreground">{serviceType.name}</span>
-                  <span className="figures text-xs text-muted-foreground/70 ml-auto">
+                  <span className="font-mono tabular-nums text-xs text-muted-foreground/70 ml-auto">
                     cap. {serviceType.capacity}
                   </span>
                 </div>
@@ -148,7 +148,7 @@ export default function BusinessScheduleClient({
                 <div className="flex items-start gap-2">
                   <span
                     className={cn(
-                      "figures text-6xl sm:text-8xl font-bold leading-none tracking-tighter",
+                      "font-mono tabular-nums text-6xl sm:text-8xl font-bold leading-none tracking-tighter",
                       isSameDay(date, venueToday) ? "text-foreground" : "text-foreground/80",
                     )}
                   >
@@ -156,7 +156,7 @@ export default function BusinessScheduleClient({
                   </span>
                   <span
                     className={cn(
-                      "eyebrow mt-2",
+                      "type-label text-muted-foreground mt-2",
                       isSameDay(date, venueToday) ? "text-primary" : "text-muted-foreground",
                     )}
                   >
@@ -166,7 +166,7 @@ export default function BusinessScheduleClient({
                 <p className="text-xs text-muted-foreground mt-2">
                   {format(date, "MMMM yyyy")}
                   {isSameDay(date, venueToday) && (
-                    <span className="ml-1.5 inline-block rounded-full bg-lager px-1.5 py-0.5 text-[10px] font-medium text-porter align-middle">
+                    <span className="ml-1.5 inline-block rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground align-middle">
                       Today
                     </span>
                   )}
@@ -197,8 +197,8 @@ export default function BusinessScheduleClient({
                         className="w-full text-left rounded-lg bg-card border border-border/40 hover:border-primary/50 transition-colors px-4 py-3 flex items-start gap-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                       >
                         <div className="shrink-0 w-24">
-                          <p className="figures text-sm font-semibold">{formatSlotTime(reservation.time, businessTimezone)}</p>
-                          <p className="figures text-xs text-muted-foreground">–{formatSlotTime(end, businessTimezone)}</p>
+                          <p className="font-mono tabular-nums text-sm font-semibold">{formatSlotTime(reservation.time, businessTimezone)}</p>
+                          <p className="font-mono tabular-nums text-xs text-muted-foreground">–{formatSlotTime(end, businessTimezone)}</p>
                         </div>
                         <span
                           className="w-0.5 self-stretch rounded-full shrink-0"
@@ -213,11 +213,11 @@ export default function BusinessScheduleClient({
                             {customerInfo?.name || "Unknown"}
                           </p>
                           <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                            <span className="figures inline-flex items-center gap-1">
+                            <span className="font-mono tabular-nums inline-flex items-center gap-1">
                               <Users className="h-3 w-3" />
                               {reservation.guests}
                             </span>
-                            <span className="figures inline-flex items-center gap-1 capitalize">
+                            <span className="font-mono tabular-nums inline-flex items-center gap-1 capitalize">
                               <Clock className="h-3 w-3" />
                               {reservation.status}
                             </span>

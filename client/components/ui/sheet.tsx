@@ -46,7 +46,7 @@ function SheetOverlay({
     <SheetPrimitive.Overlay
       data-slot="sheet-overlay"
       className={cn(
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-scrim",
+        "overlay-enter fixed inset-0 z-50 bg-scrim",
         className
       )}
       {...props}
@@ -72,18 +72,18 @@ function SheetContent({
         data-slot="sheet-content"
         className={cn(
           "bg-card text-card-foreground fixed z-50 flex flex-col shadow-e1",
-          "data-[state=open]:animate-in data-[state=closed]:animate-out",
+          
           "duration-[var(--dur-enter)] ease-[cubic-bezier(0.2,0.8,0.2,1)]",
           side === "right" &&
             // 440px is stated in §06 prose but is not in crowbar-tokens.css —
             // flagged as a token-file completeness question in docs/DESIGN.md.
-            "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right inset-y-0 right-0 h-full w-full border-l min-[440px]:w-[var(--side-panel)]",
+            "panel-enter-right inset-y-0 right-0 h-full w-full border-l min-[440px]:w-[var(--side-panel)]",
           side === "left" &&
-            "data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left inset-y-0 left-0 h-full w-full border-r min-[440px]:w-[var(--side-panel)]",
+            "panel-enter-left inset-y-0 left-0 h-full w-full border-r min-[440px]:w-[var(--side-panel)]",
           side === "top" &&
-            "data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top inset-x-0 top-0 h-auto border-b",
+            "panel-enter-top inset-x-0 top-0 h-auto border-b",
           side === "bottom" &&
-            "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom inset-x-0 bottom-0 h-auto border-t",
+            "panel-enter-bottom inset-x-0 bottom-0 h-auto border-t",
           className
         )}
         {...props}

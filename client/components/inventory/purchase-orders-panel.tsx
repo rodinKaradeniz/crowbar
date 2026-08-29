@@ -284,7 +284,7 @@ export function PurchaseOrdersPanel({ businessId, canManage, canApprove }: Props
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="section-title">Purchase orders</h2>
+          <h2 className="type-t2">Purchase orders</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
             Quantities and prices are per pack. Receiving moves stock and updates cost.
           </p>
@@ -350,35 +350,35 @@ export function PurchaseOrdersPanel({ businessId, canManage, canApprove }: Props
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {order.lines.length} {order.lines.length === 1 ? "line" : "lines"} ·{" "}
-                      <span className="figures">{money(total)}</span>
+                      <span className="font-mono tabular-nums">{money(total)}</span>
                       {order.closureReason && ` · ${order.closureReason}`}
                     </div>
                   </div>
-                  <Badge variant="outline" className={STATUS_CLASS[order.status]}>
+                  <Badge tone="neutral" className={STATUS_CLASS[order.status]}>
                     {STATUS_LABELS[order.status]}
                   </Badge>
                   {canManage && (
                     <div className="flex gap-1 shrink-0">
                       {canApprove && order.status === "draft" && (
-                        <Button size="sm" variant="outline" onClick={() => transition(order, "approved")}>
+                        <Button size="filter" variant="secondary" onClick={() => transition(order, "approved")}>
                           Approve
                         </Button>
                       )}
                       {canApprove && order.status === "approved" && (
-                        <Button size="sm" variant="outline" onClick={() => transition(order, "ordered")}>
+                        <Button size="filter" variant="secondary" onClick={() => transition(order, "ordered")}>
                           Mark Ordered
                         </Button>
                       )}
                       {(order.status === "ordered" || order.status === "partially_received") && (
-                        <Button size="sm" onClick={() => openReceive(order)}>
+                        <Button size="filter" onClick={() => openReceive(order)}>
                           <Truck className="h-3.5 w-3.5 mr-1.5" />
                           Receive
                         </Button>
                       )}
                       {canApprove && order.status === "partially_received" && (
                         <Button
-                          size="sm"
-                          variant="outline"
+                          size="filter"
+                          variant="secondary"
                           onClick={() => {
                             setClosureReason("");
                             setClosingShort(order);
@@ -511,8 +511,8 @@ export function PurchaseOrdersPanel({ businessId, canManage, canApprove }: Props
                 </div>
               ))}
               <Button
-                variant="outline"
-                size="sm"
+                variant="secondary"
+                size="filter"
                 className="self-start"
                 onClick={() => setLines((prev) => [...prev, EMPTY_LINE])}
               >
@@ -522,7 +522,7 @@ export function PurchaseOrdersPanel({ businessId, canManage, canApprove }: Props
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>
+            <Button variant="secondary" onClick={() => setCreateOpen(false)}>
               Cancel
             </Button>
             <Button onClick={createOrder} disabled={saving}>
@@ -554,7 +554,7 @@ export function PurchaseOrdersPanel({ businessId, canManage, canApprove }: Props
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setClosingShort(null)}>
+            <Button variant="secondary" onClick={() => setClosingShort(null)}>
               Cancel
             </Button>
             <Button
@@ -626,7 +626,7 @@ export function PurchaseOrdersPanel({ businessId, canManage, canApprove }: Props
                           <TableCell className="max-w-[180px] truncate">
                             {itemName[line.inventoryItemId] ?? line.description}
                           </TableCell>
-                          <TableCell className="text-right figures">{outstanding}</TableCell>
+                          <TableCell className="text-right font-mono tabular-nums">{outstanding}</TableCell>
                           <TableCell>
                             <Input
                               value={entry?.quantity ?? ""}
@@ -672,7 +672,7 @@ export function PurchaseOrdersPanel({ businessId, canManage, canApprove }: Props
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setReceiving(null)}>
+            <Button variant="secondary" onClick={() => setReceiving(null)}>
               Cancel
             </Button>
             <Button onClick={recordReceipt} disabled={receiptSaving}>

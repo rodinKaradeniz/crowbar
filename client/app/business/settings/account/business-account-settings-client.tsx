@@ -161,10 +161,10 @@ export default function BusinessAccountSettingsClient({
   };
 
   return (
-    <div className="page-container">
+    <div className="flex flex-col gap-6 px-[clamp(16px,2.5vw,32px)] py-6">
       <div>
-        <h1 className="page-title">Account Settings</h1>
-        <p className="page-description">
+        <h1 className="type-t1">Account Settings</h1>
+        <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
           Manage your account security and preferences
         </p>
       </div>
@@ -224,7 +224,7 @@ export default function BusinessAccountSettingsClient({
           </FieldSet>
 
           <Field>
-            <div className="button-group-end">
+            <div className="flex justify-end">
               <Button type="submit" disabled={isChangingEmail}>
                 {isChangingEmail ? "Sending..." : "Update Email"}
               </Button>
@@ -289,7 +289,7 @@ export default function BusinessAccountSettingsClient({
           </FieldSet>
 
           <Field>
-            <div className="button-group-end">
+            <div className="flex justify-end">
               <Button type="submit" disabled={isChangingPassword}>
                 {isChangingPassword ? "Updating..." : "Update Password"}
               </Button>
@@ -372,7 +372,7 @@ export default function BusinessAccountSettingsClient({
               </p>
               <Button
                 type="button"
-                variant="outline"
+                variant="secondary"
                 onClick={() => setShowDisableDialog(true)}
               >
                 Disable Account
@@ -403,7 +403,7 @@ export default function BusinessAccountSettingsClient({
           <DialogFooter>
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               onClick={() => setShowDisableDialog(false)}
             >
               Cancel

@@ -19,7 +19,7 @@ export default async function BusinessDocPage(props: {
   return (
     <article className="rounded-lg border border-border bg-card p-5 shadow-sm md:p-8">
       <header className="mb-6 border-b border-border pb-4">
-        <h1 className="page-title text-foreground">
+        <h1 className="type-t1 text-foreground">
           {doc.title}
         </h1>
         {doc.description ? (

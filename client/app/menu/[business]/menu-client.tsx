@@ -131,7 +131,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="eyebrow">Opening the menu…</p>
+        <p className="type-label text-muted-foreground">Opening the menu…</p>
       </div>
     );
   }
@@ -152,10 +152,10 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
     <div className="min-h-screen bg-background pb-32">
 
       {/* Masthead — set like the cover of a printed list */}
-      <header className="px-6 pt-10 pb-6 text-center fade-rise">
-        {tableSessionStatus && <p className="eyebrow text-brass mb-2">Table ordering</p>}
+      <header className="px-6 pt-10 pb-6 text-center enter-rise">
+        {tableSessionStatus && <p className="type-label text-muted-foreground mb-2">Table ordering</p>}
         <h1 className="font-display text-3xl tracking-tight">{menu.name}</h1>
-        <div className="rule-double mt-5 mx-auto max-w-36" />
+        <div className="border-t border-border mt-5 mx-auto max-w-36" />
       </header>
 
       {/* Not-accepting-orders banner */}
@@ -166,13 +166,13 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
       )}
 
       {/* Category nav */}
-      <nav className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border fade-rise" style={{ animationDelay: "80ms" }}>
+      <nav className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border enter-rise" style={{ animationDelay: "80ms" }}>
         <div className="overflow-x-auto scrollbar-hide flex gap-6 px-6 py-3">
           {menu.categories.filter((c) => c.isActive).map((cat) => (
             <a
               key={cat.id}
               href={`#cat-${cat.id}`}
-              className="eyebrow shrink-0 text-foreground/70 hover:text-primary border-b border-transparent hover:border-primary/60 pb-0.5 transition-colors"
+              className="type-label text-muted-foreground shrink-0 text-foreground/70 hover:text-primary border-b border-transparent hover:border-primary/60 pb-0.5 transition-colors"
             >
               {cat.name}
             </a>
@@ -185,10 +185,10 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
         {menu.categories
           .filter((c) => c.isActive)
           .map((cat, catIndex) => (
-            <section key={cat.id} id={`cat-${cat.id}`} className="scroll-mt-16 fade-rise" style={{ animationDelay: `${Math.min(catIndex, 4) * 90 + 140}ms` }}>
+            <section key={cat.id} id={`cat-${cat.id}`} className="scroll-mt-16 enter-rise" style={{ animationDelay: `${Math.min(catIndex, 4) * 90 + 140}ms` }}>
               <div className="flex items-center gap-4 mb-4">
                 <span className="h-px flex-1 bg-border" aria-hidden />
-                <h2 className="eyebrow text-brass">{cat.name}</h2>
+                <h2 className="type-label text-muted-foreground">{cat.name}</h2>
                 <span className="h-px flex-1 bg-border" aria-hidden />
               </div>
               <div className="divide-y divide-border/60">
@@ -204,18 +204,18 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                         <span className="font-medium text-[15px] group-hover:text-primary transition-colors">
                           {item.name}
                         </span>
-                        <span className="leader-dots text-brass" aria-hidden />
+                        <span className="flex-1" aria-hidden />
                         {hhActive && item.happyHourPrice != null ? (
                           <span className="shrink-0 text-right">
-                            <span className="figures text-sm text-primary">
+                            <span className="font-mono tabular-nums text-sm text-primary">
                               {money(item.happyHourPrice)}
                             </span>{" "}
-                            <span className="figures text-xs text-muted-foreground line-through">
+                            <span className="font-mono tabular-nums text-xs text-muted-foreground line-through">
                               {money(item.price)}
                             </span>
                           </span>
                         ) : (
-                          <span className="figures text-sm shrink-0">{money(item.price)}</span>
+                          <span className="font-mono tabular-nums text-sm shrink-0">{money(item.price)}</span>
                         )}
                       </div>
                       {item.description && (
@@ -225,10 +225,10 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                       )}
                       <div className="flex items-center gap-3 mt-1">
                         {hhActive && item.happyHourPrice != null && (
-                          <span className="eyebrow text-primary">Happy Hour</span>
+                          <span className="type-label text-muted-foreground text-primary">Happy Hour</span>
                         )}
                         {item.prepTimeMinutes && (
-                          <span className="figures text-xs text-muted-foreground">
+                          <span className="font-mono tabular-nums text-xs text-muted-foreground">
                             ~{item.prepTimeMinutes} min
                           </span>
                         )}
@@ -248,7 +248,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
       {/* Cart bar */}
       {cart.length > 0 && (
         <div className="fixed bottom-0 inset-x-0 z-20 bg-background/95 backdrop-blur">
-          <div className="rule-double" />
+          <div className="border-t border-border" />
           <div className="p-4 max-w-xl mx-auto">
             {isAcceptingOrders && tableSessionStatus === "approved" ? (
               <Link
@@ -262,14 +262,14 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                   }
                 }}
               >
-                <Button className="w-full" size="lg">
+                <Button className="w-full" size="md">
                   <ShoppingCart className="h-5 w-5 mr-2" />
                   View Cart · {totalItems} item{totalItems !== 1 ? "s" : ""} ·{" "}
-                  <span className="figures">{money(totalPrice)}</span>
+                  <span className="font-mono tabular-nums">{money(totalPrice)}</span>
                 </Button>
               </Link>
             ) : (
-              <Button className="w-full" size="lg" disabled>
+              <Button className="w-full" size="md" disabled>
                 <ShoppingCart className="h-5 w-5 mr-2" />
                 {isAcceptingOrders
                   ? tableSessionStatus === "pending"
@@ -294,16 +294,16 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                 )}
                 {hhActive && selectedItem.happyHourPrice != null ? (
                   <div className="flex items-baseline gap-2">
-                    <p className="figures text-base text-primary">
+                    <p className="font-mono tabular-nums text-base text-primary">
                       {money(selectedItem.happyHourPrice)}
                     </p>
-                    <p className="figures text-sm text-muted-foreground line-through">
+                    <p className="font-mono tabular-nums text-sm text-muted-foreground line-through">
                       {money(selectedItem.price)}
                     </p>
-                    <span className="eyebrow text-primary">Happy Hour</span>
+                    <span className="type-label text-muted-foreground text-primary">Happy Hour</span>
                   </div>
                 ) : (
-                  <p className="figures text-base">{money(selectedItem.price)}</p>
+                  <p className="font-mono tabular-nums text-base">{money(selectedItem.price)}</p>
                 )}
               </SheetHeader>
 
@@ -311,8 +311,8 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                 {selectedItem.modifierGroups.map((group) => (
                   <div key={group.id}>
                     <div className="flex items-center gap-2 mb-2.5">
-                      <p className="eyebrow">{group.name}</p>
-                      {group.required && <Badge variant="secondary" className="text-xs">Required</Badge>}
+                      <p className="type-label text-muted-foreground">{group.name}</p>
+                      {group.required && <Badge tone="neutral" className="text-xs">Required</Badge>}
                     </div>
                     <div className="space-y-2.5">
                       {group.modifiers.filter((m) => m.isAvailable).map((mod) => (
@@ -328,7 +328,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                             {mod.name}
                           </Label>
                           {mod.priceDelta > 0 && (
-                            <span className="figures text-xs text-muted-foreground">
+                            <span className="font-mono tabular-nums text-xs text-muted-foreground">
                               +{money(mod.priceDelta)}
                             </span>
                           )}
@@ -339,7 +339,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                 ))}
 
                 <div>
-                  <Label className="eyebrow">Special request (optional)</Label>
+                  <Label className="type-label text-muted-foreground">Special request (optional)</Label>
                   <Textarea
                     className="mt-2"
                     rows={2}
@@ -353,15 +353,15 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
               <SheetFooter className="mt-4 flex-col gap-3">
                 <div className="flex items-center justify-center gap-4">
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="icon"
                     onClick={() => setSheetQty((q) => Math.max(1, q - 1))}
                   >
                     <Minus className="h-4 w-4" />
                   </Button>
-                  <span className="figures text-lg w-8 text-center">{sheetQty}</span>
+                  <span className="font-mono tabular-nums text-lg w-8 text-center">{sheetQty}</span>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="icon"
                     onClick={() => setSheetQty((q) => q + 1)}
                   >
@@ -370,7 +370,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                 </div>
                 <Button className="w-full" onClick={addToCart}>
                   Add to Cart ·{" "}
-                  <span className="figures">
+                  <span className="font-mono tabular-nums">
                     {money(
                       (effectivePrice(selectedItem, hhActive) +
                         modifierTotal(sheetMods)) *

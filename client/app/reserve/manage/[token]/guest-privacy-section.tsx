@@ -93,8 +93,8 @@ export function GuestPrivacySection() {
       <div className="mt-4 flex flex-wrap gap-3">
         {consented.length > 0 && (
           <Button
-            variant="outline"
-            size="sm"
+            variant="secondary"
+            size="filter"
             disabled={busy !== null}
             onClick={() => void run("withdraw_consent")}
           >
@@ -102,16 +102,16 @@ export function GuestPrivacySection() {
           </Button>
         )}
         <Button
-          variant="outline"
-          size="sm"
+          variant="secondary"
+          size="filter"
           disabled={busy !== null}
           onClick={() => void run("export")}
         >
           {busy === "export" ? "Sending…" : "Request a copy of my data"}
         </Button>
         <Button
-          variant="outline"
-          size="sm"
+          variant="secondary"
+          size="filter"
           disabled={busy !== null}
           onClick={() => void run("deletion")}
         >

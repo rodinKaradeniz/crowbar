@@ -130,11 +130,11 @@ export default function InsightsClient({
   };
 
   return (
-    <div className="page-pad space-y-6">
+    <div className="px-[clamp(16px,2.5vw,32px)] py-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="page-title flex items-center gap-2">
+          <h1 className="type-t1 flex items-center gap-2">
             <BrainCircuit className="h-6 w-6" />
             Insights
           </h1>
@@ -151,7 +151,7 @@ export default function InsightsClient({
           <Button
             onClick={handleRunPipeline}
             disabled={isRunning}
-            size="sm"
+            size="filter"
           >
             <RefreshCw
               className={`h-4 w-4 mr-2 ${isRunning ? "animate-spin" : ""}`}
@@ -643,8 +643,9 @@ function CancellationSection({
               <div className="space-y-1">
                 {highRiskReservations.map((r) => {
                   const riskPct = Math.round(r.risk_score * 100);
-                  const badgeVariant =
-                    r.risk_score >= 0.8 ? "destructive" : "secondary";
+                  // Neutral. A cancellation-risk score is a forecast about
+                  // next week; §08 puts predictions on the neutral tier, and a
+                  // red badge here would outrank a genuinely late ticket.
                   return (
                     <div
                       key={r.id}
@@ -661,7 +662,7 @@ function CancellationSection({
                         {" · "}
                         {r.guests} {r.guests === 1 ? "guest" : "guests"}
                       </span>
-                      <Badge variant={badgeVariant} className="text-xs">
+                      <Badge tone="neutral">
                         {riskPct}% risk
                       </Badge>
                     </div>
@@ -857,10 +858,15 @@ function KpiStatCard({
   value: string;
   tone: "green" | "yellow" | "red" | "neutral";
 }) {
+  // Model quality is NEUTRAL. A fit statistic being lower than someone hoped
+  // is §08's named non-qualifying case — nobody acts on an R-squared during
+  // service. The `tone` prop is kept so callers still compile; it no longer
+  // paints. (The chart SERIES colours on this screen are separately held —
+  // see the open design question in docs/DESIGN.md.)
   const colors: Record<string, string> = {
-    green: "text-green-600 dark:text-green-400",
-    yellow: "text-yellow-600 dark:text-yellow-400",
-    red: "text-red-600 dark:text-red-400",
+    green: "",
+    yellow: "",
+    red: "",
     neutral: "",
   };
   return (
@@ -874,17 +880,12 @@ function KpiStatCard({
 // ─── Helper Components ──────────────────────────────────────────────────────
 
 function MetricBadge({ label, value }: { label: string; value: number }) {
-  const color =
-    value >= 0.7
-      ? "text-green-600 dark:text-green-400"
-      : value >= 0.5
-        ? "text-yellow-600 dark:text-yellow-400"
-        : "text-red-600 dark:text-red-400";
-
   return (
-    <div className="text-center p-2 rounded-md border bg-muted/30">
+    <div className="rounded-md border bg-muted/30 p-2 text-center">
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className={`text-sm font-bold ${color}`}>{value.toFixed(2)}</p>
+      <p className="mt-0.5 font-mono text-sm font-semibold tabular-nums">
+        {value.toFixed(2)}
+      </p>
     </div>
   );
 }

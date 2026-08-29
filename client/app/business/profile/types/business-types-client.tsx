@@ -164,11 +164,11 @@ export default function BusinessTypesClient({
   };
 
   return (
-    <div className="page-container">
+    <div className="flex flex-col gap-6 px-[clamp(16px,2.5vw,32px)] py-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="page-title">Booking Types</h1>
-          <p className="page-description">
+          <h1 className="type-t1">Booking Types</h1>
+          <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
             Configure the types of reservations your business accepts
           </p>
         </div>
@@ -193,7 +193,7 @@ export default function BusinessTypesClient({
             No booking types configured yet
           </p>
           {canEdit && (
-            <Button onClick={handleCreate} variant="outline">
+            <Button onClick={handleCreate} variant="secondary">
               <Plus className="h-4 w-4 mr-2" />
               Create Your First Booking Type
             </Button>
@@ -216,14 +216,14 @@ export default function BusinessTypesClient({
                 </div>
                 {canEdit && <div className="flex gap-1">
                   <Button
-                    size="sm"
-                    variant="outline"
+                    size="filter"
+                    variant="secondary"
                     onClick={() => handleEdit(type)}
                   >
                     <Pencil className="h-3 w-3" />
                   </Button>
                   <Button
-                    size="sm"
+                    size="filter"
                     variant="destructive"
                     onClick={() => handleDelete(type)}
                   >
@@ -402,7 +402,7 @@ export default function BusinessTypesClient({
             <DialogFooter className="mt-6">
               <Button
                 type="button"
-                variant="outline"
+                variant="secondary"
                 onClick={() => {
                   setIsDialogOpen(false);
                   resetForm();

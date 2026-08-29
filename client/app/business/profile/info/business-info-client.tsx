@@ -99,11 +99,11 @@ export default function BusinessInfoClient({
   };
 
   return (
-    <div className="page-container-split">
+    <div className="flex flex-col gap-6 lg:flex-row px-[clamp(16px,2.5vw,32px)] py-6">
       <div className="flex-1">
-        <div className="page-header">
-          <h1 className="page-title">Business Information</h1>
-          <p className="page-description">
+        <div className="mb-6">
+          <h1 className="type-t1">Business Information</h1>
+          <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
             Basic details visible to customers
           </p>
         </div>
@@ -249,7 +249,7 @@ export default function BusinessInfoClient({
             </FieldSet>
 
             <Field>
-              <div className="button-group-end">
+              <div className="flex justify-end">
                 <Button type="submit" disabled={isSaving}>
                   {isSaving ? "Saving..." : "Save Changes"}
                 </Button>

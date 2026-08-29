@@ -41,7 +41,7 @@ export function CostControlPanel({ businessId }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Variance and COGS are the two windowed figures here. This panel used to
+  // Variance and COGS are the two windowed font-mono tabular-nums here. This panel used to
   // hard-code 28 days, which docs/TODO.md recorded as the main operator
   // complaint about the analytics surfaces; it now uses the same picker the
   // Reports page does.
@@ -63,7 +63,7 @@ export function CostControlPanel({ businessId }: Props) {
       setCogs(cogsRow);
       setError(null);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not load cost figures");
+      setError(cause instanceof Error ? cause.message : "Could not load cost font-mono tabular-nums");
     } finally {
       setLoading(false);
     }
@@ -89,7 +89,7 @@ export function CostControlPanel({ businessId }: Props) {
     return (
       <EmptyState
         icon={TrendingUp}
-        title="No cost figures yet"
+        title="No cost font-mono tabular-nums yet"
         description="Receive a purchase order so stock has a cost basis to report from."
       />
     );
@@ -98,7 +98,7 @@ export function CostControlPanel({ businessId }: Props) {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="section-title">Cost control</h2>
+        <h2 className="type-t2">Cost control</h2>
         <p className="text-sm text-muted-foreground mt-0.5">
           Stock on hand and margins are current. Variance and COGS cover the range
           below.
@@ -117,8 +117,8 @@ export function CostControlPanel({ businessId }: Props) {
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-lg border p-4">
-          <div className="eyebrow">Stock on hand</div>
-          <div className="figures text-2xl mt-1">{money(overview.valuation.totalValue)}</div>
+          <div className="type-label text-muted-foreground">Stock on hand</div>
+          <div className="font-mono tabular-nums text-2xl mt-1">{money(overview.valuation.totalValue)}</div>
           {!overview.valuation.complete && (
             <div className="text-xs text-muted-foreground mt-1">
               Excludes {overview.valuation.itemsWithoutCost.length} item
@@ -128,8 +128,8 @@ export function CostControlPanel({ businessId }: Props) {
           )}
         </div>
         <div className="rounded-lg border p-4">
-          <div className="eyebrow">Cost of stock sold</div>
-          <div className="figures text-2xl mt-1">{cogs ? money(cogs.soldCost) : "—"}</div>
+          <div className="type-label text-muted-foreground">Cost of stock sold</div>
+          <div className="font-mono tabular-nums text-2xl mt-1">{cogs ? money(cogs.soldCost) : "—"}</div>
           {cogs && !cogs.complete && (
             <div className="text-xs text-muted-foreground mt-1">
               {cogs.movementsWithoutCost} movement
@@ -138,14 +138,14 @@ export function CostControlPanel({ businessId }: Props) {
           )}
         </div>
         <div className="rounded-lg border p-4">
-          <div className="eyebrow">Waste</div>
-          <div className="figures text-2xl mt-1">{cogs ? money(cogs.wasteCost) : "—"}</div>
+          <div className="type-label text-muted-foreground">Waste</div>
+          <div className="font-mono tabular-nums text-2xl mt-1">{cogs ? money(cogs.wasteCost) : "—"}</div>
         </div>
       </div>
 
       {/* Reorder suggestions with every term of the formula on screen. */}
       <div className="flex flex-col gap-2">
-        <h3 className="section-subtitle">Reorder suggestions</h3>
+        <h3 className="text-[length:var(--ui-size)] text-muted-foreground">Reorder suggestions</h3>
         {overview.reorderSuggestions.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Nothing is below its par level once stock on order is counted.
@@ -161,11 +161,11 @@ export function CostControlPanel({ businessId }: Props) {
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className="figures text-lg">
+                  <div className="font-mono tabular-nums text-lg">
                     {suggestion.suggestedQuantity} {suggestion.baseUnit}
                   </div>
                   {!suggestion.explanation.leadTimeKnown && (
-                    <Badge variant="outline" className="text-muted-foreground mt-1">
+                    <Badge tone="neutral" className="text-muted-foreground mt-1">
                       No lead time
                     </Badge>
                   )}
@@ -185,9 +185,9 @@ export function CostControlPanel({ businessId }: Props) {
                   ],
                   ["Target", suggestion.explanation.targetQuantity],
                 ].map(([label, value]) => (
-                  <div key={String(label)} className="flex justify-between gap-2 leader-dots">
+                  <div key={String(label)} className="flex justify-between gap-2 flex-1">
                     <dt className="text-muted-foreground">{label}</dt>
-                    <dd className="figures">{String(value)}</dd>
+                    <dd className="font-mono tabular-nums">{String(value)}</dd>
                   </div>
                 ))}
               </dl>
@@ -198,7 +198,7 @@ export function CostControlPanel({ businessId }: Props) {
 
       {/* Margins */}
       <div className="flex flex-col gap-2">
-        <h3 className="section-subtitle">Menu margin and pour cost</h3>
+        <h3 className="text-[length:var(--ui-size)] text-muted-foreground">Menu margin and pour cost</h3>
         {!margins || margins.items.length === 0 ? (
           <p className="text-sm text-muted-foreground">No menu items to cost yet.</p>
         ) : (
@@ -214,13 +214,13 @@ export function CostControlPanel({ businessId }: Props) {
                     <div className="text-xs text-muted-foreground">{row.incompleteReason}</div>
                   )}
                 </div>
-                <div className="figures text-sm text-muted-foreground shrink-0">
+                <div className="font-mono tabular-nums text-sm text-muted-foreground shrink-0">
                   {money(row.price)}
                 </div>
-                <div className="figures text-sm shrink-0 w-20 text-right">
+                <div className="font-mono tabular-nums text-sm shrink-0 w-20 text-right">
                   {row.pourCostPercent === null ? "—" : `${row.pourCostPercent}%`}
                 </div>
-                <div className="figures text-sm shrink-0 w-24 text-right">
+                <div className="font-mono tabular-nums text-sm shrink-0 w-24 text-right">
                   {row.grossMargin === null ? "Unknown" : money(row.grossMargin)}
                 </div>
               </div>
@@ -231,7 +231,7 @@ export function CostControlPanel({ businessId }: Props) {
 
       {/* Waste and variance */}
       <div className="flex flex-col gap-2">
-        <h3 className="section-subtitle">Consumption and waste</h3>
+        <h3 className="text-[length:var(--ui-size)] text-muted-foreground">Consumption and waste</h3>
         {!variance || variance.items.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No stock has been sold or wasted in this window.
@@ -251,10 +251,10 @@ export function CostControlPanel({ businessId }: Props) {
                   )}
                 </div>
                 <div className="text-right shrink-0">
-                  <div className="figures text-sm">
+                  <div className="font-mono tabular-nums text-sm">
                     {row.soldQuantity} {row.baseUnit} sold
                   </div>
-                  <div className="figures text-xs text-muted-foreground">
+                  <div className="font-mono tabular-nums text-xs text-muted-foreground">
                     {row.wasteValue === null ? "Waste uncosted" : `${money(row.wasteValue)} wasted`}
                   </div>
                 </div>

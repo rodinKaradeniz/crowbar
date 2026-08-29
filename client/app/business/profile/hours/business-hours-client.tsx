@@ -103,10 +103,10 @@ export default function BusinessHoursClient({
   };
 
   return (
-    <div className="page-container">
-      <div className="page-header">
-        <h1 className="page-title">Operating Hours</h1>
-        <p className="page-description">
+    <div className="flex flex-col gap-6 px-[clamp(16px,2.5vw,32px)] py-6">
+      <div className="mb-6">
+        <h1 className="type-t1">Operating Hours</h1>
+        <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
           Set your business&apos;s opening and closing times
         </p>
       </div>
@@ -175,7 +175,7 @@ export default function BusinessHoursClient({
           </FieldSet>
 
           <Field>
-            <div className="button-group-end">
+            <div className="flex justify-end">
               <Button type="submit" disabled={isSaving}>
                 {isSaving ? "Saving..." : "Save Changes"}
               </Button>

@@ -38,7 +38,7 @@ interface ReservationTableProps {
  * The reservation book, as a ledger.
  *
  * This replaces an accordion of rounded cards whose details expanded inline.
- * §06: a data table with fixed column widths so figures align down the page,
+ * §06: a data table with fixed column widths so font-mono tabular-nums align down the page,
  * hairline separators, no zebra, and **detail belongs in a side panel** — a row
  * that grows to 400px tall pushes everything below it off the screen, which is
  * the opposite of what a book is for.

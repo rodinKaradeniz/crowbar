@@ -35,7 +35,7 @@ export default function GlobalError({
           )}
         </CardContent>
         <CardFooter className="flex justify-center gap-3">
-          <Button variant="outline" onClick={reset}>
+          <Button variant="secondary" onClick={reset}>
             Try again
           </Button>
           <Button asChild>

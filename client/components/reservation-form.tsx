@@ -308,7 +308,7 @@ export function ReservationForm({
             If a suitable table opens, we&apos;ll email you a 15-minute offer to confirm it.
           </p>
         </div>
-        {waitlistManagementToken && <Button asChild variant="outline" className="w-full"><a href={`/reserve/waitlist/manage/${encodeURIComponent(waitlistManagementToken)}`}>Manage or cancel request</a></Button>}
+        {waitlistManagementToken && <Button asChild variant="secondary" className="w-full"><a href={`/reserve/waitlist/manage/${encodeURIComponent(waitlistManagementToken)}`}>Manage or cancel request</a></Button>}
         <Button onClick={() => window.location.reload()} className="w-full">Make another request</Button>
       </div>
     );
@@ -342,7 +342,7 @@ export function ReservationForm({
           </div>
           {submitError && <p className="rounded-md bg-destructive/15 p-3 text-sm text-destructive" role="alert">{submitError}</p>}
           <div className="flex gap-3">
-            <Button type="button" variant="outline" className="flex-1" onClick={() => setStep("datetime")} disabled={isSubmitting}>Back</Button>
+            <Button type="button" variant="secondary" className="flex-1" onClick={() => setStep("datetime")} disabled={isSubmitting}>Back</Button>
             <Button type="submit" className="flex-1" disabled={!firstName || !lastName || !phone || !email || !waitlistTime || isSubmitting}>{isSubmitting ? <><Loader2 className="mr-2 animate-spin" />Joining…</> : "Join waitlist"}</Button>
           </div>
         </FieldGroup>
@@ -358,28 +358,28 @@ export function ReservationForm({
           <p className="text-muted-foreground">
             Please confirm your details before submitting
           </p>
-          <div className="rule-double mt-4 mx-auto max-w-36" />
+          <div className="border-t border-border mt-4 mx-auto max-w-36" />
         </div>
         <div className="space-y-3 rounded-lg border bg-card p-5">
           <div className="flex items-baseline gap-2.5 text-sm">
             <span className="text-muted-foreground shrink-0">Date &amp; Time</span>
-            <span className="leader-dots text-brass" aria-hidden />
+            <span className="flex-1" aria-hidden />
             <span className="font-medium text-right">
               {selectedSlot && formatSlotDate(selectedSlot.startsAt, availabilityTimezone)} at{" "}
-              <span className="figures">
+              <span className="font-mono tabular-nums">
                 {selectedSlot && formatSlotTime(selectedSlot.startsAt, availabilityTimezone)}
               </span>
             </span>
           </div>
           <div className="flex items-baseline gap-2.5 text-sm">
             <span className="text-muted-foreground shrink-0">Guests</span>
-            <span className="leader-dots text-brass" aria-hidden />
-            <span className="figures font-medium">{guests}</span>
+            <span className="flex-1" aria-hidden />
+            <span className="font-mono tabular-nums font-medium">{guests}</span>
           </div>
           {selectedServiceType && (
             <div className="flex items-baseline gap-2.5 text-sm">
               <span className="text-muted-foreground shrink-0">Booking Type</span>
-              <span className="leader-dots text-brass" aria-hidden />
+              <span className="flex-1" aria-hidden />
               <span className="flex items-center gap-2 font-medium">
                 <span
                   className="w-2.5 h-2.5 rounded-full inline-block"
@@ -391,23 +391,23 @@ export function ReservationForm({
           )}
           <div className="flex items-baseline gap-2.5 text-sm">
             <span className="text-muted-foreground shrink-0">Name</span>
-            <span className="leader-dots text-brass" aria-hidden />
+            <span className="flex-1" aria-hidden />
             <span className="font-medium">{firstName} {lastName}</span>
           </div>
           <div className="flex items-baseline gap-2.5 text-sm">
             <span className="text-muted-foreground shrink-0">Phone</span>
-            <span className="leader-dots text-brass" aria-hidden />
-            <span className="figures font-medium">{phone}</span>
+            <span className="flex-1" aria-hidden />
+            <span className="font-mono tabular-nums font-medium">{phone}</span>
           </div>
           <div className="flex items-baseline gap-2.5 text-sm">
             <span className="text-muted-foreground shrink-0">Email</span>
-            <span className="leader-dots text-brass" aria-hidden />
+            <span className="flex-1" aria-hidden />
             <span className="font-medium break-all">{email}</span>
           </div>
           {note && (
             <div className="flex items-baseline gap-2.5 text-sm">
               <span className="text-muted-foreground shrink-0">Note</span>
-              <span className="leader-dots text-brass" aria-hidden />
+              <span className="flex-1" aria-hidden />
               <span className="font-medium text-right">{note}</span>
             </div>
           )}
@@ -453,7 +453,7 @@ export function ReservationForm({
         <div className="flex gap-3">
           <Button
             onClick={() => setStep("info")}
-            variant="outline"
+            variant="secondary"
             className="flex-1"
             disabled={isSubmitting}
           >
@@ -520,7 +520,7 @@ export function ReservationForm({
           </Field>
 
           <div className="flex gap-3">
-            <Button type="button" onClick={() => setStep("datetime")} variant="outline" className="flex-1">
+            <Button type="button" onClick={() => setStep("datetime")} variant="secondary" className="flex-1">
               Back
             </Button>
             <Button type="submit" disabled={!firstName || !lastName || !phone || !email} className="flex-1">
@@ -570,7 +570,7 @@ export function ReservationForm({
             <Popover>
               <PopoverTrigger asChild>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   type="button"
                   id="reservation-date"
                   className={cn(
@@ -614,7 +614,7 @@ export function ReservationForm({
             ) : availableSlots.length === 0 ? (
               <div className="rounded-md border border-dashed p-4 text-sm" aria-live="polite">
                 <p className="text-muted-foreground">No times are available for this date.</p>
-                <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => { setSubmitError(null); setStep("waitlist"); }}>
+                <Button type="button" variant="secondary" size="filter" className="mt-3" onClick={() => { setSubmitError(null); setStep("waitlist"); }}>
                   Join the waitlist
                 </Button>
               </div>
@@ -624,7 +624,7 @@ export function ReservationForm({
                   <Button
                     key={slot.startsAt}
                     type="button"
-                    variant={selectedSlot?.startsAt === slot.startsAt ? "default" : "outline"}
+                    variant={selectedSlot?.startsAt === slot.startsAt ? "primary" : "secondary"}
                     onClick={() => {
                       setSelectedSlot(slot);
                       setAlternatives([]);
@@ -651,7 +651,7 @@ export function ReservationForm({
                   <Button
                     key={slot.startsAt}
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     onClick={() => chooseAlternative(slot)}
                     className="justify-start"
                   >

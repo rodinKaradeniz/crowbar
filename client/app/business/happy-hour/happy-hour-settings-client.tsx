@@ -151,11 +151,11 @@ export default function HappyHourSettingsClient({
   }
 
   return (
-    <div className="page-container">
-      <div className="page-header flex items-start justify-between gap-4">
+    <div className="flex flex-col gap-6 px-[clamp(16px,2.5vw,32px)] py-6">
+      <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="page-title">Happy Hour</h1>
-          <p className="page-description">
+          <h1 className="type-t1">Happy Hour</h1>
+          <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
             Time windows when items with a happy-hour price are discounted.
           </p>
         </div>
@@ -184,7 +184,7 @@ export default function HappyHourSettingsClient({
                 <div className="flex items-center gap-2">
                   <p className="font-medium text-sm">{w.name}</p>
                   {!w.isActive && (
-                    <Badge variant="secondary" className="text-xs">
+                    <Badge tone="neutral" className="text-xs">
                       Inactive
                     </Badge>
                   )}
@@ -290,7 +290,7 @@ export default function HappyHourSettingsClient({
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+            <Button variant="secondary" onClick={() => setDialogOpen(false)}>
               Cancel
             </Button>
             <Button onClick={save} disabled={saving}>

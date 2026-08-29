@@ -156,7 +156,7 @@ export function ReservationEditDialog({
           <DialogFooter className="mt-6">
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               onClick={() => onOpenChange(false)}
               disabled={submitting}
             >

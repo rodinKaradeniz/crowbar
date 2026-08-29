@@ -211,7 +211,7 @@ export function CountSessionClient({ businessId, sessionId, canManage }: Props) 
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error ?? "This count could not be loaded."}
         </div>
-        <Button variant="outline" onClick={() => router.push("/business/inventory")}>
+        <Button variant="secondary" onClick={() => router.push("/business/inventory")}>
           Back to Inventory
         </Button>
       </div>
@@ -226,7 +226,7 @@ export function CountSessionClient({ businessId, sessionId, canManage }: Props) 
         <div className="max-w-md mx-auto flex items-center gap-2">
           <Button
             variant="ghost"
-            size="sm"
+            size="filter"
             className="h-9 w-9 p-0 shrink-0"
             onClick={() => router.push("/business/inventory")}
             aria-label="Back to inventory"
@@ -238,15 +238,15 @@ export function CountSessionClient({ businessId, sessionId, canManage }: Props) 
               {session.kind === "stocktake" ? "Stocktake" : "Cycle count"}
             </div>
             <div className="text-xs text-muted-foreground">
-              <span className="figures">
+              <span className="font-mono tabular-nums">
                 {counted}/{session.lines.length}
               </span>{" "}
               counted
             </div>
           </div>
           <Badge
-            variant="outline"
-            className={isOpen ? "text-marzen shrink-0" : "text-muted-foreground shrink-0"}
+            tone="neutral"
+            className={isOpen ? "text-foreground shrink-0" : "text-muted-foreground shrink-0"}
           >
             {isOpen ? "Open" : session.status === "reconciled" ? "Reconciled" : "Cancelled"}
           </Badge>
@@ -256,13 +256,13 @@ export function CountSessionClient({ businessId, sessionId, canManage }: Props) 
       <div className="px-4 py-6 max-w-md mx-auto flex flex-col gap-4">
         {isOpen && (
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="flex-1" onClick={exportSheet}>
+            <Button variant="secondary" size="filter" className="flex-1" onClick={exportSheet}>
               <Download className="h-4 w-4 mr-1.5" />
               Export CSV
             </Button>
             <Button
-              variant="outline"
-              size="sm"
+              variant="secondary"
+              size="filter"
               className="flex-1"
               onClick={() => fileInput.current?.click()}
             >
@@ -299,11 +299,11 @@ export function CountSessionClient({ businessId, sessionId, canManage }: Props) 
       {isOpen && (
         <div className="fixed bottom-0 inset-x-0 z-20 bg-background/95 backdrop-blur border-t">
           <div className="p-4 max-w-md mx-auto flex gap-2">
-            <Button variant="outline" size="lg" className="flex-1" onClick={save} disabled={saving}>
+            <Button variant="secondary" size="md" className="flex-1" onClick={save} disabled={saving}>
               {saving ? "Saving…" : "Save"}
             </Button>
             {canManage && (
-              <Button size="lg" className="flex-1" onClick={() => setConfirmReconcile(true)}>
+              <Button size="md" className="flex-1" onClick={() => setConfirmReconcile(true)}>
                 <Check className="h-4 w-4 mr-1.5" />
                 Reconcile
               </Button>
@@ -366,11 +366,11 @@ function CountLineCard({
         <div className="min-w-0">
           <div className="font-medium truncate">{line.itemName}</div>
           <div className="text-xs text-muted-foreground">
-            Book: <span className="figures">{line.bookQuantity}</span> {line.baseUnit}
+            Book: <span className="font-mono tabular-nums">{line.bookQuantity}</span> {line.baseUnit}
           </div>
         </div>
         {variance !== null && variance !== 0 && (
-          <Badge variant="outline" className={variance < 0 ? "text-oxblood" : "text-foreground"}>
+          <Badge tone="neutral" className={variance < 0 ? "text-foreground" : "text-foreground"}>
             {variance > 0 ? "+" : ""}
             {variance.toFixed(3)}
           </Badge>
@@ -379,11 +379,11 @@ function CountLineCard({
 
       {readOnly ? (
         <div className="text-sm">
-          Counted <span className="figures">{line.countedQuantity}</span> {line.baseUnit}
+          Counted <span className="font-mono tabular-nums">{line.countedQuantity}</span> {line.baseUnit}
           {line.varianceQuantity !== 0 && (
             <span className="text-muted-foreground">
               {" "}
-              · variance <span className="figures">{line.varianceQuantity}</span>
+              · variance <span className="font-mono tabular-nums">{line.varianceQuantity}</span>
             </span>
           )}
         </div>
@@ -407,7 +407,7 @@ function CountLineCard({
               </SelectContent>
             </Select>
             <Input
-              className="h-10 flex-1 figures"
+              className="h-10 flex-1 font-mono tabular-nums"
               inputMode="decimal"
               placeholder="Count"
               value={current.value}

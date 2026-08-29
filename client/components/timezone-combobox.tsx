@@ -71,7 +71,7 @@ export function TimezoneCombobox({
         <Button
           id={id}
           type="button"
-          variant="outline"
+          variant="secondary"
           role="combobox"
           aria-expanded={open}
           disabled={disabled}

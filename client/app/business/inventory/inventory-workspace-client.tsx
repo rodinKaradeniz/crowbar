@@ -48,9 +48,9 @@ export function InventoryWorkspaceClient({
   );
 
   return (
-    <div className="page-container">
+    <div className="flex flex-col gap-6 px-[clamp(16px,2.5vw,32px)] py-6">
       <div>
-        <h1 className="page-title">Inventory</h1>
+        <h1 className="type-t1">Inventory</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
           Stock, purchasing and cost control from one ledger.
         </p>

@@ -193,11 +193,11 @@ export default function StaffClient({
   );
 
   return (
-    <div className="page-container space-y-8">
+    <div className="flex flex-col gap-6 px-[clamp(16px,2.5vw,32px)] py-6 space-y-8">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="page-title">Staff</h1>
-          <p className="page-description">
+          <h1 className="type-t1">Staff</h1>
+          <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
             {canAdminister ? "Manage staff access and invitations" : "View your business team"}
           </p>
         </div>
@@ -237,7 +237,7 @@ export default function StaffClient({
                 </div>
                 {canManageMember(member) && (
                   <div className="flex gap-1">
-                    <Button size="icon" variant="outline" aria-label="Edit role" onClick={() => handleEdit(member)}>
+                    <Button size="icon" variant="secondary" aria-label="Edit role" onClick={() => handleEdit(member)}>
                       <Pencil className="h-3 w-3" />
                     </Button>
                     {/* Not destructive on the row. The confirmation owns the red. */}
@@ -280,11 +280,11 @@ export default function StaffClient({
                     )}
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" disabled={actionInvitationId === invitation.id} onClick={() => handleInvitationAction(invitation, "resend")}>
+                    <Button variant="secondary" size="filter" disabled={actionInvitationId === invitation.id} onClick={() => handleInvitationAction(invitation, "resend")}>
                       <RefreshCw className="mr-2 h-3 w-3" />
                       Resend
                     </Button>
-                    <Button variant="outline" size="sm" disabled={actionInvitationId === invitation.id} onClick={() => handleInvitationAction(invitation, "revoke")}>
+                    <Button variant="secondary" size="filter" disabled={actionInvitationId === invitation.id} onClick={() => handleInvitationAction(invitation, "revoke")}>
                       <Ban className="mr-2 h-3 w-3" />
                       Revoke
                     </Button>
@@ -342,7 +342,7 @@ export default function StaffClient({
               </Field>
             </FieldGroup>
             <DialogFooter className="mt-6">
-              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isSubmitting}>Cancel</Button>
+              <Button type="button" variant="secondary" onClick={() => setIsDialogOpen(false)} disabled={isSubmitting}>Cancel</Button>
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting ? "Saving…" : editingStaff ? "Update role" : "Create invitation"}
               </Button>

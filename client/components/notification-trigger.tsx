@@ -8,11 +8,10 @@ import {
   XCircle,
   Clock,
   Info,
-  Briefcase,
-  User2,
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import {
@@ -311,7 +310,7 @@ export function NotificationTrigger() {
             <Button
               type="button"
               variant="ghost"
-              size="sm"
+              size="filter"
               className="h-7 text-xs text-muted-foreground hover:text-foreground"
               onClick={() => void onMarkAllRead()}
             >
@@ -417,21 +416,11 @@ function NotificationCard({
           {/* source badge */}
           {n.sourceType && (
             <div className="pt-1.5">
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium",
-                  n.sourceType === "staff"
-                    ? "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300"
-                    : "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-300",
-                )}
-              >
-                {n.sourceType === "staff" ? (
-                  <Briefcase className="h-2.5 w-2.5" />
-                ) : (
-                  <User2 className="h-2.5 w-2.5" />
-                )}
-                {n.sourceType === "staff" ? "As business" : "As customer"}
-              </span>
+              {/* Whether a notification came from staff or a guest is a fact
+                  about its origin, not a rank. It was two coloured pills. */}
+              <Badge tone="neutral">
+                {n.sourceType === "staff" ? "Staff" : "Guest"}
+              </Badge>
             </div>
           )}
         </div>

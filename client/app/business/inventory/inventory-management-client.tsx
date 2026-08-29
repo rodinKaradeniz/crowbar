@@ -454,21 +454,21 @@ export function InventoryManagementClient({ businessId, businessTimezone, embedd
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div className={embedded ? "flex flex-col gap-6" : "page-container"}>
+    <div className={embedded ? "flex flex-col gap-6" : "flex flex-col gap-6 px-[clamp(16px,2.5vw,32px)] py-6"}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           {embedded ? (
-            <h2 className="section-title">Stock</h2>
+            <h2 className="type-t2">Stock</h2>
           ) : (
-            <h1 className="page-title">Inventory</h1>
+            <h1 className="type-t1">Inventory</h1>
           )}
           <p className="text-sm text-muted-foreground mt-0.5">
             Track stock levels and record movements
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={loadItems}>
+          <Button variant="secondary" size="filter" onClick={loadItems}>
             <RefreshCw className="h-4 w-4 mr-1.5" />
             Refresh
           </Button>
@@ -554,8 +554,8 @@ export function InventoryManagementClient({ businessId, businessTimezone, embedd
                   "servings left" on menu items. */}
               {item.defaultPourMl != null && item.defaultPourMl > 0 && (
                 <Badge
-                  variant="outline"
-                  className="border-slate-200 bg-slate-50 text-slate-600 tabular-nums"
+                  tone="neutral"
+                  className="tabular-nums"
                   title={`Rough estimate from a ${item.defaultPourMl} ml reference pour — not tied to any recipe`}
                 >
                   ~{Math.floor(item.currentQuantity / item.defaultPourMl)} pours left
@@ -574,7 +574,7 @@ export function InventoryManagementClient({ businessId, businessTimezone, embedd
               {/* Actions */}
               <div className="flex gap-1 shrink-0">
                 <Button
-                  size="sm"
+                  size="filter"
                   variant="ghost"
                   className="h-8 w-8 p-0"
                   title="Record movement"
@@ -583,7 +583,7 @@ export function InventoryManagementClient({ businessId, businessTimezone, embedd
                   <ArrowUpCircle className="h-3.5 w-3.5" />
                 </Button>
                 <Button
-                  size="sm"
+                  size="filter"
                   variant="ghost"
                   className="h-8 w-8 p-0"
                   title="View history"
@@ -592,7 +592,7 @@ export function InventoryManagementClient({ businessId, businessTimezone, embedd
                   <History className="h-3.5 w-3.5" />
                 </Button>
                 <Button
-                  size="sm"
+                  size="filter"
                   variant="ghost"
                   className="h-8 w-8 p-0"
                   title="Edit item"
@@ -601,7 +601,7 @@ export function InventoryManagementClient({ businessId, businessTimezone, embedd
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>
                 <Button
-                  size="sm"
+                  size="filter"
                   variant="ghost"
                   className="h-8 w-8 p-0"
                   title="Archive item"
@@ -811,7 +811,7 @@ export function InventoryManagementClient({ businessId, businessTimezone, embedd
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setItemDialog(false)}>
+            <Button variant="secondary" onClick={() => setItemDialog(false)}>
               Cancel
             </Button>
             <Button onClick={saveItem} disabled={itemSaving}>
@@ -978,7 +978,7 @@ export function InventoryManagementClient({ businessId, businessTimezone, embedd
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setMovementDialog(false)}>
+            <Button variant="secondary" onClick={() => setMovementDialog(false)}>
               Cancel
             </Button>
             <Button onClick={saveMovement} disabled={movementSaving}>
@@ -1009,7 +1009,7 @@ export function InventoryManagementClient({ businessId, businessTimezone, embedd
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-xs capitalize">
+                      <Badge tone="neutral" className="text-xs capitalize">
                         {movementTypeLabel(m.movementType)}
                       </Badge>
                       {m.reason && (

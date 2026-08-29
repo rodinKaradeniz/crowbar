@@ -34,10 +34,10 @@ export default function WidgetSnippetClient({ slug }: WidgetSnippetClientProps) 
   }
 
   return (
-    <div className="page-container">
+    <div className="flex flex-col gap-6 px-[clamp(16px,2.5vw,32px)] py-6">
       <div>
-        <h1 className="page-title">Booking Widget</h1>
-        <p className="page-description">
+        <h1 className="type-t1">Booking Widget</h1>
+        <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
           Embed your booking form on any website with a single line of code
         </p>
       </div>
@@ -56,8 +56,8 @@ export default function WidgetSnippetClient({ slug }: WidgetSnippetClientProps) 
             {snippet}
           </pre>
           <Button
-            size="sm"
-            variant="outline"
+            size="filter"
+            variant="secondary"
             className="absolute top-2 right-2"
             onClick={handleCopy}
           >
@@ -92,7 +92,7 @@ export default function WidgetSnippetClient({ slug }: WidgetSnippetClientProps) 
           <p className="text-xs text-muted-foreground mt-0.5">See how customers experience your public profile</p>
         </div>
         <a href={`/reserve/${slug}`} target="_blank" rel="noopener noreferrer">
-          <Button variant="outline" size="sm">
+          <Button variant="secondary" size="filter">
             <ExternalLink className="w-3.5 h-3.5 mr-1.5" /> Open preview
           </Button>
         </a>

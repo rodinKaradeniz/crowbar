@@ -147,7 +147,7 @@ export function SuppliersPanel({ businessId, canManage, onChanged }: Props) {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="section-title">Suppliers</h2>
+          <h2 className="type-t2">Suppliers</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
             Who you buy from. Crowbar records orders and deliveries; it does not pay invoices.
           </p>
@@ -190,11 +190,11 @@ export function SuppliersPanel({ businessId, canManage, onChanged }: Props) {
                     .join(" · ") || "No contact details"}
                 </div>
               </div>
-              {!supplier.isActive && <Badge variant="outline">Archived</Badge>}
+              {!supplier.isActive && <Badge tone="neutral">Archived</Badge>}
               {canManage && (
                 <div className="flex gap-1 shrink-0">
                   <Button
-                    size="sm"
+                    size="filter"
                     variant="ghost"
                     className="h-8 w-8 p-0"
                     title="Edit supplier"
@@ -203,7 +203,7 @@ export function SuppliersPanel({ businessId, canManage, onChanged }: Props) {
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
                   <Button
-                    size="sm"
+                    size="filter"
                     variant="ghost"
                     className="h-8 w-8 p-0"
                     title="Archive supplier"
@@ -269,7 +269,7 @@ export function SuppliersPanel({ businessId, canManage, onChanged }: Props) {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+            <Button variant="secondary" onClick={() => setDialogOpen(false)}>
               Cancel
             </Button>
             <Button onClick={save} disabled={saving}>

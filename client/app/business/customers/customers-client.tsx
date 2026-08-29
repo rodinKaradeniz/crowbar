@@ -63,10 +63,10 @@ export default function CustomersClient({
   }, [visitors, searchQuery]);
 
   return (
-    <div className="page-container">
+    <div className="flex flex-col gap-6 px-[clamp(16px,2.5vw,32px)] py-6">
       <div>
-        <h1 className="page-title">Customers</h1>
-        <p className="page-description">
+        <h1 className="type-t1">Customers</h1>
+        <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
           Reservation customers and queue walk-ins across your business
         </p>
       </div>
@@ -159,7 +159,7 @@ export default function CustomersClient({
 
                   <TableCell>
                     <Link href={`/business/customers/${v.id}`}>
-                      <Button variant="ghost" size="sm" className="text-xs h-7">
+                      <Button variant="ghost" size="filter" className="text-xs h-7">
                         Profile <ArrowRight className="ml-1 h-3 w-3" />
                       </Button>
                     </Link>

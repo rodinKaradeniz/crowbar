@@ -140,8 +140,8 @@ function WindowEditor({
       {!disabled && (
         <Button
           type="button"
-          variant="outline"
-          size="sm"
+          variant="secondary"
+          size="filter"
           onClick={() =>
             onChange([
               ...windows,
@@ -350,10 +350,10 @@ export default function BusinessBookingClient({
   };
 
   return (
-    <div className="page-container space-y-6">
-      <div className="page-header">
-        <h1 className="page-title">Booking Configuration</h1>
-        <p className="page-description">
+    <div className="flex flex-col gap-6 px-[clamp(16px,2.5vw,32px)] py-6 space-y-6">
+      <div className="mb-6">
+        <h1 className="type-t1">Booking Configuration</h1>
+        <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
           Manage reservation policy, weekly availability, and one-off exceptions.
         </p>
       </div>
@@ -441,7 +441,7 @@ export default function BusinessBookingClient({
                   {canEdit && (
                     <Button
                       type="button"
-                      variant={publicReservationsEnabled ? "outline" : "default"}
+                      variant={publicReservationsEnabled ? "secondary" : "primary"}
                       disabled={savingPublicReservations}
                       onClick={() => {
                         if (publicReservationsEnabled) setConfirmDisablePublicReservations(true);
@@ -476,7 +476,7 @@ export default function BusinessBookingClient({
                     />
                   </label>
                   {canEdit && (
-                    <Button type="button" variant="outline" onClick={savePartySize} disabled={savingPartySize}>
+                    <Button type="button" variant="secondary" onClick={savePartySize} disabled={savingPartySize}>
                       {savingPartySize ? "Saving…" : "Save limit"}
                     </Button>
                   )}
@@ -579,7 +579,7 @@ export default function BusinessBookingClient({
                 </p>
               </div>
               {scope === "default" && canEdit && (
-                <Button type="button" variant="outline" onClick={openCopyPreview} disabled={loadingPreview}>
+                <Button type="button" variant="secondary" onClick={openCopyPreview} disabled={loadingPreview}>
                   <Copy /> {loadingPreview ? "Loading…" : "Copy operating hours"}
                 </Button>
               )}
@@ -626,7 +626,7 @@ export default function BusinessBookingClient({
               {editable && (
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="secondary"
                   onClick={() =>
                     setDraft((current) => ({
                       ...current,
@@ -783,7 +783,7 @@ export default function BusinessBookingClient({
             </div>
           )}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setPreview(null)} disabled={copyingHours}>
+            <Button type="button" variant="secondary" onClick={() => setPreview(null)} disabled={copyingHours}>
               Cancel
             </Button>
             <Button type="button" onClick={copyOperatingHours} disabled={copyingHours}>

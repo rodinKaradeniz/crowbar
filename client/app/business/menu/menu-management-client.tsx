@@ -686,17 +686,17 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
   }
 
   return (
-    <div className="page-pad max-w-5xl mx-auto space-y-6">
+    <div className="px-[clamp(16px,2.5vw,32px)] py-6 max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="page-title">Menu Management</h1>
+          <h1 className="type-t1">Menu Management</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Create menus, categories, and items for your ordering board.
           </p>
         </div>
         <div className="flex gap-2">
           <Button
-            variant="outline"
+            variant="secondary"
             onClick={() => {
               void loadLibrary();
               setLibraryTargetCategoryId(null);
@@ -722,7 +722,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <Button size="sm" variant="outline" onClick={handleCopyMenuLink}>
+          <Button size="filter" variant="secondary" onClick={handleCopyMenuLink}>
             {menuLinkCopied ? (
               <>
                 <Check className="h-3.5 w-3.5 mr-1.5" /> Copied
@@ -734,7 +734,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
             )}
           </Button>
           <Link href={`/menu/${businessSlug}`} target="_blank">
-            <Button size="sm" variant="outline">
+            <Button size="filter" variant="secondary">
               <ExternalLink className="h-3.5 w-3.5 mr-1.5" /> Open
             </Button>
           </Link>
@@ -752,7 +752,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
           ))}
           {stations.filter((station) => station.isActive).length === 0 && <p className="text-sm text-muted-foreground">No active station. Items can still use the shared queue.</p>}
         </div>
-        {canManageTax && <div className="flex max-w-sm gap-2"><Input placeholder="New station name" value={newStationName} onChange={(event) => setNewStationName(event.target.value)} /><Button variant="outline" onClick={() => void addStation()} disabled={!newStationName.trim()}>Add station</Button></div>}
+        {canManageTax && <div className="flex max-w-sm gap-2"><Input placeholder="New station name" value={newStationName} onChange={(event) => setNewStationName(event.target.value)} /><Button variant="secondary" onClick={() => void addStation()} disabled={!newStationName.trim()}>Add station</Button></div>}
       </section>
 
       {menus.length === 0 ? (
@@ -798,29 +798,29 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
                 </div>
                 <div className="flex gap-2">
                   <Button
-                    variant="outline"
-                    size="sm"
+                    variant="secondary"
+                    size="filter"
                     onClick={() => toggleMenuActive(selectedMenu)}
                   >
                     {selectedMenu.isActive ? "Deactivate" : "Activate"}
                   </Button>
                   <Button
-                    variant="outline"
-                    size="sm"
+                    variant="secondary"
+                    size="filter"
                     onClick={() => openEditMenu(selectedMenu)}
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
                   <Button
-                    variant="outline"
-                    size="sm"
+                    variant="secondary"
+                    size="filter"
                     onClick={() => deleteMenu(selectedMenu.id)}
                     className="text-destructive hover:text-destructive"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                   <Button
-                    size="sm"
+                    size="filter"
                     onClick={() => openCreateCategory(selectedMenu.id)}
                   >
                     <Plus className="h-3.5 w-3.5 mr-1" />
@@ -901,7 +901,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setMenuDialog(false)}>
+            <Button variant="secondary" onClick={() => setMenuDialog(false)}>
               Cancel
             </Button>
             <Button onClick={saveMenu} disabled={!menuName.trim()}>
@@ -926,7 +926,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCategoryDialog(false)}>
+            <Button variant="secondary" onClick={() => setCategoryDialog(false)}>
               Cancel
             </Button>
             <Button onClick={saveCategory} disabled={!categoryName.trim()}>
@@ -944,7 +944,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
           </DialogHeader>
           <ItemFormFields form={itemForm} onChange={setItemForm} showHappyHour showAlcohol taxProfiles={taxProfiles} canManageTax={canManageTax} currencyCode={currencyCode} taxLabel={taxLabel} stations={stations} />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setItemDialog(false)}>
+            <Button variant="secondary" onClick={() => setItemDialog(false)}>
               Cancel
             </Button>
             <Button
@@ -973,7 +973,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
                 ? "Click + to add an item to the selected category."
                 : "Manage reusable item templates."}
             </p>
-            {canManageTax && <Button size="sm" variant="outline" onClick={openCreateLibraryItem}>
+            {canManageTax && <Button size="filter" variant="secondary" onClick={openCreateLibraryItem}>
               <Plus className="h-3.5 w-3.5 mr-1" />
               New
             </Button>}
@@ -991,7 +991,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
                   No library items yet.
                 </p>
                 {canManageTax && <Button
-                  size="sm"
+                  size="filter"
                   className="mt-3"
                   onClick={openCreateLibraryItem}
                 >
@@ -1011,7 +1011,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
                         {item.name}
                       </span>
                       <Badge
-                        variant="outline"
+                        tone="neutral"
                         className="text-xs flex items-center gap-1 h-4 shrink-0"
                       >
                         {item.routesToAllStations ? "Shared" : (stations.find((station) => station.id === item.preparationStationId)?.name ?? "Archived station")}
@@ -1029,7 +1029,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
                   <div className="flex gap-1 shrink-0">
                     {libraryTargetCategoryId && (
                       <Button
-                        size="sm"
+                        size="filter"
                         variant="ghost"
                         className="h-8 w-8 p-0 text-primary hover:text-primary"
                         title="Add to category"
@@ -1039,7 +1039,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
                       </Button>
                     )}
                     <Button
-                      size="sm"
+                      size="filter"
                       variant="ghost"
                       className="h-8 w-8 p-0"
                       onClick={() => openEditLibraryItem(item)}
@@ -1047,7 +1047,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
                     <Button
-                      size="sm"
+                      size="filter"
                       variant="ghost"
                       className="h-8 w-8 p-0 text-destructive hover:text-destructive"
                       onClick={() =>
@@ -1087,7 +1087,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
           />
           <DialogFooter>
             <Button
-              variant="outline"
+              variant="secondary"
               onClick={() => setLibraryItemDialog(false)}
             >
               Cancel
@@ -1351,7 +1351,7 @@ function CategorySection({
         <h3 className="font-medium text-sm">{category.name}</h3>
         <div className="flex gap-1.5">
           <Button
-            size="sm"
+            size="filter"
             variant="ghost"
             onClick={() => onAddFromLibrary(category.id)}
           >
@@ -1359,7 +1359,7 @@ function CategorySection({
             Library
           </Button>
           {canCreateItems && <Button
-            size="sm"
+            size="filter"
             variant="ghost"
             onClick={() => onAddItem(category.id)}
           >
@@ -1367,7 +1367,7 @@ function CategorySection({
             Item
           </Button>}
           <Button
-            size="sm"
+            size="filter"
             variant="ghost"
             className="text-destructive hover:text-destructive"
             onClick={() => onDeleteCategory(menu.id, category.id)}
@@ -1393,19 +1393,19 @@ function CategorySection({
                     {item.name}
                   </span>
                   <Badge
-                    variant="outline"
+                    tone="neutral"
                     className="text-xs flex items-center gap-1 h-4"
                   >
                     {item.routesToAllStations ? "Shared" : (stations.find((station) => station.id === item.preparationStationId)?.name ?? "Archived station")}
                   </Badge>
                   {!item.isAvailable && (
-                    <Badge variant="secondary" className="text-xs h-4">
+                    <Badge tone="neutral" className="text-xs h-4">
                       unavailable
                     </Badge>
                   )}
                   {stockInfo.get(item.id)?.hasLowStockIngredient && (
                     <Badge
-                      variant="outline"
+                      tone="neutral"
                       className="flex items-center gap-1"
                       title="A recipe ingredient is below par level"
                     >
@@ -1415,7 +1415,7 @@ function CategorySection({
                   )}
                   {stockInfo.get(item.id)?.servingsRemaining != null && (
                     <Badge
-                      variant="outline"
+                      tone="neutral"
                       className="text-xs h-4 flex items-center gap-1 border-slate-200 bg-slate-50 text-slate-600 tabular-nums"
                       title="Servings you can still make from current stock (recipe-exact). Shared ingredients mean this drops when a related item sells too."
                     >
@@ -1435,7 +1435,7 @@ function CategorySection({
               </span>
               <div className="flex gap-1">
                 <Button
-                  size="sm"
+                  size="filter"
                   variant="ghost"
                   className="text-xs h-7 px-2"
                   onClick={() => onToggleAvail(item, category.id)}
@@ -1443,7 +1443,7 @@ function CategorySection({
                   {item.isAvailable ? "86" : "Restore"}
                 </Button>
                 <Button
-                  size="sm"
+                  size="filter"
                   variant="ghost"
                   className="h-7 w-7 p-0"
                   title="Edit recipe"
@@ -1452,7 +1452,7 @@ function CategorySection({
                   <FlaskConical className="h-3.5 w-3.5" />
                 </Button>
                 <Button
-                  size="sm"
+                  size="filter"
                   variant="ghost"
                   className="h-7 w-7 p-0"
                   title="Save to library"
@@ -1461,7 +1461,7 @@ function CategorySection({
                   <Bookmark className="h-3.5 w-3.5" />
                 </Button>
                 <Button
-                  size="sm"
+                  size="filter"
                   variant="ghost"
                   className="h-7 w-7 p-0"
                   onClick={() => onEditItem(item, category.id)}
@@ -1469,7 +1469,7 @@ function CategorySection({
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>
                 <Button
-                  size="sm"
+                  size="filter"
                   variant="ghost"
                   className="h-7 w-7 p-0 text-destructive hover:text-destructive"
                   onClick={() => onDeleteItem(item, menu.id, category.id)}
@@ -1701,7 +1701,7 @@ function RecipeEditorDialog({
                       </span>
                     )}
                     <Button
-                      size="sm"
+                      size="filter"
                       variant="ghost"
                       className="h-8 w-8 p-0 text-destructive hover:text-destructive shrink-0"
                       onClick={() => removeRow(idx)}
@@ -1715,7 +1715,7 @@ function RecipeEditorDialog({
           )}
 
           {inventory.length > 0 && (
-            <Button size="sm" variant="outline" onClick={addRow}>
+            <Button size="filter" variant="secondary" onClick={addRow}>
               <Plus className="h-3.5 w-3.5 mr-1" />
               Add ingredient
             </Button>
@@ -1723,7 +1723,7 @@ function RecipeEditorDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
           <Button onClick={save} disabled={saving || loading}>

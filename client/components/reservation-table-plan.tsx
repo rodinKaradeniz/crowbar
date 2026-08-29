@@ -134,11 +134,11 @@ export function ReservationTablePlan({
         </p>
       </div>
       <div className="flex gap-2">
-        <Button size="sm" variant="outline" disabled={submitting} onClick={() => void load()}>
+        <Button size="filter" variant="secondary" disabled={submitting} onClick={() => void load()}>
           <Armchair /> {assignment ? "Reassign" : "Plan tables"}
         </Button>
         {assignment && (
-          <Button size="sm" variant="ghost" disabled={submitting} onClick={() => setRemoving(true)}>
+          <Button size="filter" variant="ghost" disabled={submitting} onClick={() => setRemoving(true)}>
             Remove
           </Button>
         )}

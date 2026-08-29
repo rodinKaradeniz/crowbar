@@ -39,7 +39,7 @@ const ORDERED_DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "s
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-4 mb-5">
-      <h2 className="eyebrow text-brass">{children}</h2>
+      <h2 className="type-label text-muted-foreground">{children}</h2>
       <span className="h-px flex-1 bg-border" aria-hidden />
     </div>
   );
@@ -61,8 +61,8 @@ export default function ReserveClient({ business, serviceTypes }: ReserveClientP
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-6 text-center">
         <div className="max-w-md">
-          <CalendarDays className="mx-auto size-10 text-brass" />
-          <p className="eyebrow mt-5 text-brass">Reservations</p>
+          <CalendarDays className="mx-auto size-10 text-muted-foreground" />
+          <p className="type-label text-muted-foreground mt-5 text-muted-foreground">Reservations</p>
           <h1 className="mt-2 font-display text-3xl">Online bookings are unavailable</h1>
           <p className="mt-3 text-sm text-muted-foreground">
             {business.name} is currently taking reservations directly through the venue.
@@ -122,18 +122,18 @@ export default function ReserveClient({ business, serviceTypes }: ReserveClientP
 
         {/* Hero content */}
         <div className="absolute bottom-0 left-0 right-0 p-6 md:p-10">
-          <div className="max-w-3xl mx-auto text-center fade-rise">
+          <div className="max-w-3xl mx-auto text-center enter-rise">
             {business.tags && business.tags.length > 0 && (
-              <p className="eyebrow text-brass mb-3">
+              <p className="type-label text-muted-foreground mb-3">
                 {business.tags.join("  ·  ")}
               </p>
             )}
             <h1 className="font-display text-4xl md:text-6xl text-foreground mb-2 tracking-tight">
               {business.name}
             </h1>
-            <div className="rule-double mt-5 mx-auto max-w-36" />
+            <div className="border-t border-border mt-5 mx-auto max-w-36" />
             <Button
-              size="lg"
+              size="md"
               className="mt-6"
               onClick={() => openBooking()}
             >
@@ -147,7 +147,7 @@ export default function ReserveClient({ business, serviceTypes }: ReserveClientP
       {/* Content */}
       <div className="max-w-3xl mx-auto px-6 py-12 space-y-12">
         {/* About */}
-        <section className="fade-rise" style={{ animationDelay: "100ms" }}>
+        <section className="enter-rise" style={{ animationDelay: "100ms" }}>
           <SectionHeading>About</SectionHeading>
           <div className="grid md:grid-cols-2 gap-6">
             {business.description && (
@@ -156,25 +156,25 @@ export default function ReserveClient({ business, serviceTypes }: ReserveClientP
             <div className="space-y-3">
               {business.phone && (
                 <div className="flex items-center gap-3 text-sm">
-                  <Phone className="w-4 h-4 text-brass shrink-0" />
-                  <a href={`tel:${business.phone}`} className="figures hover:text-primary transition-colors">{business.phone}</a>
+                  <Phone className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <a href={`tel:${business.phone}`} className="font-mono tabular-nums hover:text-primary transition-colors">{business.phone}</a>
                 </div>
               )}
               {business.email && (
                 <div className="flex items-center gap-3 text-sm">
-                  <Mail className="w-4 h-4 text-brass shrink-0" />
+                  <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
                   <a href={`mailto:${business.email}`} className="hover:text-primary transition-colors">{business.email}</a>
                 </div>
               )}
               {business.website && (
                 <div className="flex items-center gap-3 text-sm">
-                  <Globe className="w-4 h-4 text-brass shrink-0" />
+                  <Globe className="w-4 h-4 text-muted-foreground shrink-0" />
                   <a href={business.website} target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">{business.website}</a>
                 </div>
               )}
               {business.address && (
                 <div className="flex items-center gap-3 text-sm">
-                  <MapPin className="w-4 h-4 text-brass shrink-0" />
+                  <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
                   <span>{business.address}</span>
                 </div>
               )}
@@ -184,7 +184,7 @@ export default function ReserveClient({ business, serviceTypes }: ReserveClientP
 
         {/* Operating Hours — set like the back page of the menu */}
         {business.operatingHours && Object.keys(business.operatingHours).length > 0 && (
-          <section className="fade-rise" style={{ animationDelay: "160ms" }}>
+          <section className="enter-rise" style={{ animationDelay: "160ms" }}>
             <SectionHeading>Hours</SectionHeading>
             <div className="max-w-md space-y-2.5">
               {ORDERED_DAYS.filter((d) => d in business.operatingHours).map((day) => {
@@ -193,11 +193,11 @@ export default function ReserveClient({ business, serviceTypes }: ReserveClientP
                 return (
                   <div key={day} className="flex items-baseline gap-2.5 text-sm">
                     <span className="font-medium">{DAY_LABELS[day] || day}</span>
-                    <span className="leader-dots text-brass" aria-hidden />
+                    <span className="flex-1" aria-hidden />
                     {isClosed ? (
                       <span className="text-muted-foreground">Closed</span>
                     ) : (
-                      <span className="figures text-muted-foreground">
+                      <span className="font-mono tabular-nums text-muted-foreground">
                         {"open" in hours ? `${hours.open} – ${hours.close}` : ""}
                       </span>
                     )}
@@ -210,7 +210,7 @@ export default function ReserveClient({ business, serviceTypes }: ReserveClientP
 
         {/* Services */}
         {serviceTypes.length > 0 && (
-          <section className="fade-rise" style={{ animationDelay: "220ms" }}>
+          <section className="enter-rise" style={{ animationDelay: "220ms" }}>
             <SectionHeading>Bookings</SectionHeading>
             <div className="grid sm:grid-cols-2 gap-4">
               {serviceTypes.map((st) => (
@@ -226,14 +226,14 @@ export default function ReserveClient({ business, serviceTypes }: ReserveClientP
                   {st.description && (
                     <p className="text-sm text-muted-foreground mb-3 line-clamp-2 leading-relaxed">{st.description}</p>
                   )}
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground figures">
+                  <div className="flex items-center gap-4 text-xs text-muted-foreground font-mono tabular-nums">
                     {st.duration && (
                       <span className="flex items-center gap-1.5">
-                        <Clock className="w-3 h-3 text-brass" /> {st.duration} min
+                        <Clock className="w-3 h-3 text-muted-foreground" /> {st.duration} min
                       </span>
                     )}
                     <span className="flex items-center gap-1.5">
-                      <Users className="w-3 h-3 text-brass" /> Up to {st.capacity}
+                      <Users className="w-3 h-3 text-muted-foreground" /> Up to {st.capacity}
                     </span>
                   </div>
                 </button>
@@ -246,9 +246,9 @@ export default function ReserveClient({ business, serviceTypes }: ReserveClientP
 
       {/* Sticky mobile CTA */}
       <div className="fixed bottom-0 left-0 right-0 md:hidden bg-background/95 backdrop-blur z-40">
-        <div className="rule-double" />
+        <div className="border-t border-border" />
         <div className="p-4">
-          <Button className="w-full" size="lg" onClick={() => openBooking()}>
+          <Button className="w-full" size="md" onClick={() => openBooking()}>
             <CalendarDays className="w-4 h-4 mr-2" />
             Book Now
           </Button>

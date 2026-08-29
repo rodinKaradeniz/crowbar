@@ -354,7 +354,9 @@ export function StaffReservationDialog({
             <Calendar mode="single" selected={date} onSelect={(value) => { if (value) setAllocationField(() => setDate(value)); }} disabled={{ before: venueToday }} className="rounded-md border" />
 
             {canOverride && (
-              <Button type="button" variant={overrideMode ? "destructive" : "outline"} className="w-full" onClick={() => { setOverrideMode((current) => !current); setSelectedSlot(null); setAlternatives([]); setOverrideReason(""); }}>
+              <Button type="button" /* Override is a mode, not a failure — it takes the primary
+                    signature while it is on, and a hairline while it is off. */
+                variant={overrideMode ? "primary" : "secondary"} className="w-full" onClick={() => { setOverrideMode((current) => !current); setSelectedSlot(null); setAlternatives([]); setOverrideReason(""); }}>
                 <ShieldAlert /> {overrideMode ? "Return to normal availability" : "Override availability"}
               </Button>
             )}
@@ -364,7 +366,7 @@ export function StaffReservationDialog({
             {reservation && (
               <div className="rounded-md border bg-muted/30 p-3 text-sm">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current booking</p>
-                <p className="mt-1 font-medium">{formatSlotDate(reservation.time, businessTimezone)} at <span className="figures">{formatSlotTime(reservation.time, businessTimezone)}</span></p>
+                <p className="mt-1 font-medium">{formatSlotDate(reservation.time, businessTimezone)} at <span className="font-mono tabular-nums">{formatSlotTime(reservation.time, businessTimezone)}</span></p>
               </div>
             )}
 
@@ -396,23 +398,23 @@ export function StaffReservationDialog({
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {availableSlots.map((slot) => {
                   const selected = selectedSlot ? sameInstant(slot.startsAt, selectedSlot.startsAt) : false;
-                  return <Button key={slot.startsAt} type="button" variant={selected ? "default" : "outline"} onClick={() => { setSelectedSlot(slot); setAlternatives([]); }} aria-pressed={selected} className="figures">{formatSlotTime(slot.startsAt, availabilityTimezone)}</Button>;
+                  return <Button key={slot.startsAt} type="button" variant={selected ? "primary" : "secondary"} onClick={() => { setSelectedSlot(slot); setAlternatives([]); }} aria-pressed={selected} className="font-mono tabular-nums">{formatSlotTime(slot.startsAt, availabilityTimezone)}</Button>;
                 })}
               </div>
             )}
 
             {alternatives.length > 0 && (
-              <div className="rounded-md border border-primary/30 p-3"><p className="mb-2 text-sm font-medium">That slot was just taken. Nearby options:</p><div className="flex flex-wrap gap-2">{alternatives.map((slot) => <Button key={slot.startsAt} type="button" variant="outline" size="sm" onClick={() => chooseAlternative(slot)}>{formatSlotDate(slot.startsAt, availabilityTimezone)} · <span className="figures">{formatSlotTime(slot.startsAt, availabilityTimezone)}</span></Button>)}</div></div>
+              <div className="rounded-md border border-primary/30 p-3"><p className="mb-2 text-sm font-medium">That slot was just taken. Nearby options:</p><div className="flex flex-wrap gap-2">{alternatives.map((slot) => <Button key={slot.startsAt} type="button" variant="secondary" size="filter" onClick={() => chooseAlternative(slot)}>{formatSlotDate(slot.startsAt, availabilityTimezone)} · <span className="font-mono tabular-nums">{formatSlotTime(slot.startsAt, availabilityTimezone)}</span></Button>)}</div></div>
             )}
 
             {selectedSlot && allocationChanged && (
-              <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm"><p className="flex items-center gap-2 font-medium"><CalendarClock /> {isCreate ? "Booking" : "New booking"}</p><p className="mt-1">{formatSlotDate(selectedSlot.startsAt, availabilityTimezone)} at <span className="figures">{formatSlotTime(selectedSlot.startsAt, availabilityTimezone)}</span> · {guestCount} {guestCount === 1 ? "guest" : "guests"}</p></div>
+              <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm"><p className="flex items-center gap-2 font-medium"><CalendarClock /> {isCreate ? "Booking" : "New booking"}</p><p className="mt-1">{formatSlotDate(selectedSlot.startsAt, availabilityTimezone)} at <span className="font-mono tabular-nums">{formatSlotTime(selectedSlot.startsAt, availabilityTimezone)}</span> · {guestCount} {guestCount === 1 ? "guest" : "guests"}</p></div>
             )}
           </div>
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>Cancel</Button>
+          <Button type="button" variant="secondary" onClick={() => onOpenChange(false)} disabled={submitting}>Cancel</Button>
           <Button type="button" onClick={submit} disabled={!canSubmit || submitting}>
             {submitting ? <><Loader2 className="animate-spin" /> Saving…</> : overrideMode ? (isCreate ? "Create with override" : "Reschedule with override") : isCreate ? "Create reservation" : "Confirm reschedule"}
           </Button>

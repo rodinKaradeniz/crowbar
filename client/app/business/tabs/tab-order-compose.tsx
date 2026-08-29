@@ -164,7 +164,7 @@ export function TabOrderCompose({
                   <p className="text-sm text-muted-foreground line-through">
                     {money(Number(detailItem.price))}
                   </p>
-                  <Badge variant="secondary" className="text-[10px]">
+                  <Badge tone="neutral" className="text-[10px]">
                     Happy Hour
                   </Badge>
                 </div>
@@ -179,7 +179,7 @@ export function TabOrderCompose({
                   <div className="flex items-center gap-2 mb-2">
                     <p className="text-sm font-medium">{group.name}</p>
                     {group.required && (
-                      <Badge variant="secondary" className="text-xs">
+                      <Badge tone="neutral" className="text-xs">
                         Required
                       </Badge>
                     )}
@@ -234,7 +234,7 @@ export function TabOrderCompose({
             <DialogFooter className="flex-col gap-3 sm:flex-col">
               <div className="flex items-center justify-center gap-4">
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="icon"
                   onClick={() => setDetailQty((q) => Math.max(1, q - 1))}
                 >
@@ -244,7 +244,7 @@ export function TabOrderCompose({
                   {detailQty}
                 </span>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="icon"
                   onClick={() => setDetailQty((q) => q + 1)}
                 >
@@ -253,7 +253,7 @@ export function TabOrderCompose({
               </div>
               <div className="flex gap-2">
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   className="flex-1"
                   onClick={() => setDetailItem(null)}
                 >

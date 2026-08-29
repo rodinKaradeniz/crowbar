@@ -52,29 +52,11 @@ const badgeVariants = cva(
   }
 )
 
-/**
- * Retired shadcn variant names, kept so unported call sites still compile and
- * still render something LEGAL while Phase 5 assigns real tones screen by
- * screen. Everything collapses to neutral except `destructive`, because
- * neutral is the correct default under the rank and a wrong red is worse than
- * no colour. REMOVED IN PHASE 7 — `grep -rn 'variant=' | grep Badge` is the
- * checklist.
- */
-const RETIRED_VARIANT_TONE = {
-  default: "neutral",
-  secondary: "neutral",
-  outline: "neutral",
-  destructive: "critical",
-} as const
-
 type BadgeProps = React.HTMLAttributes<HTMLDivElement> &
-  VariantProps<typeof badgeVariants> & {
-    /** @deprecated Use `tone`. See RETIRED_VARIANT_TONE. */
-    variant?: keyof typeof RETIRED_VARIANT_TONE
-  }
+  VariantProps<typeof badgeVariants>
 
-function Badge({ className, tone, variant, ...props }: BadgeProps) {
-  const resolved = tone ?? (variant ? RETIRED_VARIANT_TONE[variant] : undefined)
+function Badge({ className, tone, ...props }: BadgeProps) {
+  const resolved = tone
 
   return (
     <div

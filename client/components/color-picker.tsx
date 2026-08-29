@@ -40,7 +40,7 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
           <PopoverTrigger asChild>
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               className="w-full justify-start"
             >
               <div

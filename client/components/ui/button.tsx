@@ -77,39 +77,21 @@ const buttonVariants = cva(
   }
 )
 
-/**
- * Retired shadcn names. `default` was the brand fill and maps straight to
- * `primary`; `outline` was the hairline and maps to `secondary`. Kept so the
- * ~200 unported call sites compile and render legally during the port.
- * REMOVED IN PHASE 7.
- */
-const RETIRED_VARIANTS = {
-  default: "primary",
-  outline: "secondary",
-} as const
-
-const RETIRED_SIZES = {
-  sm: "filter",
-  lg: "md",
-} as const
-
 type ButtonVariant = NonNullable<VariantProps<typeof buttonVariants>["variant"]>
 type ButtonSize = NonNullable<VariantProps<typeof buttonVariants>["size"]>
 
 type ButtonProps = React.ComponentProps<"button"> & {
-  variant?: ButtonVariant | keyof typeof RETIRED_VARIANTS
-  size?: ButtonSize | keyof typeof RETIRED_SIZES
+  variant?: ButtonVariant
+  size?: ButtonSize
   asChild?: boolean
 }
 
-/** Maps a possibly-retired variant name onto a live one. Exported for the few
- *  places that call `buttonVariants()` directly rather than rendering <Button>. */
+/** Defaults a missing variant to `primary`. Exported for the few places that
+ *  call `buttonVariants()` directly rather than rendering <Button>. */
 function resolveButtonVariant(
-  variant: ButtonVariant | keyof typeof RETIRED_VARIANTS | null | undefined
+  variant: ButtonVariant | null | undefined
 ): ButtonVariant {
-  if (!variant) return "primary"
-  return (RETIRED_VARIANTS[variant as keyof typeof RETIRED_VARIANTS] ??
-    variant) as ButtonVariant
+  return variant ?? "primary"
 }
 
 function Button({
@@ -121,8 +103,7 @@ function Button({
 }: ButtonProps) {
   const Comp = asChild ? Slot : "button"
   const resolvedVariant = resolveButtonVariant(variant)
-  const resolvedSize = (RETIRED_SIZES[size as keyof typeof RETIRED_SIZES] ??
-    size) as ButtonSize
+  const resolvedSize = size
 
   return (
     <Comp

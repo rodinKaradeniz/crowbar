@@ -80,7 +80,7 @@ export function CountsPanel({ businessId, businessTimezone, canManage }: Props) 
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="section-title">Counts</h2>
+          <h2 className="type-t2">Counts</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
             Stocktakes and cycle counts. Reconciling posts the variance to the stock ledger.
           </p>
@@ -88,7 +88,7 @@ export function CountsPanel({ businessId, businessTimezone, canManage }: Props) 
         {canManage && (
           <div className="flex gap-2 shrink-0">
             <Button
-              variant="outline"
+              variant="secondary"
               onClick={() => startCount("cycle_count")}
               disabled={starting}
             >
@@ -134,7 +134,7 @@ export function CountsPanel({ businessId, businessTimezone, canManage }: Props) 
                 </div>
               </div>
               <Badge
-                variant="outline"
+                tone="neutral"
                 /* A count in progress is a workflow position, not a severity. */
                 className="text-muted-foreground"
               >
@@ -146,14 +146,14 @@ export function CountsPanel({ businessId, businessTimezone, canManage }: Props) 
               </Badge>
               <div className="flex gap-1 shrink-0">
                 <Button
-                  size="sm"
-                  variant={session.status === "open" ? "default" : "outline"}
+                  size="filter"
+                  variant={session.status === "open" ? "primary" : "secondary"}
                   onClick={() => router.push(`/business/inventory/counts/${session.id}`)}
                 >
                   {session.status === "open" ? "Continue" : "View"}
                 </Button>
                 {canManage && session.status === "open" && (
-                  <Button size="sm" variant="ghost" onClick={() => setToCancel(session)}>
+                  <Button size="filter" variant="ghost" onClick={() => setToCancel(session)}>
                     Cancel
                   </Button>
                 )}
@@ -167,7 +167,7 @@ export function CountsPanel({ businessId, businessTimezone, canManage }: Props) 
         open={toCancel !== null}
         onOpenChange={(open) => !open && setToCancel(null)}
         title="Cancel this count?"
-        description="Counted figures are discarded and no stock movement is posted."
+        description="Counted font-mono tabular-nums are discarded and no stock movement is posted."
         confirmLabel="Cancel Count"
         variant="destructive"
         onConfirm={cancel}

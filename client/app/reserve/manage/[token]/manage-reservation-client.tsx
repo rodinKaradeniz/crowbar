@@ -75,12 +75,12 @@ export default function ManageReservationClient() {
     finally { setAction(null); }
   }
 
-  if (loading) return <main className="theme-night min-h-screen grid place-items-center p-6 text-sm text-muted-foreground">Loading reservation…</main>;
-  if (!reservation) return <main className="theme-night min-h-screen grid place-items-center p-6"><div className="max-w-md text-center"><h1 className="font-display text-3xl">Reservation unavailable</h1><p className="mt-3 text-sm text-muted-foreground">{error ?? "This link is invalid or has been replaced."}</p></div></main>;
+  if (loading) return <main className="min-h-screen grid place-items-center p-6 text-sm text-muted-foreground">Loading reservation…</main>;
+  if (!reservation) return <main className="min-h-screen grid place-items-center p-6"><div className="max-w-md text-center"><h1 className="font-display text-3xl">Reservation unavailable</h1><p className="mt-3 text-sm text-muted-foreground">{error ?? "This link is invalid or has been replaced."}</p></div></main>;
 
   const active = reservation.status === "pending" || reservation.status === "confirmed";
-  return <main className="theme-night min-h-screen p-5 sm:p-10"><section className="mx-auto max-w-xl rounded-xl border border-border bg-card p-5 shadow-sm sm:p-8">
-    <p className="eyebrow text-brass">Reservation</p>
+  return <main className="min-h-screen p-5 sm:p-10"><section className="mx-auto max-w-xl rounded-xl border border-border bg-card p-5 shadow-sm sm:p-8">
+    <p className="type-label text-muted-foreground">Reservation</p>
     <h1 className="mt-2 font-display text-3xl">Manage your booking</h1>
     <p className="mt-4 text-sm text-muted-foreground">{formatBusinessDateTime(reservation.time, business?.timezone ?? "UTC", business?.locale)} · {reservation.guests} guests</p>
     <p className="mt-2 text-sm capitalize">Status: <strong>{reservation.status.replace("_", " ")}</strong>{reservation.cancelledLate ? " (late cancellation)" : ""}</p>
@@ -91,11 +91,11 @@ export default function ManageReservationClient() {
     {error && <p role="alert" className="mt-4 border-l-2 border-critical-fill bg-critical-tint p-3 text-[length:var(--ui-size)] text-critical-text">{error}</p>}
     {active && <div className="mt-6 flex flex-wrap gap-3">
       <Button onClick={() => void run("reconfirm")} disabled={action !== null}><CheckCircle2 /> {action === "reconfirm" ? "Saving…" : "I’m still coming"}</Button>
-      <Button variant="outline" onClick={() => void run("cancel")} disabled={action !== null}><X /> {action === "cancel" ? "Cancelling…" : "Cancel reservation"}</Button>
+      <Button variant="secondary" onClick={() => void run("cancel")} disabled={action !== null}><X /> {action === "cancel" ? "Cancelling…" : "Cancel reservation"}</Button>
     </div>}
     {active && <section className="mt-8 border-t pt-6"><h2 className="font-semibold">Reschedule</h2><p className="mt-1 text-sm text-muted-foreground">Choose a date and we&apos;ll show live available times.</p>
-      <div className="mt-4 flex flex-wrap gap-3"><Input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="w-auto" /><Input type="number" min="1" value={guests} onChange={(event) => setGuests(Number(event.target.value))} className="w-24" aria-label="Guests" /><Button variant="outline" onClick={() => void loadAvailability()} disabled={action !== null}><CalendarClock /> {action === "slots" ? "Loading…" : "Find times"}</Button></div>
-      {availability && <div className="mt-4 flex flex-wrap gap-2">{slots.length ? slots.map((slot) => <Button key={slot.startsAt} size="sm" variant="outline" disabled={action !== null} onClick={() => void reschedule(slot.startsAt)}>{formatBusinessTime(slot.startsAt, business?.timezone ?? "UTC", business?.locale)}</Button>) : <p className="text-sm text-muted-foreground">No times are available that day.</p>}</div>}
+      <div className="mt-4 flex flex-wrap gap-3"><Input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="w-auto" /><Input type="number" min="1" value={guests} onChange={(event) => setGuests(Number(event.target.value))} className="w-24" aria-label="Guests" /><Button variant="secondary" onClick={() => void loadAvailability()} disabled={action !== null}><CalendarClock /> {action === "slots" ? "Loading…" : "Find times"}</Button></div>
+      {availability && <div className="mt-4 flex flex-wrap gap-2">{slots.length ? slots.map((slot) => <Button key={slot.startsAt} size="filter" variant="secondary" disabled={action !== null} onClick={() => void reschedule(slot.startsAt)}>{formatBusinessTime(slot.startsAt, business?.timezone ?? "UTC", business?.locale)}</Button>) : <p className="text-sm text-muted-foreground">No times are available that day.</p>}</div>}
     </section>}
     <GuestPrivacySection />
   </section></main>;

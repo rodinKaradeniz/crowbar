@@ -19,7 +19,7 @@ export function BusinessRouteGuard({ children }: { children: React.ReactNode }) 
 
   if (!isOnboarding && (isLoading || needsOnboarding)) {
     return (
-      <div className="page-pad text-sm text-muted-foreground" role="status">
+      <div className="px-[clamp(16px,2.5vw,32px)] py-6 text-sm text-muted-foreground" role="status">
         Loading workspace…
       </div>
     );

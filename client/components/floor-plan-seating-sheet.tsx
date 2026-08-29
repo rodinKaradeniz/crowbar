@@ -76,11 +76,11 @@ export function FloorPlanSeatingSheet({
             <span className="inline-flex items-center gap-1.5 text-muted-foreground">
               <Users className="h-4 w-4" /> Selected capacity
             </span>
-            <span className="figures font-semibold">{selectedCapacity} / {party?.partySize ?? 0}</span>
+            <span className="font-mono tabular-nums font-semibold">{selectedCapacity} / {party?.partySize ?? 0}</span>
           </div>
 
           <div>
-            <p className="eyebrow mb-2">Ready tables</p>
+            <p className="type-label text-muted-foreground mb-2">Ready tables</p>
             {tables.length === 0 ? (
               <p className="rounded-lg border border-dashed px-3 py-5 text-sm text-muted-foreground">
                 No tables are configured yet.
@@ -105,7 +105,7 @@ export function FloorPlanSeatingSheet({
                     >
                       {selected && <Check className="absolute right-2 top-2 h-4 w-4 text-primary" />}
                       <p className="font-medium">{table.label}</p>
-                      <p className="figures text-xs text-muted-foreground">{table.capacity} seats</p>
+                      <p className="font-mono tabular-nums text-xs text-muted-foreground">{table.capacity} seats</p>
                       {!selectable && <p className="mt-1 text-[10px] capitalize">{table.displayState.replaceAll("_", " ")}</p>}
                     </button>
                   );
@@ -140,7 +140,7 @@ export function FloorPlanSeatingSheet({
         </div>
 
         <SheetFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+          <Button variant="secondary" onClick={() => onOpenChange(false)} disabled={submitting}>
             Cancel
           </Button>
           <Button

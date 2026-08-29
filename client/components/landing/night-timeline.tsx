@@ -41,7 +41,7 @@ const MOMENTS = [
   {
     time: "20:30",
     title: "Closed out",
-    body: "The tab closes, the table opens again, and the night's figures are already written.",
+    body: "The tab closes, the table opens again, and the night's font-mono tabular-nums are already written.",
     where: "Floor map · Reports",
   },
 ];

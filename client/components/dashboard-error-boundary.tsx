@@ -49,7 +49,7 @@ export class DashboardErrorBoundary extends React.Component<
             </CardContent>
             <CardFooter className="flex justify-center gap-3">
               <Button
-                variant="outline"
+                variant="secondary"
                 onClick={() => this.setState({ hasError: false })}
               >
                 Try again

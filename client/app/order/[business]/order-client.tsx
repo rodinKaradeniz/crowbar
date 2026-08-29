@@ -185,7 +185,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
   if (placed) {
     return (
       <div className="min-h-screen bg-background p-6 max-w-md mx-auto">
-        <div className="text-center mb-8 fade-rise">
+        <div className="text-center mb-8 enter-rise">
           <CheckCircle2 className="h-10 w-10 text-primary mx-auto mb-3" />
           <h1 className="font-display text-2xl">Order placed</h1>
           <p className="text-sm text-muted-foreground mt-2">
@@ -200,16 +200,16 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
           </div>
         ) : (
           orders.map((order, orderIndex) => (
-            <div key={`${order.placedAt}-${orderIndex}`} className="rounded-lg border bg-card p-5 space-y-4 fade-rise" style={{ animationDelay: "120ms" }}>
+            <div key={`${order.placedAt}-${orderIndex}`} className="rounded-lg border bg-card p-5 space-y-4 enter-rise" style={{ animationDelay: "120ms" }}>
               <div className="flex items-center justify-between gap-3">
-                <p className="eyebrow">
+                <p className="type-label text-muted-foreground">
                   Order
                 </p>
                 <span
                   className={cn(
-                    "eyebrow rounded-full px-2.5 py-1",
+                    "type-label text-muted-foreground rounded-full px-2.5 py-1",
                     STATUS_COLOR[order.status] ?? "bg-muted text-muted-foreground",
-                    order.status === "ready" && "glow-pulse",
+                    order.status === "ready" && "live-pulse",
                   )}
                 >
                   {STATUS_LABEL[order.status] ?? order.status}
@@ -218,7 +218,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
               <div className="space-y-2">
                 {order.lineItems.map((li, lineIndex) => (
                   <div key={`${li.itemName}-${lineIndex}`} className="flex items-baseline gap-2.5 text-sm">
-                    <span className="figures text-muted-foreground shrink-0">{li.quantity}×</span>
+                    <span className="font-mono tabular-nums text-muted-foreground shrink-0">{li.quantity}×</span>
                     <span>{li.itemName}</span>
                     {li.selectedModifiers.length > 0 && (
                       <span className="text-xs text-muted-foreground">
@@ -228,30 +228,30 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
                   </div>
                 ))}
               </div>
-              <div className="rule-double" />
+              <div className="border-t border-border" />
               <div className="flex items-baseline gap-2.5 text-xs text-muted-foreground">
                 <span>Operational {taxLabel}</span>
-                <span className="leader-dots" aria-hidden />
-                <span className="figures">{money(order.taxAmount)}</span>
+                <span className="flex-1" aria-hidden />
+                <span className="font-mono tabular-nums">{money(order.taxAmount)}</span>
               </div>
               <div className="flex items-baseline gap-2.5">
-                <span className="eyebrow">Total</span>
-                <span className="leader-dots text-brass" aria-hidden />
-                <span className="figures text-base">{money(order.totalAmount)}</span>
+                <span className="type-label text-muted-foreground">Total</span>
+                <span className="flex-1" aria-hidden />
+                <span className="font-mono tabular-nums text-base">{money(order.totalAmount)}</span>
               </div>
             </div>
           ))
         )}
 
         {polling && (
-          <p className="figures text-center text-xs text-muted-foreground mt-5">
+          <p className="font-mono tabular-nums text-center text-xs text-muted-foreground mt-5">
             Auto-refreshing every 10 seconds…
           </p>
         )}
 
         <div className="mt-8">
           <Link href={`/menu/${businessSlug}`}>
-            <Button variant="outline" className="w-full">
+            <Button variant="secondary" className="w-full">
               Order more
             </Button>
           </Link>
@@ -266,28 +266,28 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
     <div className="min-h-screen bg-background pb-32">
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b px-6 py-3 flex items-center gap-2">
         <Link href={`/menu/${businessSlug}`}
-          className="eyebrow text-muted-foreground hover:text-primary transition-colors"
+          className="type-label text-muted-foreground hover:text-primary transition-colors"
         >
           ← Back to menu
         </Link>
       </div>
 
       <div className="px-6 py-8 max-w-md mx-auto space-y-8">
-        <div className="text-center fade-rise">
+        <div className="text-center enter-rise">
           <h1 className="font-display text-2xl">Your order</h1>
-          <div className="rule-double mt-4 mx-auto max-w-36" />
+          <div className="border-t border-border mt-4 mx-auto max-w-36" />
         </div>
 
         {cart.length === 0 ? (
           <div className="text-center py-10">
             <p className="text-muted-foreground text-sm">Your cart is empty.</p>
             <Link href={`/menu/${businessSlug}`}>
-              <Button variant="outline" className="mt-4">Browse menu</Button>
+              <Button variant="secondary" className="mt-4">Browse menu</Button>
             </Link>
           </div>
         ) : (
           <>
-            <div className="divide-y divide-border/60 fade-rise" style={{ animationDelay: "90ms" }}>
+            <div className="divide-y divide-border/60 enter-rise" style={{ animationDelay: "90ms" }}>
               {cart.map((ci, i) => {
                 const modTotal = ci.selectedModifiers.reduce((s, m) => s + m.priceDelta, 0);
                 const lineTotal = (effectivePrice(ci.item) + modTotal) * ci.quantity;
@@ -296,10 +296,10 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline gap-2.5">
                         <span className="text-sm font-medium">
-                          <span className="figures text-muted-foreground">{ci.quantity}×</span> {ci.item.name}
+                          <span className="font-mono tabular-nums text-muted-foreground">{ci.quantity}×</span> {ci.item.name}
                         </span>
-                        <span className="leader-dots text-brass" aria-hidden />
-                        <span className="figures text-sm shrink-0">{money(lineTotal)}</span>
+                        <span className="flex-1" aria-hidden />
+                        <span className="font-mono tabular-nums text-sm shrink-0">{money(lineTotal)}</span>
                       </div>
                       {ci.selectedModifiers.length > 0 && (
                         <p className="text-xs text-muted-foreground mt-1">
@@ -322,10 +322,10 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
               })}
             </div>
 
-            <div className="space-y-4 fade-rise" style={{ animationDelay: "160ms" }}>
+            <div className="space-y-4 enter-rise" style={{ animationDelay: "160ms" }}>
               {!tableApproved && <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">Ask a staff member to approve ordering for this table.</p>}
               <div className="space-y-1.5">
-                <Label className="eyebrow">Order notes (optional)</Label>
+                <Label className="type-label text-muted-foreground">Order notes (optional)</Label>
                 <Input
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
@@ -335,7 +335,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
             </div>
 
             <div className="fixed bottom-0 inset-x-0 z-20 bg-background/95 backdrop-blur">
-              <div className="rule-double" />
+              <div className="border-t border-border" />
               <div className="p-4 max-w-md mx-auto">
                 {cartHasAlcohol && (
                   <label className="flex items-start gap-2.5 mb-3 rounded-md border bg-muted/40 p-3 text-sm cursor-pointer">
@@ -352,17 +352,17 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
                 )}
                 <div className="mb-2 flex items-baseline gap-2.5 text-xs text-muted-foreground">
                   <span>Estimated {taxLabel} (non-fiscal)</span>
-                  <span className="leader-dots" aria-hidden />
-                  <span className="figures">{money(roundCurrency(cartTotals.tax))}</span>
+                  <span className="flex-1" aria-hidden />
+                  <span className="font-mono tabular-nums">{money(roundCurrency(cartTotals.tax))}</span>
                 </div>
                 <div className="flex items-baseline gap-2.5 mb-3">
-                  <span className="eyebrow">Total</span>
-                  <span className="leader-dots text-brass" aria-hidden />
-                  <span className="figures text-base">{money(totalPrice)}</span>
+                  <span className="type-label text-muted-foreground">Total</span>
+                  <span className="flex-1" aria-hidden />
+                  <span className="font-mono tabular-nums text-base">{money(totalPrice)}</span>
                 </div>
                 <Button
                   className="w-full"
-                  size="lg"
+                  size="md"
                   onClick={placeOrder}
                   disabled={
                     placing ||
