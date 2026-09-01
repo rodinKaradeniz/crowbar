@@ -39,7 +39,7 @@ function startOfToday(): Date {
   return date;
 }
 
-export function rangeForPreset(days: number, label: string): ReportRange {
+function rangeForPreset(days: number, label: string): ReportRange {
   const end = new Date();
   const start = startOfToday();
   if (days > 0) start.setDate(start.getDate() - days);

@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils"
  * ink — `--focus-ring-paper` / `--focus-ring-ink`, resolved by `--ring`).
  *
  * Invalid uses `--field-invalid`, which is a FORM STATE and not a severity
- * rank. "Too short — 10 characters minimum" is this; it never borrows a
+ * rank. "Too short — 12 characters minimum" is this; it never borrows a
  * severity token, because a password-length hint is not a service item to be
  * handled before the night ends. The token resolves per ground —
  * `--field-invalid` on paper, `--field-invalid-ink` on ink and surface — so a

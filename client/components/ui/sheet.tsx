@@ -75,11 +75,10 @@ function SheetContent({
           
           "duration-[var(--dur-enter)] ease-[cubic-bezier(0.2,0.8,0.2,1)]",
           side === "right" &&
-            // 440px is stated in §06 prose but is not in crowbar-tokens.css —
-            // flagged as a token-file completeness question in docs/DESIGN.md.
-            "panel-enter-right inset-y-0 right-0 h-full w-full border-l min-[440px]:w-[var(--side-panel)]",
+            // `panel:` is --breakpoint-panel (440px) in globals.css.
+            "panel-enter-right inset-y-0 right-0 h-full w-full border-l panel:w-[var(--side-panel)]",
           side === "left" &&
-            "panel-enter-left inset-y-0 left-0 h-full w-full border-r min-[440px]:w-[var(--side-panel)]",
+            "panel-enter-left inset-y-0 left-0 h-full w-full border-r panel:w-[var(--side-panel)]",
           side === "top" &&
             "panel-enter-top inset-x-0 top-0 h-auto border-b",
           side === "bottom" &&

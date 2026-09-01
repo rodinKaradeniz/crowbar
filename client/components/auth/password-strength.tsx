@@ -1,4 +1,9 @@
-/** The product's real minimum. The canvas says 10; `PASSWORD_MIN_LENGTH` is 12. */
+/**
+ * The product's real minimum, and the one value every password string derives
+ * from. The rev-3 canvas said 10; closed at 12 to match `PASSWORD_MIN_LENGTH`
+ * in `server/app/services/auth_service.py`, because a form promising a laxer
+ * rule than the API fails at submit instead of at the field.
+ */
 export const PASSWORD_MIN_LENGTH = 12;
 
 export type PasswordVerdict = {

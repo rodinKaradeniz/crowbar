@@ -5,10 +5,27 @@ import { AlertCircle, CheckCircle2, XCircle, ChevronDown, ChevronUp } from "luci
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { clientGetPublicQueueService, clientJoinQueue, clientGetQueueStatus, clientLeaveQueue } from "@/lib/client-api";
+import { clientGetPublicQueueService, clientJoinQueue, clientGetQueueStatus, clientLeaveQueue, ClientApiError } from "@/lib/client-api";
 import type { Business, QueueServiceDay, QueueStatus } from "@/types";
 
 const POLL_INTERVAL = 30_000;
+
+/**
+ * Why the service read failed, because the two answers are not the same
+ * promise to a guest. A 4xx here describes how the venue is configured —
+ * `QUEUE_LOCATION_REQUIRED` (409) when it has no primary location — and no
+ * amount of retrying changes it, so the page must not offer a button that
+ * cannot work. A network failure, a 5xx, or a 429 from the public read limit
+ * is a moment in time, and retrying is exactly right.
+ */
+type ServiceFault = "retryable" | "unavailable";
+
+function classifyServiceFault(err: unknown): ServiceFault {
+  if (err instanceof ClientApiError && err.status >= 400 && err.status < 500 && err.status !== 429) {
+    return "unavailable";
+  }
+  return "retryable";
+}
 function formatWait(minutes?: number): string {
   if (minutes === undefined) return "Not enough history yet";
   if (minutes < 60) return `~${minutes} min`;
@@ -63,7 +80,7 @@ export function QueueJoinClient({ business }: { business: Business }) {
   const [queueStatus, setQueueStatus] = useState<QueueStatus | null>(null);
   const [service, setService] = useState<QueueServiceDay | null>(null);
   const [serviceLoading, setServiceLoading] = useState(true);
-  const [serviceError, setServiceError] = useState(false);
+  const [serviceError, setServiceError] = useState<ServiceFault | null>(null);
   const [stale, setStale] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const joinKeyRef = useRef<string | null>(null);
@@ -92,9 +109,9 @@ export function QueueJoinClient({ business }: { business: Business }) {
   const refreshService = useCallback(async () => {
     try {
       setService(await clientGetPublicQueueService(business.id));
-      setServiceError(false);
-    } catch {
-      setServiceError(true);
+      setServiceError(null);
+    } catch (err) {
+      setServiceError(classifyServiceFault(err));
     } finally {
       setServiceLoading(false);
     }
@@ -272,7 +289,24 @@ export function QueueJoinClient({ business }: { business: Business }) {
     return <div className="flex min-h-screen items-center justify-center bg-background"><p className="text-sm text-muted-foreground">Checking today&apos;s queue…</p></div>;
   }
 
-  if (serviceError) {
+  // A venue that cannot hold queue entries at all. Same shape as the closed and
+  // full states below, because it is the same kind of answer — a fact about the
+  // venue, not a failure the guest can clear — and deliberately no button.
+  if (serviceError === "unavailable") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-6">
+        <div className="max-w-sm space-y-4 text-center">
+          <p className="type-label text-muted-foreground">{business.name}</p>
+          <h1 className="type-d3">Walk-ins aren&apos;t available here</h1>
+          <p className="text-sm text-muted-foreground">
+            This venue isn&apos;t taking walk-in queue entries through this page. Please speak to a member of staff.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (serviceError === "retryable") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-6">
         <div className="max-w-sm space-y-4 text-center">

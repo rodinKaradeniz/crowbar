@@ -38,7 +38,7 @@
  *
  * NOT ON THE LADDER AT ALL:
  *   · Form validation — a form state. `--field-invalid`, never a severity
- *     token. "Too short — 10 characters minimum" is this.
+ *     token. "Too short — 12 characters minimum" is this.
  *   · Brand — identity, the primary action, the active nav item, and
  *     live-and-healthy. Green never means "good news about a number".
  *

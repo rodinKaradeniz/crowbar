@@ -32,7 +32,9 @@ authority in this MVP.
 Complete these stages in order unless the user explicitly reprioritizes them.
 Stages 0–6 build the operational record, stage 7 makes it good to use, stage 8
 proves it locally, stages 9–10 put it in front of the venue, and stage 11 adds
-a second client once the first one is settled.
+a second client once the first one is settled. Stage 12 sits outside that
+order: it is blocked on the operating company existing, not on any stage
+before it, and it gates the public site rather than the pilot.
 
 Stage 9 remains an external deployment action requiring separate user
 authorization even after the local release gate passes.
@@ -499,6 +501,20 @@ ships **honest** rather than simulated, and lands here with its trigger.
   expiry ("the link expires at 20:24"). `forgot-password` returns nothing about
   the token, so the screen states the window ("works for one hour") instead.
   *Trigger:* the endpoint returns an expiry.
+- **The public queue read demands a location the rule says it should not.**
+  `server/app/services/queue_service.py` states the rule explicitly next to
+  `get_active_entries`: *"Reads report the empty queue; only join/open demand a
+  location."* `get_service_day` is a read, but it calls `_context`, which raises
+  `QUEUE_LOCATION_REQUIRED` (409) when the tenant has no primary location — so
+  the read path contradicts the codebase's own documented rule, and the public
+  queue page gets a 409 where the rule says it should get an empty queue.
+  Arguably the better fix is one line on the server: have `get_service_day`
+  fall back the way `get_active_entries` already does. That is a **behaviour**
+  change and this was a presentation pass, so the guest page was made honest
+  about the state instead (§7b, and `app/queue/[business]/join-client.tsx`) and
+  the server was left alone. *Trigger:* the queue module next takes a behaviour
+  change, or a tenant without a primary location becomes an expected production
+  state rather than a dev-stack artifact.
 
 Consequence worth stating plainly: **three of the four exhaustive critical
 cases are not currently derivable.** Only "a live board that has lost its
@@ -527,16 +543,38 @@ missing is a design question, not an implementation choice.
   recording: this entry previously said `--chart-1..5` "are aliased to brand
   plus the neutral ramp as a provisional stand-in". They were never written —
   `grep chart client/app/globals.css` returned nothing.
-- **Phone.** The product is designed at 1280+ and 1024×768 only. Stage 7's exit
-  gate below requires each pilot role to complete its core task on a phone
-  during service; there is no phone canvas, so **that clause is currently
-  unmet** and is carried here deliberately rather than quietly dropped.
-- **440px side-panel breakpoint.** Stated in §06 prose but absent from the token
-  block; used as an arbitrary variant in `components/ui/sheet.tsx`.
-- **`--field-invalid-ink` (`#D98B78`).** Added during the port because
+- ~~**Phone.**~~ **Closed as re-sequenced — moved to stage 11, not cancelled.**
+  The product is designed at 1280+ and 1024×768 only, both of which shipped;
+  there is no phone canvas, and stage 7's exit gate below **was never met on
+  that clause**. It is not being quietly dropped: the phone answer is a React
+  Native client, which is stage 11 and comes after the pilot, and it is wanted
+  regardless of what the venue turns out to prefer. Stage 7's gate now claims
+  only the two targets that exist, and the phone requirement is carried in
+  stage 11 with the same wording. Recorded here because a gate that silently
+  loses a clause is worse than one that records the change.
+- ~~**440px side-panel breakpoint.**~~ **Closed — declared.** It was stated in
+  §06 prose and used as a bare `min-[440px]:` variant in
+  `components/ui/sheet.tsx`, the only arbitrary breakpoint left in the client.
+  It is now `--bp-panel: 440px` in the `:root` block beside `--bp-desktop`, and
+  `--breakpoint-panel` in the `@theme` bridge, which generates the `panel:`
+  variant the sheet now uses. The bridge value is written literally and carries
+  the comment tying it to `--bp-panel`, because a media query cannot read a
+  custom property — the same constraint `--bp-desktop` already documents, and
+  the same pattern the shipped `desktop:` variant uses. The compiled CSS is the
+  identical `@media (min-width: 440px)` rule as before, so nothing moved on
+  screen.
+- ~~**`--field-invalid-ink` (`#D98B78`).**~~ **Codebase side closed; the
+  remaining half is not an agent's to do.** Added during the port because
   `--field-invalid` measured 1.84:1 on ink and had no dark-ground pair, while
-  the product has forms on dark surfaces. Confirm it lands in the canonical
-  `crowbar-tokens.css` so the design file and the codebase do not diverge.
+  the product has forms on dark surfaces. This entry used to say "confirm it
+  lands in the canonical `crowbar-tokens.css`", which is not an action anyone
+  can take in this repository: **`crowbar-tokens.css` does not exist here.** It
+  is the design file, and it lives outside the repo; `client/app/globals.css`
+  describes its own `:root` as a port *of* it. The codebase half is therefore
+  already done — the token is declared in `globals.css` with its measured
+  ratios (ink 6.96:1, surface 6.52:1). What is left is a **user action in the
+  design file**: add the token there so the two do not diverge. Do not create a
+  `crowbar-tokens.css` in the repo to make the sentence resolvable.
 - ~~**Password strength and the attend colour.**~~ **Closed as decided.** §08
   governs over the Auth canvas: the meter uses the validation channel and a
   neutral, never attend. A real bug sat behind the settled question — the meter
@@ -545,10 +583,16 @@ missing is a design question, not an implementation choice.
   `PasswordStrength` now takes `touched` and withholds the invalid tone until
   the field is blurred; reaching the minimum clears it without waiting for a
   blur. Covered by `client/tests/unit/password-strength.test.tsx`.
-- **Password minimum: 10 or 12.** The canvas says 10 characters throughout;
-  `PASSWORD_MIN_LENGTH` and the server both enforce 12. The screens ship 12,
-  because a form promising a laxer rule than the API fails at submit instead of
-  at the field. Align the canvas or the server.
+- ~~**Password minimum: 10 or 12.**~~ **Closed as decided: 12.** The screens
+  ship 12 because a form promising a laxer rule than the API fails at submit
+  instead of at the field, which is the worse of the two failures — so the
+  **canvas is corrected to match the code**, not the reverse. No behaviour
+  changed: `PASSWORD_MIN_LENGTH` (`client/components/auth/password-strength.tsx`)
+  and the server (`server/app/services/auth_service.py`) were already 12, the
+  UI derives its copy from the constant, and a unit test asserts it. What made
+  this look unresolved was three *comments* still using "10 characters minimum"
+  as their worked example — in `docs/DESIGN.md`, `client/components/ui/input.tsx`
+  and `client/lib/severity.ts`. All three now say 12.
 - **Marketing measurements outside the token block.** The Landing canvas uses 31
   distinct `clamp()` expressions and a set of editorial type sizes (14.5, 15.5,
   16.5, 19, 20, 22px) that sit between the ten declared steps. They are
@@ -559,21 +603,46 @@ missing is a design question, not an implementation choice.
   `text-xs` / `text-sm` / `text-base` to the Data, UI and Body steps, closing a
   hole of roughly 580 undeclared size utilities that the raw-hex grep could
   never see. `text-lg` and above stay unmapped on purpose so they fail loudly.
-  Confirm this is intended, or promote them.
+  **Closed as decided: they stay outside the token block, as a documented
+  exception.** Promoting them would roughly double the declared type scale, and
+  almost every step it added would be used by exactly one page. A marketing
+  page and a service board are different typography problems, and a scale that
+  tries to serve both stops being a constraint on either. The values are
+  already quarantined in the `.mkt-*` layer of `client/app/globals.css` rather
+  than inlined in JSX, and no product surface uses those classes. This is the
+  **only** licensed exception — it is not precedent for putting a size outside
+  the declared scale anywhere else, and a second one is a design question, not
+  a call-site decision.
 - **Terms, privacy and Impressum.** The canvas footer links all three; the
   product has terms only as a dialog inside registration, and no privacy or
-  Impressum page. The links are not rendered rather than pointing nowhere. A
-  German GmbH operating a public site will need at least an Impressum.
-- **`bar_kitchen` navigation breadth.** The States canvas shows a bartender with
-  a three-item nav; the real role also holds `customers.view`, `floor.view`,
-  `queue.view`, `reservations.view`, `menu.edit` and `overview.view`. The nav
-  renders from the real capability matrix. Narrowing the role is a stage-6
-  permissions change, not a design one.
+  Impressum page. The links are not rendered rather than pointing nowhere.
+  Correction worth recording: this entry previously assumed a German GmbH and
+  therefore a §5 DDG Impressum. The operating company will not be German —
+  the pilot venue is, the vendor is not — so the obligation follows the
+  vendor's own jurisdiction instead. Moved to stage 12, which cannot be
+  answered until the company exists.
+- ~~**`bar_kitchen` navigation breadth.**~~ **Closed — it was never a design
+  question.** The States canvas shows a bartender with a three-item nav; the
+  real role also holds `customers.view`, `floor.view`, `queue.view`,
+  `reservations.view`, `menu.edit` and `overview.view`, so an honest nav renders
+  more. The nav already renders from the real capability matrix, which is the
+  correct behaviour — the divergence is in what the role *holds*, not in how it
+  is drawn. Narrowing it is a **permissions** change, deferred to whoever next
+  revisits the capability matrix in `server/app/core/permissions.py`. Nothing in
+  the design layer is outstanding, and this pass deliberately did not touch that
+  file.
 
 - **Exit gate:** every retained surface follows one documented design contract,
-  each pilot role can complete its core task on a phone during service, no
-  screen carries a placeholder or dishonest state, and no functional behavior
-  changed without being recorded as its own item.
+  each pilot role can complete its core task on the **shipped desktop (1280+)
+  and tablet (1024×768) targets**, no screen carries a placeholder or dishonest
+  state, and no functional behavior changed without being recorded as its own
+  item.
+  - **Changed clause, recorded rather than dropped.** This gate previously read
+    "on a phone during service". That clause was **never met** — the tablet
+    target shipped and no phone canvas was ever drawn — and it has been moved
+    to stage 11, where the mobile client already lives, because the phone
+    answer is a React Native client that comes after the pilot. This is a
+    re-sequencing, not a cancellation.
 
 ### 7c. Endpoints the client never calls — surfaced by the completion pass
 
@@ -702,9 +771,46 @@ churn across two codebases.
   Do not promise generic "offline mode" without per-operation safety rules.
 - Decide push notification ownership, device/session revocation, store
   distribution, and release cadence alongside the web release process.
+- **Carried here from stage 7, and the reason it moved.** Stage 7's exit gate
+  used to require that *each pilot role can complete its core task on a phone
+  during service*. Stage 7 shipped the desktop (1280+) and tablet (1024×768)
+  targets and **never met that clause** — no phone canvas was drawn. The phone
+  answer is this stage's client, and it is wanted regardless of what the pilot
+  venue turns out to prefer, so the requirement was re-sequenced here rather
+  than cancelled. It is not satisfied by making the web client narrower.
 - **Exit gate:** the chosen audience can complete its core journey on the app
   with the same authority, tenancy, and vocabulary guarantees as the web
-  client, and the design reads as the same product.
+  client, the design reads as the same product, and **each pilot role can
+  complete its core task on a phone during service** — the clause inherited
+  from stage 7.
+
+### 12. Public-site legal pages — blocked on the operating company existing
+
+The marketing footer links terms, privacy and an Impressum; none of the three
+is rendered, because none can be written truthfully before there is a company
+to name in them. What is required is a function of where the **vendor** is
+established, not where the pilot venue is: a German venue as a customer does
+not make a non-German vendor subject to §5 DDG.
+
+- **Blocked — decide the operating entity and jurisdiction first.** Everything
+  below is unanswerable until then, and guessing produces a page that has to be
+  rewritten. Current expectation is a UK company; that is not yet a fact.
+- **Privacy policy.** Required in every candidate jurisdiction the moment the
+  product handles guest names, contact details and reservation history — which
+  it already does. This is the one item that is certain regardless of where the
+  company lands, so it is the one to draft first.
+- **Terms.** Terms exist today only as a dialog inside registration. A public
+  page and the registration dialog must be the same text, from one source.
+- **Site identity page.** A UK company has its own disclosure rules for a
+  business website; a German Impressum is a different document with different
+  contents. Write whichever the chosen jurisdiction requires. Do not ship a
+  German Impressum for a company that is not established in Germany.
+- **Data processing for the pilot venue.** The venue is a customer whose guest
+  data Crowbar processes. A processor agreement is the venue's requirement, not
+  the website's, and belongs with stage 10's rollout paperwork rather than here.
+- **Exit gate:** every link the public site renders resolves to a page that is
+  accurate for the company that actually exists, and no link is rendered that
+  points nowhere.
 
 ### Post-MVP: German fiscal POS, payments, and broader platform work — deferred
 
@@ -1151,6 +1257,20 @@ the confirmed sequence unless a stage explicitly pulls the item forward.
   WhatsApp conversation. Decide whether Twilio WhatsApp or Meta's Cloud API is
   the initial transport and whether the first release is deterministic,
   AI-assisted, or fully tool-calling.
+- **Needs decision — walk-ins through the same conversation.** Joining the
+  walk-in queue by message is a different operation from booking: it writes a
+  `QueueEntry`, it only makes sense while the queue is open, and its answer
+  ("you are fourth, roughly twenty minutes") goes stale in a way a reservation
+  time does not. It reuses the same transport and identity resolution, so it is
+  the same feature economically, but it needs its own confirmation and its own
+  staleness rule. Decide whether the first release carries it or books only.
+- **Needs decision — Instagram alongside WhatsApp, or after it.** Meta's Cloud
+  API covers Instagram Direct as well as WhatsApp, so choosing that transport
+  makes the second channel much cheaper than the deferral below assumes. The
+  cost is not the transport; it is that Instagram identities are handles rather
+  than phone numbers, which is a second answer to "who is this person" against
+  the existing customer-identity path. Decide whether the transport choice is
+  made with Instagram in view even if it ships later.
 - **Ready:** Reuse the existing reservation, customer-identity, notification,
   channel, and idempotency paths rather than creating a second booking engine.
   Use the existing `bot_configs` and `bot_enabled` foundations only after

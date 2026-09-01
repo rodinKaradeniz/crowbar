@@ -116,7 +116,7 @@ screen is already a lot; a fourth means the rank is being abused.
 - **Form validation.** Inline field errors, invalid input, required-field
   messages — anything the person can fix in the field they are standing in.
   `--field-invalid` on paper, `--field-invalid-ink` on ink and surface. It
-  never borrows a severity token. *"Too short — 10 characters minimum"* is
+  never borrows a severity token. *"Too short — 12 characters minimum"* is
   this, not attend: a password-length hint is not a service item to be handled
   before the night ends.
 - **Brand.** Identity, the primary action, the active nav item, and
@@ -337,7 +337,7 @@ them:
   em-dash, never a zero.
 - **Side panel** — 400px, full height, right edge, E1, 180ms slide. Fixed
   structure: header → two-cell figure band → definition list → history →
-  actions in a bordered footer. Full width under 440px.
+  actions in a bordered footer. Full width under `--bp-panel` (440px).
 - **Disabled** — flat, on every control: `--control-disabled` fill,
   `--control-disabled-foreground` text, a plain hairline border, no hover. Both
   tokens resolve per ground. Never a translucent version of the enabled
@@ -401,7 +401,11 @@ which is neither an animation nor a transition and needs its own rule.
 ## Responsive
 
 Two targets, and no others. There is no phone design; if a task needs one, that
-is a design question, and stage 7's phone exit gate is **recorded as unmet**.
+is a design question. Stage 7's exit gate once required a phone-capable staff
+surface and never met it; that clause now sits in `docs/TODO.md` stage 11,
+where the answer is a React Native client rather than a narrower web layout.
+Nothing here is expected to serve a phone in the meantime — see open question
+3 below.
 
 | | Desktop | Tablet |
 | --- | --- | --- |
@@ -522,7 +526,11 @@ in the port.
 
 ## Open design questions
 
-Three of the original eight are now answered; the rest stand.
+Eight of the ten are now closed. Two stand, and **neither is an outstanding
+code change**: one is an action in the design file outside this repo, the
+other is a question for a surface that does not exist yet. The numbers below
+are the original question IDs and are kept stable, so they are neither
+sequential nor unique across the blocks.
 
 **Answered in the completion pass:**
 
@@ -548,30 +556,63 @@ Three of the original eight are now answered; the rest stand.
    done anything wrong. `PasswordStrength` now takes `touched` and holds the
    invalid tone until the field is blurred.
 
+**Closed in the design closeout pass:**
+
+3. ~~**Phone.**~~ **Closed as re-sequenced, not cancelled.** The product is
+   designed at 1280+ and 1024×768, and both shipped. There is no phone canvas,
+   and `docs/TODO.md` stage 7's exit gate **was never met on that clause** —
+   this file recorded it as unmet and that record was correct. The phone answer
+   is a React Native client, which is stage 11 and comes after the pilot, and
+   it is wanted regardless of what the venue prefers. The clause now lives in
+   stage 11's gate; stage 7's gate claims only the two targets that exist. It
+   moved because the answer belongs to a different client, not because the
+   requirement went away.
+4. ~~**440px side-panel breakpoint.**~~ **Closed — declared.** It is now
+   `--bp-panel: 440px` in the token block beside `--bp-desktop`, bridged as
+   `--breakpoint-panel`, which generates the `panel:` variant `ui/sheet.tsx`
+   uses in place of its bare `min-[440px]:`. The bridge value is written
+   literally with a comment tying it to `--bp-panel`, because a media query
+   cannot read a custom property — the constraint `--bp-desktop` already
+   documents. Same compiled media query, so nothing moved on screen.
+6. ~~**Password minimum: 10 or 12.**~~ **Closed as decided: 12.** A form
+   promising a laxer rule than the API fails at submit instead of at the field,
+   which is the worse failure — so the **canvas is corrected to match the code**,
+   not the reverse. Nothing in the product changed: `PASSWORD_MIN_LENGTH` and
+   the server were already 12 and the UI derives its copy from the constant.
+   Three comments still used "10 characters minimum" as their worked example
+   (this file, `ui/input.tsx`, `lib/severity.ts`); all three now say 12.
+7. ~~**The marketing measurement layer.**~~ **Closed as decided: it stays
+   outside the token block, as a documented exception.** 31 `clamp()`
+   expressions and six editorial type sizes that sit between the ten declared
+   steps. Promoting them would roughly double the declared scale, and almost
+   every step it added would serve exactly one page — a marketing page and a
+   service board are different typography problems. They are already
+   quarantined in the `.mkt-*` layer of `globals.css` rather than inlined, and
+   no product surface uses those classes. This remains the *only* place sizes
+   live outside the declared scale, and it is **not** precedent for a second
+   one: another exception is a design question, not a call-site decision.
+8. ~~**`bar_kitchen` navigation breadth.**~~ **Closed — it was never a design
+   question.** The States canvas shows a bartender with a three-item nav and
+   "cannot see guest records"; the real role also holds `customers.view`,
+   `floor.view`, `queue.view`, `reservations.view`, `menu.edit` and
+   `overview.view`, so an honest nav renders more. Rendering from the real
+   capability matrix is the correct behaviour — the divergence is in what the
+   role holds, not in how it is drawn. Narrowing it is a **permissions** change,
+   deferred to whoever next revisits the capability matrix.
+
 **Still open:**
 
-3. **Phone.** The product is designed at 1280+ and 1024×768. `docs/TODO.md`
-   stage 7's exit gate requires phone-capable staff surfaces; there is no phone
-   canvas. Recorded as unmet.
-4. **440px side-panel breakpoint.** Stated in §06 prose but absent from
-   `crowbar-tokens.css`. Used as an arbitrary variant in `ui/sheet.tsx` pending
-   a token.
-5. **`--field-invalid-ink`.** Added under instruction during the port. Confirm
-   it lands in the canonical `crowbar-tokens.css` so the design file and the
-   codebase do not diverge.
-6. **Password minimum: 10 or 12.** The canvas says 10 throughout;
-   `PASSWORD_MIN_LENGTH` and the server enforce 12. The screens ship 12.
-7. **The marketing measurement layer.** 31 `clamp()` expressions and six
-   editorial type sizes that sit between the ten declared steps. Transcribed,
-   not invented, but they are not tokens. Note this is now the *only* place
-   sizes live outside the declared scale for product surfaces: the `@theme`
-   bridge closed the Tailwind-scale hole described under *Rule zero*.
-8. **`bar_kitchen` navigation breadth.** The States canvas shows a bartender
-   with a three-item nav and "cannot see guest records"; the real `bar_kitchen`
-   role also holds `customers.view`, `floor.view`, `queue.view`,
-   `reservations.view`, `menu.edit` and `overview.view`, so an honest nav
-   renders more. The nav renders from the real capability matrix. Narrowing the
-   role is a stage-6 permissions change, not a design one.
+5. **`--field-invalid-ink` — codebase side closed; one action left, and it is
+   not in this repository.** Added under instruction during the port because
+   `--field-invalid` measured 1.84:1 on ink. This entry used to say "confirm it
+   lands in the canonical `crowbar-tokens.css`", which nobody can do here:
+   **`crowbar-tokens.css` does not exist in this repository.** It is the design
+   file and it lives outside the repo — `client/app/globals.css` describes its
+   own `:root` as a port *of* it. The codebase half is therefore done: the token
+   is declared in `globals.css` with its measured ratios (ink 6.96:1, surface
+   6.52:1). What remains is a **user action in the design file** — add the token
+   there so the two do not diverge. Creating a `crowbar-tokens.css` in the repo
+   to make the sentence resolvable would be the wrong fix.
 9. **A spinner.** The declared five motions have no "work in progress"
    animation. Thirteen call sites used Tailwind's `animate-spin`, which carries
    its own 1s linear rotation. All of them already stated the wait in words, so
