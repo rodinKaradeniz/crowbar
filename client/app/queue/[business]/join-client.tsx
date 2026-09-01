@@ -47,7 +47,7 @@ function PartyStepper({
         type="button"
         variant="secondary"
         size="icon"
-        className="h-9 w-9 shrink-0"
+        className="shrink-0"
         onClick={() => onChange(Math.max(1, value - 1))}
         disabled={value <= 1}
       >
@@ -58,7 +58,7 @@ function PartyStepper({
         type="button"
         variant="secondary"
         size="icon"
-        className="h-9 w-9 shrink-0"
+        className="shrink-0"
         onClick={() => onChange(Math.min(20, value + 1))}
         disabled={value >= 20}
       >
@@ -239,7 +239,7 @@ export function QueueJoinClient({ business }: { business: Business }) {
                 <p className="text-sm text-muted-foreground">Hi, {entry.name} — you&apos;re</p>
                 {/* The coaster: your place at the bar */}
                 <div className="flex items-center justify-center rounded-full border border-border-strong mx-auto mt-5 h-40 w-40">
-                  <p className="font-mono tabular-nums text-6xl text-primary">
+                  <p className="font-mono tabular-nums text-[length:var(--d2-size)] text-primary">
                     {entry.position ?? "—"}
                   </p>
                 </div>

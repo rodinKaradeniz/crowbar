@@ -8,8 +8,8 @@ than Alembic. Run commands from `server/` with `venv/` activated.
 | Command | Effect |
 | --- | --- |
 | `python -m db.migrate` | Apply pending migrations |
-| `SEED_DATA=true DEMO_ADMIN_PASSWORD='<one-time value>' python -m db.migrate` | Apply migrations, then replace the synthetic Example Lantern demo tenant |
-| `DEMO_ADMIN_PASSWORD='<one-time value>' python -m db.migrate seed` | Replace the synthetic Example Lantern demo tenant without running migrations |
+| `SEED_DATA=true DEMO_ADMIN_PASSWORD='<one-time value>' python -m db.migrate` | Apply migrations, then replace the synthetic Volt & Vine demo tenant |
+| `DEMO_ADMIN_PASSWORD='<one-time value>' python -m db.migrate seed` | Replace the synthetic Volt & Vine demo tenant without running migrations |
 | `docker compose up -d` | Start local PostgreSQL, Redis, and ML |
 | `docker compose down` | Stop local containers while keeping volumes |
 | `../scripts/verify-fresh-db.sh` | Recreate a name-restricted disposable database, run every migration, repeat the canonical seed, and assert current invariants |
@@ -82,10 +82,10 @@ migrations.
 
 ## Canonical Demo Tenant
 
-`db/seeds/001_seed_example_lantern.sql` is the only seed file, named for what it
+`db/seeds/001_seed_volt_and_vine.sql` is the only seed file, named for what it
 carries. Seeds are discovered by globbing `seeds/*.sql` and are not tracked by
 filename the way migrations are, so renaming one is safe. It creates the
-unmistakably synthetic Example Lantern tenant with relative dates and data across
+unmistakably synthetic Volt & Vine tenant with relative dates and data across
 all current modules: one primary location, three areas, twenty tables, two active
 combinations, the Bar and Kitchen preparation stations, table assignments for the
 days ahead, a live queue and waitlist, an open seating carrying an open tab, and a

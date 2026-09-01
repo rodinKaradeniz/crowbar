@@ -7,8 +7,8 @@ Local development only. Nothing here applies to Railway.
 1. DEMO CREDENTIALS
 ────────────────────────────────────────────────────────────────────────
 
-All five accounts belong to the seeded demo tenant "Example Lantern"
-(slug: example-lantern). Sign in at http://localhost:3000/auth/login
+All five accounts belong to the seeded demo tenant "Volt & Vine"
+(slug: volt-and-vine). Sign in at http://localhost:3000/auth/login
 
   EMAIL                    PASSWORD     ROLE                NAME
   owner@example.com        password123  owner               Demo Owner

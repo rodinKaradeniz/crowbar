@@ -163,13 +163,13 @@ export default function ReserveClient({ business, serviceTypes }: ReserveClientP
               {business.email && (
                 <div className="flex items-center gap-3 text-sm">
                   <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <a href={`mailto:${business.email}`} className="hover:text-primary transition-colors">{business.email}</a>
+                  <a href={`mailto:${business.email}`} className="break-all hover:text-primary transition-colors">{business.email}</a>
                 </div>
               )}
               {business.website && (
                 <div className="flex items-center gap-3 text-sm">
                   <Globe className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <a href={business.website} target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">{business.website}</a>
+                  <a href={business.website} target="_blank" rel="noopener noreferrer" className="break-all hover:text-primary transition-colors">{business.website}</a>
                 </div>
               )}
               {business.address && (

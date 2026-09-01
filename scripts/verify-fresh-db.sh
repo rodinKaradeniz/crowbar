@@ -40,13 +40,13 @@ BEGIN
   IF (SELECT COUNT(*) FROM _migrations) <> :'expected'::integer THEN
     RAISE EXCEPTION 'migration count mismatch';
   END IF;
-  IF (SELECT COUNT(*) FROM businesses WHERE slug = 'example-lantern') <> 1 THEN
-    RAISE EXCEPTION 'synthetic Example Lantern tenant missing or duplicated';
+  IF (SELECT COUNT(*) FROM businesses WHERE slug = 'volt-and-vine') <> 1 THEN
+    RAISE EXCEPTION 'synthetic Volt & Vine tenant missing or duplicated';
   END IF;
   -- One demo account per pilot role, so the stage-6 permission matrix can be
   -- checked by signing in rather than by reading a table.
   IF (SELECT COUNT(DISTINCT s.role) FROM staff s JOIN businesses b ON b.id = s.business_id
-      WHERE b.slug = 'example-lantern'
+      WHERE b.slug = 'volt-and-vine'
         AND s.role IN ('owner', 'manager', 'host_server', 'bar_kitchen',
                        'inventory_operator')) <> 5 THEN
     RAISE EXCEPTION 'canonical staff-role seed is invalid';
@@ -73,12 +73,12 @@ BEGIN
     RAISE EXCEPTION 'order authority backfill invariant failed';
   END IF;
   IF (SELECT COUNT(*) FROM businesses
-      WHERE slug = 'example-lantern' AND country_code = 'DE' AND currency_code = 'EUR'
+      WHERE slug = 'volt-and-vine' AND country_code = 'DE' AND currency_code = 'EUR'
         AND locale = 'de-DE' AND timezone = 'Europe/Berlin') <> 1 THEN
     RAISE EXCEPTION 'canonical regional configuration is invalid';
   END IF;
   IF (SELECT COUNT(*) FROM tax_profiles tp JOIN businesses b ON b.id = tp.business_id
-      WHERE b.slug = 'example-lantern' AND tp.code IN ('STANDARD', 'REDUCED', 'EXEMPT', 'CUSTOM')) <> 4 THEN
+      WHERE b.slug = 'volt-and-vine' AND tp.code IN ('STANDARD', 'REDUCED', 'EXEMPT', 'CUSTOM')) <> 4 THEN
     RAISE EXCEPTION 'canonical operational tax profiles are invalid';
   END IF;
   IF EXISTS (
@@ -138,36 +138,59 @@ BEGIN
   IF EXISTS (SELECT 1 FROM tabs WHERE status NOT IN ('open', 'settled_externally')) THEN
     RAISE EXCEPTION 'external settlement status migration failed';
   END IF;
+  -- Migration 050. The 001 status check was inline, auto-named and never dropped,
+  -- so 'no_show' -- which migration 030 and reservation_service both assume --
+  -- was rejected on every migrated database. pytest cannot see this: it builds
+  -- its schema from Base.metadata, not from the migration chain.
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint con
+    JOIN pg_class rel ON rel.oid = con.conrelid
+    WHERE rel.relname = 'reservations'
+      AND con.conname = 'ck_reservations_status'
+      AND pg_get_constraintdef(con.oid) LIKE '%no_show%'
+  ) THEN
+    RAISE EXCEPTION 'reservations.status constraint does not admit no_show';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint con
+    JOIN pg_class rel ON rel.oid = con.conrelid
+    WHERE rel.relname = 'reservations'
+      AND con.contype = 'c'
+      AND con.conname <> 'ck_reservations_status'
+      AND pg_get_constraintdef(con.oid) LIKE '%''completed''%'
+  ) THEN
+    RAISE EXCEPTION 'a second reservations status check survived migration 050';
+  END IF;
   -- Stage 8 part one: the physical layer the pilot journey needs. Migrations 024
   -- and 039 backfill these only for businesses that already existed, so the seed
   -- has to insert its own and a silent regression would leave the floor empty.
   IF (SELECT COUNT(*) FROM locations l JOIN businesses b ON b.id = l.business_id
-      WHERE b.slug = 'example-lantern' AND l.is_primary) <> 1 THEN
+      WHERE b.slug = 'volt-and-vine' AND l.is_primary) <> 1 THEN
     RAISE EXCEPTION 'the demo tenant has no single primary location';
   END IF;
   IF (SELECT COUNT(*) FROM table_areas a JOIN businesses b ON b.id = a.business_id
-      WHERE b.slug = 'example-lantern' AND a.deleted_at IS NULL) = 0
+      WHERE b.slug = 'volt-and-vine' AND a.deleted_at IS NULL) = 0
      OR (SELECT COUNT(*) FROM tables t JOIN businesses b ON b.id = t.business_id
-         WHERE b.slug = 'example-lantern' AND t.deleted_at IS NULL) = 0 THEN
+         WHERE b.slug = 'volt-and-vine' AND t.deleted_at IS NULL) = 0 THEN
     RAISE EXCEPTION 'the demo tenant has no floor plan to seat anyone on';
   END IF;
   IF NOT EXISTS (
     SELECT 1 FROM table_combinations c
     JOIN businesses b ON b.id = c.business_id
     JOIN table_combination_members m ON m.combination_id = c.id
-    WHERE b.slug = 'example-lantern' AND c.is_active
+    WHERE b.slug = 'volt-and-vine' AND c.is_active
     GROUP BY c.id HAVING COUNT(m.table_id) > 1
   ) THEN
     RAISE EXCEPTION 'no active table combination with members, so multi-table allocation is unreachable';
   END IF;
   IF (SELECT COUNT(*) FROM preparation_stations p JOIN businesses b ON b.id = p.business_id
-      WHERE b.slug = 'example-lantern' AND p.is_active
+      WHERE b.slug = 'volt-and-vine' AND p.is_active
         AND p.name IN ('Bar', 'Kitchen')) <> 2 THEN
     RAISE EXCEPTION 'the demo tenant is missing its bar or kitchen preparation station';
   END IF;
   IF NOT EXISTS (
     SELECT 1 FROM tabs t JOIN businesses b ON b.id = t.business_id
-    WHERE b.slug = 'example-lantern' AND t.status = 'open' AND t.seating_id IS NOT NULL
+    WHERE b.slug = 'volt-and-vine' AND t.status = 'open' AND t.seating_id IS NOT NULL
   ) THEN
     RAISE EXCEPTION 'the demo tenant has no open tab on a seating';
   END IF;
@@ -175,7 +198,7 @@ BEGIN
     SELECT 1 FROM tabs t
     JOIN businesses b ON b.id = t.business_id
     JOIN tab_settlement_events e ON e.id = t.current_settlement_event_id
-    WHERE b.slug = 'example-lantern' AND t.status = 'settled_externally'
+    WHERE b.slug = 'volt-and-vine' AND t.status = 'settled_externally'
       AND e.event_type = 'settled_externally'
   ) THEN
     RAISE EXCEPTION 'the demo tenant has no externally settled tab with its settlement event';

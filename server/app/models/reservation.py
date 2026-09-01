@@ -25,6 +25,13 @@ class Reservation(Base, UUIDMixin, TimestampMixin):
         CheckConstraint(
             "ends_at > time", name="ck_reservations_positive_interval"
         ),
+        # Mirrored from migration 050. The pytest fixture builds its schema from
+        # this metadata, so a status the database rejects is only caught here.
+        CheckConstraint(
+            "status IN ('pending', 'confirmed', 'cancelled', 'completed', "
+            "'no_show')",
+            name="ck_reservations_status",
+        ),
         CheckConstraint(
             "(availability_override_reason IS NULL "
             "AND availability_overridden_at IS NULL) "

@@ -48,6 +48,12 @@ changes.
   configuration, owner/manager-controlled effective tax profiles, immutable
   order tax snapshots, and migration 037. Stage 3 guest-to-table completion is
   the next boundary.
+- **2026-09-01:** The synthetic demo tenant was renamed from Example Lantern to
+  **Volt & Vine** (slug `volt-and-vine`, seed
+  `server/db/seeds/001_seed_volt_and_vine.sql`). The old name carried the
+  "this is not a real venue" signal in the name itself; the new one does not, so
+  that guarantee moved explicitly into the seed header alongside the RFC 2606
+  `@example.com` addresses, which were deliberately left untouched.
 
 ## Durable Decisions
 
@@ -1297,7 +1303,7 @@ carries one account per role so the matrix is demonstrable by signing in.
 pricing is preserved by splitting `menu.edit` from `menu.pricing`.
 
 **References:** `server/db/migrations/049_role_matrix_and_ml_snapshots.sql`,
-`server/app/services/staff_service.py`, `server/db/seeds/001_seed_example_lantern.sql`
+`server/app/services/staff_service.py`, `server/db/seeds/001_seed_volt_and_vine.sql`
 
 ## 2026-08-26 — Withdrawn consent suppresses marketing, never the guest's own booking
 
@@ -1427,7 +1433,7 @@ not be moved to a reserved special-use TLD (`.invalid`, `.test`, `.example`,
 `server/tests/unit/test_seed_credentials.py` reads the seed file and asserts
 every address in it passes `LoginRequest`, so that regression fails the suite.
 
-**References:** `server/db/seeds/001_seed_example_lantern.sql`,
+**References:** `server/db/seeds/001_seed_volt_and_vine.sql`,
 `server/app/schemas/reservation.py`,
 `server/app/services/reservation_waitlist_service.py`,
 `server/app/routers/reservations.py`,
@@ -1752,6 +1758,51 @@ the guest who just rescheduled keeps the link they are holding;
 `run-crowbar-service-loop` had claimed the opposite and has been corrected against
 `docs/PRODUCT.md`.
 
-**References.** `server/db/seeds/001_seed_example_lantern.sql` (renamed from
-`001_seed_puzzles.sql`), `scripts/verify-fresh-db.sh`, `docs/TODO.md` stage 8,
+**References.** `server/db/seeds/001_seed_volt_and_vine.sql` (named
+`001_seed_example_lantern.sql` at the time, renamed from `001_seed_puzzles.sql`),
+`scripts/verify-fresh-db.sh`, `docs/TODO.md` stage 8,
 `.claude/skills/run-crowbar-service-loop/SKILL.md`.
+
+## 2026-09-01 — A schema built from `Base.metadata` cannot test what only the migrations know
+
+**Context.** `reservations.status` had been restricted to four values since
+`001_initial_schema.sql`, where the CHECK was written inline on the column and was
+therefore auto-named by PostgreSQL. Migration 030 later added
+`ck_reservations_no_show_audit`, which is only satisfiable when the status is
+`'no_show'`, and `reservation_service.mark_reservation_no_show` writes exactly that.
+No migration ever dropped the original check, so marking a no-show violated it on
+every migrated database and had never once succeeded on this project.
+
+Thirteen tests asserted on `no_show` and all of them passed. They could not have
+failed: `tests/conftest.py` builds its schema with `Base.metadata.create_all`, and
+`models/reservation.py` declared two CheckConstraints but not the status one — so
+the suite ran against a database where the constraint did not exist, certifying a
+write production would always reject.
+
+**Decision.** Migration 050 drops the auto-named check and re-adds it as
+`ck_reservations_status` with `'no_show'` included, and the model mirrors that one
+constraint so `create_all` builds it. The mirror is the load-bearing half: without
+it, migration 050 stays invisible to pytest and the same class of defect returns.
+
+Two details worth keeping. The constraint had to be resolved from `pg_constraint`
+rather than named, because an inline CHECK has no name in the source — 049 had
+already learned this for `staff.role`. But 049's trick of matching on the
+constraint *definition* (`ILIKE '%role%'`) is unsafe here: `ck_reservations_no_show_audit`
+also mentions `status`, so a text match could drop the wrong constraint. Matching on
+the constraint's *column set* — the check whose columns are exactly `(status)` —
+excludes every audit constraint by construction.
+
+**Consequences.** The general gap is not closed and was not closed here. The
+migrations carry roughly 122 `CHECK (` clauses against 55 `CheckConstraint`
+declarations in the models; the counts are not strictly comparable, but about half
+the database's check constraints are invisible to the whole suite. Mirroring all of
+them is over-build for a single-venue MVP, so it is recorded in `docs/TODO.md` with
+a trigger rather than done. The rule to carry forward: **a constraint that lives
+only in a migration is not tested by pytest, and belongs in
+`scripts/verify-fresh-db.sh` — mirroring it into the model is what moves it into
+the suite.**
+
+**References.** `server/db/migrations/050_reservation_no_show_status.sql`,
+`server/app/models/reservation.py`, `server/tests/conftest.py`,
+`server/tests/integration/test_reservation_routes.py`, `scripts/verify-fresh-db.sh`,
+`docs/TODO.md`.

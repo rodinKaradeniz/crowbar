@@ -201,7 +201,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                       className="group w-full text-left py-3.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                     >
                       <div className="flex items-baseline gap-2.5">
-                        <span className="font-medium text-[15px] group-hover:text-primary transition-colors">
+                        <span className="min-w-0 font-medium text-[15px] group-hover:text-primary transition-colors">
                           {item.name}
                         </span>
                         <span className="flex-1" aria-hidden />
@@ -284,7 +284,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
 
       {/* Item detail sheet */}
       <Sheet open={!!selectedItem} onOpenChange={(open) => { if (!open) setSelectedItem(null); }}>
-        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto border-t-brass/40">
+        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
           {selectedItem && (
             <>
               <SheetHeader className="text-left">
@@ -307,7 +307,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                 )}
               </SheetHeader>
 
-              <div className="space-y-5 mt-4">
+              <div className="space-y-5 mt-4 px-[var(--space-16)]">
                 {selectedItem.modifierGroups.map((group) => (
                   <div key={group.id}>
                     <div className="flex items-center gap-2 mb-2.5">

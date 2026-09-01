@@ -18,7 +18,7 @@ export default async function MenuPage({ params }: MenuPageProps) {
         <div className="w-full max-w-md px-6 py-16 text-center">
           <AlertCircle className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
           <h1 className="type-t1 mb-2">Venue not found</h1>
-          <p className="text-muted-foreground mb-6">
+          <p className="text-muted-foreground mb-6 break-words">
             The business &quot;{businessSlug}&quot; doesn&apos;t exist or is no longer available.
           </p>
           <Link href="/" className="text-primary hover:underline">

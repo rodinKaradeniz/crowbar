@@ -33,12 +33,13 @@ grep -rEn "#[0-9a-fA-F]{3,8}\b" --include="*.tsx" --include="*.ts" --include="*.
   app components lib contexts hooks | grep -v "app/globals.css"
 ```
 
-**Every hit that survives is one of two named things, and nothing else.** If a
+**Every hit that survives is one of three named things, and nothing else.** If a
 hit does not fall into one of these, it is a bug:
 
 | What | Where | Why it is there |
 | --- | --- | --- |
 | Library selectors | `components/ui/chart.tsx` | Attribute selectors matching hexes that Recharts itself emits (`stroke='#ccc'`). These are matched, never declared. |
+| HTML numeric entities | e.g. `&#8599;` in `components/landing/closing-cta.tsx` | The regex cannot tell `#8599` from a hex colour. A character reference, not a value. |
 | The declared series values | `lib/series-palette.ts` | The five `--series-*` values and the map from colours stored before the palette existed. A service-type colour is **tenant data** persisted as a string, and a CSS variable cannot be written to a database, so the values are duplicated here; `globals.css` remains the source of truth for rendering. |
 
 This list was four entries before the categorical palette was declared. Held
@@ -55,6 +56,11 @@ sits at 18, 20, 24, 30 or 36px. They are the size equivalent of a raw hex:
 ```bash
 grep -rEn "text-(lg|xl|2xl|3xl|4xl)\b" --include="*.tsx" app components
 ```
+
+This one has a single allowed survivor: a prose comment in
+`components/reports/report-shell.tsx` that *names* `text-2xl` while explaining
+what was removed. The grep reads source, not markup, so a size discussed in a
+comment looks identical to one applied to an element.
 
 Anything else — a colour in a class, a fill, a style object — has drifted.
 

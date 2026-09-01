@@ -5,6 +5,7 @@ from datetime import datetime, time, timedelta, timezone
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.booking_schedule import BookingSchedule, BookingScheduleWindow
@@ -339,6 +340,38 @@ class TestPublicReservation:
         assert no_show.status_code == 200, no_show.text
         assert no_show.json()["status"] == "no_show"
         assert no_show.json()["no_show_note"] == "No arrival"
+
+    @pytest.mark.asyncio
+    async def test_reservation_status_check_rejects_unknown_value(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        """ck_reservations_status must reject a status the services never write.
+
+        Migration 050 re-added this check with 'no_show' included, and the model
+        mirrors it so this fixture builds it. Without the mirror the assertion
+        above passes against a database that has no status constraint at all.
+        """
+        owner_token, business_id = await _create_business_owner(client)
+        await _open_default_schedule(db_session, business_id)
+        service_type_id = await _create_service_type(client, owner_token, business_id)
+        created = await client.post(
+            "/api/reservations",
+            headers={"Authorization": f"Bearer {owner_token}"},
+            json={
+                "service_type_id": service_type_id,
+                "time": _future_time(1),
+                "phone": "+31600000002",
+                "email": "bogus-status@example.com",
+                "name": "Bogus status",
+                "guests": 2,
+            },
+        )
+        reservation = await db_session.get(Reservation, created.json()["id"])
+        assert reservation is not None
+        reservation.status = "seated"
+        with pytest.raises(IntegrityError):
+            await db_session.flush()
+        await db_session.rollback()
 
     @pytest.mark.asyncio
     async def test_waitlist_offer_acceptance_creates_reservation(

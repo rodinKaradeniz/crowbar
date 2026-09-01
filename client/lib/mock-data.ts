@@ -28,8 +28,8 @@ function daysFromNow(days: number, hour: number = 10, minute: number = 0): strin
 export const mockBusinesses: Business[] = [
   {
     id: "00000000-0000-0000-0000-000000000001",
-    name: "Example Lantern",
-    slug: "example-lantern",
+    name: "Volt & Vine",
+    slug: "volt-and-vine",
     email: "venue@example.com",
     phone: "+14155550101",
     countryCode: "US",

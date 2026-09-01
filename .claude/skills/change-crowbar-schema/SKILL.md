@@ -32,7 +32,7 @@ is the workflow they do not carry.
 ## 1. The migration mechanism
 
 Migrations are ordered `*.sql` files in `server/db/migrations/`, currently
-`001_*` through `037_*`. `server/db/migrate.py` sorts them by filename, applies
+`001_*` through `050_*`. `server/db/migrate.py` sorts them by filename, applies
 each unapplied file, and records the filename in the `_migrations` table.
 
 ```bash
@@ -62,8 +62,8 @@ Rules that follow from that mechanism:
   without being a reliable reset. `docs/TODO.md` carries an open item to repair
   or remove it.
 - **`SEED_DATA=true` is a data mutation, not a read.**
-  `db/seeds/001_seed_example_lantern.sql` deletes and recreates the Example
-  Lantern demo tenant. `./scripts/dev.sh` does **not** seed by default — it gates
+  `db/seeds/001_seed_volt_and_vine.sql` deletes and recreates the Volt & Vine
+  demo tenant. `./scripts/dev.sh` does **not** seed by default — it gates
   seeding behind `SEED_DATA=true` and otherwise logs that it left demo data
   alone — so seeding is always something you chose. Never point it at shared data.
 
@@ -183,7 +183,7 @@ one belongs in `scripts/verify-fresh-db.sh`, not in pytest.
 
 ## 6. A migration is not deployed because it applied
 
-Migrations **023–037 are local only**. Railway remains at 001–022 and its
+Migrations **023–050 are local only**. Railway remains at 001–022 and its
 partially provisioned rollout is intentionally paused until the local stages
 pass and the user explicitly authorizes deployment. `docs/deployment.md` owns
 the verified resume point.

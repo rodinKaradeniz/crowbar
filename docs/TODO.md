@@ -234,7 +234,7 @@ runtime legal rules engine.
   policy, net subtotal, tax, and gross total on every line plus order totals.
   Later profile changes do not rewrite old orders. Public checkout and menu
   disclosures label this as estimated operational/non-fiscal tax.
-- **Complete — editable German seed:** The Example Lantern demo uses DE/EUR/`de-DE`/
+- **Complete — editable German seed:** The Volt & Vine demo uses DE/EUR/`de-DE`/
   `Europe/Berlin` and editable 19% beverage/standard, 7% food/reduced, 0%
   exempt, and 0% custom examples. These are demo suggestions to verify with the
   venue's adviser, not automatic classification or legal advice. Non-German
@@ -632,6 +632,32 @@ missing is a design question, not an implementation choice.
   the design layer is outstanding, and this pass deliberately did not touch that
   file.
 
+- **The guest surface at phone width needs values the token block does not
+  declare.** Raised by the 390px read of the public guest pages, per rule zero:
+  each of these is a value that is needed and missing, so none of them was
+  invented. The two shipped targets are unaffected — checking a guest surface at
+  phone width is not a third target, and this entry does not ask for one.
+  - **No 40px or 36px control step.** `ui/button.tsx` `size: md` is a raw
+    `h-10` and `ui/select.tsx`'s trigger is a raw `h-9`; the declared ladder is
+    34 / 44 / 48 / 50 / 56. Every guest primary CTA uses `size="md"`, so the
+    guest surface's main action sits under the 48px floor the tablet rule
+    already sets. Either those literals get a declared step or those call sites
+    move to `size="default"`, and that is a design call, not a call-site one.
+  - **No token for the guest bottom-bar height.** `menu-client.tsx` and
+    `order-client.tsx` reserve `pb-32` for their fixed cart bar and
+    `reserve-client.tsx` reserves `h-24` — three separate guesses at one
+    measurement, and the order page's is very likely too small once the
+    age-confirmation block wraps. `--bottom-nav` describes the *staff* bar, not
+    this one. A declared height that both the bar and its spacer read would
+    make the class of bug impossible.
+  - **No declared phone breakpoint.** `@theme` declares only `--breakpoint-desktop`
+    and `--breakpoint-panel`, yet the guest pages already lean on Tailwind's
+    undeclared `sm:` and `md:` defaults. Anything that needs to reflow at phone
+    width — the booking sheet's `grid-cols-3` slot grid is the live example —
+    has no declared width to reflow at.
+  - **Minor, same cause:** `p-7` (28px) on the two waitlist cards, and
+    `text-[11px]` / `text-[13px]` on the menu, sit between declared steps.
+
 - **Exit gate:** every retained surface follows one documented design contract,
   each pilot role can complete its core task on the **shipped desktop (1280+)
   and tablet (1024×768) targets**, no screen carries a placeholder or dishonest
@@ -704,6 +730,30 @@ is a data mutation that needs explicit authorization.
   externally with its settlement event. Steps 3–11 of `run-crowbar-service-loop`
   are walkable on seeded data; `scripts/verify-fresh-db.sh` asserts the floor
   exists. Still open here: printable table QR sheets.
+- **Guest surfaces were checked at 390px — statically, not in a browser.** QR
+  ordering is only reachable from a phone, so the public guest pages were read for
+  phone-hostile layout. A 390px viewport already receives the tablet token values
+  (`globals.css` uses an open-ended `@media (width < 1280px)`), so the standard
+  control sizes are correct at 48px and the failures were only where code overrode
+  the system with a literal or rendered unbounded tenant data without a wrap guard.
+  Fixed: `break-all` on the venue email/website and the privacy contact,
+  `break-words` on the not-found slug in four pages, the queue party stepper's
+  `h-9 w-9` override, an undeclared `text-6xl`, a dead `border-t-brass/40`, a
+  missing `min-w-0`, and the item sheet's missing horizontal padding. **Not
+  verified in a browser** — `chrome-devtools-axi` fails with `Required at pageId`
+  on `snapshot`/`screenshot`/`eval`, and jsdom does no layout. Left unconfirmed and
+  needing a real 390px look: whether the `/order/[business]` fixed footer exceeds
+  its `pb-32` reserve once the age-confirmation block wraps (the most likely
+  remaining bug), the menu cart button's `whitespace-nowrap` label, and the booking
+  sheet's `grid-cols-3` slot grid in a 12-hour locale.
+- **Guest controls below the 48px floor that are shared primitives.** `Input`
+  (`h-10`), `SelectTrigger` (`h-9`), the calendar's 32px day cells, and the
+  unpadded ~16px remove-item control in `order/[business]/order-client.tsx` all sit
+  under the tablet floor on the guest surface. Left alone deliberately: they are
+  shared primitives, so changing them changes the whole product, and three of the
+  four need a control step the token block does not declare — see `docs/DESIGN.md`
+  §7b. *Trigger:* the phone-width design question being answered, or a pilot guest
+  failing to hit one of them.
 - Automate the critical browser journey: book → assign/seat → QR/staff order →
   fulfill → deduct/reconcile stock → record waste → settle externally → close
   seating → inspect guest and cost history.
@@ -987,18 +1037,27 @@ roadmap and feed its stages 1–8.
   15-minute offer, and an atomic acceptance recheck. Guests can join from a
   fully booked date with a preferred-time flexibility window; staff can add,
   review, and offer only live slots inside that window.
-- **Marking a no-show fails on a migrated database.** `reservations_status_check`,
-  written inline at `001_initial_schema.sql:85-86`, restricts status to
-  `('confirmed', 'pending', 'cancelled', 'completed')` and no later migration drops
-  it. Migration 030 then added `ck_reservations_no_show_audit`, which presumes a
-  `'no_show'` status, and `reservation_service.mark_reservation_no_show` writes
-  exactly that — so the write violates the older check. The suite does not catch it
-  because `tests/conftest.py` builds its schema with `Base.metadata.create_all` and
-  the ORM declares no status check, so every test runs against a database whose
-  constraint does not exist. Found while planning the stage 8 seed and confirmed
-  against the live migrated schema; not fixed here because the fix is a migration
-  and this pass adds none. *Trigger:* the next migration to the reservations table,
-  or the first time a host tries to mark a no-show.
+- **Complete — marking a no-show works on a migrated database.** The inline
+  `reservations_status_check` from `001_initial_schema.sql` forbade the `'no_show'`
+  status that migration 030 and `reservation_service.mark_reservation_no_show` both
+  assume, so the write had never once succeeded outside the test suite. Migration
+  050 drops that auto-named check and re-adds it as `ck_reservations_status` with
+  `'no_show'` included; `models/reservation.py` mirrors that one constraint so the
+  ORM-metadata fixture builds it, and `scripts/verify-fresh-db.sh` asserts it on the
+  migrated schema. Verified by marking a real reservation as a no-show against the
+  migrated database.
+
+- **Migration CHECK constraints are largely invisible to the test suite.**
+  `tests/conftest.py` builds its schema with `Base.metadata.create_all`, so any
+  constraint that exists only in a migration is absent from every test. The
+  migrations carry roughly 122 `CHECK (` clauses against 55 `CheckConstraint`
+  declarations in `app/models/` — the counts are not strictly comparable, but the
+  gap is real and roughly half the database's check constraints are unenforced
+  under pytest. The no-show defect above is what this gap costs. Only the
+  reservation status check was mirrored; mirroring all of them is over-build for a
+  single-venue MVP, and the honest alternatives are a migration-built test schema or
+  moving these assertions into `scripts/verify-fresh-db.sh`. *Trigger:* the next
+  migration that adds a CHECK, or the next constraint violation found in production.
 
 - **Deferred beyond MVP:** Deposits, card holds, fees, blacklists, and automatic
   punitive action remain part of the post-MVP fiscal POS/payment program.

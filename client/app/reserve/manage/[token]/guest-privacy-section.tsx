@@ -129,7 +129,7 @@ export function GuestPrivacySection() {
       {(state.privacyContact || state.privacyPolicyUrl) && (
         <p className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <Mail className="size-3.5 shrink-0" aria-hidden />
-          {state.privacyContact && <span>{state.privacyContact}</span>}
+          {state.privacyContact && <span className="break-all">{state.privacyContact}</span>}
           {state.privacyPolicyUrl && (
             <a
               href={state.privacyPolicyUrl}

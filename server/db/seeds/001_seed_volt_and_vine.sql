@@ -1,6 +1,12 @@
--- ─── Seed: Example Lantern ───────────────────────────────────────────────────
+-- ─── Seed: Volt & Vine ───────────────────────────────────────────────────────
 -- A wholly synthetic bar used as a rich demo data source showcasing all platform
 -- modules: reservations, queue, floor, ordering, tabs, inventory, insights.
+--
+-- "Volt & Vine" is an invented venue and reads like a real one, which the
+-- previous name ("Example Lantern") did not. Nothing in the name now signals
+-- that this data is fake, so the guarantee rests entirely on two things below:
+-- every address is @example.com, and this header. Neither is decoration. If you
+-- add a section, keep both true.
 --
 -- Staff : one account per pilot role — owner, manager, host/server, bar/kitchen,
 --         inventory operator
@@ -105,8 +111,8 @@ INSERT INTO businesses (
   is_accepting_orders, timezone, country_code, currency_code, locale, tax_label
 ) VALUES (
   '00000000-0000-0000-0000-000000000002',
-  'Example Lantern',
-  'example-lantern',
+  'Volt & Vine',
+  'volt-and-vine',
   'venue@example.com',
   '+12025550100',
   'Musterstraße 1, 10115 Berlin, Germany',
@@ -175,7 +181,7 @@ INSERT INTO staff (id, user_id, business_id, role, created_at) VALUES
 -- group is the migration that introduced the table.
 
 INSERT INTO locations (id, business_id, name, address, phone, is_primary, created_at, updated_at) VALUES
-('00000000-0000-0005-0000-000000000001', '00000000-0000-0000-0000-000000000002', 'Example Lantern', 'Schönhauser Allee 42, 10435 Berlin, Germany', '+493012345678', TRUE, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days');
+('00000000-0000-0005-0000-000000000001', '00000000-0000-0000-0000-000000000002', 'Volt & Vine', 'Schönhauser Allee 42, 10435 Berlin, Germany', '+493012345678', TRUE, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days');
 
 -- ─── Table Areas ──────────────────────────────────────────────────────────────
 INSERT INTO table_areas (id, business_id, location_id, name, sort_order, created_at, updated_at) VALUES
@@ -715,10 +721,10 @@ FROM (VALUES
 -- placed from the table QR and a second the bartender added, which is what makes
 -- "both rounds share one tab" checkable on seeded data. 23 and 24 are the tab on
 -- T5+T6 that was settled at the venue register before the party left.
-('00000000-0000-0000-0011-000000000021', '00000000-0000-0000-0000-000000000002', 'lantern-s-tonight-001', 'T3', 'served',    'lantern-order-tonight-001', 27.00, NOW() - INTERVAL '30 minutes'),
-('00000000-0000-0000-0011-000000000022', '00000000-0000-0000-0000-000000000002', 'lantern-s-tonight-002', 'T3', 'preparing', 'lantern-order-tonight-002', 39.00, NOW() - INTERVAL '8 minutes'),
-('00000000-0000-0000-0011-000000000023', '00000000-0000-0000-0000-000000000002', 'lantern-s-tonight-003', 'T5', 'served',    'lantern-order-tonight-003', 78.00, NOW() - INTERVAL '2 hours 30 minutes'),
-('00000000-0000-0000-0011-000000000024', '00000000-0000-0000-0000-000000000002', 'lantern-s-tonight-004', 'T5', 'served',    'lantern-order-tonight-004', 38.00, NOW() - INTERVAL '1 hour 50 minutes')
+('00000000-0000-0000-0011-000000000021', '00000000-0000-0000-0000-000000000002', 'voltvine-s-tonight-001', 'T3', 'served',    'voltvine-order-tonight-001', 27.00, NOW() - INTERVAL '30 minutes'),
+('00000000-0000-0000-0011-000000000022', '00000000-0000-0000-0000-000000000002', 'voltvine-s-tonight-002', 'T3', 'preparing', 'voltvine-order-tonight-002', 39.00, NOW() - INTERVAL '8 minutes'),
+('00000000-0000-0000-0011-000000000023', '00000000-0000-0000-0000-000000000002', 'voltvine-s-tonight-003', 'T5', 'served',    'voltvine-order-tonight-003', 78.00, NOW() - INTERVAL '2 hours 30 minutes'),
+('00000000-0000-0000-0011-000000000024', '00000000-0000-0000-0000-000000000002', 'voltvine-s-tonight-004', 'T5', 'served',    'voltvine-order-tonight-004', 38.00, NOW() - INTERVAL '1 hour 50 minutes')
 ) AS seeded_orders(
   id, business_id, session_token, table_identifier, status, idempotency_key,
   total_amount, placed_at
@@ -1302,8 +1308,8 @@ INSERT INTO reservation_waitlist_entries (id, business_id, service_type_id, cust
 -- from the staff side — it is a fixture for that screen, not a usable credential.
 INSERT INTO table_guest_sessions (id, business_id, location_id, table_id, seating_id, table_qr_revision, browser_nonce_hash, token_hash, status, expires_at, created_at, updated_at) VALUES
 ('00000000-0000-0041-0000-000000000001', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0024-0000-000000000213', '00000000-0000-0024-0000-000000000402', 1,
-  encode(digest('lantern-guest-nonce-tonight-001', 'sha256'), 'hex'),
-  encode(digest('lantern-guest-token-tonight-001', 'sha256'), 'hex'),
+  encode(digest('voltvine-guest-nonce-tonight-001', 'sha256'), 'hex'),
+  encode(digest('voltvine-guest-token-tonight-001', 'sha256'), 'hex'),
   'pending', NOW() + INTERVAL '25 minutes', NOW() - INTERVAL '3 minutes', NOW() - INTERVAL '3 minutes');
 
 -- Migration 044 stamps a cost onto movements that existed when it ran. Seed rows
