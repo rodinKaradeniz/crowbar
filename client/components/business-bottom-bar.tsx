@@ -12,7 +12,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { isNavItemActive, type NavGroup } from "@/lib/nav";
+import { flattenNavItems, isNavItemActive, type NavGroup } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
 /** The bar has five slots across 1024px; two labels are shortened to fit. */
@@ -50,15 +50,20 @@ export function BusinessBottomBar({
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
 
-  const all = groups.flatMap((group) => group.items);
+  const all = groups.flatMap((group) => flattenNavItems(group.items));
   const primary = SERVICE_ORDER.map((href) =>
     all.find((item) => item.href === href),
   ).filter((item) => item !== undefined);
 
+  // "Everything else" is flat on purpose. The sheet is already a disclosure —
+  // nesting a second one inside it would be two taps to reach one page on the
+  // device where taps are most expensive. The child keeps its own full label
+  // ("Happy hour windows"), which is what makes it readable without the parent
+  // above it.
   const rest = groups
     .map((group) => ({
       ...group,
-      items: group.items.filter(
+      items: flattenNavItems(group.items).filter(
         (item) => !SERVICE_ORDER.includes(item.href),
       ),
     }))

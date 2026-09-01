@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, CheckCircle2, Clock } from "lucide-react";
+import { Trash2, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -187,7 +187,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
       <div className="min-h-screen bg-background p-6 max-w-md mx-auto">
         <div className="text-center mb-8 enter-rise">
           <CheckCircle2 className="h-10 w-10 text-primary mx-auto mb-3" />
-          <h1 className="font-display text-2xl">Order placed</h1>
+          <h1 className="type-t1">Order placed</h1>
           <p className="text-sm text-muted-foreground mt-2">
             We&apos;ll update this page as your order progresses.
           </p>
@@ -195,12 +195,11 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
 
         {orders.length === 0 ? (
           <div className="flex items-center justify-center gap-2 text-muted-foreground text-sm">
-            <Clock className="h-4 w-4 animate-spin" />
             Loading status…
           </div>
         ) : (
           orders.map((order, orderIndex) => (
-            <div key={`${order.placedAt}-${orderIndex}`} className="rounded-lg border bg-card p-5 space-y-4 enter-rise" style={{ animationDelay: "120ms" }}>
+            <div key={`${order.placedAt}-${orderIndex}`} className="border bg-card p-5 space-y-4 enter-rise" style={{ animationDelay: "120ms" }}>
               <div className="flex items-center justify-between gap-3">
                 <p className="type-label text-muted-foreground">
                   Order
@@ -274,7 +273,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
 
       <div className="px-6 py-8 max-w-md mx-auto space-y-8">
         <div className="text-center enter-rise">
-          <h1 className="font-display text-2xl">Your order</h1>
+          <h1 className="type-t1">Your order</h1>
           <div className="border-t border-border mt-4 mx-auto max-w-36" />
         </div>
 

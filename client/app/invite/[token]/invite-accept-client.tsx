@@ -47,6 +47,9 @@ export default function InviteAcceptClient({ invite }: Props) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
+  // The strength meter must not call a password invalid before the person
+  // has finished typing it. See components/auth/password-strength.tsx.
+  const [passwordTouched, setPasswordTouched] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -146,6 +149,7 @@ export default function InviteAcceptClient({ invite }: Props) {
               placeholder={`At least ${PASSWORD_MIN_LENGTH} characters`}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
+              onBlur={() => setPasswordTouched(true)}
               required
               maxLength={128}
               invalid={verdict.tone === "invalid"}
@@ -158,7 +162,7 @@ export default function InviteAcceptClient({ invite }: Props) {
                 ) : undefined
               }
             />
-            <PasswordStrength verdict={verdict} />
+            <PasswordStrength verdict={verdict} touched={passwordTouched} />
           </div>
 
           <Button

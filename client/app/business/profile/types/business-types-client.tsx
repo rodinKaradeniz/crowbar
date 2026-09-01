@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { ServiceType } from "@/types";
+import { SERIES_HEX } from "@/lib/series-palette";
 import { Plus, Pencil, Trash2, Tag } from "lucide-react";
 import { ColorPicker } from "@/components/color-picker";
 import {
@@ -60,7 +61,7 @@ export default function BusinessTypesClient({
   const [resourceTurnBufferMinutes, setResourceTurnBufferMinutes] = useState("0");
   const [isPendingEnabled, setIsPendingEnabled] = useState(true);
   const [duration, setDuration] = useState("");
-  const [color, setColor] = useState("#3b82f6");
+  const [color, setColor] = useState(SERIES_HEX[1]);
 
   const resetForm = () => {
     setName("");
@@ -72,7 +73,7 @@ export default function BusinessTypesClient({
     setResourceTurnBufferMinutes("0");
     setIsPendingEnabled(true);
     setDuration("");
-    setColor("#3b82f6");
+    setColor(SERIES_HEX[1]);
     setEditingType(null);
   };
 
@@ -181,13 +182,13 @@ export default function BusinessTypesClient({
       </div>
 
       {!canEdit && (
-        <div className="mb-6 rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground">
+        <div className="mb-6 border bg-muted/40 p-4 text-sm text-muted-foreground">
           You have read-only access. An owner or manager can change booking types.
         </div>
       )}
 
       {serviceTypes.length === 0 ? (
-        <div className="text-center py-12 border rounded-lg bg-card">
+        <div className="text-center py-12 border bg-card">
           <Tag className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
           <p className="text-muted-foreground mb-4">
             No booking types configured yet
@@ -204,7 +205,7 @@ export default function BusinessTypesClient({
           {serviceTypes.map((type) => (
             <div
               key={type.id}
-              className="border rounded-lg p-4 bg-card hover:shadow-md transition-shadow"
+              className="border p-4 bg-card transition-shadow"
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-2 flex-1">

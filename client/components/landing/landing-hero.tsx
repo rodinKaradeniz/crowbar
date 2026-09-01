@@ -6,14 +6,31 @@ import { Button } from "@/components/ui/button";
  * 7/5 split, panel flush right, and the "it replaces" strip beneath.
  *
  * The panel is an ILLUSTRATION of a night, not a live feed. It is the one place
- * in the port where font-mono tabular-nums are not read from the API, because there is no
+ * in the port where numbers are not read from the API, because there is no
  * tenant here — a visitor to the marketing page has not signed in and has no
  * venue. The names and numbers are the canvas's own sample venue.
+ *
+ * THE ROW CENTRES. `items-end` bottom-aligned the shorter panel against the
+ * taller text column, so every bit of slack collected into a dead band ABOVE
+ * the card and the panel's top edge floated in the middle of the headline.
+ *
+ * Stretching was tried and is worse: the panel has no honest way to fill the
+ * text column's height, so the hole simply moves inside it — either above the
+ * last row, or as 240px of air around two figures. Inventing four more rows of
+ * sample data to fill a box is not a fix either.
+ *
+ * So the panel keeps its natural height and is centred on the text body, which
+ * splits the remaining difference evenly above and below rather than banking it
+ * all at one end. Three rows were added to close most of that difference, and
+ * --mkt-d1's maximum came down from 92px to 84px.
+ *
+ * Nothing here carries `.settle`: this is above the fold on every target, and
+ * it must paint complete.
  */
 export function LandingHero() {
   return (
-    <section id="top" className="mkt-shell mkt-sec-hero">
-      <div className="mkt-gap-hero flex flex-wrap items-end">
+    <section id="top" className="mkt-anchor mkt-shell mkt-sec-hero">
+      <div className="mkt-gap-hero flex flex-wrap items-center">
         <div className="min-w-[min(100%,420px)] flex-[1_1_520px]">
           <p className="mkt-eyebrow mb-[22px] text-text-muted">
             For independent bars &amp; restaurants
@@ -56,10 +73,19 @@ export function LandingHero() {
   );
 }
 
+/**
+ * The sample night.
+ *
+ * Three entries were added in the canvas's own voice when the row stopped
+ * bottom-aligning: a third booking, the stock line, and the moment a table is
+ * settled. That last one is the claim the whole product rests on, said the only
+ * way it may be said — settled externally, against a name and a time. Crowbar
+ * did not take the money; it recorded that the register did.
+ */
 function SampleNightPanel() {
   return (
     <figure
-      className="m-0 min-w-[min(100%,340px)] flex-[1_1_380px] border border-ink bg-paper-raised"
+      className="m-0 flex min-w-[min(100%,340px)] flex-[1_1_380px] flex-col border border-ink bg-paper-raised"
       aria-label="An example of a night in Crowbar"
     >
       <div className="mkt-cell ground-ink flex items-center justify-between gap-2.5 border-b border-ink bg-background text-foreground">
@@ -103,6 +129,15 @@ function SampleNightPanel() {
         </span>
       </div>
 
+      <div className="mkt-cell mkt-item flex items-center gap-3 border-b border-line-soft">
+        <span className="mkt-stamp text-text-muted">19:30</span>
+        <span className="font-medium">Weber</span>
+        <span className="mkt-stamp text-text-muted">×6</span>
+        <span className="mkt-chip ml-auto rounded-[var(--radius-2)] border border-border-strong px-[7px] py-[3px] text-text-secondary">
+          Booked online
+        </span>
+      </div>
+
       <div className="mkt-cell mkt-item flex items-baseline gap-2.5 border-b border-line-soft bg-brand-wash-2">
         <span className="mkt-stamp text-primary">19:21</span>
         <span className="text-[var(--surface-4)]">
@@ -111,11 +146,20 @@ function SampleNightPanel() {
         </span>
       </div>
 
-      <div className="mkt-cell mkt-item flex items-baseline gap-2.5">
+      <div className="mkt-cell mkt-item flex items-baseline gap-2.5 border-b border-line-soft">
         <span className="mkt-stamp text-text-muted">19:21</span>
         <span className="text-text-secondary">
           Gin, Monkey 47 — <strong className="font-mono font-semibold">60 ml</strong>{" "}
           out of stock
+        </span>
+      </div>
+
+      {/* The one thing a visitor most needs to read, at the foot of the night. */}
+      <div className="mkt-cell mkt-item flex items-baseline gap-2.5">
+        <span className="mkt-stamp text-text-muted">19:52</span>
+        <span className="text-text-secondary">
+          Tisch 2 <strong className="font-semibold">settled externally</strong> —
+          Theo, 19:52
         </span>
       </div>
     </figure>

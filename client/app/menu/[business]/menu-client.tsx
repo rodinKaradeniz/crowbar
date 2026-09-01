@@ -141,7 +141,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center px-6">
           <ChefHat className="h-10 w-10 mx-auto text-muted-foreground mb-4" />
-          <p className="font-display text-xl">No menu available</p>
+          <p className="type-t1">No menu available</p>
           <p className="text-sm text-muted-foreground mt-2">This business hasn&apos;t set up their menu yet.</p>
         </div>
       </div>
@@ -154,7 +154,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
       {/* Masthead — set like the cover of a printed list */}
       <header className="px-6 pt-10 pb-6 text-center enter-rise">
         {tableSessionStatus && <p className="type-label text-muted-foreground mb-2">Table ordering</p>}
-        <h1 className="font-display text-3xl tracking-tight">{menu.name}</h1>
+        <h1 className="type-d3">{menu.name}</h1>
         <div className="border-t border-border mt-5 mx-auto max-w-36" />
       </header>
 
@@ -288,7 +288,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
           {selectedItem && (
             <>
               <SheetHeader className="text-left">
-                <SheetTitle className="font-display text-xl font-normal">{selectedItem.name}</SheetTitle>
+                <SheetTitle className="type-t1 font-normal">{selectedItem.name}</SheetTitle>
                 {selectedItem.description && (
                   <p className="text-sm leading-relaxed text-muted-foreground">{selectedItem.description}</p>
                 )}
@@ -359,7 +359,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                   >
                     <Minus className="h-4 w-4" />
                   </Button>
-                  <span className="font-mono tabular-nums text-lg w-8 text-center">{sheetQty}</span>
+                  <span className="w-8 text-center font-mono tabular-nums text-[length:var(--t1-size)]">{sheetQty}</span>
                   <Button
                     variant="secondary"
                     size="icon"

@@ -81,7 +81,11 @@ server/uploads/*
 *.csv.gz
 uploads/
 artifacts/
-reports/
+# Root-anchored: this group is for generated data dumps and exports. An
+# unanchored `reports/` also matched client/app/business/reports/ and
+# client/components/reports/, so the entire staff Reports feature was
+# untracked and could never be committed.
+/reports/
 *.har
 
 # Python and notebook state

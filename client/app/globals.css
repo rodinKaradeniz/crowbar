@@ -118,6 +118,42 @@
   --field-invalid-ring: rgba(122, 36, 20, 0.35);
 
   /* ── Scrims and elevation ──────────────────────────────────────────────── */
+  /* ── Categorical series · the answer to DESIGN.md open questions 1 and 2 ────
+   * Charts and tenant-chosen service-type colours were the two places the
+   * system had no answer for, and both were held on raw hex. This is the
+   * declared set that replaces them. It is NOT a severity and NOT brand:
+   *
+   *   - Five, not twelve. Three sectors of the wheel are reserved — critical
+   *     (hue ~30), attend (~66) and brand green (~160) — and five is the
+   *     largest set that still clears the normal-vision separation floor with
+   *     those removed. A sixth slot is not a generated hue: it folds into
+   *     "Other". Twelve arbitrary hues could not pass, which is why the old
+   *     picker is reduced rather than re-tinted.
+   *   - ONE value per slot, valid on BOTH grounds. Unlike severity, which
+   *     needs a paper pair and an ink pair, these sit in the lightness band
+   *     where a single value clears paper, ink and the panel surface.
+   *   - Marks only. Contrast is >= 3:1 against every ground, which is the
+   *     graphical-object floor, NOT the 4.5:1 text floor. Text beside a series
+   *     wears a text token; the swatch carries the identity.
+   *   - Colour is never the sole carrier: every series is directly labelled.
+   *
+   * Verified with the dataviz validator against #F6F4EE, #14140F and #1B1B14 —
+   * lightness band, chroma floor, CVD separation, normal-vision floor and
+   * contrast all pass on all three. Worst adjacent pair is series-2/series-1
+   * at dE 12.9 deutan, 18.4 normal. Nearest rank colour is series-3 to
+   * attend-fill at dE 12.6, which is why every series carries its name.
+   *
+   * Contrast — paper / ink / panel:
+   *   series-1 3.08 / 5.46 / 5.11      series-2 4.35 / 3.86 / 3.61
+   *   series-3 3.74 / 4.49 / 4.21      series-4 4.50 / 3.74 / 3.50
+   *   series-5 3.08 / 5.45 / 5.10
+   */
+  --series-1: #0a9c95;
+  --series-2: #6a69bf;
+  --series-3: #967a23;
+  --series-4: #a85386;
+  --series-5: #2291e0;
+
   --scrim-55: rgba(10, 10, 7, 0.55);
   --scrim-60: rgba(10, 10, 7, 0.6);
   --scrim-70: rgba(0, 0, 0, 0.7);
@@ -175,6 +211,16 @@
   --dur-pulse: 2000ms;
   --dur-alarm: 2000ms;
 
+  /* Settle · the marketing intro. Content arriving into the grid, nothing more:
+     opacity plus one small rise, no scale, no rotate, no blur, no parallax. It
+     is driven by VIEW PROGRESS rather than a clock (see `.settle` below), so
+     the values below are a distance and two percentages of an element's entry
+     — a scroll-driven animation has no millisecond duration to declare. Reuses
+     --ease-enter; the system gains no new easing. */
+  --settle-rise: 10px;      /* the only distance                             */
+  --settle-span: 46%;       /* view progress over which one block settles    */
+  --settle-stagger: 6%;     /* offset per sibling, WITHIN one section only   */
+
   /* ── Targets ───────────────────────────────────────────────────────────── */
   --control-desktop-min: 34px;
   --control-desktop: 44px;
@@ -189,6 +235,15 @@
   --offline-bar: 38px;
   --grid-marketing: 1360px;
   --bp-desktop: 1280px;
+  /* Both headers are sticky, so both are also a scroll offset: an anchor or a
+     sticky sibling that ignores them lands underneath the bar. Declared here so
+     the bar and the thing that must clear it read the same number. Each is a
+     FLOOR on its header (`min-height`), never a fixed height — the marketing
+     nav wraps on a phone and a fixed value would clip it. */
+  --scrollbar-w: 10px;        /* the ink scrollbar, where a browser lets us size one */
+  --mkt-head-body: 380px;     /* the body column in a section header row */
+  --mkt-header: 66px;         /* the landing header bar     */
+  --workspace-header: 76px;   /* the /business topbar       */
 }
 
 /*
@@ -340,6 +395,14 @@
   --color-attend-tint: var(--attend-tint);
   --color-attend-line-ink: var(--attend-line-ink);
 
+  /* Categorical series — identity, never rank. Marks only; text beside a
+     series wears a text token. */
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
+  --color-series-4: var(--series-4);
+  --color-series-5: var(--series-5);
+
   /* Form validation — a form state, not an operational rank. */
   --color-field-invalid: var(--field-invalid-text);
   --color-field-invalid-wash: var(--field-invalid-wash);
@@ -386,6 +449,27 @@
   --font-sans: var(--font-ui);
   --font-mono: var(--font-data);
   --font-display: var(--font-display);
+
+  /* The ten declared steps are the only sizes the product has. Tailwind ships
+     its own scale, and until this bridge existed every `text-sm` in the
+     codebase was a 14px literal that the token block never declared — and, more
+     importantly, one that the tablet media query below could not reach. Three
+     of Tailwind's steps have a real home here, so they are mapped:
+
+       text-xs   -> Data  13.5 -> 15 on tablet
+       text-sm   -> UI    14   -> 15 on tablet
+       text-base -> Body  16
+
+     `lg`, `xl`, `2xl`, `3xl` and `4xl` are deliberately NOT mapped. There is no
+     declared step at 18, 20, 24, 30 or 36px, so they must be swept to `.type-*`
+     rather than silently remapped to something that merely looks close. If one
+     appears in a diff, that is the system telling you a size was invented. */
+  --text-xs: var(--data-size);
+  --text-xs--line-height: var(--data-lh);
+  --text-sm: var(--ui-size);
+  --text-sm--line-height: var(--ui-lh);
+  --text-base: var(--body-size);
+  --text-base--line-height: var(--body-lh);
 
   /* Radius means you can act on it. Structure stays square, which is why
      nothing needs a shadow to look like a card. Everything above 4px collapses
@@ -492,6 +576,26 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  /*
+   * Smooth in-page scrolling, on the PUBLIC document only.
+   *
+   * `.ground-ink` is already the marker <html> carries for /business, set by
+   * the boot script in app/layout.tsx and by components/ground.tsx — so this
+   * selector reaches marketing, auth and the public guest pages and nothing
+   * else, using the mechanism that exists rather than a second one.
+   *
+   * The product is deliberately excluded: it scrolls elements into view
+   * programmatically, and smoothing a board that is trying to put a ticket in
+   * front of someone would be a regression, not a refinement.
+   *
+   * NO SCROLL LIBRARY. A hijacker costs a dependency and a permanent rAF loop,
+   * fights the tablet target, and breaks browser scroll restoration. Two lines
+   * of CSS do the part that is actually wanted.
+   */
+  html:not(.ground-ink) {
+    scroll-behavior: smooth;
+  }
+
   ::selection {
     background: var(--brand-lit);
     color: var(--ink);
@@ -549,19 +653,44 @@
  */
 @layer components {
   /* ── Shell ──────────────────────────────────────────────────────────── */
+  /*
+   * THE single containment primitive for marketing. Every section's content
+   * shares a left edge because every section's content is inside one of these
+   * and nothing else sets a horizontal gutter.
+   *
+   * The four full-bleed ink/brand bands (night, ordering, cta, footer) used to
+   * carry their own copy of this padding on the <section> and cap their inner
+   * div at --grid-marketing with no padding at all. Because that inner div was
+   * not a border-box sharing the padding, their content ran to 1360px while the
+   * six `.mkt-shell` sections capped at 1248px — a 56px disagreement on a wide
+   * viewport, which is exactly the misalignment you could see. The bands now
+   * keep only their padding-block; their inner div is a `.mkt-shell`.
+   */
   .mkt-shell {
+    /* `width: 100%` is load-bearing, not belt-and-braces. `app/page.tsx` wraps
+       the page in a `flex flex-col`, and an AUTO CROSS-AXIS MARGIN DISABLES
+       FLEX STRETCH — so without it, every `.mkt-shell` that is a direct child
+       of that wrapper shrink-to-fits and self-centres at its own content width
+       instead of filling to the 1360 cap. The sections whose content happened
+       to exceed 1360 (faq, inventory) looked right; hero, capabilities and
+       demand collapsed by up to 100px and centred, which is the other half of
+       the misalignment. Fill first, then cap. */
+    width: 100%;
     max-width: var(--grid-marketing);
     margin-inline: auto;
     padding-inline: clamp(18px, 4vw, 56px);
   }
   /* A floor, not a fixed height: the nav wraps to a second line on a phone,
      and a fixed 66px would clip it. Same value the canvas sets. */
-  .mkt-header-bar { min-height: 66px; }
+  .mkt-header-bar { min-height: var(--mkt-header); }
+  /* An in-page anchor target under the sticky header. Without this the header
+     covers the heading you just jumped to. */
+  .mkt-anchor { scroll-margin-top: calc(var(--mkt-header) + var(--space-24)); }
   .mkt-logo-mark { width: 11px; height: 11px; }
   .mkt-logo-type { font-family: var(--font-display); font-weight: 800; font-size: 19px; letter-spacing: -0.035em; }
 
   /* ── Fluid display steps ────────────────────────────────────────────── */
-  .mkt-d1 { font-family: var(--font-display); font-weight: 800; font-size: clamp(44px, 7.4vw, 92px); line-height: 0.94; letter-spacing: -0.038em; text-wrap: balance; }
+  .mkt-d1 { font-family: var(--font-display); font-weight: 800; font-size: clamp(44px, 7.4vw, 84px); line-height: 0.94; letter-spacing: -0.038em; text-wrap: balance; }
   .mkt-d2 { font-family: var(--font-display); font-weight: 800; font-size: clamp(32px, 5.4vw, 68px); line-height: 0.98; letter-spacing: -0.036em; }
   .mkt-d2-cap { font-family: var(--font-display); font-weight: 800; font-size: clamp(30px, 4.2vw, 52px); line-height: 1; letter-spacing: -0.032em; }
   .mkt-d2-faq { font-family: var(--font-display); font-weight: 800; font-size: clamp(30px, 4vw, 46px); line-height: 1; letter-spacing: -0.034em; }
@@ -601,15 +730,30 @@
   .mkt-stamp-sm { font-family: var(--font-data); font-size: 12px; }
 
   /* ── Section rhythm. Named for the section, because they differ. ─────── */
-  .mkt-sec-hero { padding-top: clamp(44px, 7vw, 100px); }
-  .mkt-sec-night { margin-top: clamp(48px, 6vw, 80px); padding-block: clamp(48px, 6vw, 92px); padding-inline: clamp(18px, 4vw, 56px); }
-  .mkt-sec-cap { padding-top: clamp(52px, 7vw, 96px); }
-  .mkt-sec-ordering { margin-top: clamp(48px, 6vw, 80px); padding-block: clamp(44px, 5.5vw, 80px); padding-inline: clamp(18px, 4vw, 56px); }
-  .mkt-sec-inventory { padding-top: clamp(40px, 5vw, 72px); }
-  .mkt-sec-demand { padding-top: clamp(28px, 3.4vw, 44px); }
-  .mkt-sec-faq { padding-block: clamp(48px, 6vw, 88px); }
-  .mkt-sec-cta { padding-block: clamp(44px, 6vw, 84px); padding-inline: clamp(18px, 4vw, 56px); }
-  .mkt-sec-footer { padding-top: clamp(40px, 5vw, 68px); padding-bottom: 28px; padding-inline: clamp(18px, 4vw, 56px); }
+  /*
+   * The four full-bleed bands set NO padding-inline. Their <section> exists to
+   * carry the background edge to edge; the gutter belongs to the `.mkt-shell`
+   * inside them, so it is stated once, above.
+   *
+   * EVERY SECTION NOW BREATHES ON BOTH SIDES. Four of these carried only a
+   * padding-top and leaned on the next section's top padding for their bottom
+   * edge, which is why the paper run read as packed: a section's last line sat
+   * hard against the rule beneath it. Each now has its own bottom.
+   *
+   * The near-duplicate values (6vw/92, /88, /84 …) are the canvas's and are
+   * kept APART rather than averaged — §04 makes the marketing grid "broken on
+   * purpose". So this scales each one, preserving the differences between them;
+   * it does not normalise them to a single rhythm.
+   */
+  .mkt-sec-hero { padding-top: clamp(52px, 8vw, 112px); padding-bottom: clamp(36px, 5vw, 72px); }
+  .mkt-sec-night { margin-top: clamp(48px, 6vw, 80px); padding-block: clamp(60px, 7.4vw, 116px); }
+  .mkt-sec-cap { padding-block: clamp(64px, 8.4vw, 120px); }
+  .mkt-sec-ordering { margin-top: clamp(48px, 6vw, 80px); padding-block: clamp(56px, 6.8vw, 104px); }
+  .mkt-sec-inventory { padding-block: clamp(52px, 6.2vw, 92px); }
+  .mkt-sec-demand { padding-block: clamp(44px, 5vw, 76px); }
+  .mkt-sec-faq { padding-block: clamp(60px, 7.4vw, 112px); }
+  .mkt-sec-cta { padding-block: clamp(56px, 7.4vw, 108px); }
+  .mkt-sec-footer { padding-top: clamp(52px, 6.2vw, 88px); padding-bottom: clamp(28px, 3vw, 40px); }
 
   .mkt-row { padding-block: clamp(24px, 3vw, 40px); }
   .mkt-row-head { margin-bottom: clamp(24px, 3vw, 40px); }
@@ -628,6 +772,10 @@
   .mkt-gap-footer { gap: clamp(28px, 5vw, 72px); }
   .mkt-gap-hero { gap: clamp(32px, 5vw, 72px); }
   .mkt-gap-bars { gap: clamp(6px, 1.4vw, 14px); }
+  /* A primary button and the alternative to it are two choices, not one
+     control with a suffix — they need more air between them than the 12px that
+     separates items inside a group. */
+  .mkt-gap-actions { gap: clamp(16px, 2.4vw, 32px); }
 
   /* ── Panel padding ──────────────────────────────────────────────────── */
   .mkt-cell { padding: 12px 14px; }
@@ -639,11 +787,40 @@
   .mkt-pad-wide { padding: 22px 20px; }
   .mkt-pad-step { padding: 22px 20px 26px; }
 
-  /* ── Auth · the hinge between the two grounds ───────────────────────── */
-  .auth-page { padding: clamp(20px, 3vw, 44px) clamp(16px, 3vw, 44px) 80px; }
-  .auth-pane { padding: clamp(28px, 4vw, 64px) clamp(24px, 4vw, 60px); }
-  .auth-panel { padding: clamp(24px, 3vw, 40px); }
-  .auth-card { padding: clamp(24px, 3vw, 36px); }
+  /*
+   * ── Auth · the hinge between the two grounds ─────────────────────────────
+   *
+   * These paddings and the rhythm below are the whole vertical budget of an
+   * auth screen, which is why they live here rather than as per-component
+   * overrides: register is the tallest form in the product and it has to fit a
+   * 1280x800 laptop without scrolling.
+   *
+   * THE FIELD HEIGHT IS NOT PART OF THE BUDGET. `Input inputSize="auth"` is
+   * 48px, which is both the §06 spec ("48px auth") and --control-tablet-min
+   * exactly. Trimming it would buy about 30px and break every auth control on
+   * the 1024x768 target, so the height stays and the space comes out of
+   * padding and rhythm instead.
+   */
+  .auth-page { padding: clamp(16px, 2vw, 32px) clamp(16px, 3vw, 44px) clamp(20px, 2vw, 32px); }
+  .auth-pane { padding: clamp(20px, 2.6vw, 36px) clamp(24px, 4vw, 60px); }
+  .auth-panel { padding: clamp(22px, 2.6vw, 34px); }
+  .auth-card { padding: clamp(22px, 2.6vw, 32px); }
+
+  /* The form's vertical rhythm. Declared, so a form cannot drift from its
+     neighbours and so one change moves login, register, reset and invite
+     together. */
+  .auth-heading { margin-bottom: clamp(12px, 1.6vw, 18px); }
+  .auth-field { margin-bottom: clamp(8px, 1vw, 12px); }
+  /* The last field before the actions gets a little more air, so the button
+     does not read as belonging to the field above it. */
+  .auth-field-end { margin-bottom: clamp(12px, 1.4vw, 16px); }
+  .auth-hint { margin-top: 6px; font-size: 12.5px; line-height: 1.45; }
+
+  /* The two auth control sizes that were being written inline at the call
+     site. 50px is the `size="auth"` button height; 15.5px is one of the six
+     editorial sizes this layer exists to hold. */
+  .auth-cta { padding-inline: 26px; font-size: 15.5px; font-weight: 600; }
+  .auth-inline-link { height: 50px; }
   .auth-title { font-family: var(--font-display); font-weight: 700; font-size: 28px; letter-spacing: -0.028em; line-height: 1.1; }
   .auth-title-sm { font-family: var(--font-display); font-weight: 700; font-size: 24px; letter-spacing: -0.026em; line-height: 1.1; }
   .auth-panel-h { font-family: var(--font-display); font-weight: 800; font-size: clamp(28px, 3.4vw, 42px); line-height: 0.98; letter-spacing: -0.036em; }
@@ -653,7 +830,44 @@
   .mkt-dot { width: 7px; height: 7px; border-radius: var(--radius-full); }
   .mkt-meter { width: 64px; height: 5px; }
   .mkt-meter-val { width: 56px; }
-  .mkt-num-col { width: 58px; }
+
+  /*
+   * ── The section header row ───────────────────────────────────────────────
+   * Number, title, body — one rule, so every section head aligns with every
+   * other one down the page.
+   *
+   * What it fixes: the number sat in a 58px fixed column (`.mkt-num-col`, now
+   * gone) with the SAME 16px gap on both sides of the title. So a two-digit
+   * number left ~38px of dead space before the title, while the title and the
+   * body ran together as one line of text. The number now sits tight against
+   * the title it labels, and the body is a column of its own at the right edge.
+   *
+   * `space-between` plus a fixed body basis is what flushes the body right
+   * WITHOUT a media query: while both fit, the lead grows and the body pins to
+   * the right edge; when they no longer fit, each takes its own line and stays
+   * left-aligned, which is the correct narrow-screen reading. A right-aligned
+   * paragraph on its own line would not be.
+   */
+  .mkt-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    column-gap: clamp(24px, 4vw, 64px);
+    row-gap: var(--space-16);
+  }
+  /* Number and title are one object: the number is a label ON the title, not a
+     third column beside it. 8px is `--space-8`, the inside-a-badge step. */
+  .mkt-head-lead {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-8);
+    flex: 1 1 auto;
+  }
+  .mkt-head-body {
+    flex: 0 1 var(--mkt-head-body);
+    min-width: min(100%, 300px);
+  }
 
   /* ── Flex bases the canvas sets per column ──────────────────────────── */
   .mkt-col { min-width: min(100%, 300px); }
@@ -679,6 +893,65 @@
 
 .enter-rise {
   animation: enter-rise var(--dur-enter) var(--ease-enter) both;
+}
+
+/*
+ * ── Settle · the marketing intro ────────────────────────────────────────────
+ * Content arriving into the grid, not a showreel. Opacity plus one 10px rise,
+ * and that is the whole vocabulary: nothing scales, rotates, blurs or
+ * parallaxes.
+ *
+ * DRIVEN BY VIEW PROGRESS, NOT A CLOCK, and that is what makes it safe on a
+ * statically prerendered page:
+ *
+ *   - No JavaScript. No client boundary, no IntersectionObserver, no hydration
+ *     gate. The page is fully readable with JS disabled.
+ *   - Nothing is hidden by a base rule. The `from` keyframe only applies while
+ *     an animation is running, so above-the-fold content — which is already
+ *     past its range when the page paints — renders at its end state. There is
+ *     no flash of missing content and no layout shift. The hero carries no
+ *     `.settle` at all.
+ *   - Where `animation-timeline` is unsupported the @supports block does not
+ *     apply and there is simply no motion. That is the static fallback.
+ *   - Under prefers-reduced-motion the global rule at the foot of this file
+ *     sets `animation: none`, which leaves the content at its natural state.
+ *
+ * A scroll-driven animation has no millisecond duration — the range is the
+ * duration — so none is declared. `--settle-span` and `--settle-stagger` are
+ * the vocabulary instead, and the stagger is only ever applied to siblings
+ * inside one section.
+ */
+@keyframes settle-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--settle-rise));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@supports (animation-timeline: view()) {
+  .settle {
+    animation: settle-in linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry var(--settle-span);
+  }
+  /* Stagger, within a section. Three steps is the whole ladder — a fourth
+     sibling arriving a quarter-second after the first is a wait, not a rhythm. */
+  .settle-2 {
+    animation-range: entry var(--settle-stagger)
+      entry calc(var(--settle-span) + var(--settle-stagger));
+  }
+  .settle-3 {
+    animation-range: entry calc(var(--settle-stagger) * 2)
+      entry calc(var(--settle-span) + var(--settle-stagger) * 2);
+  }
+  .settle-4 {
+    animation-range: entry calc(var(--settle-stagger) * 3)
+      entry calc(var(--settle-span) + var(--settle-stagger) * 3);
+  }
 }
 
 /* Live-and-healthy. Brand, not severity — it means the connection is good. */
@@ -793,6 +1066,33 @@
   display: none;
 }
 
+/*
+ * ── Scrollbars on the ink ground ────────────────────────────────────────────
+ * A browser's default scrollbar is drawn for a light document: on `--ink` the
+ * rail's track came out near-white and read as a bright vertical rule beside
+ * the navigation — the loudest thing on a screen whose whole point is that
+ * nothing is loud unless it is a real alarm.
+ *
+ * It is THEMED, NOT HIDDEN. The rail genuinely scrolls when the viewport is
+ * short or the role holds every entry, and hiding the bar would hide the fact
+ * that there is more navigation below the fold — an affordance removed to fix
+ * a colour.
+ *
+ * Only the standard properties, deliberately. The `::-webkit-scrollbar`
+ * pseudo-elements would also work, but setting a width on them FORCES classic
+ * always-visible scrollbars on macOS, where the system default is an overlay
+ * that appears only while scrolling. That is a behaviour change, and the ask
+ * here was a colour. `scrollbar-color` tints the overlay in place and leaves
+ * the operator's own scrollbar preference alone.
+ *
+ * Inherited, so every scroll container on this ground matches: the rail, the
+ * sheets, the schedule's sticky column, the dialogs.
+ */
+.ground-ink {
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-raised) transparent;
+}
+
 /* All motion is off under prefers-reduced-motion — §07 of the System canvas. */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -800,5 +1100,12 @@
   *::after {
     animation: none !important;
     transition: none !important;
+  }
+
+  /* Scroll behaviour is neither an animation nor a transition, so the rule
+     above does not reach it. Smooth anchor scrolling is motion, and it stops
+     here too. */
+  html {
+    scroll-behavior: auto !important;
   }
 }

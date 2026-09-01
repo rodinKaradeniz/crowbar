@@ -33,15 +33,28 @@ grep -rEn "#[0-9a-fA-F]{3,8}\b" --include="*.tsx" --include="*.ts" --include="*.
   app components lib contexts hooks | grep -v "app/globals.css"
 ```
 
-**Every hit that survives is one of four named things, and nothing else.** If a
+**Every hit that survives is one of two named things, and nothing else.** If a
 hit does not fall into one of these, it is a bug:
 
 | What | Where | Why it is there |
 | --- | --- | --- |
-| Held chart series | `app/business/insights/` | The token file declares no categorical palette. Open question 1; Insights ships its chrome ported and its series untouched. |
-| Tenant-chosen colours | `components/color-picker.tsx`, `profile/types/`, `schedule/`, `onboarding-wizard.tsx`, `lib/mock-data.ts` | A venue picks a service-type colour from a fixed palette of twelve. This is **tenant data**, not design tokens — but the palette sits entirely outside the system, and is the same open question as the chart series. Deleting it is a feature removal, so it is recorded rather than changed. |
 | Library selectors | `components/ui/chart.tsx` | Attribute selectors matching hexes that Recharts itself emits (`stroke='#ccc'`). These are matched, never declared. |
-| A hex in a placeholder | `components/color-picker.tsx` | The string `#000000` shown to a user typing a colour. |
+| The declared series values | `lib/series-palette.ts` | The five `--series-*` values and the map from colours stored before the palette existed. A service-type colour is **tenant data** persisted as a string, and a CSS variable cannot be written to a database, so the values are duplicated here; `globals.css` remains the source of truth for rendering. |
+
+This list was four entries before the categorical palette was declared. Held
+Insights chart series, the twelve-hue tenant colour picker and its `#000000`
+placeholder are all gone — see *Categorical series* below.
+
+The grep above finds a colour. It does not find a **size**, and until the type
+scale was bridged the codebase carried roughly 580 Tailwind size utilities the
+token block never declared. `--text-xs`, `--text-sm` and `--text-base` are now
+mapped to the Data, UI and Body steps in the `@theme` bridge; `text-lg`, `xl`,
+`2xl`, `3xl` and `4xl` are deliberately left unmapped, because no declared step
+sits at 18, 20, 24, 30 or 36px. They are the size equivalent of a raw hex:
+
+```bash
+grep -rEn "text-(lg|xl|2xl|3xl|4xl)\b" --include="*.tsx" app components
+```
 
 Anything else — a colour in a class, a fill, a style object — has drifted.
 
@@ -109,6 +122,47 @@ screen is already a lot; a fourth means the rank is being abused.
 - **Brand.** Identity, the primary action, the active nav item, and
   live-and-healthy. Green never means "good news about a number". If green ever
   reads that way, it has been misused.
+
+### Categorical series — identity, not rank
+
+Charts and tenant-chosen service-type colours needed a colour that is neither a
+severity nor brand. `--series-1..5` are that set, and they close what were open
+questions 1 and 2.
+
+| Slot | Value | Name |
+| --- | --- | --- |
+| `--series-1` | `#0A9C95` | Teal |
+| `--series-2` | `#6A69BF` | Periwinkle |
+| `--series-3` | `#967A23` | Ochre |
+| `--series-4` | `#A85386` | Plum |
+| `--series-5` | `#2291E0` | Blue |
+
+Five things about them are load-bearing:
+
+1. **Five, not twelve.** Three sectors of the wheel are reserved — critical
+   (hue ~30), attend (~66) and brand green (~160) — and five is the largest set
+   that still clears the normal-vision separation floor once those are removed.
+   A sixth is not a generated hue; it folds into "Other". The tenant picker's
+   old twelve arbitrary hues could not pass: several sat close enough to the
+   severity fills to read as an alarm beside a real one.
+2. **One value per slot, both grounds.** Unlike severity, which needs a paper
+   pair and an ink pair, these sit in the lightness band where a single value
+   clears paper, ink and the panel surface.
+3. **Marks, not text.** Contrast is ≥ 3:1 against every ground — the
+   graphical-object floor, not the 4.5:1 text floor. Text beside a series wears
+   a text token; the swatch carries the identity.
+4. **Always labelled.** Colour is never the sole carrier, exactly as for
+   severity. The nearest rank colour is series-3 to `--attend-fill` at ΔE 12.6,
+   which is why the name is never optional.
+5. **Reached through `lib/series-palette.ts`.** No call site handles a literal.
+   A colour stored before the palette existed resolves to its nearest slot; an
+   unrecognised one falls back to the muted token rather than painting a hue
+   the system never declared.
+
+Verified with the dataviz validator against `#F6F4EE`, `#14140F` and `#1B1B14`:
+lightness band, chroma floor, CVD separation, normal-vision floor and contrast
+all pass on all three. Worst adjacent pair is series-2/series-1 at ΔE 12.9
+deutan, 18.4 normal.
 
 ### Two rules that constrain layout, not just colour
 
@@ -201,7 +255,16 @@ never inlined in a component — so the marketing scale is reviewable in one pla
 and nothing enters the codebase that the design did not set. **Product surfaces
 never use `.mkt-*`.** They use `.type-*` and the `--space-*` tokens.
 
-The same layer holds the auth measurements (`.auth-*`), for the same reason.
+The same layer holds the auth measurements (`.auth-*`), for the same reason:
+the paddings, the form rhythm (`.auth-field`, `.auth-field-end`, `.auth-hint`,
+`.auth-heading`) and the two auth control sizes (`.auth-cta`,
+`.auth-inline-link`). Register is the tallest form in the product and has to fit
+a 1280x800 laptop without scrolling, so its whole vertical budget is reviewable
+in one place rather than spread across per-component margins.
+
+**The 48px auth field height is not part of that budget.** It is both the Input
+spec and `--control-tablet-min` exactly; trimming it would break every auth
+control on the 1024x768 target.
 
 This is the one place where sizes live outside `:root`, and it is recorded as an
 open question in `docs/TODO.md` §7b rather than treated as settled.
@@ -229,6 +292,19 @@ above carry E1.
 | Floor tile | 118px |
 | Ticket clear bar | 60px |
 | Bottom nav | 76px |
+| Marketing header (`--mkt-header`) | 66px floor |
+| Workspace topbar (`--workspace-header`) | 76px floor |
+
+Both headers are sticky, so both are also a **scroll offset**: `--mkt-header`
+sizes `scroll-margin-top` on every in-page anchor target (`.mkt-anchor`), and
+`--workspace-header` is where the Schedule calendar sticks. Each is a
+`min-height` floor on its own bar, never a fixed height.
+
+`.mkt-shell` is the single containment primitive for marketing — max width,
+centring and the one horizontal gutter. Full-bleed bands carry their background
+on the `<section>` and their content in a `.mkt-shell` inside it; a band that
+sets its own `padding-inline` will not share a left edge with the rest of the
+page.
 
 Destructive or shift-ending actions are never adjacent to a frequent one:
 "Close the night" lives in the sidebar foot, diagonally opposite "Seat a
@@ -297,7 +373,30 @@ Overlay enter and exit are four keyframes in `globals.css`, driven by the
 performance. This replaced `tw-animate-css`, which carried its own durations
 and easings — values the token block does not declare.
 
-All motion is off under `prefers-reduced-motion`.
+**One addition, and it is the marketing page only.** *Settle* — the intro on
+the landing page: opacity plus a 10px rise (`--settle-rise`), nothing that
+scales, rotates, blurs or parallaxes, staggered only among siblings inside one
+section.
+
+It is driven by **view progress, not a clock** — `animation-timeline: view()`
+over `--settle-span`, offset per sibling by `--settle-stagger` — which is what
+makes it safe on a statically prerendered page. There is no JavaScript, no
+client boundary and no hydration gate; nothing is hidden by a base rule, so
+above-the-fold content paints complete and the page is fully readable with
+JavaScript disabled. Because a scroll-driven animation has no millisecond
+duration, none is declared: the range is the duration.
+
+Where `animation-timeline` is unsupported the `@supports` block does not apply
+and there is simply no motion. That static fallback is deliberate — it is a
+better answer than a scroll library, which costs a dependency and a permanent
+rAF loop, fights the tablet target, and breaks browser scroll restoration.
+
+Smooth in-page scrolling is scoped to `html:not(.ground-ink)` — marketing, auth
+and the public guest pages. The product is excluded because it scrolls elements
+into view programmatically, and smoothing that would be a regression.
+
+All motion is off under `prefers-reduced-motion`, including `scroll-behavior`,
+which is neither an animation nor a transition and needs its own rule.
 
 ## Responsive
 
@@ -423,36 +522,58 @@ in the port.
 
 ## Open design questions
 
-1. **Categorical chart palette.** The token file declares no multi-series or
-   multi-category chart colours. `/business/insights` renders five guest
-   segments; `--chart-1..5` are aliased to brand plus the neutral ramp as a
-   *provisional* stand-in and must not be treated as a sanctioned series
-   palette. Insights' own series colours are held on raw hex until this is
-   answered — the one documented exception to the raw-hex check.
-2. **Phone.** The product is designed at 1280+ and 1024×768. `docs/TODO.md`
+Three of the original eight are now answered; the rest stand.
+
+**Answered in the completion pass:**
+
+1. ~~**Categorical chart palette.**~~ **Answered.** `--series-1..5` are
+   declared in the token block and validated on both grounds — see *Categorical
+   series* above. The earlier claim in this file that `--chart-1..5` were
+   "aliased to brand plus the neutral ramp as a provisional stand-in" was
+   **wrong**: those aliases were never written, and `grep chart
+   client/app/globals.css` returned nothing. Insights now renders on the
+   declared set.
+2. ~~**Per-tenant service-type colours.**~~ **Answered, by the same set.** The
+   picker offers the five declared slots and nothing else. It previously
+   offered twelve arbitrary hues *plus a free hex field and a native colour
+   well*, which meant a venue could enter any colour in the sRGB gamut — the
+   largest single hole in rule zero. The stored shape is unchanged (a hex
+   string), so no migration was needed; only the set of reachable values
+   narrowed.
+5. ~~**Password strength and the attend colour.**~~ **Closed as decided.** §08
+   governs over the Auth canvas: the meter uses the validation channel and a
+   neutral, never attend. Implementation carried a real bug alongside the
+   settled question — it rendered `tone: "invalid"` from the first keystroke,
+   so every password field flashed the validation colour before the person had
+   done anything wrong. `PasswordStrength` now takes `touched` and holds the
+   invalid tone until the field is blurred.
+
+**Still open:**
+
+3. **Phone.** The product is designed at 1280+ and 1024×768. `docs/TODO.md`
    stage 7's exit gate requires phone-capable staff surfaces; there is no phone
    canvas. Recorded as unmet.
-3. **440px side-panel breakpoint.** Stated in §06 prose but absent from
+4. **440px side-panel breakpoint.** Stated in §06 prose but absent from
    `crowbar-tokens.css`. Used as an arbitrary variant in `ui/sheet.tsx` pending
    a token.
-4. **`--field-invalid-ink`.** Added under instruction during the port. Confirm
+5. **`--field-invalid-ink`.** Added under instruction during the port. Confirm
    it lands in the canonical `crowbar-tokens.css` so the design file and the
    codebase do not diverge.
-5. **Password strength and the attend colour.** The Auth canvas's notes say
-   "amber is a password that isn't strong enough yet". §08 of the System canvas
-   puts that exact case on the form-validation channel instead — "'Too short —
-   10 characters minimum' is this, not attend". The two boards disagree. §08
-   governs here, so `components/auth/password-strength.tsx` uses the validation
-   colour and a neutral, never attend: a password hint must not read as a
-   service alarm on a screen that also shows real failures.
 6. **Password minimum: 10 or 12.** The canvas says 10 throughout;
    `PASSWORD_MIN_LENGTH` and the server enforce 12. The screens ship 12.
-7. **The marketing measurement layer.** See *The marketing layer* above — 31
-   `clamp()` expressions and six editorial type sizes that sit between the ten
-   declared steps. Transcribed, not invented, but they are not tokens.
+7. **The marketing measurement layer.** 31 `clamp()` expressions and six
+   editorial type sizes that sit between the ten declared steps. Transcribed,
+   not invented, but they are not tokens. Note this is now the *only* place
+   sizes live outside the declared scale for product surfaces: the `@theme`
+   bridge closed the Tailwind-scale hole described under *Rule zero*.
 8. **`bar_kitchen` navigation breadth.** The States canvas shows a bartender
    with a three-item nav and "cannot see guest records"; the real `bar_kitchen`
    role also holds `customers.view`, `floor.view`, `queue.view`,
    `reservations.view`, `menu.edit` and `overview.view`, so an honest nav
    renders more. The nav renders from the real capability matrix. Narrowing the
    role is a stage-6 permissions change, not a design one.
+9. **A spinner.** The declared five motions have no "work in progress"
+   animation. Thirteen call sites used Tailwind's `animate-spin`, which carries
+   its own 1s linear rotation. All of them already stated the wait in words, so
+   the icon was removed rather than a sixth motion declared. If a future
+   surface needs a spinner with no accompanying text, that is a design question.

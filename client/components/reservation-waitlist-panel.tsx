@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
-import { Clock, Loader2, Plus, RefreshCw, Send, Trash2 } from "lucide-react";
+import { Clock, Plus, RefreshCw, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -186,9 +186,9 @@ export function ReservationWaitlistPanel({
   };
 
   return (
-    <section className="mt-8 rounded-lg border bg-card p-4 sm:p-6" aria-labelledby="waitlist-heading">
+    <section className="mt-8 border bg-card p-4 sm:p-6" aria-labelledby="waitlist-heading">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div><h2 id="waitlist-heading" className="font-display text-xl">Waitlist</h2><p className="mt-1 text-sm text-muted-foreground">Offer a live, matching slot one guest at a time. Offers expire after 15 minutes.</p></div>
+        <div><h2 id="waitlist-heading" className="type-t1">Waitlist</h2><p className="mt-1 text-sm text-muted-foreground">Offer a live, matching slot one guest at a time. Offers expire after 15 minutes.</p></div>
         <div className="flex gap-2"><Button type="button" size="filter" variant={view === "active" ? "primary" : "secondary"} onClick={() => void switchView("active")}>Active</Button><Button type="button" size="filter" variant={view === "history" ? "primary" : "secondary"} onClick={() => void switchView("history")}>History</Button><Button type="button" size="filter" onClick={() => { resetCreateForm(); setCreateOpen(true); }}><Plus /> Add guest</Button></div>
       </div>
       <div className="mt-5 divide-y rounded-md border">
@@ -207,14 +207,14 @@ export function ReservationWaitlistPanel({
           <div className="space-y-2"><Label>Booking type</Label><Select value={serviceTypeId} onValueChange={setServiceTypeId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{serviceTypes.map((service) => <SelectItem key={service.id} value={service.id}>{service.name}</SelectItem>)}</SelectContent></Select></div><div className="space-y-2"><Label htmlFor="waitlist-staff-guests">Party size</Label><Input id="waitlist-staff-guests" type="number" min="1" max={maxGuests} value={guests} onChange={(event) => setGuests(event.target.value)} /></div>
           <div className="space-y-2"><Label htmlFor="waitlist-staff-date">Date</Label><Input id="waitlist-staff-date" type="date" min={format(venueToday, "yyyy-MM-dd")} value={date} onChange={(event) => setDate(event.target.value)} /></div><div className="space-y-2"><Label htmlFor="waitlist-staff-time">Preferred time</Label><Input id="waitlist-staff-time" type="time" value={time} onChange={(event) => setTime(event.target.value)} /></div>
           <div className="space-y-2 sm:col-span-2"><Label>Can accept up to</Label><Select value={flexibility} onValueChange={setFlexibility}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="30">30 minutes later</SelectItem><SelectItem value="60">1 hour later</SelectItem><SelectItem value="90">90 minutes later</SelectItem></SelectContent></Select></div></div>
-        <DialogFooter><Button type="button" variant="secondary" onClick={() => setCreateOpen(false)} disabled={saving}>Cancel</Button><Button type="button" onClick={() => void createEntry()} disabled={saving}>{saving ? <><Loader2 className="animate-spin" />Saving…</> : "Add guest"}</Button></DialogFooter>
+        <DialogFooter><Button type="button" variant="secondary" onClick={() => setCreateOpen(false)} disabled={saving}>Cancel</Button><Button type="button" onClick={() => void createEntry()} disabled={saving}>{saving ? "Saving…" : "Add guest"}</Button></DialogFooter>
       </DialogContent></Dialog>
 
       <Dialog open={removeTarget !== null} onOpenChange={(open) => !open && setRemoveTarget(null)}><DialogContent><DialogHeader><DialogTitle>Remove waitlist request</DialogTitle><DialogDescription>This terminal action is retained in history.</DialogDescription></DialogHeader><div className="space-y-3"><Input placeholder="Required reason code" value={removeReason} onChange={(event) => setRemoveReason(event.target.value)} /><Textarea placeholder="Optional note" value={removeNote} onChange={(event) => setRemoveNote(event.target.value)} /></div><DialogFooter><Button onClick={() => setRemoveTarget(null)}>Keep request</Button><Button variant="destructive-quiet" onClick={() => void removeEntry()} disabled={saving || !removeReason.trim()}>Remove</Button></DialogFooter></DialogContent></Dialog>
 
       <Dialog open={offeringEntry !== null} onOpenChange={(open) => !open && setOfferingEntry(null)}><DialogContent><DialogHeader><DialogTitle>Offer a matching slot</DialogTitle><DialogDescription>{offeringEntry && `Only times from ${formatSlotTime(offeringEntry.requestedStartsAt, businessTimezone)} to ${formatSlotTime(offeringEntry.flexibleUntil, businessTimezone)} are eligible. The guest receives a 15-minute confirmation link.`}</DialogDescription></DialogHeader>
-        {loadingSlots ? <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground"><Loader2 className="animate-spin" />Checking live availability…</div> : slots.length === 0 ? <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">No live slots remain in this guest&apos;s requested window.</p> : <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{slots.map((slot) => <Button key={slot.startsAt} type="button" variant={selectedSlot === slot.startsAt ? "primary" : "secondary"} onClick={() => setSelectedSlot(slot.startsAt)} className="font-mono tabular-nums"><Clock />{formatSlotTime(slot.startsAt, slotsTimezone)}</Button>)}</div>}
-        <DialogFooter><Button type="button" variant="secondary" onClick={() => setOfferingEntry(null)} disabled={saving}>Cancel</Button><Button type="button" onClick={() => void sendOffer()} disabled={!selectedSlot || saving}>{saving ? <><Loader2 className="animate-spin" />Sending…</> : "Send 15-minute offer"}</Button></DialogFooter>
+        {loadingSlots ? <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">Checking live availability…</div> : slots.length === 0 ? <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">No live slots remain in this guest&apos;s requested window.</p> : <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{slots.map((slot) => <Button key={slot.startsAt} type="button" variant={selectedSlot === slot.startsAt ? "primary" : "secondary"} onClick={() => setSelectedSlot(slot.startsAt)} className="font-mono tabular-nums"><Clock />{formatSlotTime(slot.startsAt, slotsTimezone)}</Button>)}</div>}
+        <DialogFooter><Button type="button" variant="secondary" onClick={() => setOfferingEntry(null)} disabled={saving}>Cancel</Button><Button type="button" onClick={() => void sendOffer()} disabled={!selectedSlot || saving}>{saving ? "Sending…" : "Send 15-minute offer"}</Button></DialogFooter>
       </DialogContent></Dialog>
     </section>
   );

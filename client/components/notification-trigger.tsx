@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import {
@@ -107,21 +108,25 @@ function kindIcon(kind: string) {
 // ─── skeleton ────────────────────────────────────────────────────────────────
 
 function NotificationSkeleton() {
+  // The Skeleton primitive, not a hand-rolled `animate-pulse`: pulse is
+  // Tailwind's own 2s cubic-bezier, a duration the token block does not
+  // declare. Skeleton carries the declared 1.4s breathe and the 100ms stagger.
   return (
     <div className="space-y-3">
       {[0, 1, 2].map((i) => (
         <div
           key={i}
-          className="flex gap-3 rounded-xl border border-border bg-card p-4"
+          className="flex gap-3 border-b border-border px-1 py-[13px]"
         >
-          <div className="mt-0.5 h-4 w-4 shrink-0 rounded-full bg-muted animate-pulse" />
+          <Skeleton className="mt-0.5 size-4 shrink-0 rounded-full" index={i} />
           <div className="flex-1 space-y-2">
-            <div
-              className="h-3.5 rounded bg-muted animate-pulse"
+            <Skeleton
+              className="h-3.5"
               style={{ width: `${65 + i * 10}%` }}
+              index={i}
             />
-            <div className="h-3 rounded bg-muted animate-pulse w-4/5" />
-            <div className="h-3 rounded bg-muted animate-pulse w-1/3" />
+            <Skeleton className="h-3 w-4/5" index={i} />
+            <Skeleton className="h-3 w-1/3" index={i} />
           </div>
         </div>
       ))}
@@ -382,7 +387,7 @@ function NotificationCard({
       type="button"
       onClick={onClick}
       className={cn(
-        "group w-full rounded-xl border bg-card text-left transition-colors",
+        "group w-full border bg-card text-left transition-colors",
         "hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         isUnread
           ? "border-l-[3px] border-l-primary border-border/60"

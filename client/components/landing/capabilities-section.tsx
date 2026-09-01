@@ -7,8 +7,8 @@
  */
 export function CapabilitiesSection() {
   return (
-    <section id="capabilities" className="mkt-shell mkt-sec-cap">
-      <div className="mkt-row-head flex flex-wrap items-end gap-6">
+    <section id="capabilities" className="mkt-anchor mkt-shell mkt-sec-cap">
+      <div className="mkt-row-head settle flex flex-wrap items-end gap-6">
         <h2 className="mkt-d2-cap flex-[1_1_420px]">
           Five areas.
           <br />
@@ -26,6 +26,13 @@ export function CapabilitiesSection() {
   );
 }
 
+/**
+ * The section header row: number, title, body.
+ *
+ * One layout for every section that has all three, so the heads align down the
+ * page. `.mkt-head` owns the spacing — the number tight against the title it
+ * labels, the body flushed to the right edge in its own column.
+ */
 function RowHeading({
   number,
   title,
@@ -36,12 +43,12 @@ function RowHeading({
   body: string;
 }) {
   return (
-    <div className="mb-[26px] flex flex-wrap items-baseline gap-4">
-      <span className="mkt-num mkt-num-col text-text-faint">{number}</span>
-      <h3 className="mkt-d3 flex-[0_1_auto]">{title}</h3>
-      <p className="mkt-body max-w-[46ch] flex-[1_1_300px] text-text-body">
-        {body}
-      </p>
+    <div className="mkt-head mb-[26px]">
+      <div className="mkt-head-lead">
+        <span className="mkt-num text-text-faint">{number}</span>
+        <h3 className="mkt-d3">{title}</h3>
+      </div>
+      <p className="mkt-head-body mkt-body text-text-body">{body}</p>
     </div>
   );
 }
@@ -57,7 +64,7 @@ function ReservationsRow() {
       />
 
       <div className="mkt-gap-cards grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))]">
-        <div className="border border-border bg-paper-tint">
+        <div className="settle border border-border bg-paper-tint">
           <p className="mkt-cell-label type-label border-b border-border text-text-faint">
             Friday, on the clipboard
           </p>
@@ -81,7 +88,7 @@ function ReservationsRow() {
           </p>
         </div>
 
-        <div className="border border-ink bg-paper-raised">
+        <div className="settle-2 border border-ink bg-paper-raised">
           <p className="mkt-cell-label type-label border-b border-ink text-foreground">
             Friday, in Crowbar
           </p>
@@ -143,7 +150,7 @@ function QueueRow() {
       />
 
       <div className="flex flex-wrap items-stretch">
-        <div className="mkt-pad min-w-[min(100%,230px)] flex-[1_1_240px] border border-border md:border-r-0 bg-paper-raised">
+        <div className="mkt-pad settle min-w-[min(100%,230px)] flex-[1_1_240px] border border-border md:border-r-0 bg-paper-raised">
           <p className="type-label mb-3.5 text-text-faint">
             Step 1 · 21:04
           </p>
@@ -154,7 +161,7 @@ function QueueRow() {
           </div>
         </div>
 
-        <div className="mkt-pad min-w-[min(100%,230px)] flex-[1_1_240px] border border-ink bg-paper-raised">
+        <div className="mkt-pad settle-2 min-w-[min(100%,230px)] flex-[1_1_240px] border border-ink bg-paper-raised">
           <p className="type-label mb-3.5 text-primary">Step 2 · 21:04</p>
           <p className="mkt-strip-title mb-4">In the queue, position 3</p>
           <div className="flex items-end gap-2.5">
@@ -167,7 +174,7 @@ function QueueRow() {
           </div>
         </div>
 
-        <div className="mkt-pad min-w-[min(100%,230px)] flex-[1_1_240px] border border-border md:border-l-0 bg-paper-raised">
+        <div className="mkt-pad settle-3 min-w-[min(100%,230px)] flex-[1_1_240px] border border-border md:border-l-0 bg-paper-raised">
           <p className="type-label mb-3.5 text-text-faint">
             Step 3 · 21:26
           </p>

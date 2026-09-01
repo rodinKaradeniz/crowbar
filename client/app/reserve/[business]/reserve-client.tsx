@@ -63,7 +63,7 @@ export default function ReserveClient({ business, serviceTypes }: ReserveClientP
         <div className="max-w-md">
           <CalendarDays className="mx-auto size-10 text-muted-foreground" />
           <p className="type-label text-muted-foreground mt-5 text-muted-foreground">Reservations</p>
-          <h1 className="mt-2 font-display text-3xl">Online bookings are unavailable</h1>
+          <h1 className="mt-2 type-d3">Online bookings are unavailable</h1>
           <p className="mt-3 text-sm text-muted-foreground">
             {business.name} is currently taking reservations directly through the venue.
           </p>
@@ -128,7 +128,7 @@ export default function ReserveClient({ business, serviceTypes }: ReserveClientP
                 {business.tags.join("  ·  ")}
               </p>
             )}
-            <h1 className="font-display text-4xl md:text-6xl text-foreground mb-2 tracking-tight">
+            <h1 className="font-display type-d3 md:type-d2 text-foreground mb-2 tracking-tight">
               {business.name}
             </h1>
             <div className="border-t border-border mt-5 mx-auto max-w-36" />
@@ -217,7 +217,7 @@ export default function ReserveClient({ business, serviceTypes }: ReserveClientP
                 <button
                   key={st.id}
                   onClick={() => openBooking(st.id)}
-                  className="text-left rounded-lg border bg-card p-5 hover:border-primary/50 transition-colors group focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  className="text-left border bg-card p-5 hover:border-primary/50 transition-colors group focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 >
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: st.color }} />
@@ -260,7 +260,7 @@ export default function ReserveClient({ business, serviceTypes }: ReserveClientP
       <Sheet open={bookingOpen} onOpenChange={setBookingOpen}>
         <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
           <SheetHeader>
-            <SheetTitle className="font-display text-xl font-normal">Book at {business.name}</SheetTitle>
+            <SheetTitle className="type-t1 font-normal">Book at {business.name}</SheetTitle>
           </SheetHeader>
           <div className="mt-4">
             <ReservationForm

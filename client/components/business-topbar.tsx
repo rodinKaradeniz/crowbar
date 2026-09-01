@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { useServiceClock } from "@/hooks/use-service-clock";
 import { useRegionalSettings } from "@/contexts/regional-context";
 import {
-  formatBusinessServiceDay,
+  formatBusinessServiceDayLong,
   formatBusinessTime,
 } from "@/lib/business-time";
 
@@ -30,11 +30,9 @@ import {
  */
 export function BusinessTopbar({
   businessName,
-  docsAssistantEnabled,
   canSeatWalkIn,
 }: {
   businessName: string;
-  docsAssistantEnabled: boolean;
   /** Desktop only — on tablet this action moves to the bottom-right corner. */
   canSeatWalkIn: boolean;
 }) {
@@ -59,7 +57,11 @@ export function BusinessTopbar({
         variant="business"
       />
 
-      <header className="sticky top-0 z-20 flex flex-wrap items-center gap-4 border-b border-border bg-[var(--scrim-ink)] px-[clamp(16px,2.5vw,32px)] py-3.5 backdrop-blur-[8px]">
+      {/* `min-h`, not `h`: a floor, the same way the marketing header bar is a
+          floor. The value is declared because it is also a SCROLL OFFSET — a
+          sticky sibling that does not know how tall this bar is ends up
+          underneath it. See --workspace-header and the Schedule calendar. */}
+      <header className="sticky top-0 z-20 flex min-h-[var(--workspace-header)] flex-wrap items-center gap-4 border-b border-border bg-[var(--scrim-ink)] px-[clamp(16px,2.5vw,32px)] py-3.5 backdrop-blur-[8px]">
         <div className="min-w-0">
           <h1 className="type-t1 mb-[3px] truncate">{businessName}</h1>
           <ServiceClock />
@@ -79,10 +81,7 @@ export function BusinessTopbar({
           </button>
 
           <div className="flex shrink-0 items-center gap-2">
-            <DashboardHeaderTrailing
-              variant="business"
-              docsAssistantEnabled={docsAssistantEnabled}
-            />
+            <DashboardHeaderTrailing />
           </div>
 
           {/* Desktop only. On a tablet this lives in the bottom-right corner,
@@ -104,6 +103,16 @@ export function BusinessTopbar({
  * Renders nothing on the server: the venue's local time is not knowable at
  * build or on a cached render, and a stale clock behind the bar is worse than a
  * blank one for the half-second before hydration.
+ *
+ * IT KEEPS TICKING, on the 30s cadence of `useServiceClock`. This is the
+ * VENUE'S time in the venue's configured timezone, not the device's — the
+ * laptop behind the bar may be set to anything — so a clock frozen at page load
+ * would quietly misreport it for the rest of a shift on a screen nobody
+ * reloads. One text node every 30 seconds is the cheapest thing on this page.
+ *
+ * Weekday and month are spelled out. This line has a whole row to itself, so
+ * there is nothing to be gained by abbreviating them, and "Di." is a worse read
+ * at a glance than "Dienstag".
  */
 function ServiceClock() {
   const { locale, timezone } = useRegionalSettings();
@@ -116,7 +125,7 @@ function ServiceClock() {
   return (
     <p className="type-label flex items-center gap-3 text-text-on-ink-faint">
       <span>
-        {formatBusinessServiceDay(now, timezone, locale)} ·{" "}
+        {formatBusinessServiceDayLong(now, timezone, locale)} ·{" "}
         {formatBusinessTime(now, timezone, locale)}
       </span>
     </p>

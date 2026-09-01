@@ -72,7 +72,7 @@ export function FloorPlanSeatingSheet({
         </SheetHeader>
 
         <div className="flex-1 space-y-5 px-4 pb-4">
-          <div className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2 text-sm">
+          <div className="flex items-center justify-between bg-muted/50 px-3 py-2 text-sm">
             <span className="inline-flex items-center gap-1.5 text-muted-foreground">
               <Users className="h-4 w-4" /> Selected capacity
             </span>
@@ -82,7 +82,7 @@ export function FloorPlanSeatingSheet({
           <div>
             <p className="type-label text-muted-foreground mb-2">Ready tables</p>
             {tables.length === 0 ? (
-              <p className="rounded-lg border border-dashed px-3 py-5 text-sm text-muted-foreground">
+              <p className="border border-dashed px-3 py-5 text-sm text-muted-foreground">
                 No tables are configured yet.
               </p>
             ) : (
@@ -97,7 +97,7 @@ export function FloorPlanSeatingSheet({
                       disabled={!selectable}
                       onClick={() => toggleTable(table)}
                       className={cn(
-                        "relative rounded-lg border px-3 py-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+                        "relative border px-3 py-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
                         selected && "border-primary bg-primary/10",
                         selectable && !selected && "hover:border-primary/50",
                         !selectable && "cursor-not-allowed border-border/50 bg-muted/40 text-muted-foreground opacity-70",

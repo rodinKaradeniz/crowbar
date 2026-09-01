@@ -67,4 +67,30 @@ function SkeletonRow({
   )
 }
 
-export { Skeleton, SkeletonRow }
+/**
+ * A run of `SkeletonRow`s, staggered.
+ *
+ * Still per-surface, not a generic block: the caller passes the column widths
+ * of the table it is standing in for, so the placeholder has that surface's own
+ * rhythm and the page does not reflow when the data lands.
+ */
+function SkeletonList({
+  rows,
+  columns,
+  className,
+}: {
+  rows: number
+  /** Tailwind width classes, one per column of the table being replaced. */
+  columns: string[]
+  className?: string
+}) {
+  return (
+    <div className={className} role="status" aria-label="Loading">
+      {Array.from({ length: rows }).map((_, row) => (
+        <SkeletonRow key={row} columns={columns} index={row} />
+      ))}
+    </div>
+  )
+}
+
+export { Skeleton, SkeletonRow, SkeletonList }

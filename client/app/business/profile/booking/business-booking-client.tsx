@@ -359,12 +359,12 @@ export default function BusinessBookingClient({
       </div>
 
       {!canEdit && (
-        <div className="rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground">
+        <div className="border bg-muted/40 p-4 text-sm text-muted-foreground">
           You have read-only access. An owner or manager can change booking configuration.
         </div>
       )}
 
-      <div className="rounded-lg border bg-card p-4">
+      <div className="border bg-card p-4">
         <label className="mb-2 block text-sm font-medium" htmlFor="booking-scope">
           Configuration scope
         </label>
@@ -387,7 +387,7 @@ export default function BusinessBookingClient({
       </div>
 
       {scope !== "default" && (
-        <div className="flex flex-col gap-3 rounded-lg border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="font-medium">{selectedService?.name}</p>
             <p className="text-sm text-muted-foreground">
@@ -427,7 +427,7 @@ export default function BusinessBookingClient({
         <TabsContent value="policy" className="space-y-4 pt-4">
           {scope === "default" && (
             <>
-              <section className="rounded-lg border bg-card p-4">
+              <section className="border bg-card p-4">
                 <h2 className="font-semibold">Public online bookings</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {publicReservationsEnabled
@@ -458,7 +458,7 @@ export default function BusinessBookingClient({
                 </div>
               </section>
 
-              <section className="rounded-lg border bg-card p-4">
+              <section className="border bg-card p-4">
                 <h2 className="font-semibold">Business-wide party limit</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                   This caps every reservation; a booking type&apos;s capacity can lower it further.
@@ -485,7 +485,7 @@ export default function BusinessBookingClient({
             </>
           )}
 
-          <section className="rounded-lg border bg-card p-4">
+          <section className="border bg-card p-4">
             <h2 className="font-semibold">Scheduling policy</h2>
             <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {([
@@ -519,7 +519,7 @@ export default function BusinessBookingClient({
             )}
           </section>
 
-          <section className="rounded-lg border bg-card p-4">
+          <section className="border bg-card p-4">
             <h2 className="font-semibold">Reservation protection</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Guests can still cancel or reschedule until their reservation starts; changes inside the window are recorded as late so staff can respond.
@@ -570,7 +570,7 @@ export default function BusinessBookingClient({
         </TabsContent>
 
         <TabsContent value="weekly" className="space-y-4 pt-4">
-          <section className="rounded-lg border bg-card p-4">
+          <section className="border bg-card p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <h2 className="font-semibold">Recurring weekly hours</h2>
@@ -615,7 +615,7 @@ export default function BusinessBookingClient({
         </TabsContent>
 
         <TabsContent value="exceptions" className="space-y-4 pt-4">
-          <section className="rounded-lg border bg-card p-4">
+          <section className="border bg-card p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="font-semibold">Date exceptions</h2>

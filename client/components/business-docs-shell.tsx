@@ -17,7 +17,7 @@ export function BusinessDocsShell({
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-6 p-4 md:flex-row md:gap-8 md:p-6">
       <aside className="w-full shrink-0 md:sticky md:top-0 md:max-h-[calc(100vh-3rem)] md:w-56 md:overflow-y-auto">
-        <nav className="space-y-6 rounded-lg border border-border bg-card p-3">
+        <nav className="space-y-6 border border-border bg-card p-3">
           {nav.map((section) => (
             <div key={section.label}>
               <p className="mb-2 px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">

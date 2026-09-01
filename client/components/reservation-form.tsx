@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TermsAndConditionsDialog } from "@/components/terms-and-conditions-dialog";
-import { CalendarDays, CheckCircle2, Clock, Loader2 } from "lucide-react";
+import { CalendarDays, CheckCircle2, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AvailabilitySlot, ServiceType } from "@/types";
 import {
@@ -286,7 +286,7 @@ export function ReservationForm({
       <div className="flex flex-col gap-6 p-6 items-center text-center">
         <CheckCircle2 className="h-14 w-14 text-primary" />
         <div>
-          <h2 className="font-display text-2xl mb-2">Reservation Submitted!</h2>
+          <h2 className="type-t1 mb-2">Reservation Submitted!</h2>
           <p className="text-muted-foreground">
             You&apos;ll receive a confirmation email shortly.
           </p>
@@ -303,7 +303,7 @@ export function ReservationForm({
       <div className="flex flex-col items-center gap-6 p-6 text-center">
         <CheckCircle2 className="h-14 w-14 text-primary" />
         <div>
-          <h2 className="font-display text-2xl">You&apos;re on the waitlist</h2>
+          <h2 className="type-t1">You&apos;re on the waitlist</h2>
           <p className="mt-2 text-muted-foreground">
             If a suitable table opens, we&apos;ll email you a 15-minute offer to confirm it.
           </p>
@@ -319,7 +319,7 @@ export function ReservationForm({
       <form className="flex flex-col gap-6 p-6" onSubmit={(event) => { event.preventDefault(); void handleWaitlistSubmit(); }}>
         <FieldGroup>
           <div className="text-center">
-            <h2 className="font-display text-xl">Join the waitlist</h2>
+            <h2 className="type-t1">Join the waitlist</h2>
             <p className="mt-2 text-sm text-muted-foreground">
               Choose your preferred time in {availabilityTimezone}. We only send an offer if a matching slot opens.
             </p>
@@ -343,7 +343,7 @@ export function ReservationForm({
           {submitError && <p className="rounded-md bg-destructive/15 p-3 text-sm text-destructive" role="alert">{submitError}</p>}
           <div className="flex gap-3">
             <Button type="button" variant="secondary" className="flex-1" onClick={() => setStep("datetime")} disabled={isSubmitting}>Back</Button>
-            <Button type="submit" className="flex-1" disabled={!firstName || !lastName || !phone || !email || !waitlistTime || isSubmitting}>{isSubmitting ? <><Loader2 className="mr-2 animate-spin" />Joining…</> : "Join waitlist"}</Button>
+            <Button type="submit" className="flex-1" disabled={!firstName || !lastName || !phone || !email || !waitlistTime || isSubmitting}>{isSubmitting ? "Joining…" : "Join waitlist"}</Button>
           </div>
         </FieldGroup>
       </form>
@@ -354,13 +354,13 @@ export function ReservationForm({
     return (
       <div className="flex flex-col gap-6 p-6">
         <div className="text-center">
-          <h2 className="font-display text-2xl mb-2">Review Your Reservation</h2>
+          <h2 className="type-t1 mb-2">Review Your Reservation</h2>
           <p className="text-muted-foreground">
             Please confirm your details before submitting
           </p>
           <div className="border-t border-border mt-4 mx-auto max-w-36" />
         </div>
-        <div className="space-y-3 rounded-lg border bg-card p-5">
+        <div className="space-y-3 border bg-card p-5">
           <div className="flex items-baseline gap-2.5 text-sm">
             <span className="text-muted-foreground shrink-0">Date &amp; Time</span>
             <span className="flex-1" aria-hidden />
@@ -432,7 +432,7 @@ export function ReservationForm({
           </label>
         </div>
 
-        <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
+        <div className="space-y-3 border bg-muted/30 p-4">
           <p className="text-sm font-medium">Stay in touch <span className="font-normal text-muted-foreground">(optional)</span></p>
           <label className="flex items-start gap-2 text-sm">
             <Checkbox checked={marketingEmailOptIn} onCheckedChange={(checked) => setMarketingEmailOptIn(checked === true)} />
@@ -465,10 +465,7 @@ export function ReservationForm({
             disabled={!termsAgreed || isSubmitting}
           >
             {isSubmitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Submitting...
-              </>
+              "Submitting…"
             ) : (
               "Submit Reservation"
             )}
@@ -489,7 +486,7 @@ export function ReservationForm({
       >
         <FieldGroup>
           <div className="text-center mb-4">
-            <h2 className="font-display text-xl mb-2">Your Information</h2>
+            <h2 className="type-t1 mb-2">Your Information</h2>
             <p className="text-sm text-muted-foreground">
               Please provide your contact details
             </p>
@@ -543,7 +540,7 @@ export function ReservationForm({
       >
         <FieldGroup>
           <div className="text-center mb-4">
-            <h2 className="font-display text-xl mb-2">Select Date &amp; Time</h2>
+            <h2 className="type-t1 mb-2">Select Date &amp; Time</h2>
             <p className="text-sm text-muted-foreground">
               Choose from live availability in {availabilityTimezone}
             </p>
@@ -604,8 +601,7 @@ export function ReservationForm({
               </p>
             ) : isLoadingAvailability ? (
               <div className="flex items-center justify-center gap-2 rounded-md border border-dashed p-5 text-sm text-muted-foreground" aria-live="polite">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Checking availability...
+                Checking availability…
               </div>
             ) : availabilityError ? (
               <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive" role="alert">
@@ -691,7 +687,7 @@ export function ReservationForm({
     >
       <FieldGroup>
         <div className="text-center mb-4">
-          <h2 className="font-display text-xl mb-2">Select Booking Type</h2>
+          <h2 className="type-t1 mb-2">Select Booking Type</h2>
           <p className="text-sm text-muted-foreground">
             Choose the type of reservation you&apos;d like to make
           </p>
@@ -702,7 +698,7 @@ export function ReservationForm({
             <p>No booking types available for this business.</p>
           </div>
         ) : serviceTypes.length === 1 ? (
-          <div className="p-4 border rounded-lg bg-card">
+          <div className="p-4 border bg-card">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-4 h-4 rounded-full" style={{ backgroundColor: serviceTypes[0].color }} />
               <h3 className="font-medium">{serviceTypes[0].name}</h3>

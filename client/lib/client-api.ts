@@ -15,7 +15,6 @@ import {
   FloorPlanTable,
   GuestProfile,
   GuestListItem,
-  HighRiskReservation,
   InventoryItem,
   LibraryItem,
   Menu,
@@ -25,7 +24,6 @@ import {
   ModifierGroup,
   MeContext,
   Notification,
-  OperationalKpis,
   Order,
   OrderLineItem,
   OrderAllDayCount,
@@ -436,19 +434,6 @@ export async function clientGetServiceTypesByBusiness(
     `/service-types/business/${businessId}`,
   );
   return data.map(toServiceType);
-}
-
-export async function clientGetServiceType(
-  id: string,
-): Promise<ServiceType | null> {
-  try {
-    const data = await clientFetch<Record<string, unknown>>(
-      `/service-types/${id}`,
-    );
-    return toServiceType(data);
-  } catch {
-    return null;
-  }
 }
 
 export async function clientGetAvailability(data: {
@@ -1123,10 +1108,6 @@ export async function clientRescheduleReservation(
     },
   );
   return toReservation(result);
-}
-
-export async function clientDeleteReservation(id: string): Promise<void> {
-  await authFetch(`/reservations/${id}`, { method: "DELETE" });
 }
 
 // ─── Authenticated: Service Type mutations ───────────────────────────────────
@@ -2103,18 +2084,6 @@ export async function clientGetOrders(
   return result.map(toOrder);
 }
 
-export async function clientAdvanceOrderStatus(
-  businessId: string,
-  orderId: string,
-  status: Order["status"],
-): Promise<Order> {
-  const result = await authFetch<Record<string, unknown>>(
-    `/ordering/${businessId}/orders/${orderId}/status`,
-    { method: "PATCH", body: JSON.stringify({ status }) },
-  );
-  return toOrder(result);
-}
-
 export async function clientAdvanceOrderLineStatus(
   businessId: string,
   orderId: string,
@@ -2260,14 +2229,6 @@ export async function clientListTabs(
   const q = status ? `?status=${status}` : "";
   const result = await authFetch<Record<string, unknown>[]>(`/tabs${q}`);
   return result.map(toTab);
-}
-
-export async function clientOpenTab(): Promise<Tab> {
-  const result = await authFetch<Record<string, unknown>>(`/tabs`, {
-    method: "POST",
-    body: JSON.stringify({}),
-  });
-  return toTab(result);
 }
 
 export async function clientOpenSeatingTab(seatingId: string): Promise<Tab> {
@@ -2786,15 +2747,6 @@ export async function clientDeleteInventoryItem(
   await authFetch(`/inventory/${businessId}/items/${itemId}`, { method: "DELETE" });
 }
 
-export async function clientGetLowStockItems(
-  businessId: string,
-): Promise<InventoryItem[]> {
-  const result = await authFetch<Record<string, unknown>[]>(
-    `/inventory/${businessId}/low-stock`,
-  );
-  return (result ?? []).map(toInventoryItem);
-}
-
 export interface InventoryDiscrepancy {
   id: string;
   businessId: string;
@@ -2930,57 +2882,6 @@ export async function clientGetStockMovements(
     `/inventory/${businessId}/items/${itemId}/movements${query}`,
   );
   return (result ?? []).map(toStockMovement);
-}
-
-export async function clientGetKpis(
-  businessId: string,
-): Promise<OperationalKpis | null> {
-  const result = await authFetch<{
-    reservation: Record<string, unknown>;
-    ordering: Record<string, unknown> | null;
-    inventory: Record<string, unknown> | null;
-  }>(`/analytics/business/${businessId}/kpis`);
-  if (!result) return null;
-  return {
-    reservation: {
-      cancellationRate: result.reservation.cancellation_rate as number,
-      completionRate: result.reservation.completion_rate as number,
-      avgLeadTimeHours: result.reservation.avg_lead_time_hours as number,
-      occupancyByHour: result.reservation.occupancy_by_hour as { hour: number; count: number }[],
-    },
-    ordering: result.ordering
-      ? {
-          avgPrepTimeMinutes: result.ordering.avg_prep_time_minutes as number,
-          peakHours: result.ordering.peak_hours as { hour: number; count: number }[],
-          topItems: result.ordering.top_items as { name: string; totalOrdered: number }[],
-        }
-      : null,
-    inventory: result.inventory
-      ? {
-          totalMovements: result.inventory.total_movements as number,
-          wasteMovements: result.inventory.waste_movements as number,
-          lowStockIncidents: result.inventory.low_stock_incidents as number,
-          itemsBelowPar: result.inventory.items_below_par as number,
-        }
-      : null,
-  };
-}
-
-export async function clientGetHighRiskReservations(
-  businessId: string,
-): Promise<HighRiskReservation[]> {
-  const result = await authFetch<Record<string, unknown>[]>(
-    `/analytics/business/${businessId}/high-risk`,
-  );
-  return (result ?? []).map((r) => ({
-    id: r.id as string,
-    time: r.time as string,
-    guests: r.guests as number,
-    status: r.status as string,
-    customerId: r.customer_id as string,
-    serviceTypeId: r.service_type_id as string,
-    riskScore: r.risk_score as number,
-  }));
 }
 
 // ─── Staff Invitations ────────────────────────────────────────────────────────

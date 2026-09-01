@@ -21,15 +21,17 @@ const STOCK: [string, number, string, boolean][] = [
 
 export function InventorySection() {
   return (
-    <section className="mkt-shell mkt-sec-inventory">
-      <div className="mb-2 flex flex-wrap items-baseline gap-4">
-        <span className="mkt-num mkt-num-col text-text-faint">04</span>
-        <p className="type-label text-text-muted">
-          One Negroni leaves the bar at 19:04. Nobody types anything.
-        </p>
+    <section id="inventory" className="mkt-anchor mkt-shell mkt-sec-inventory">
+      <div className="mkt-head settle mb-2">
+        <div className="mkt-head-lead">
+          <span className="mkt-num text-text-faint">04</span>
+          <p className="type-label text-text-muted">
+            One Negroni leaves the bar at 19:04. Nobody types anything.
+          </p>
+        </div>
       </div>
 
-      <div className="mb-[26px] flex flex-wrap items-stretch border border-ink">
+      <div className="settle-2 mb-[26px] flex flex-wrap items-stretch border border-ink">
         <div className="mkt-pad-wide min-w-[min(100%,190px)] flex-[1_1_200px] border-r border-border bg-paper-raised">
           <p className="type-label mb-2.5 text-text-faint">
             Ticket cleared
@@ -94,7 +96,7 @@ export function InventorySection() {
         </div>
       </div>
 
-      <div className="mkt-gap-split mkt-pb-row flex flex-wrap border-b border-border">
+      <div className="mkt-gap-split mkt-pb-row settle-3 flex flex-wrap border-b border-border">
         <h3 className="mkt-d3 flex-[1_1_320px]">Inventory, down to the pour</h3>
         <p className="mkt-body max-w-[48ch] flex-[1_1_300px] text-text-body">
           Every drink has a recipe, so serving is the only data entry.

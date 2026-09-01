@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { SETTLE_STEP } from "@/components/landing/settle";
+
 /**
  * The full-bleed ink band: six moments of one night, in one record.
  *
@@ -41,7 +43,7 @@ const MOMENTS = [
   {
     time: "20:30",
     title: "Closed out",
-    body: "The tab closes, the table opens again, and the night's font-mono tabular-nums are already written.",
+    body: "The tab closes, the table opens again, and the night's numbers are already written.",
     where: "Floor map · Reports",
   },
 ];
@@ -50,10 +52,12 @@ export function NightTimeline() {
   return (
     <section
       id="night"
-      className="mkt-sec-night ground-ink bg-background text-foreground"
+      className="mkt-anchor mkt-sec-night ground-ink bg-background text-foreground"
     >
-      <div className="mx-auto max-w-[var(--grid-marketing)]">
-        <div className="mkt-band-head flex flex-wrap items-end gap-5">
+      {/* Full-bleed <section> for the band; `.mkt-shell` for the content, so
+          this band's left edge is the same one every paper section uses. */}
+      <div className="mkt-shell">
+        <div className="mkt-band-head settle flex flex-wrap items-end gap-5">
           <p className="mkt-kicker shrink-0 tracking-[0.15em] text-primary">
             One connected record
           </p>
@@ -73,11 +77,15 @@ export function NightTimeline() {
           {MOMENTS.map((moment, index) => (
             <li
               key={moment.time}
-              className={
-                index === MOMENTS.length - 1
-                  ? "mkt-pad-step"
-                  : "mkt-pad-step border-r border-border"
-              }
+              className={[
+                "mkt-pad-step",
+                index === MOMENTS.length - 1 ? "" : "border-r border-border",
+                // Left-to-right within the row: the six moments are one night in
+                // order, so they arrive in that order.
+                SETTLE_STEP[index % SETTLE_STEP.length],
+              ]
+                .filter(Boolean)
+                .join(" ")}
             >
               <p className="mkt-stamp mb-[18px] tracking-[0.1em] text-primary">
                 {moment.time}
@@ -93,8 +101,18 @@ export function NightTimeline() {
           ))}
         </ol>
 
-        <div className="mt-6 flex flex-wrap items-baseline gap-4 border-t border-border pt-[18px]">
-          <p className="mkt-body-sm flex-[1_1_420px] text-muted-foreground">
+        {/*
+          The claim and the way to read more about it are two things, so they sit
+          on two lines. They shared one baseline row before, which on a wide
+          viewport crowded the link up against the end of a legally load-bearing
+          sentence and made it look like punctuation.
+
+          The wording is unchanged and not ours to edit: the register is the
+          payment and fiscal authority, and what Crowbar records is a staff
+          assertion with a name and a timestamp.
+        */}
+        <div className="mt-6 flex flex-col items-start gap-4 border-t border-border pt-[18px]">
+          <p className="mkt-body-sm max-w-[76ch] text-muted-foreground">
             <strong className="font-semibold text-foreground">
               Crowbar never takes the money.
             </strong>{" "}
@@ -102,9 +120,11 @@ export function NightTimeline() {
             the staff assertion that settlement completed, with a name and a
             timestamp against it.
           </p>
+          {/* A real destination — #faq is the register question, which leads
+              that list. */}
           <Link
             href="#faq"
-            className="mkt-kicker shrink-0 border-b border-border pb-[3px] text-primary"
+            className="mkt-kicker border-b border-border pb-[3px] text-primary"
           >
             How that works with my register →
           </Link>

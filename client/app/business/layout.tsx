@@ -34,9 +34,6 @@ export default async function BusinessLayout({
   }
 
   const business = await fetchBusiness(user.businessId);
-  const docsAssistantEnabled =
-    process.env.DOCS_ASSISTANT_ENABLED === "true" &&
-    Boolean(process.env.OPENAI_API_KEY);
 
   return (
     <RegionalSettingsProvider
@@ -52,10 +49,7 @@ export default async function BusinessLayout({
           from auth, which would otherwise leave the workspace on paper. */}
       <Ground ground="ink" />
 
-      <BusinessShell
-        businessName={business?.name ?? "Your venue"}
-        docsAssistantEnabled={docsAssistantEnabled}
-      >
+      <BusinessShell businessName={business?.name ?? "Your venue"}>
         <DashboardErrorBoundary>
           <BusinessRouteGuard>{children}</BusinessRouteGuard>
         </DashboardErrorBoundary>

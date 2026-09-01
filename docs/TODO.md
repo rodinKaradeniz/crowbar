@@ -511,20 +511,22 @@ in the port.
 Raised rather than answered locally, per rule zero — a value that is needed and
 missing is a design question, not an implementation choice.
 
-- **Per-tenant service-type colours.** A venue picks a colour for each service
-  type from a fixed palette of twelve arbitrary hues in
-  `client/components/color-picker.tsx`. Nothing in the token block governs them,
-  and they surface on the schedule and (until this port) as a dot beside every
-  booking. The dot is gone — it was a second status object competing with the
-  badge — but the colours are still stored and still shown on the schedule.
-  This is the same question as the chart palette: either the system declares a
-  categorical set, or per-tenant colour leaves the product. *Trigger:* the chart
-  palette question is answered.
-- **Categorical chart palette.** `crowbar-tokens.css` declares no multi-series
-  chart colours. `/business/insights` renders five guest segments and several
-  multi-series bars on raw Tailwind hex. `--chart-1..5` are aliased to brand
-  plus the neutral ramp as a provisional stand-in; Insights' own series colours
-  are held on raw hex as the one documented exception to the raw-hex check.
+- ~~**Per-tenant service-type colours.**~~ **Answered by the same set.** The
+  picker now offers the five declared slots and nothing else. It previously
+  offered twelve arbitrary hues **plus a free hex field and a native colour
+  well**, so a venue could enter any colour in the sRGB gamut — the largest
+  single hole in rule zero. The persisted shape is unchanged (a hex string), so
+  no migration was required; colours stored earlier resolve to their nearest
+  declared slot via `client/lib/series-palette.ts`, and a venue re-picking
+  writes a declared value.
+- ~~**Categorical chart palette.**~~ **Answered.** `--series-1..5` are declared
+  in `client/app/globals.css` and validated against paper, ink and the panel
+  surface (lightness band, chroma floor, CVD separation, normal-vision floor,
+  contrast). Five is the maximum that clears the separation floor once the
+  critical, attend and brand hue sectors are reserved. Correction worth
+  recording: this entry previously said `--chart-1..5` "are aliased to brand
+  plus the neutral ramp as a provisional stand-in". They were never written —
+  `grep chart client/app/globals.css` returned nothing.
 - **Phone.** The product is designed at 1280+ and 1024×768 only. Stage 7's exit
   gate below requires each pilot role to complete its core task on a phone
   during service; there is no phone canvas, so **that clause is currently
@@ -535,13 +537,14 @@ missing is a design question, not an implementation choice.
   `--field-invalid` measured 1.84:1 on ink and had no dark-ground pair, while
   the product has forms on dark surfaces. Confirm it lands in the canonical
   `crowbar-tokens.css` so the design file and the codebase do not diverge.
-- **Password strength and the attend colour.** The Auth canvas's notes say
-  "amber is a password that isn't strong enough yet". §08 of the System canvas
-  puts exactly that case on the form-validation channel instead — "'Too short —
-  10 characters minimum' is this, not attend". The two boards disagree, and §08
-  governs, so the strength meter uses the validation colour and a neutral, never
-  attend: a password hint must not read as a service alarm. Confirm which board
-  is authoritative.
+- ~~**Password strength and the attend colour.**~~ **Closed as decided.** §08
+  governs over the Auth canvas: the meter uses the validation channel and a
+  neutral, never attend. A real bug sat behind the settled question — the meter
+  rendered `tone: "invalid"` from the first keystroke, so every password field
+  flashed the validation colour before the person had done anything wrong.
+  `PasswordStrength` now takes `touched` and withholds the invalid tone until
+  the field is blurred; reaching the minimum clears it without waiting for a
+  blur. Covered by `client/tests/unit/password-strength.test.tsx`.
 - **Password minimum: 10 or 12.** The canvas says 10 characters throughout;
   `PASSWORD_MIN_LENGTH` and the server both enforce 12. The screens ship 12,
   because a form promising a laxer rule than the API fails at submit instead of
@@ -551,8 +554,12 @@ missing is a design question, not an implementation choice.
   16.5, 19, 20, 22px) that sit between the ten declared steps. They are
   transcribed verbatim into a marketing layer in `client/app/globals.css` rather
   than inlined, so nothing enters the codebase that the design did not set — but
-  they are not tokens, and the marketing surface is the one place where sizes
-  live outside `:root`. Confirm this is intended, or promote them.
+  they are not tokens, and the marketing surface is now the **only** place where
+  sizes live outside the declared scale: the `@theme` bridge maps Tailwind's
+  `text-xs` / `text-sm` / `text-base` to the Data, UI and Body steps, closing a
+  hole of roughly 580 undeclared size utilities that the raw-hex grep could
+  never see. `text-lg` and above stay unmapped on purpose so they fail loudly.
+  Confirm this is intended, or promote them.
 - **Terms, privacy and Impressum.** The canvas footer links all three; the
   product has terms only as a dialog inside registration, and no privacy or
   Impressum page. The links are not rendered rather than pointing nowhere. A
@@ -567,6 +574,56 @@ missing is a design question, not an implementation choice.
   each pilot role can complete its core task on a phone during service, no
   screen carries a placeholder or dishonest state, and no functional behavior
   changed without being recorded as its own item.
+
+### 7c. Endpoints the client never calls — surfaced by the completion pass
+
+Auditing all 223 `client/lib/client-api.ts` exports against their call sites
+found sixteen functions nothing invoked. They split cleanly, and "unused" was
+not the same answer as "wire it" in either direction.
+
+**Removed as superseded** — wiring them would have added a second code path
+where one is already correct:
+
+- `clientGetServiceType` — the by-business list is what every caller uses.
+- `clientDeleteReservation` — cancellation is a status transition through
+  `clientUpdateReservation`, which keeps the operational record. A hard DELETE
+  destroys the thing the product exists to retain.
+- `clientAdvanceOrderStatus` — the ticket board advances per **line**
+  (`clientAdvanceOrderLineStatus`); an order-level status setter competes with it.
+- `clientOpenTab` — tabs are opened from a seating (`clientOpenSeatingTab`).
+- `clientGetLowStockItems` — the inventory screen derives low stock from
+  `item.isLowStock` on the list it already holds; a second call is a redundant
+  round trip.
+- `clientGetKpis`, `clientGetHighRiskReservations` — Insights receives both from
+  the server component via `fetchBusinessKpis` / `fetchHighRiskReservations`.
+
+**Wired** — the endpoint existed and the affordance was simply missing:
+
+- `clientUpdateCategory` — a menu category could be created and deleted but
+  never renamed, so fixing a typo meant deleting the section and its items.
+- `clientUpdatePreparationStation` — same for a prep station: create, archive,
+  no rename.
+- `clientUpdateFloorPlanArea` / `clientUpdateFloorPlanTable` — Floor setup now
+  renames an area and edits a table's label and seat count in place. This was
+  the most consequential of the group: the only previous way to fix a mistyped
+  table was archive plus recreate, and **recreating a table issues a new QR
+  code**, invalidating every code already printed and stuck to it. Server
+  routes confirmed at `server/app/routers/floor_plan.py:234` and `:298`.
+
+**Still to wire** — endpoint exists, UI does not call it. Not backend gaps:
+
+- `clientUpdateFloorPlanCombination` — combinations can be created and archived
+  but not edited. `server/app/routers/floor_plan.py:543`.
+- `clientGetSupplierProducts` / `clientCreateSupplierProduct` /
+  `clientArchiveSupplierProduct` — the supplier catalogue cannot be managed from
+  the UI, yet purchase orders are built from supplier products.
+- `clientCreatePackConversion` — `clientGetPackConversions` is read by both the
+  count session and the purchase-order panel, but nothing can create one.
+
+*Verification note:* the wired floor-plan editors typecheck and build, but could
+not be exercised end to end locally — the dev tenant has no primary location, so
+area creation returns `CONFLICT: Business has no primary location`, and seeding
+is a data mutation that needs explicit authorization.
 
 ### 8. Demo environment and local release gate — ready after stage 7
 

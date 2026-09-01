@@ -2,9 +2,14 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 
+/**
+ * `#night` is a walk-through of one service from the door to close-out, and
+ * `#capabilities` is the five areas the product covers — so they are named for
+ * what a visitor gets by clicking, not for what the sections are called.
+ */
 const SECTIONS = [
-  { href: "#night", label: "A night" },
-  { href: "#capabilities", label: "Capabilities" },
+  { href: "#night", label: "How it works" },
+  { href: "#capabilities", label: "What you get" },
   { href: "#faq", label: "Questions" },
 ];
 

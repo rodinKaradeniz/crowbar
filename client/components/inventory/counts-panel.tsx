@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { EmptyState } from "@/components/empty-state";
+import { SkeletonList } from "@/components/ui/skeleton";
 
 interface Props {
   businessId: string;
@@ -109,7 +110,7 @@ export function CountsPanel({ businessId, businessTimezone, canManage }: Props) 
       )}
 
       {loading ? (
-        <div className="text-sm text-muted-foreground">Loading counts…</div>
+        <SkeletonList rows={3} columns={["w-[28%]", "w-[20%]", "w-[18%]", "w-[14%]"]} />
       ) : sessions.length === 0 ? (
         <EmptyState
           icon={ClipboardCheck}
@@ -122,7 +123,7 @@ export function CountsPanel({ businessId, businessTimezone, canManage }: Props) 
       ) : (
         <div className="flex flex-col gap-2">
           {sessions.map((session) => (
-            <div key={session.id} className="flex items-center gap-3 rounded-lg border px-4 py-3">
+            <div key={session.id} className="flex items-center gap-3 border px-4 py-3">
               <div className="flex-1 min-w-0">
                 <div className="font-medium">
                   {session.kind === "stocktake" ? "Stocktake" : "Cycle count"}
@@ -167,7 +168,7 @@ export function CountsPanel({ businessId, businessTimezone, canManage }: Props) 
         open={toCancel !== null}
         onOpenChange={(open) => !open && setToCancel(null)}
         title="Cancel this count?"
-        description="Counted font-mono tabular-nums are discarded and no stock movement is posted."
+        description="Counted numbers are discarded and no stock movement is posted."
         confirmLabel="Cancel Count"
         variant="destructive"
         onConfirm={cancel}

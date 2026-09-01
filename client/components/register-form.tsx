@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 import { AuthField, AuthNotice, RevealToggle } from "@/components/auth/auth-field";
+import { BackLink } from "@/components/auth/auth-shell";
 import {
   gradePassword,
   PASSWORD_MIN_LENGTH,
@@ -52,6 +53,9 @@ export function RegisterForm() {
   const [address, setAddress] = useState("");
   const [description, setDescription] = useState("");
   const [password, setPassword] = useState("");
+  // The strength meter must not call a password invalid before the person
+  // has finished typing it. See components/auth/password-strength.tsx.
+  const [passwordTouched, setPasswordTouched] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState("");
   const [revealed, setRevealed] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -159,10 +163,16 @@ export function RegisterForm() {
 
   return (
     <form onSubmit={handleSubmit} noValidate>
-      <p className="mkt-eyebrow mb-2.5 text-text-muted">
-        Create account · Step {step} of 2
-      </p>
-      <h1 className="auth-title mb-7">
+      {/* The way out shares the step counter's line rather than taking one of
+          its own: this form has to fit an 800px-tall laptop without scrolling,
+          and a control that is genuinely unobtrusive should not cost a row. */}
+      <div className="mb-2.5 flex items-center justify-between gap-4">
+        <p className="mkt-eyebrow text-text-muted">
+          Create account · Step {step} of 2
+        </p>
+        <BackLink href="/" label="← Crowbar home" />
+      </div>
+      <h1 className="auth-title auth-heading">
         {step === 1 ? "Name the venue" : "Pick a password"}
       </h1>
 
@@ -180,19 +190,19 @@ export function RegisterForm() {
             value={businessName}
             onChange={(event) => handleBusinessName(event.target.value)}
             required
-            className="mb-4"
+            className="auth-field"
           />
 
           <AuthField
-            label="Public address"
+            label="Public url"
             value={businessSlug}
             onChange={(event) => setBusinessSlug(event.target.value)}
             required
             hint={`Guests will book at /reserve/${businessSlug || "your-venue"}`}
-            className="mb-4"
+            className="auth-field"
           />
 
-          <div className="mb-4 flex flex-wrap gap-3.5">
+          <div className="auth-field flex flex-wrap gap-3.5">
             <AuthField
               label="Your name"
               placeholder="Marisol Vega"
@@ -219,7 +229,7 @@ export function RegisterForm() {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="mt-2 text-[12.5px] text-text-muted">
+              <p className="auth-hint text-text-muted">
                 Sets your currency, date format and {taxLabel} label. All
                 editable later.
               </p>
@@ -235,7 +245,7 @@ export function RegisterForm() {
             onChange={(event) => setEmail(event.target.value)}
             required
             hint="Staff get their own invitations later — this one is yours."
-            className="mb-4"
+            className="auth-field"
           />
 
           <AuthField
@@ -246,21 +256,21 @@ export function RegisterForm() {
             onChange={(event) => setPhone(event.target.value)}
             required
             hint="A national or international number for the country above."
-            className="mb-6"
+            className="auth-field-end"
           />
 
           <div className="flex flex-wrap items-center gap-3">
             <Button
               type="submit"
               size="auth"
-              className="px-[26px] text-[15.5px] font-semibold"
+              className="auth-cta"
               disabled={!stepOneComplete}
             >
               Continue
             </Button>
             <Link
               href="/auth/login"
-              className="inline-flex h-[50px] items-center px-1.5 text-[length:var(--ui-size)] text-text-secondary hover:text-primary"
+              className="auth-inline-link inline-flex items-center px-1.5 text-[length:var(--ui-size)] text-text-secondary hover:text-primary"
             >
               I already have an account
             </Link>
@@ -268,7 +278,7 @@ export function RegisterForm() {
         </>
       ) : (
         <>
-          <div className="mb-4">
+          <div className="auth-field">
             <AuthField
               label="Password"
               type={revealed ? "text" : "password"}
@@ -276,6 +286,7 @@ export function RegisterForm() {
               placeholder={`At least ${PASSWORD_MIN_LENGTH} characters`}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
+              onBlur={() => setPasswordTouched(true)}
               required
               maxLength={128}
               invalid={verdict.tone === "invalid"}
@@ -288,7 +299,7 @@ export function RegisterForm() {
                 ) : undefined
               }
             />
-            <PasswordStrength verdict={verdict} />
+            <PasswordStrength verdict={verdict} touched={passwordTouched} />
           </div>
 
           <AuthField
@@ -302,7 +313,7 @@ export function RegisterForm() {
             maxLength={128}
             invalid={mismatch}
             hint={mismatch ? "The two don't match yet." : undefined}
-            className="mb-4"
+            className="auth-field"
           />
 
           <AuthField
@@ -311,10 +322,10 @@ export function RegisterForm() {
             value={address}
             onChange={(event) => setAddress(event.target.value)}
             hint="Optional — you can add it during setup."
-            className="mb-4"
+            className="auth-field"
           />
 
-          <div className="mb-6">
+          <div className="auth-field-end">
             <Label htmlFor="business-description" className="mb-[7px]">
               What the venue is
             </Label>
@@ -324,7 +335,7 @@ export function RegisterForm() {
               value={description}
               onChange={(event) => setDescription(event.target.value)}
             />
-            <p className="mt-2 text-[12.5px] text-text-muted">
+            <p className="auth-hint text-text-muted">
               Optional — shown on your public booking page.
             </p>
           </div>
@@ -333,7 +344,7 @@ export function RegisterForm() {
             <Button
               type="submit"
               size="auth"
-              className="px-[26px] text-[15.5px] font-semibold"
+              className="auth-cta"
               disabled={
                 isSubmitting ||
                 password.length < PASSWORD_MIN_LENGTH ||
@@ -345,7 +356,7 @@ export function RegisterForm() {
             <button
               type="button"
               onClick={() => setStep(1)}
-              className="inline-flex h-[50px] items-center px-1.5 text-[length:var(--ui-size)] text-text-secondary hover:text-primary"
+              className="auth-inline-link inline-flex items-center px-1.5 text-[length:var(--ui-size)] text-text-secondary hover:text-primary"
             >
               ← Back
             </button>

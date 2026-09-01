@@ -5,6 +5,7 @@ import { addDays, addMinutes, format, isSameDay, parseISO } from "date-fns";
 import { Clock, Plus, Users } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Business, Reservation, ServiceType } from "@/types";
+import { seriesVarForColor } from "@/lib/series-palette";
 import { CustomerResponse } from "@/lib/api-client";
 import { ReservationDetailsDialog } from "@/components/reservation-details-dialog";
 import { ReservationTablePlan } from "@/components/reservation-table-plan";
@@ -105,13 +106,25 @@ export default function BusinessScheduleClient({
       </div>
 
       <div className="flex flex-col lg:flex-row gap-10">
-        {/* ── Left rail: month picker + legend ──────────────────────────── */}
-        <aside className="lg:w-72 shrink-0 space-y-6">
+        {/*
+          ── Left rail: month picker + legend ─────────────────────────────────
+          Sticky from `lg` up, which is where the two-column layout starts. The
+          day ledger below is three days long and scrolls; the calendar that
+          picks which three stays where you left it.
+
+          `--workspace-header` is the sticky topbar's own declared floor, so the
+          calendar parks BELOW the bar rather than sliding under it, and the
+          max-height plus its own scroll means a short viewport never strands
+          the bottom of it out of reach. Under `lg` the columns stack and none
+          of this applies — a sticky sidebar in a single column is just a
+          sidebar that will not go away.
+        */}
+        <aside className="lg:w-72 shrink-0 space-y-6 lg:sticky lg:top-[var(--workspace-header)] lg:self-start lg:max-h-[calc(100svh-var(--workspace-header)-var(--space-24))] lg:overflow-y-auto">
           <Calendar
             mode="single"
             selected={selectedDate}
             onSelect={(date) => date && setSelectedDate(date)}
-            className="rounded-xl bg-card border border-border/40 p-3 w-fit"
+            className="bg-card border border-border/40 p-3 w-fit"
           />
 
           {serviceTypes.length > 0 && (
@@ -176,11 +189,11 @@ export default function BusinessScheduleClient({
               {/* Events */}
               <div className="min-w-0 space-y-2.5">
                 {isClosed ? (
-                  <div className="rounded-lg border border-dashed border-border/70 px-4 py-6 text-sm text-muted-foreground">
+                  <div className="border border-dashed border-border/70 px-4 py-6 text-sm text-muted-foreground">
                     Closed on {format(date, "EEEE")}s
                   </div>
                 ) : reservations.length === 0 ? (
-                  <div className="rounded-lg bg-muted/40 px-4 py-6 text-sm text-muted-foreground">
+                  <div className="bg-muted/40 px-4 py-6 text-sm text-muted-foreground">
                     No reservations yet
                   </div>
                 ) : (
@@ -188,13 +201,16 @@ export default function BusinessScheduleClient({
                     const end = endTimeOf(reservation);
                     const serviceType = serviceTypeMap.get(reservation.serviceTypeId);
                     const customerInfo = customerMap.get(reservation.customerId);
-                    const color = serviceType?.color || "#6b7280";
+                    // A stored service-type colour resolves to its declared
+                    // slot; anything unrecognised falls back to the muted token
+                    // rather than painting an undeclared hue.
+                    const color = seriesVarForColor(serviceType?.color);
 
                     return (
                       <button
                         key={reservation.id}
                         onClick={() => handleReservationClick(reservation)}
-                        className="w-full text-left rounded-lg bg-card border border-border/40 hover:border-primary/50 transition-colors px-4 py-3 flex items-start gap-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        className="w-full text-left bg-card border border-border/40 hover:border-primary/50 transition-colors px-4 py-3 flex items-start gap-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                       >
                         <div className="shrink-0 w-24">
                           <p className="font-mono tabular-nums text-sm font-semibold">{formatSlotTime(reservation.time, businessTimezone)}</p>

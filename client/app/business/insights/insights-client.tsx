@@ -26,6 +26,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import { seriesVar } from "@/lib/series-palette";
 import {
   BarChart,
   Bar,
@@ -61,12 +62,21 @@ interface InsightsClientProps {
   businessTimezone: string;
 }
 
+/**
+ * Guest segments are IDENTITY, not rank. `docs/DESIGN.md` classifies a guest
+ * segment as neutral -- "a visit frequency has no deadline at all" -- so these
+ * are the five declared categorical slots, assigned in fixed order.
+ *
+ * They used to be green for "champions" and red for "lost": brand green
+ * meaning "good news about a number", and the critical fill on a guest who has
+ * not been in for a while. Both are named misuses of the rank.
+ */
 const SEGMENT_COLORS: Record<string, string> = {
-  champions: "#22c55e",
-  loyal: "#3b82f6",
-  at_risk: "#eab308",
-  new: "#8b5cf6",
-  lost: "#ef4444",
+  champions: seriesVar(1),
+  loyal: seriesVar(2),
+  at_risk: seriesVar(3),
+  new: seriesVar(4),
+  lost: seriesVar(5),
 };
 
 const SEGMENT_ICONS: Record<string, string> = {
@@ -153,9 +163,7 @@ export default function InsightsClient({
             disabled={isRunning}
             size="filter"
           >
-            <RefreshCw
-              className={`h-4 w-4 mr-2 ${isRunning ? "animate-spin" : ""}`}
-            />
+            <RefreshCw className="h-4 w-4 mr-2" aria-hidden />
             {isRunning ? "Running..." : "Run Pipeline"}
           </Button>
         </div>
@@ -166,15 +174,13 @@ export default function InsightsClient({
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
             <BrainCircuit className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">No insights yet</h3>
+            <h3 className="type-t2 mb-2">No insights yet</h3>
             <p className="text-sm text-muted-foreground text-center max-w-md mb-6">
               Run the ML pipeline to generate demand forecasts from operational
               reservation data.
             </p>
             <Button onClick={handleRunPipeline} disabled={isRunning}>
-              <RefreshCw
-                className={`h-4 w-4 mr-2 ${isRunning ? "animate-spin" : ""}`}
-              />
+              <RefreshCw className="h-4 w-4 mr-2" aria-hidden />
               {isRunning ? "Running Pipeline..." : "Run Pipeline"}
             </Button>
           </CardContent>
@@ -266,7 +272,7 @@ function DemandForecastSection({
   const chartData = Array.from(dateMap.values()).map((d) => ({
     day: d.day,
     reservations: Math.round(d.total * 10) / 10,
-    fill: d.is_weekend ? "#8b5cf6" : "#3b82f6",
+    fill: d.is_weekend ? seriesVar(2) : seriesVar(1),
   }));
 
   const totalPredicted = chartData.reduce((sum, d) => sum + d.reservations, 0);
@@ -286,7 +292,7 @@ function DemandForecastSection({
     Math.max(chartData.filter((d) => !["Fri", "Sat", "Sun"].includes(d.day)).length, 1);
 
   const chartConfig: ChartConfig = {
-    reservations: { label: "Predicted Reservations", color: "#3b82f6" },
+    reservations: { label: "Predicted Reservations", color: seriesVar(1) },
   };
 
   return (
@@ -335,11 +341,17 @@ function DemandForecastSection({
             </ChartContainer>
             <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
-                <div className="w-2.5 h-2.5 rounded-sm bg-[#3b82f6]" />
+                <div
+                  className="size-2.5 rounded-[var(--radius-2)]"
+                  style={{ backgroundColor: seriesVar(1) }}
+                />
                 Weekday
               </span>
               <span className="flex items-center gap-1">
-                <div className="w-2.5 h-2.5 rounded-sm bg-[#8b5cf6]" />
+                <div
+                  className="size-2.5 rounded-[var(--radius-2)]"
+                  style={{ backgroundColor: seriesVar(2) }}
+                />
                 Weekend
               </span>
             </div>
@@ -347,15 +359,15 @@ function DemandForecastSection({
 
           {/* Quick stats */}
           <div className="space-y-3">
-            <div className="p-3 rounded-lg border bg-muted/30">
+            <div className="p-3 border bg-muted/30">
               <p className="text-xs text-muted-foreground">Total Expected</p>
-              <p className="text-xl font-bold">
+              <p className="type-t1">
                 {Math.round(totalPredicted)}
               </p>
               <p className="text-xs text-muted-foreground">reservations</p>
             </div>
             {busiestDay && (
-              <div className="p-3 rounded-lg border bg-muted/30">
+              <div className="p-3 border bg-muted/30">
                 <p className="text-xs text-muted-foreground">Busiest Day</p>
                 <p className="text-sm font-medium">
                   {busiestDay.day} ({Math.round(busiestDay.reservations)})
@@ -363,14 +375,14 @@ function DemandForecastSection({
               </div>
             )}
             {quietestDay && (
-              <div className="p-3 rounded-lg border bg-muted/30">
+              <div className="p-3 border bg-muted/30">
                 <p className="text-xs text-muted-foreground">Quietest Day</p>
                 <p className="text-sm font-medium">
                   {quietestDay.day} ({Math.round(quietestDay.reservations)})
                 </p>
               </div>
             )}
-            <div className="p-3 rounded-lg border bg-muted/30">
+            <div className="p-3 border bg-muted/30">
               <p className="text-xs text-muted-foreground">Avg / Day</p>
               <p className="text-sm font-medium">
                 Weekday: {weekdayAvg.toFixed(1)} · Weekend:{" "}
@@ -416,7 +428,7 @@ function SegmentationSection({
   const pieData = Object.entries(segments).map(([label, count]) => ({
     name: label,
     value: count,
-    fill: SEGMENT_COLORS[label] || "#6b7280",
+    fill: SEGMENT_COLORS[label] || "var(--muted-foreground)",
   }));
 
   const pieConfig: ChartConfig = Object.fromEntries(
@@ -484,7 +496,8 @@ function SegmentationSection({
                   <div
                     className="w-2.5 h-2.5 rounded-full"
                     style={{
-                      backgroundColor: SEGMENT_COLORS[label] || "#6b7280",
+                      backgroundColor:
+                        SEGMENT_COLORS[label] || "var(--muted-foreground)",
                     }}
                   />
                   <span className="text-sm font-medium capitalize">
@@ -551,7 +564,7 @@ function CancellationSection({
     }));
 
   const featureChartConfig: ChartConfig = {
-    importance: { label: "Importance", color: "#f59e0b" },
+    importance: { label: "Importance", color: seriesVar(3) },
   };
 
   // Generate insight sentence from top feature
@@ -618,7 +631,7 @@ function CancellationSection({
                   <ChartTooltip content={<ChartTooltipContent />} />
                   <Bar
                     dataKey="importance"
-                    fill="#f59e0b"
+                    fill={seriesVar(3)}
                     radius={[0, 4, 4, 0]}
                   />
                 </BarChart>
@@ -689,10 +702,10 @@ function OperationalKpisSection({
   const hasInventory = kpis.inventory !== null;
 
   const occupancyConfig: ChartConfig = {
-    count: { label: "Reservations", color: "#3b82f6" },
+    count: { label: "Reservations", color: seriesVar(1) },
   };
   const topItemsConfig: ChartConfig = {
-    total_ordered: { label: "Ordered", color: "#8b5cf6" },
+    total_ordered: { label: "Ordered", color: seriesVar(2) },
   };
 
   return (
@@ -732,17 +745,14 @@ function OperationalKpisSection({
               <KpiStatCard
                 label="Completion rate"
                 value={`${Math.round(kpis.reservation.completion_rate * 100)}%`}
-                tone={kpis.reservation.completion_rate >= 0.7 ? "green" : "yellow"}
               />
               <KpiStatCard
                 label="Cancellation rate"
                 value={`${Math.round(kpis.reservation.cancellation_rate * 100)}%`}
-                tone={kpis.reservation.cancellation_rate <= 0.15 ? "green" : "red"}
               />
               <KpiStatCard
                 label="Avg lead time"
                 value={`${kpis.reservation.avg_lead_time_hours}h`}
-                tone="neutral"
               />
             </div>
             {kpis.reservation.occupancy_by_hour?.length > 0 && (
@@ -762,7 +772,11 @@ function OperationalKpisSection({
                     />
                     <YAxis tickLine={false} axisLine={false} fontSize={11} />
                     <ChartTooltip content={<ChartTooltipContent />} />
-                    <Bar dataKey="count" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                    <Bar
+                      dataKey="count"
+                      fill={seriesVar(1)}
+                      radius={[3, 3, 0, 0]}
+                    />
                   </BarChart>
                 </ChartContainer>
               </div>
@@ -775,7 +789,6 @@ function OperationalKpisSection({
                 <KpiStatCard
                   label="Avg prep time"
                   value={`${kpis.ordering.avg_prep_time_minutes} min`}
-                  tone="neutral"
                 />
                 <KpiStatCard
                   label="Peak hour"
@@ -784,7 +797,6 @@ function OperationalKpisSection({
                       ? `${kpis.ordering.peak_hours[0].hour}:00`
                       : "—"
                   }
-                  tone="neutral"
                 />
               </div>
               {kpis.ordering.top_items?.length > 0 && (
@@ -807,7 +819,7 @@ function OperationalKpisSection({
                       <ChartTooltip content={<ChartTooltipContent />} />
                       <Bar
                         dataKey="total_ordered"
-                        fill="#8b5cf6"
+                        fill={seriesVar(2)}
                         radius={[0, 4, 4, 0]}
                       />
                     </BarChart>
@@ -823,22 +835,18 @@ function OperationalKpisSection({
                 <KpiStatCard
                   label="Total movements"
                   value={String(kpis.inventory.total_movements)}
-                  tone="neutral"
                 />
                 <KpiStatCard
                   label="Waste events"
                   value={String(kpis.inventory.waste_movements)}
-                  tone={kpis.inventory.waste_movements > 0 ? "yellow" : "green"}
                 />
                 <KpiStatCard
                   label="Low-stock alerts"
                   value={String(kpis.inventory.low_stock_incidents)}
-                  tone={kpis.inventory.low_stock_incidents > 0 ? "red" : "green"}
                 />
                 <KpiStatCard
                   label="Items below par"
                   value={String(kpis.inventory.items_below_par)}
-                  tone={kpis.inventory.items_below_par > 0 ? "yellow" : "green"}
                 />
               </div>
             </TabsContent>
@@ -849,30 +857,25 @@ function OperationalKpisSection({
   );
 }
 
-function KpiStatCard({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone: "green" | "yellow" | "red" | "neutral";
-}) {
-  // Model quality is NEUTRAL. A fit statistic being lower than someone hoped
-  // is §08's named non-qualifying case — nobody acts on an R-squared during
-  // service. The `tone` prop is kept so callers still compile; it no longer
-  // paints. (The chart SERIES colours on this screen are separately held —
-  // see the open design question in docs/DESIGN.md.)
-  const colors: Record<string, string> = {
-    green: "",
-    yellow: "",
-    red: "",
-    neutral: "",
-  };
+function KpiStatCard({ label, value }: { label: string; value: string }) {
+  // NO TONE PROP, deliberately. These tiles used to take
+  // "green" | "yellow" | "red" and the call sites computed a traffic light:
+  // green when a completion rate cleared 70%, red when cancellations passed
+  // 15%, red on a low-stock incident, amber on items below par.
+  //
+  // Every one of those is a named §08 violation. Green may never mean "good
+  // news about a number". Stock is never critical. Par levels never qualify as
+  // attend. And a rate being higher than someone hoped is the exact case the
+  // rank calls non-qualifying.
+  //
+  // The port had already blanked the colour map to empty strings, but left the
+  // prop and the judgements in place — dead code that reads like a decision
+  // waiting to be switched back on. Both are gone. These are operational
+  // figures; weight and position carry them.
   return (
-    <div className="p-3 rounded-lg border bg-muted/30">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className={`text-lg font-bold mt-0.5 ${colors[tone]}`}>{value}</p>
+    <div className="border border-border p-3">
+      <p className="type-label text-muted-foreground">{label}</p>
+      <p className="type-t2 mt-0.5">{value}</p>
     </div>
   );
 }

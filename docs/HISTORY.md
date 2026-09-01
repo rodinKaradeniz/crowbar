@@ -1597,3 +1597,108 @@ is not valid CSS. `next build` tolerated both; `next dev` did not.
 
 `docs/DESIGN.md` is now the committed contract stage 7 asked for, and the
 `frontend-design` skill was rewritten against it in the same change.
+
+## 2026-08-31 — The categorical set is five, because three sectors are reserved
+
+**Context.** `DESIGN.md` open questions 1 and 2 asked for either a declared
+categorical palette or the removal of per-tenant colour. Both were held on raw
+hex: `/business/insights` on 17 literals, the service-type picker on twelve
+arbitrary hues plus a free hex field and a native colour well. Both documents
+also claimed `--chart-1..5` existed as provisional aliases. They did not —
+`grep chart client/app/globals.css` returned nothing.
+
+**Decision.** Declare `--series-1..5` and route every use through
+`client/lib/series-palette.ts`.
+
+Five is not a preference. The severity rank reserves three sectors of the
+colour wheel — critical (~hue 30), attend (~66) and brand green (~160) — and a
+search over the remaining arc, checked with the dataviz validator's own CVD
+and separation math, showed that five is the largest set that still clears the
+normal-vision separation floor on paper, ink and the panel surface. Six scored
+14.7 against a floor of 15; eight scored 11.6. The old twelve could not have
+passed at any lightness: several sat close enough to the severity fills to read
+as an alarm beside a real one.
+
+Two properties fell out of the constraint rather than being chosen. A single
+value per slot serves **both** grounds, because the lightness band where a
+colour clears paper also clears ink — unlike severity, which needs a paper pair
+and an ink pair. And the contrast floor is 3:1, not 4.5:1, because these are
+graphical marks; text beside a series wears a text token.
+
+**Consequences.**
+- The service-type picker offers five named slots. The persisted shape is
+  unchanged — still a hex string — so no migration was needed; colours stored
+  earlier resolve to their nearest slot, and re-picking writes a declared value.
+- Guest segments in Insights were green-for-champions and red-for-lost. That is
+  a good/bad ramp on a state `DESIGN.md` classifies as neutral, and it is now
+  categorical identity.
+- Raw hex outside `globals.css` went from 45 across seven files to two
+  sanctioned files. The rule-zero table in `DESIGN.md` dropped from four
+  categories to two.
+
+**References.** `client/app/globals.css` (`--series-*`),
+`client/lib/series-palette.ts`, `docs/DESIGN.md` *Categorical series*,
+`docs/TODO.md` §7b.
+
+## 2026-08-31 — Tailwind's type scale is bridged to the ten declared steps
+
+**Context.** Rule zero says no size enters that the token block does not
+declare, and the verification for it is a grep for raw hex. That grep cannot
+see a size. Underneath it, roughly 580 Tailwind size utilities were live at
+12/14/18/20/24/30/36px — values the token block never declared — while
+`.type-ui`, `.type-data` and `.type-body` had **zero** call sites. Worse,
+`text-sm` was a hard 14px, so the tablet media query that steps `--ui-size` to
+15px never reached body text on any screen.
+
+**Decision.** Map `--text-xs`, `--text-sm` and `--text-base` to the Data, UI and
+Body steps in the `@theme` bridge, and deliberately leave `text-lg`, `xl`,
+`2xl`, `3xl` and `4xl` unmapped.
+
+The asymmetry is the point. The three that map have a real declared home, and
+mapping them converts ~500 call sites to token-driven in one edit — including
+making them scale on tablet, which was the actual service-context defect. The
+five that do not map have no declared step at 18, 20, 24, 30 or 36px, so
+leaving them pointing at Tailwind's own values makes them fail loudly and marks
+them for sweeping to `.type-*`. Remapping them to something that merely looked
+close would have hidden the problem.
+
+**Consequences.**
+- A second grep joins the raw-hex one as a rule-zero check:
+  `grep -rEn "text-(lg|xl|2xl|3xl|4xl)\b" --include="*.tsx" app components`.
+- Verify in the **built** CSS, not the source. `.text-sm` must compile to
+  `font-size: var(--ui-size)`; a stale `.next` cache once made a green build
+  meaningless here.
+- The marketing `.mkt-*` layer is now the only place product-adjacent sizes
+  live outside the declared scale.
+
+**References.** `client/app/globals.css` (`@theme inline`), `docs/DESIGN.md`
+*Rule zero*, `.claude/skills/frontend-design`.
+
+## 2026-08-31 — "Unused endpoint" is not the same finding as "missing feature"
+
+**Context.** A completion pass audited all 223 `client/lib/client-api.ts`
+exports against their call sites and found sixteen that nothing invoked.
+
+**Decision.** Classify each, and treat *delete* as a legitimate outcome.
+
+Seven were superseded and were removed, because wiring them would have added a
+second code path where one is already correct: a single-service-type fetch
+beside the by-business list, an order-level status setter beside the ticket
+board's per-line advance, a bare `clientOpenTab` beside seating-scoped tab
+opening, a low-stock endpoint beside a list the screen already holds, and two
+analytics calls the server component already makes. `clientDeleteReservation`
+is the one worth remembering: cancellation is a *status transition* that keeps
+the record, and a hard DELETE would destroy exactly what the product exists to
+retain.
+
+Nine were genuine missing affordances. Two were wired immediately — a menu
+category and a preparation station could each be created and archived but never
+renamed, so fixing a typo meant deleting the section and its items. The
+remaining seven are recorded in `docs/TODO.md` §7c; the floor-plan editors are
+the most consequential, because renaming a mistyped area currently means
+archive-plus-recreate, **which loses the table's QR code**.
+
+**Consequences.** An unused export is a question, not a verdict. Ask whether a
+correct caller already exists before assuming the UI is missing one.
+
+**References.** `docs/TODO.md` §7c, `client/lib/client-api.ts`.

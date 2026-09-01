@@ -261,7 +261,7 @@ export default function BusinessInfoClient({
 
       <div className="lg:w-80">
         <div className="sticky top-6">
-          <div className="rounded-lg border bg-card overflow-hidden">
+          <div className="border bg-card overflow-hidden">
             <div className="relative h-32 w-full">
               {businessImage && (
                 <Image
@@ -308,7 +308,7 @@ export default function BusinessInfoClient({
 
           {/* Booking URL */}
           {slug && (
-            <div className="mt-4 rounded-lg border bg-muted/40 p-3 space-y-2">
+            <div className="mt-4 border bg-muted/40 p-3 space-y-2">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Booking URL</p>
               <p className="text-xs font-mono text-foreground break-all">/reserve/{slug}</p>
               <div className="flex gap-2">

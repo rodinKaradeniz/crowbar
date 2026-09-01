@@ -44,6 +44,17 @@ export default function RegisterPage() {
                 the next service.
               </h2>
 
+              {/* THE SEQUENCING HAS TO BE UNMISTAKABLE. This list was read as
+                  part of registration: it sat in numbered order beside a form
+                  that says "Step 1 of 2", so two numbered sequences shared one
+                  screen and only one of them was the form. The eyebrow says
+                  when these happen, and the ordinals are gone — the <ol> still
+                  carries the order for anything that needs it, but there are no
+                  digits left to mistake for a step of the form. */}
+              <p className="mkt-eyebrow mb-3.5 text-text-on-ink-faint">
+                After you create the account
+              </p>
+
               <ol className="flex flex-col border-t border-border">
                 {SETUP_STEPS.map((label, index) => (
                   <li
@@ -57,17 +68,18 @@ export default function RegisterPage() {
                     <span
                       className={
                         index === 0
-                          ? "font-mono text-[12px] text-primary"
-                          : "font-mono text-[12px] text-text-on-ink-faint"
+                          ? "mkt-num text-primary"
+                          : "mkt-num text-text-on-ink-faint"
                       }
+                      aria-hidden
                     >
-                      {String(index + 1).padStart(2, "0")}
+                      —
                     </span>
                     <span
                       className={
                         index === 0
-                          ? "text-[14.5px] text-text-on-ink-2"
-                          : "text-[14.5px] text-muted-foreground"
+                          ? "mkt-item-lg text-text-on-ink-2"
+                          : "mkt-item-lg text-muted-foreground"
                       }
                     >
                       {label}

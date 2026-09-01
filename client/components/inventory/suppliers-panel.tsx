@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { EmptyState } from "@/components/empty-state";
+import { SkeletonList } from "@/components/ui/skeleton";
 
 type SupplierFormState = {
   name: string;
@@ -167,7 +168,7 @@ export function SuppliersPanel({ businessId, canManage, onChanged }: Props) {
       )}
 
       {loading ? (
-        <div className="text-sm text-muted-foreground">Loading suppliers…</div>
+        <SkeletonList rows={4} columns={["w-[26%]", "w-[20%]", "w-[18%]", "w-[14%]"]} />
       ) : suppliers.length === 0 ? (
         <EmptyState
           icon={Building2}
@@ -180,7 +181,7 @@ export function SuppliersPanel({ businessId, canManage, onChanged }: Props) {
           {suppliers.map((supplier) => (
             <div
               key={supplier.id}
-              className="flex items-center gap-3 rounded-lg border px-4 py-3"
+              className="flex items-center gap-3 border px-4 py-3"
             >
               <div className="flex-1 min-w-0">
                 <div className="font-medium truncate">{supplier.name}</div>
@@ -194,18 +195,16 @@ export function SuppliersPanel({ businessId, canManage, onChanged }: Props) {
               {canManage && (
                 <div className="flex gap-1 shrink-0">
                   <Button
-                    size="filter"
+                    size="icon-sm"
                     variant="ghost"
-                    className="h-8 w-8 p-0"
                     title="Edit supplier"
                     onClick={() => openEdit(supplier)}
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
                   <Button
-                    size="filter"
+                    size="icon-sm"
                     variant="ghost"
-                    className="h-8 w-8 p-0"
                     title="Archive supplier"
                     onClick={() => setToArchive(supplier)}
                   >

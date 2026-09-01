@@ -90,7 +90,7 @@ export default function CustomersClient({
           </p>
         </div>
       ) : (
-        <div className="rounded-lg border bg-card">
+        <div className="border bg-card">
           <Table>
             <TableHeader>
               <TableRow>

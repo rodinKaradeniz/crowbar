@@ -10,7 +10,7 @@ import type { Severity } from "@/lib/severity"
  *
  * Header is the Micro step (9.5 mono uppercase) over a strong rule. Rows are
  * 44px on desktop and 56px on tablet, separated by hairlines, with NO ZEBRA.
- * Text left, font-mono tabular-nums right and tabular. Hover lifts the background one step.
+ * Text left, numbers right and tabular. Hover lifts the background one step.
  * Selection is a 2px inset brand bar.
  *
  * Fixed column widths per screen, so numbers align down the page — set them at
@@ -120,7 +120,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
   )
 }
 
-/** `numeric` puts the cell right and sets it in tabular mono, so font-mono tabular-nums align
+/** `numeric` puts the cell right and sets it in tabular mono, so numbers align
  *  down the page. Format the value through the canonical helpers first. */
 function TableCell({
   className,

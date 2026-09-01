@@ -46,3 +46,25 @@ export function formatBusinessServiceDay(
     month: "short",
   }).format(new Date(value));
 }
+
+/**
+ * The same service day, spelled out.
+ *
+ * A SEPARATE FUNCTION, not an option on the one above, because the abbreviated
+ * form is load-bearing where it is used: the overview's seven-night forecast
+ * splits it on the comma to get a weekday for a narrow axis column, and the
+ * reservation table sets it in a fixed-width mono cell. "Dienstag" would break
+ * both. Use this only where a full line has room for it.
+ */
+export function formatBusinessServiceDayLong(
+  value: string | number | Date,
+  timeZone: string,
+  locale?: string,
+): string {
+  return new Intl.DateTimeFormat(locale, {
+    timeZone,
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(new Date(value));
+}

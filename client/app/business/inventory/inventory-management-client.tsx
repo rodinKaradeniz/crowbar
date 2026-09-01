@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { SkeletonList } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -467,8 +468,11 @@ export function InventoryManagementClient({ businessId, businessTimezone, embedd
             Track stock levels and record movements
           </p>
         </div>
+        {/* One size for the pair. `filter` is the 34px chip used INSIDE a filter
+            bar; a screen's header actions take the default height, which is what
+            every other screen's header does. */}
         <div className="flex gap-2">
-          <Button variant="secondary" size="filter" onClick={loadItems}>
+          <Button variant="secondary" onClick={loadItems}>
             <RefreshCw className="h-4 w-4 mr-1.5" />
             Refresh
           </Button>
@@ -515,9 +519,9 @@ export function InventoryManagementClient({ businessId, businessTimezone, embedd
 
       {/* Item list */}
       {loading ? (
-        <div className="text-sm text-muted-foreground">Loading inventory…</div>
+        <SkeletonList rows={6} columns={["w-[28%]", "w-[16%]", "w-[14%]", "w-[14%]", "w-[12%]"]} />
       ) : items.length === 0 ? (
-        <div className="rounded-lg border border-dashed p-12 text-center">
+        <div className="border border-dashed p-12 text-center">
           <Package className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
           <p className="font-medium">No inventory items yet</p>
           <p className="text-sm text-muted-foreground mt-1">
@@ -533,7 +537,7 @@ export function InventoryManagementClient({ businessId, businessTimezone, embedd
           {items.map((item) => (
             <div
               key={item.id}
-              className="flex items-center gap-3 rounded-lg border px-4 py-3"
+              className="flex items-center gap-3 border px-4 py-3"
             >
               {/* Name + meta */}
               <div className="flex-1 min-w-0">
@@ -574,36 +578,32 @@ export function InventoryManagementClient({ businessId, businessTimezone, embedd
               {/* Actions */}
               <div className="flex gap-1 shrink-0">
                 <Button
-                  size="filter"
+                  size="icon-sm"
                   variant="ghost"
-                  className="h-8 w-8 p-0"
                   title="Record movement"
                   onClick={() => openMovement(item)}
                 >
                   <ArrowUpCircle className="h-3.5 w-3.5" />
                 </Button>
                 <Button
-                  size="filter"
+                  size="icon-sm"
                   variant="ghost"
-                  className="h-8 w-8 p-0"
                   title="View history"
                   onClick={() => openHistory(item)}
                 >
                   <History className="h-3.5 w-3.5" />
                 </Button>
                 <Button
-                  size="filter"
+                  size="icon-sm"
                   variant="ghost"
-                  className="h-8 w-8 p-0"
                   title="Edit item"
                   onClick={() => openEditItem(item)}
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>
                 <Button
-                  size="filter"
+                  size="icon-sm"
                   variant="ghost"
-                  className="h-8 w-8 p-0"
                   title="Archive item"
                   onClick={() => deleteItem(item)}
                 >
@@ -1005,7 +1005,7 @@ export function InventoryManagementClient({ businessId, businessTimezone, embedd
               movements.map((m) => (
                 <div
                   key={m.id}
-                  className="flex items-start gap-3 rounded-lg border px-3 py-2.5"
+                  className="flex items-start gap-3 border px-3 py-2.5"
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">

@@ -17,6 +17,7 @@ import { consumeCapabilityFragment } from "@/lib/capability-fragment";
 import type { Availability, Reservation } from "@/types";
 import type { Business } from "@/types";
 import { formatBusinessDateTime, formatBusinessTime } from "@/lib/business-time";
+import { DocumentLocale } from "@/components/document-locale";
 import { GuestPrivacySection } from "./guest-privacy-section";
 
 export default function ManageReservationClient() {
@@ -76,12 +77,12 @@ export default function ManageReservationClient() {
   }
 
   if (loading) return <main className="min-h-screen grid place-items-center p-6 text-sm text-muted-foreground">Loading reservation…</main>;
-  if (!reservation) return <main className="min-h-screen grid place-items-center p-6"><div className="max-w-md text-center"><h1 className="font-display text-3xl">Reservation unavailable</h1><p className="mt-3 text-sm text-muted-foreground">{error ?? "This link is invalid or has been replaced."}</p></div></main>;
+  if (!reservation) return <main className="min-h-screen grid place-items-center p-6"><div className="max-w-md text-center"><h1 className="type-d3">Reservation unavailable</h1><p className="mt-3 text-sm text-muted-foreground">{error ?? "This link is invalid or has been replaced."}</p></div></main>;
 
   const active = reservation.status === "pending" || reservation.status === "confirmed";
-  return <main className="min-h-screen p-5 sm:p-10"><section className="mx-auto max-w-xl rounded-xl border border-border bg-card p-5 shadow-sm sm:p-8">
+  return <main className="min-h-screen p-5 sm:p-10">{business?.locale ? <DocumentLocale locale={business.locale} /> : null}<section className="mx-auto max-w-xl border border-border bg-card p-5 sm:p-8">
     <p className="type-label text-muted-foreground">Reservation</p>
-    <h1 className="mt-2 font-display text-3xl">Manage your booking</h1>
+    <h1 className="mt-2 type-d3">Manage your booking</h1>
     <p className="mt-4 text-sm text-muted-foreground">{formatBusinessDateTime(reservation.time, business?.timezone ?? "UTC", business?.locale)} · {reservation.guests} guests</p>
     <p className="mt-2 text-sm capitalize">Status: <strong>{reservation.status.replace("_", " ")}</strong>{reservation.cancelledLate ? " (late cancellation)" : ""}</p>
     {/* Brand, not a green tick — this is "we have you", not a success state. */}

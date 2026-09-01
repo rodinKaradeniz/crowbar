@@ -26,6 +26,9 @@ import { clientExchangePublicCapability } from "@/lib/client-api";
  */
 export function ResetPasswordForm() {
   const [password, setPassword] = useState("");
+  // The strength meter must not call a password invalid before the person
+  // has finished typing it. See components/auth/password-strength.tsx.
+  const [passwordTouched, setPasswordTouched] = useState(false);
   const [confirmation, setConfirmation] = useState("");
   const [revealed, setRevealed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -155,6 +158,7 @@ export function ResetPasswordForm() {
             placeholder={`At least ${PASSWORD_MIN_LENGTH} characters`}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
+            onBlur={() => setPasswordTouched(true)}
             required
             maxLength={128}
             disabled={submitting || !capabilityReady}
@@ -168,7 +172,7 @@ export function ResetPasswordForm() {
               ) : undefined
             }
           />
-          <PasswordStrength verdict={verdict} />
+          <PasswordStrength verdict={verdict} touched={passwordTouched} />
         </div>
 
         <AuthField

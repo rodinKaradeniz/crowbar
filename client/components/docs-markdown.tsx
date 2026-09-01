@@ -14,7 +14,7 @@ function createMdComponents(variant: "page" | "chat"): Components {
         className={cn(
           chat
             ? "mt-3 scroll-m-20 text-base font-semibold tracking-tight text-foreground first:mt-0"
-            : "scroll-m-20 text-2xl font-semibold tracking-tight text-foreground",
+            : "scroll-m-20 type-t1 text-foreground",
           className,
         )}
         {...p}
@@ -25,7 +25,7 @@ function createMdComponents(variant: "page" | "chat"): Components {
         className={cn(
           chat
             ? "mt-3 scroll-m-20 text-sm font-semibold tracking-tight text-foreground first:mt-0"
-            : "mt-8 scroll-m-20 border-b border-border pb-2 text-xl font-semibold tracking-tight text-foreground first:mt-0",
+            : "mt-8 scroll-m-20 border-b border-border pb-2 type-t1 text-foreground first:mt-0",
           className,
         )}
         {...p}
@@ -36,7 +36,7 @@ function createMdComponents(variant: "page" | "chat"): Components {
         className={cn(
           chat
             ? "mt-3 scroll-m-20 text-sm font-semibold tracking-tight text-foreground first:mt-0"
-            : "mt-6 scroll-m-20 text-lg font-semibold tracking-tight text-foreground",
+            : "mt-6 scroll-m-20 type-t2 text-foreground",
           className,
         )}
         {...p}
@@ -143,7 +143,7 @@ function createMdComponents(variant: "page" | "chat"): Components {
     pre: ({ className, ...p }) => (
       <pre
         className={cn(
-          "overflow-x-auto rounded-lg bg-muted",
+          "overflow-x-auto bg-muted",
           chat ? "mt-2 p-2 text-xs" : "mt-4 p-3",
           className,
         )}

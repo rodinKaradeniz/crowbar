@@ -63,7 +63,7 @@ export function AuthField({
         <p
           id={hintId}
           className={cn(
-            "mt-2 text-[12.5px] leading-[1.45]",
+            "auth-hint",
             // Resolves per ground — this primitive may end up on an ink panel.
             invalid ? "text-field-invalid" : "text-muted-foreground",
           )}

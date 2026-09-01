@@ -194,6 +194,35 @@ What changed with stage 7: they no longer own *aesthetic direction*. The
 palette, type scale, spacing, radius, elevation and motion are settled. They
 own how well a screen is composed inside those constraints.
 
+That distinction decides which of the installed user-level skills to load.
+Most of them exist to *propose a visual language*, which is the one thing this
+repository no longer has an opening for.
+
+### Load these
+
+| For | Skill | Boundary |
+| --- | --- | --- |
+| UX review, hierarchy, cognitive load, empty and error states, i18n, accessibility | `impeccable` | Owns craft inside the system. If it proposes a new tone, size or duration, that is a design question — raise it, do not take it. |
+| Auditing a screen against interface guidelines | `web-design-guidelines` | Its accessibility and semantics findings are authoritative. Its styling suggestions yield to the token block. |
+| Any chart, series, legend, axis, stat tile or dashboard | `dataviz` | Load it **before** writing chart code. Its method (form first, colour last, run the validator) applies as written; its palette does not — the series colours are `--series-1..5` in `globals.css`. |
+| Component API shape, decomposing a large client component, Server Component boundaries | `vercel-composition-patterns`, `vercel-react-best-practices` | Structure and data flow only. |
+| Interaction polish and micro-interaction judgement | `emil-design-eng` | Its taste on *what* should respond is useful. Its durations and easings yield to the declared five. |
+| Driving a surface at 1280 and 1024×768 | `playwright-cli`, or the `chrome-devtools-axi` CLI | Verification, not design. |
+
+### Do not load these here
+
+`high-end-visual-design` · `gpt-taste` · `minimalist-ui` ·
+`industrial-brutalist-ui` · `stitch-design-taste` · `design-taste-frontend` ·
+`design-taste-frontend-v1` · `redesign-existing-projects` · `image-to-code` ·
+`imagegen-frontend-web` · `imagegen-frontend-mobile` · `brandkit`
+
+One reason covers all of them: each supplies an aesthetic direction — a font
+pairing, a shadow language, a motion vocabulary, a palette — and Crowbar's is
+settled and committed in `docs/DESIGN.md`. Loading one produces a screen that
+is good on its own terms and wrong for this product, which is the exact failure
+the stage 7 port existed to end. They remain the right tools in a repository
+that has not settled its direction.
+
 ## Anti-patterns
 
 - Inventing a colour, size or duration because the token block lacks one.
@@ -221,11 +250,27 @@ grep -rEn "#[0-9a-fA-F]{3,8}\b" --include="*.tsx" --include="*.ts" --include="*.
   app components lib contexts hooks | grep -v "app/globals.css"
 ```
 
-Every surviving hit must be one of the four named categories in
-`docs/DESIGN.md` under *Rule zero* — held Insights chart series, tenant-chosen
-service-type colours, Recharts attribute selectors, or the `#000000` placeholder
-in the colour picker. **Anything else has drifted.** Do not add a fifth
-category; raise it as a design question instead.
+Every surviving hit must be one of the two named categories in
+`docs/DESIGN.md` under *Rule zero*:
+
+- `components/ui/chart.tsx` — attribute selectors matching hexes Recharts
+  itself emits (`stroke='#ccc'`). Matched, never declared.
+- `lib/series-palette.ts` — the five declared `--series-*` values and the
+  legacy-colour map. A service-type colour is persisted as a string and a CSS
+  variable cannot be written to a database, so the values exist here too;
+  `globals.css` stays the source of truth for rendering.
+
+**Anything else has drifted.** Do not add a third category; raise it as a
+design question instead.
+
+The hex grep does not catch a size. Tailwind's own scale is bridged to the
+declared steps for `text-xs` / `text-sm` / `text-base` only — `text-lg`, `xl`,
+`2xl`, `3xl` and `4xl` resolve to values the token block never declared, so
+treat any of those five in a diff as the same class of bug as a raw hex:
+
+```bash
+grep -rEn "text-(lg|xl|2xl|3xl|4xl)\b" --include="*.tsx" app components
+```
 
 Drive the surface in `./scripts/dev.sh` at **1280 and at 1024×768** before
 claiming a staff screen works.

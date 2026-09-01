@@ -77,9 +77,9 @@ const FAQS: Faq[] = [
 
 export function FaqSection() {
   return (
-    <section id="faq" className="mkt-shell mkt-sec-faq">
+    <section id="faq" className="mkt-anchor mkt-shell mkt-sec-faq">
       <div className="mkt-gap-faq flex flex-wrap">
-        <div className="min-w-[min(100%,280px)] flex-[0_1_320px]">
+        <div className="settle min-w-[min(100%,280px)] flex-[0_1_320px]">
           <h2 className="mkt-d2-faq mb-3.5">
             The practical
             <br />
@@ -96,7 +96,7 @@ export function FaqSection() {
           </p>
         </div>
 
-        <dl className="min-w-[min(100%,320px)] flex-[1_1_520px] border-t border-ink">
+        <dl className="settle-2 min-w-[min(100%,320px)] flex-[1_1_520px] border-t border-ink">
           {FAQS.map((faq) => (
             <div
               key={faq.question}

@@ -123,7 +123,6 @@ confirmed fixed MVP permission matrix.
 | `/api/proxy/[...path]` | Supporting infrastructure | Retain authenticated forwarding; stage 1 regression-tests authentication, error/status/header behavior, and mutation boundaries. |
 | `/api/ws-token` | Supporting infrastructure | Retain short-lived business-bound WebSocket credentials; stages 1 and 7 prove revocation, tenant scope, reconnect, and HTTP/WS parity. |
 | `/api/health` | Supporting infrastructure | Retain for local and later Railway health checks; stage 8 defines local release evidence and stage 9 adds deployment readiness. |
-| `/api/business-docs-chat` | Optional | Hidden and 404 unless explicitly enabled with a configured provider; authenticated input/history/output and request rate are bounded. Stage 7 proves distributed abuse control and provider failure. |
 
 No customer dashboard, customer account area, payment screen, receipt/invoice
 route, cash drawer, fiscal export, or supplier-payment route belongs in this
@@ -152,7 +151,7 @@ what is sufficient for release.
 | NOTIFY | `/api/notifications/*`; `notification_service` plus reservation/queue delivery services and scheduled jobs | notifications and workflow-specific delivery/deduplication fields; stage 1 adds durable channel attempts | Email/SMS and staff notification UI | Notification integration and email/reminder units cover parts; stages 1 and 3 own channel truth, retry/fallback, tenant/user scope and shell behavior. |
 | ANALYTICS | `/api/analytics/*`; `analytics_service` | Read models computed from reservations, queue, orders, tabs, inventory | None | No dedicated analytics suite; stages 1, 2, and 6 own semantic, service-day, cancellation, and report reconciliation tests. |
 | INSIGHT | `/api/insights/*`; FastAPI gateway and private ML service | Main operational tables plus ML result tables; latest response also held in process memory | Private HTTP pipeline run | FastAPI router units and two ML tests exist; stages 1 and 6 own reproducibility/persistence, stage 8 owns outage tolerance. |
-| DOCS | Static MDX loader and `/api/business-docs-chat` | Checked-in documentation chunks; no product record | Optional OpenAI API request | Build exercises docs compilation; stages 1 and 7 own provider gating, bounds, and failure behavior if the assistant remains. |
+| DOCS | Static MDX loader | Checked-in documentation chunks; no product record | None | Build exercises docs compilation. The optional OpenAI docs assistant and its route were removed in stage 7; there is no third-party provider on this surface. |
 
 Redis events are failure-tolerant projections, not the authoritative record.
 Acceptance for every event-backed workflow therefore requires both committed

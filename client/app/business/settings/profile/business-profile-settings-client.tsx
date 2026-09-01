@@ -125,7 +125,7 @@ export default function BusinessProfileSettingsClient({
       {/* Preview Card */}
       <div className="lg:w-80">
         <div className="sticky top-6">
-          <div className="flex flex-col gap-4 border border-border bg-card p-6">
+          <div className="flex flex-col gap-4 border border-border p-6">
             <div className="flex items-center gap-4">
               {avatar ? (
                 <div className="relative h-16 w-16 overflow-hidden rounded-full">
@@ -137,7 +137,7 @@ export default function BusinessProfileSettingsClient({
                   />
                 </div>
               ) : (
-                <div className="h-16 w-16 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-lg font-semibold">
+                <div className="flex size-16 items-center justify-center rounded-full bg-primary type-t1 text-primary-foreground">
                   {getInitials(name || "U")}
                 </div>
               )}

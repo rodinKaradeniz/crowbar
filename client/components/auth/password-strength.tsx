@@ -45,15 +45,36 @@ export function gradePassword(password: string): PasswordVerdict {
  * exactly this case on the form-validation channel instead — "'Too short — 10
  * characters minimum' is this, not attend" — and §08 is the governing rank.
  * A weak-but-valid password is drawn neutral rather than borrowing a service
- * alarm. Recorded as an open design question in `docs/TODO.md` §7b.
+ * alarm. §08 governs over the Auth canvas; `docs/TODO.md` §7b is closed as
+ * decided.
+ *
+ * `touched` IS NOT COSMETIC. Without it the meter renders `tone: "invalid"` on
+ * the first keystroke, so every password field flashed the validation colour
+ * before the person had done anything wrong -- telling someone they had failed
+ * while they were still typing the first four characters of a twelve-character
+ * minimum. The verdict is still computed live; only the *invalid* tone waits
+ * for the field to lose focus. Reaching the minimum clears it immediately,
+ * without a blur, so the meter never withholds good news.
  */
-export function PasswordStrength({ verdict }: { verdict: PasswordVerdict }) {
+export function PasswordStrength({
+  verdict,
+  touched = false,
+}: {
+  verdict: PasswordVerdict;
+  /** Set once the field has been blurred. Until then a shortfall reads neutral. */
+  touched?: boolean;
+}) {
   if (verdict.score === 0) return null;
 
+  // Before first blur a too-short password is simply "not there yet", not an
+  // error the person has made.
+  const tone =
+    verdict.tone === "invalid" && !touched ? "neutral" : verdict.tone;
+
   const fill =
-    verdict.tone === "invalid"
+    tone === "invalid"
       ? "bg-field-invalid"
-      : verdict.tone === "brand"
+      : tone === "brand"
         ? "bg-primary"
         : "bg-text-faint";
 
@@ -69,9 +90,9 @@ export function PasswordStrength({ verdict }: { verdict: PasswordVerdict }) {
       </div>
       <p
         className={`mkt-eyebrow mt-2 tracking-[0.06em] ${
-          verdict.tone === "invalid"
+          tone === "invalid"
             ? "text-field-invalid"
-            : verdict.tone === "brand"
+            : tone === "brand"
               ? "text-primary"
               : "text-muted-foreground"
         }`}

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Armchair, ChevronRight, Copy, Loader2, Plus, Wrench } from "lucide-react";
+import { Armchair, ChevronRight, Copy, Plus, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,12 +20,15 @@ import {
 } from "@/components/ui/sheet";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { FloorPlanSeatingSheet } from "@/components/floor-plan-seating-sheet";
+import { SkeletonList } from "@/components/ui/skeleton";
 import { useFloorPlanSocket } from "@/hooks/use-floor-plan-socket";
 import {
   clientArchiveFloorPlanArea,
   clientArchiveFloorPlanTable,
   clientCloseFloorPlanSeating,
   clientCreateFloorPlanArea,
+  clientUpdateFloorPlanArea,
+  clientUpdateFloorPlanTable,
   clientCreateFloorPlanCombination,
   clientCreateFloorPlanTable,
   clientGetFloorPlanAreas,
@@ -113,7 +116,7 @@ function PartyCard({
   businessTimezone: string;
 }) {
   return (
-    <div className="rounded-xl border bg-card p-3 shadow-sm">
+    <div className="border bg-card p-3">
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">{party.name}</p>
@@ -226,33 +229,108 @@ function SetupPanel({ onChanged }: { onChanged: () => Promise<void> }) {
     toast.success(message);
   };
 
-  if (loading) return <div className="py-16 text-center text-sm text-muted-foreground">Loading floor setup…</div>;
+  // Renaming an area or a table used to be impossible: the client-api update
+  // functions existed but nothing called them, so the only way to fix a typo
+  // was archive-plus-recreate — and recreating a table ISSUES A NEW QR CODE,
+  // invalidating every printed code already on that table.
+  const [editing, setEditing] = useState<
+    { kind: "area" | "table"; id: string; label: string; capacity?: string } | null
+  >(null);
+
+  const saveEdit = async () => {
+    if (!editing) return;
+    const label = editing.label.trim();
+    if (!label) return;
+    try {
+      if (editing.kind === "area") {
+        await clientUpdateFloorPlanArea(editing.id, { name: label });
+      } else {
+        const capacity = Number(editing.capacity);
+        await clientUpdateFloorPlanTable(editing.id, {
+          label,
+          ...(Number.isFinite(capacity) && capacity > 0 ? { capacity } : {}),
+        });
+      }
+      setEditing(null);
+      await onChanged();
+      toast.success(editing.kind === "area" ? "Area renamed." : "Table updated.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not save that change.",
+      );
+    }
+  };
+
+  if (loading)
+    return (
+      <SkeletonList
+        className="py-6"
+        rows={5}
+        columns={["w-[30%]", "w-[18%]", "w-[16%]"]}
+      />
+    );
 
   return (
     <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
       <div className="space-y-8">
         <section>
           <div className="mb-3 flex items-center justify-between gap-3">
-            <div><p className="type-label text-muted-foreground">Areas and tables</p><h2 className="text-xl font-semibold">Your floor, by area</h2></div>
+            <div><p className="type-label text-muted-foreground">Areas and tables</p><h2 className="type-t1">Your floor, by area</h2></div>
           </div>
           {areas.length === 0 ? (
-            <p className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">Create an area before adding tables.</p>
+            <p className="border border-dashed p-6 text-sm text-muted-foreground">Create an area before adding tables.</p>
           ) : (
             <div className="space-y-3">
               {areas.map((area) => {
                 const areaTables = tables.filter((table) => table.areaId === area.id);
                 return (
-                  <div key={area.id} className="rounded-xl border bg-card p-4">
+                  <div key={area.id} className="border bg-card p-4">
                     <div className="flex items-center justify-between gap-3">
-                      <div><h3 className="font-semibold">{area.name}</h3><p className="text-xs text-muted-foreground">{areaTables.length} tables</p></div>
-                      <Button size="filter" variant="secondary" onClick={() => setArchiveTarget({ type: "area", id: area.id, label: area.name })}>Archive</Button>
+                      {editing?.kind === "area" && editing.id === area.id ? (
+                        <div className="flex flex-1 items-center gap-2">
+                          <Input
+                            autoFocus
+                            value={editing.label}
+                            onChange={(event) => setEditing({ ...editing, label: event.target.value })}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") void saveEdit();
+                              if (event.key === "Escape") setEditing(null);
+                            }}
+                            aria-label={`Rename ${area.name}`}
+                          />
+                          <Button size="filter" variant="secondary" onClick={() => void saveEdit()}>Save</Button>
+                          <Button size="filter" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
+                        </div>
+                      ) : (
+                        <>
+                          <div><h3 className="font-semibold">{area.name}</h3><p className="text-xs text-muted-foreground">{areaTables.length} tables</p></div>
+                          <div className="flex gap-2">
+                            <Button size="filter" variant="ghost" onClick={() => setEditing({ kind: "area", id: area.id, label: area.name })}>Rename</Button>
+                            <Button size="filter" variant="secondary" onClick={() => setArchiveTarget({ type: "area", id: area.id, label: area.name })}>Archive</Button>
+                          </div>
+                        </>
+                      )}
                     </div>
                     {areaTables.length > 0 && (
                       <div className="mt-3 grid gap-2 sm:grid-cols-2">
                         {areaTables.map((table) => (
-                          <div key={table.id} className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2">
-                            <span className="text-sm font-medium">{table.label} <span className="font-mono tabular-nums text-xs text-muted-foreground">· {table.capacity}</span></span>
-                            <Button size="filter" variant="ghost" onClick={() => setArchiveTarget({ type: "table", id: table.id, label: table.label })}>Archive</Button>
+                          <div key={table.id} className="flex items-center justify-between gap-2 bg-muted/40 px-3 py-2">
+                            {editing?.kind === "table" && editing.id === table.id ? (
+                              <div className="flex flex-1 flex-wrap items-center gap-2">
+                                <Input autoFocus value={editing.label} onChange={(event) => setEditing({ ...editing, label: event.target.value })} className="w-28" aria-label={`Rename ${table.label}`} />
+                                <Input type="number" min={1} value={editing.capacity ?? ""} onChange={(event) => setEditing({ ...editing, capacity: event.target.value })} className="w-20" aria-label={`Seats at ${table.label}`} />
+                                <Button size="filter" variant="secondary" onClick={() => void saveEdit()}>Save</Button>
+                                <Button size="filter" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
+                              </div>
+                            ) : (
+                              <>
+                                <span className="text-sm font-medium">{table.label} <span className="font-mono tabular-nums text-xs text-muted-foreground">· {table.capacity}</span></span>
+                                <div className="flex gap-1">
+                                  <Button size="filter" variant="ghost" onClick={() => setEditing({ kind: "table", id: table.id, label: table.label, capacity: String(table.capacity) })}>Edit</Button>
+                                  <Button size="filter" variant="ghost" onClick={() => setArchiveTarget({ type: "table", id: table.id, label: table.label })}>Archive</Button>
+                                </div>
+                              </>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -264,16 +342,16 @@ function SetupPanel({ onChanged }: { onChanged: () => Promise<void> }) {
           )}
         </section>
 
-        <section className="rounded-xl border bg-card p-4">
+        <section className="border bg-card p-4">
           <p className="type-label text-muted-foreground">Table combinations</p>
           <p className="mt-1 text-sm text-muted-foreground">Only configured combinations may seat one party across multiple tables.</p>
-          {combinations.length > 0 && <div className="mt-4 space-y-2">{combinations.map((item) => <div key={item.id} className="rounded-lg bg-muted/40 px-3 py-2 text-sm"><span className="font-medium">{item.name}</span><span className="font-mono tabular-nums ml-2 text-xs text-muted-foreground">{item.effectiveCapacity} seats</span></div>)}</div>}
+          {combinations.length > 0 && <div className="mt-4 space-y-2">{combinations.map((item) => <div key={item.id} className="bg-muted/40 px-3 py-2 text-sm"><span className="font-medium">{item.name}</span><span className="font-mono tabular-nums ml-2 text-xs text-muted-foreground">{item.effectiveCapacity} seats</span></div>)}</div>}
           <div className="mt-4 space-y-3">
             <Input value={combinationName} onChange={(event) => setCombinationName(event.target.value)} placeholder="Combination name" />
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {tables.map((table) => {
                 const selected = combinationTableIds.includes(table.id);
-                return <button key={table.id} type="button" onClick={() => setCombinationTableIds((ids) => selected ? ids.filter((id) => id !== table.id) : [...ids, table.id])} className={cn("rounded-lg border px-3 py-2 text-left text-sm", selected && "border-primary bg-primary/10")}>{table.label}<span className="font-mono tabular-nums ml-1 text-xs text-muted-foreground">{table.capacity}</span></button>;
+                return <button key={table.id} type="button" onClick={() => setCombinationTableIds((ids) => selected ? ids.filter((id) => id !== table.id) : [...ids, table.id])} className={cn("border px-3 py-2 text-left text-sm", selected && "border-primary bg-primary/10")}>{table.label}<span className="font-mono tabular-nums ml-1 text-xs text-muted-foreground">{table.capacity}</span></button>;
               })}
             </div>
             <Button disabled={busy || combinationName.trim().length === 0 || combinationTableIds.length < 2} onClick={async () => { setBusy(true); try { await clientCreateFloorPlanCombination({ name: combinationName.trim(), tableIds: combinationTableIds }); setCombinationName(""); setCombinationTableIds([]); await finishMutation("Table combination created."); } catch (error) { toast.error(error instanceof Error ? error.message : "Could not create combination."); } finally { setBusy(false); } }}>Create combination</Button>
@@ -282,11 +360,11 @@ function SetupPanel({ onChanged }: { onChanged: () => Promise<void> }) {
       </div>
 
       <aside className="space-y-5">
-        <section className="rounded-xl border bg-card p-4">
+        <section className="border bg-card p-4">
           <p className="type-label text-muted-foreground">Add area</p>
           <div className="mt-3 flex gap-2"><Input value={areaName} onChange={(event) => setAreaName(event.target.value)} placeholder="e.g. Patio" /><Button disabled={busy || !areaName.trim()} onClick={async () => { setBusy(true); try { await clientCreateFloorPlanArea({ name: areaName.trim() }); setAreaName(""); await finishMutation("Area created."); } catch (error) { toast.error(error instanceof Error ? error.message : "Could not create area."); } finally { setBusy(false); } }}><Plus /></Button></div>
         </section>
-        <section className="rounded-xl border bg-card p-4">
+        <section className="border bg-card p-4">
           <p className="type-label text-muted-foreground">Add table</p>
           <div className="mt-3 space-y-2">
             <select value={newTable.areaId} onChange={(event) => setNewTable((current) => ({ ...current, areaId: event.target.value }))} className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"><option value="">Choose area</option>{areas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}</select>
@@ -295,7 +373,7 @@ function SetupPanel({ onChanged }: { onChanged: () => Promise<void> }) {
             <Button className="w-full" disabled={busy || !newTable.areaId || !newTable.label.trim() || Number(newTable.capacity) < 1} onClick={async () => { setBusy(true); try { await clientCreateFloorPlanTable({ areaId: newTable.areaId, label: newTable.label.trim(), capacity: Number(newTable.capacity), shape: "square" }); setNewTable((current) => ({ ...current, label: "", capacity: "2" })); await finishMutation("Table created."); } catch (error) { toast.error(error instanceof Error ? error.message : "Could not create table."); } finally { setBusy(false); } }}>Add table</Button>
           </div>
         </section>
-        <section className="rounded-xl border bg-card p-4">
+        <section className="border bg-card p-4">
           <p className="type-label text-muted-foreground">Service day</p>
           <p className="mt-1 text-sm text-muted-foreground">{settings?.timezone}</p>
           <div className="mt-3 flex gap-2"><Input type="time" value={cutoff} onChange={(event) => setCutoff(event.target.value)} /><Button variant="secondary" disabled={busy || !cutoff} onClick={async () => { setBusy(true); try { await clientUpdateFloorPlanSettings(`${cutoff}:00`); await finishMutation("Service-day cutoff updated."); } catch (error) { toast.error(error instanceof Error ? error.message : "Could not update cutoff."); } finally { setBusy(false); } }}>Save</Button></div>
@@ -440,7 +518,7 @@ export default function FloorClient({ businessId, canManage, hasReservations, ha
     }
   };
 
-  if (loading) return <div className="px-[clamp(16px,2.5vw,32px)] py-6 flex min-h-80 items-center justify-center text-sm text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading host board…</div>;
+  if (loading) return <div className="px-[clamp(16px,2.5vw,32px)] py-6 flex min-h-80 items-center justify-center text-sm text-muted-foreground">Loading host board…</div>;
 
   return (
     <>
@@ -489,14 +567,14 @@ export default function FloorClient({ businessId, canManage, hasReservations, ha
                   />
                 ) : board.areas.map((area) => (
                   <section key={area.id}>
-                    <div className="mb-3 flex items-baseline justify-between"><h2 className="text-lg font-semibold">{area.name}</h2><span className="font-mono tabular-nums text-xs text-muted-foreground">{area.tables.length} tables</span></div>
+                    <div className="mb-3 flex items-baseline justify-between"><h2 className="type-t2">{area.name}</h2><span className="font-mono tabular-nums text-xs text-muted-foreground">{area.tables.length} tables</span></div>
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{area.tables.map((table) => <TableCard key={table.id} table={table} businessTimezone={businessTimezone} onClick={() => { setQrUrl(null); setSelectedTable(table); }} />)}</div>
                   </section>
                 ))}
               </div>
               <aside className="space-y-6 xl:sticky xl:top-4 xl:self-start">
-                {hasReservations && <section><div className="mb-2 flex items-center justify-between"><p className="type-label text-muted-foreground">Unassigned arrivals</p><span className="font-mono tabular-nums text-xs text-muted-foreground">{board.unassignedReservations.length}</span></div><div className="space-y-2">{board.unassignedReservations.length ? board.unassignedReservations.map((party) => <PartyCard key={party.sourceId} party={party} actionLabel="Seat" secondaryLabel="Assign" businessTimezone={businessTimezone} onAction={() => startSelection(party, "seat")} onSecondary={() => startSelection(party, "assign")} />) : <p className="rounded-lg bg-muted/40 px-3 py-4 text-sm text-muted-foreground">No unassigned arrivals.</p>}</div></section>}
-                {hasQueue && <section><div className="mb-2 flex items-center justify-between"><p className="type-label text-muted-foreground">Walk-ins</p><span className="font-mono tabular-nums text-xs text-muted-foreground">{board.queueEntries.length}</span></div><div className="space-y-2">{board.queueEntries.length ? board.queueEntries.map((party) => <PartyCard key={party.sourceId} party={party} actionLabel="Seat" secondaryLabel={party.assignedTableIds.length ? "Reassign" : "Assign"} businessTimezone={businessTimezone} onAction={() => startSelection(party, "seat", party.assignedTableIds)} onSecondary={() => startSelection(party, "assign", party.assignedTableIds)} />) : <p className="rounded-lg bg-muted/40 px-3 py-4 text-sm text-muted-foreground">No active walk-ins.</p>}</div></section>}
+                {hasReservations && <section><div className="mb-2 flex items-center justify-between"><p className="type-label text-muted-foreground">Unassigned arrivals</p><span className="font-mono tabular-nums text-xs text-muted-foreground">{board.unassignedReservations.length}</span></div><div className="space-y-2">{board.unassignedReservations.length ? board.unassignedReservations.map((party) => <PartyCard key={party.sourceId} party={party} actionLabel="Seat" secondaryLabel="Assign" businessTimezone={businessTimezone} onAction={() => startSelection(party, "seat")} onSecondary={() => startSelection(party, "assign")} />) : <p className="bg-muted/40 px-3 py-4 text-sm text-muted-foreground">No unassigned arrivals.</p>}</div></section>}
+                {hasQueue && <section><div className="mb-2 flex items-center justify-between"><p className="type-label text-muted-foreground">Walk-ins</p><span className="font-mono tabular-nums text-xs text-muted-foreground">{board.queueEntries.length}</span></div><div className="space-y-2">{board.queueEntries.length ? board.queueEntries.map((party) => <PartyCard key={party.sourceId} party={party} actionLabel="Seat" secondaryLabel={party.assignedTableIds.length ? "Reassign" : "Assign"} businessTimezone={businessTimezone} onAction={() => startSelection(party, "seat", party.assignedTableIds)} onSecondary={() => startSelection(party, "assign", party.assignedTableIds)} />) : <p className="bg-muted/40 px-3 py-4 text-sm text-muted-foreground">No active walk-ins.</p>}</div></section>}
               </aside>
             </div>
           )}

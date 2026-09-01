@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
-import { AlertTriangle, CalendarClock, Loader2, ShieldAlert } from "lucide-react";
+import { AlertTriangle, CalendarClock, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -384,7 +384,7 @@ export function StaffReservationDialog({
             <div><h3 className="font-medium">{overrideMode ? "Override time" : "Available times"}</h3><p className="text-sm text-muted-foreground">Times are shown in {availabilityTimezone}.</p></div>
 
             {loadingAvailability ? (
-              <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="animate-spin" /> Loading times…</div>
+              <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">Loading times…</div>
             ) : availabilityError ? (
               <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{availabilityError}</p>
             ) : availableSlots.length === 0 ? (
@@ -416,7 +416,7 @@ export function StaffReservationDialog({
         <DialogFooter>
           <Button type="button" variant="secondary" onClick={() => onOpenChange(false)} disabled={submitting}>Cancel</Button>
           <Button type="button" onClick={submit} disabled={!canSubmit || submitting}>
-            {submitting ? <><Loader2 className="animate-spin" /> Saving…</> : overrideMode ? (isCreate ? "Create with override" : "Reschedule with override") : isCreate ? "Create reservation" : "Confirm reschedule"}
+            {submitting ? "Saving…" : overrideMode ? (isCreate ? "Create with override" : "Reschedule with override") : isCreate ? "Create reservation" : "Confirm reschedule"}
           </Button>
         </DialogFooter>
       </DialogContent>

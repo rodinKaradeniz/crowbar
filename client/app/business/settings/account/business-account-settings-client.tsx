@@ -13,6 +13,8 @@ import {
   FieldSeparator,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -302,17 +304,17 @@ export default function BusinessAccountSettingsClient({
       <FieldGroup>
         <FieldSeparator />
         <FieldSet>
-          <FieldLegend>Notification Channels</FieldLegend>
+          <FieldLegend>Notification channels</FieldLegend>
           <FieldDescription>
-            Configure how customers receive reservation confirmations, reminders, and status updates.
+            How guests receive reservation confirmations, reminders and status updates.
           </FieldDescription>
 
           <div className="space-y-3 mt-2">
             {/* Email — always on */}
-            <div className="rounded-lg border p-4">
+            <div className="border-b border-border py-[var(--space-16)]">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <h3 className="font-medium text-sm">Email</h3>
+                  <h3 className="type-t2">Email</h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Sent to {userEmail}. Email notifications are always enabled.
                   </p>
@@ -323,31 +325,28 @@ export default function BusinessAccountSettingsClient({
             </div>
 
             {/* SMS — toggleable */}
-            <div className="rounded-lg border p-4">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <h3 className="font-medium text-sm">SMS</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Customers receive an SMS when reservations are confirmed, updated, or cancelled.
-                    Requires Twilio to be configured on the server.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={smsEnabled}
-                  disabled={savingSms}
-                  onClick={() => handleSmsToggle(!smsEnabled)}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
-                    smsEnabled ? "bg-primary" : "bg-input"
-                  }`}
-                >
-                  <span
-                    className={`pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform ${
-                      smsEnabled ? "translate-x-5" : "translate-x-0"
-                    }`}
-                  />
-                </button>
+            {/* A checkbox, not a hand-rolled sliding switch. §06 declares no
+                switch primitive, and the old one carried its own rounded-full
+                track, a shadow-lg (E1 — a dialog's elevation, on a settings
+                row) and disabled:opacity-50, which is the disabled treatment
+                the system forbids. */}
+            <div className="flex items-start gap-[var(--space-12)] border-b border-border py-[var(--space-16)]">
+              <Checkbox
+                id="sms-notifications"
+                checked={smsEnabled}
+                disabled={savingSms}
+                onCheckedChange={(next: boolean | "indeterminate") => handleSmsToggle(next === true)}
+                className="mt-0.5"
+              />
+              <div className="flex-1">
+                <Label htmlFor="sms-notifications" className="type-t2 normal-case">
+                  SMS
+                </Label>
+                <p className="mt-0.5 text-[length:var(--ui-size)] text-muted-foreground">
+                  Guests receive an SMS when reservations are confirmed, updated
+                  or cancelled. Requires SMS delivery to be configured on the
+                  server.
+                </p>
               </div>
             </div>
           </div>
@@ -358,15 +357,15 @@ export default function BusinessAccountSettingsClient({
       <FieldGroup>
         <FieldSeparator />
         <FieldSet>
-          <FieldLegend>Danger Zone</FieldLegend>
+          <FieldLegend>Danger zone</FieldLegend>
           <FieldDescription>
-            Irreversible actions for your account
+            Actions that cannot be undone.
           </FieldDescription>
 
-          <div className="rounded-lg border border-destructive/50 p-4 space-y-4">
+          <div className="border-t-2 border-critical-fill pt-[var(--space-16)] space-y-4">
             <div>
-              <h3 className="font-medium mb-2">Disable Account</h3>
-              <p className="text-sm text-muted-foreground mb-4">
+              <h3 className="type-t2 mb-2">Disable account</h3>
+              <p className="mb-4 text-[length:var(--ui-size)] text-muted-foreground">
                 Temporarily disable your account. You can reactivate it by
                 logging in again within 30 days.
               </p>

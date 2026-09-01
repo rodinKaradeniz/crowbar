@@ -5,7 +5,13 @@ import type { Capability } from "@/lib/permissions";
  * The workspace navigation, as data.
  *
  * Three groups — Service, Setup, Business — matching §05 of the Dashboard
- * canvas. Flat: the rail has no sub-menus, no collapsibles and no icons.
+ * canvas.
+ *
+ * THE GROUPS COLLAPSE, AND ONE ITEM NESTS. Sixteen entries dumped at once is a
+ * list nobody reads; the groups are now disclosures, and the group holding the
+ * current route has no toggle at all so the active item can never be hidden.
+ * `children` exists for exactly one relationship — see "Happy hour windows"
+ * below — and is deliberately one level deep.
  *
  * THE GATES ARE THE POINT. An item renders only when its module is on AND the
  * role holds its capability. **A disabled module's entry is removed, not
@@ -30,6 +36,11 @@ export interface NavItem {
   matchPrefix?: boolean;
   /** Which live count, if any, this entry carries. */
   badge?: "queue";
+  /**
+   * Entries that are a part of this one rather than a peer of it. One level
+   * only: a second would be a different navigation, not a deeper one.
+   */
+  children?: NavItem[];
 }
 
 export interface NavGroup {
@@ -89,12 +100,22 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Menu",
         module: "ordering",
         capability: "menu.view",
-      },
-      {
-        href: "/business/happy-hour",
-        label: "Happy hour",
-        module: "ordering",
-        capability: "menu.edit",
+        /*
+         * "Happy hour" read as a duplicate of the menu's own happy-hour price
+         * field, and it is not one — the two are halves of one feature. This
+         * page owns the WINDOWS (which days, what times) and is the only UI
+         * for /happy-hour/windows; the item form owns the per-item discounted
+         * price. Nesting it under Menu says which half is which, and the label
+         * says it is a schedule rather than a second menu.
+         */
+        children: [
+          {
+            href: "/business/happy-hour",
+            label: "Happy hour windows",
+            module: "ordering",
+            capability: "menu.edit",
+          },
+        ],
       },
       {
         href: "/business/inventory",
@@ -168,13 +189,27 @@ export function visibleNavGroups(
   moduleEnabled: (module: ModuleKey) => boolean,
   can: (capability: Capability) => boolean,
 ): NavGroup[] {
+  const allowed = (item: NavItem): boolean => {
+    if (item.module && !moduleEnabled(item.module)) return false;
+    if (item.anyModule && !item.anyModule.some(moduleEnabled)) return false;
+    if (item.capability && !can(item.capability)) return false;
+    return true;
+  };
+
   return NAV_GROUPS.map((group) => ({
     ...group,
-    items: group.items.filter((item) => {
-      if (item.module && !moduleEnabled(item.module)) return false;
-      if (item.anyModule && !item.anyModule.some(moduleEnabled)) return false;
-      if (item.capability && !can(item.capability)) return false;
-      return true;
+    items: group.items.filter(allowed).map((item) => {
+      // Children pass the same gates as their parent, independently: a role
+      // that may open Menu does not necessarily hold `menu.edit`. An empty
+      // `children` is dropped rather than left as an empty disclosure.
+      if (!item.children) return item;
+      const children = item.children.filter(allowed);
+      return children.length > 0 ? { ...item, children } : { ...item, children: undefined };
     }),
   })).filter((group) => group.items.length > 0);
+}
+
+/** Every entry a group renders, parents and children, in visual order. */
+export function flattenNavItems(items: NavItem[]): NavItem[] {
+  return items.flatMap((item) => [item, ...(item.children ?? [])]);
 }

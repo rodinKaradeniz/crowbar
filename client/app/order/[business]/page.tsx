@@ -17,7 +17,7 @@ export default async function OrderPage({ params }: OrderPageProps) {
       <div className="flex min-h-screen w-full items-center justify-center bg-background">
         <div className="w-full max-w-md px-6 py-16 text-center">
           <AlertCircle className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-          <h1 className="text-2xl font-bold mb-2">Business Not Found</h1>
+          <h1 className="type-t1 mb-2">Venue not found</h1>
           <p className="text-muted-foreground mb-6">
             The business &quot;{businessSlug}&quot; doesn&apos;t exist or is no longer available.
           </p>

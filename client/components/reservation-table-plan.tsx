@@ -122,7 +122,7 @@ export function ReservationTablePlan({
     .join(", ");
 
   return (
-    <section className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/40 p-3">
+    <section className="flex flex-wrap items-center justify-between gap-3 bg-muted/40 p-3">
       <div>
         <h4 className="text-sm font-medium">Table plan</h4>
         <p className="mt-1 text-sm text-muted-foreground">

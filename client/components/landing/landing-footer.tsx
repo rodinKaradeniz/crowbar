@@ -3,13 +3,18 @@ import Link from "next/link";
 const COLUMNS: { heading: string; basis: string; links: { href: string; label: string }[] }[] = [
   {
     heading: "Product",
+    // Every one of these resolved before, but three of them resolved to the
+    // WRONG section: #capabilities covers rows 01 (reservations) and 02 (the
+    // queue) only, so "QR ordering", "Inventory" and "Insights" all landed a
+    // reader on the reservations comparison. The sections they describe now
+    // carry the ids they should always have had.
     basis: "flex-[0_1_160px]",
     links: [
       { href: "#capabilities", label: "Reservations" },
       { href: "#capabilities", label: "Walk-in queue" },
-      { href: "#capabilities", label: "QR ordering" },
-      { href: "#capabilities", label: "Inventory" },
-      { href: "#capabilities", label: "Insights" },
+      { href: "#ordering", label: "QR ordering" },
+      { href: "#inventory", label: "Inventory" },
+      { href: "#demand", label: "Insights" },
     ],
   },
   {
@@ -33,7 +38,8 @@ const COLUMNS: { heading: string; basis: string; links: { href: string; label: s
 export function LandingFooter() {
   return (
     <footer className="mkt-sec-footer ground-ink bg-background text-muted-foreground">
-      <div className="mx-auto max-w-[var(--grid-marketing)]">
+      {/* Full-bleed band, `.mkt-shell` content — see the note on `.mkt-shell`. */}
+      <div className="mkt-shell">
         <div className="mkt-gap-footer flex flex-wrap border-b border-border pb-9">
           <div className="flex-[1_1_280px]">
             <div className="mb-3 flex items-center gap-[9px]">

@@ -18,7 +18,9 @@ import type {
 import { useRegionalSettings } from "@/contexts/regional-context";
 import { formatMoney } from "@/lib/money";
 import { Badge } from "@/components/ui/badge";
+import { Figure } from "@/components/ui/figure";
 import { EmptyState } from "@/components/empty-state";
+import { SkeletonList } from "@/components/ui/skeleton";
 import {
   DEFAULT_RANGE,
   RangeCaption,
@@ -41,7 +43,7 @@ export function CostControlPanel({ businessId }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Variance and COGS are the two windowed font-mono tabular-nums here. This panel used to
+  // Variance and COGS are the two windowed numbers here. This panel used to
   // hard-code 28 days, which docs/TODO.md recorded as the main operator
   // complaint about the analytics surfaces; it now uses the same picker the
   // Reports page does.
@@ -63,7 +65,7 @@ export function CostControlPanel({ businessId }: Props) {
       setCogs(cogsRow);
       setError(null);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not load cost font-mono tabular-nums");
+      setError(cause instanceof Error ? cause.message : "Could not load cost numbers");
     } finally {
       setLoading(false);
     }
@@ -74,7 +76,7 @@ export function CostControlPanel({ businessId }: Props) {
   }, [load]);
 
   if (loading) {
-    return <div className="text-sm text-muted-foreground">Loading cost control…</div>;
+    return <SkeletonList rows={4} columns={["w-[30%]", "w-[22%]", "w-[18%]"]} />;
   }
 
   if (error) {
@@ -89,7 +91,7 @@ export function CostControlPanel({ businessId }: Props) {
     return (
       <EmptyState
         icon={TrendingUp}
-        title="No cost font-mono tabular-nums yet"
+        title="No cost numbers yet"
         description="Receive a purchase order so stock has a cost basis to report from."
       />
     );
@@ -116,9 +118,9 @@ export function CostControlPanel({ businessId }: Props) {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-lg border p-4">
+        <div className="border p-4">
           <div className="type-label text-muted-foreground">Stock on hand</div>
-          <div className="font-mono tabular-nums text-2xl mt-1">{money(overview.valuation.totalValue)}</div>
+          <Figure className="mt-1" value={money(overview.valuation.totalValue)} size="panel" />
           {!overview.valuation.complete && (
             <div className="text-xs text-muted-foreground mt-1">
               Excludes {overview.valuation.itemsWithoutCost.length} item
@@ -127,9 +129,9 @@ export function CostControlPanel({ businessId }: Props) {
             </div>
           )}
         </div>
-        <div className="rounded-lg border p-4">
+        <div className="border p-4">
           <div className="type-label text-muted-foreground">Cost of stock sold</div>
-          <div className="font-mono tabular-nums text-2xl mt-1">{cogs ? money(cogs.soldCost) : "—"}</div>
+          <Figure className="mt-1" value={cogs ? money(cogs.soldCost) : null} size="panel" />
           {cogs && !cogs.complete && (
             <div className="text-xs text-muted-foreground mt-1">
               {cogs.movementsWithoutCost} movement
@@ -137,9 +139,9 @@ export function CostControlPanel({ businessId }: Props) {
             </div>
           )}
         </div>
-        <div className="rounded-lg border p-4">
+        <div className="border p-4">
           <div className="type-label text-muted-foreground">Waste</div>
-          <div className="font-mono tabular-nums text-2xl mt-1">{cogs ? money(cogs.wasteCost) : "—"}</div>
+          <Figure className="mt-1" value={cogs ? money(cogs.wasteCost) : null} size="panel" />
         </div>
       </div>
 
@@ -152,7 +154,7 @@ export function CostControlPanel({ businessId }: Props) {
           </p>
         ) : (
           overview.reorderSuggestions.map((suggestion) => (
-            <div key={suggestion.itemId} className="rounded-lg border px-4 py-3">
+            <div key={suggestion.itemId} className="border px-4 py-3">
               <div className="flex items-center gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="font-medium truncate">{suggestion.itemName}</div>
@@ -161,7 +163,7 @@ export function CostControlPanel({ businessId }: Props) {
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className="font-mono tabular-nums text-lg">
+                  <div className="font-mono tabular-nums text-[length:var(--t1-size)]">
                     {suggestion.suggestedQuantity} {suggestion.baseUnit}
                   </div>
                   {!suggestion.explanation.leadTimeKnown && (
@@ -206,7 +208,7 @@ export function CostControlPanel({ businessId }: Props) {
             {margins.items.map((row) => (
               <div
                 key={row.menuItemId}
-                className="flex items-center gap-3 rounded-lg border px-4 py-2.5"
+                className="flex items-center gap-3 border px-4 py-2.5"
               >
                 <div className="flex-1 min-w-0">
                   <div className="font-medium truncate">{row.menuItemName}</div>
@@ -239,7 +241,7 @@ export function CostControlPanel({ businessId }: Props) {
         ) : (
           <div className="flex flex-col gap-1.5">
             {variance.items.map((row) => (
-              <div key={row.itemId} className="flex items-center gap-3 rounded-lg border px-4 py-2.5">
+              <div key={row.itemId} className="flex items-center gap-3 border px-4 py-2.5">
                 <div className="flex-1 min-w-0">
                   <div className="font-medium truncate">{row.name}</div>
                   {row.wasteByReason.length > 0 && (

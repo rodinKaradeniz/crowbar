@@ -18,10 +18,10 @@ const NIGHTS: { label: string; covers: string; height: string; kind: "today" | "
 
 export function DemandSection() {
   return (
-    <section className="mkt-shell mkt-sec-demand">
+    <section id="demand" className="mkt-anchor mkt-shell mkt-sec-demand">
       <div className="mkt-gap-split-wide mkt-pb-row flex flex-wrap border-b border-ink">
-        <div className="mkt-col flex-[1_1_340px]">
-          <div className="mb-3 flex items-baseline gap-4">
+        <div className="mkt-col settle flex-[1_1_340px]">
+          <div className="mkt-head-lead mb-3">
             <span className="mkt-num text-text-faint">05</span>
             <h3 className="mkt-d3">Demand you can roster against</h3>
           </div>
@@ -32,7 +32,7 @@ export function DemandSection() {
           </p>
         </div>
 
-        <div className="mkt-gap-bars mkt-col flex h-[170px] flex-[1_1_420px] items-end border-b border-ink">
+        <div className="mkt-gap-bars mkt-col settle-2 flex h-[170px] flex-[1_1_420px] items-end border-b border-ink">
           {NIGHTS.map((night) => (
             <div
               key={night.label}

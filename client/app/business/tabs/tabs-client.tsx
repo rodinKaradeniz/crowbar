@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
 import { EmptyState } from "@/components/empty-state";
+import { SkeletonList } from "@/components/ui/skeleton";
 import { OfflineBar } from "@/components/offline-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -232,9 +233,12 @@ export function TabsClient({
         ) : null}
 
         {!loaded ? (
-          <p className="text-[length:var(--ui-size)] text-muted-foreground">
-            Loading tabs…
-          </p>
+          // NOT wrapped in a <p>. `Skeleton` renders a <div>, and a <div> inside
+          // a <p> is invalid HTML — the browser closes the paragraph early, the
+          // server and client trees stop matching, and React reports a
+          // hydration error. The skeleton carries its own sizing and its own
+          // role="status", so the wrapper bought nothing to begin with.
+          <SkeletonList rows={5} columns={["w-[26%]", "w-[20%]", "w-[18%]", "w-[14%]"]} />
         ) : tabs.length === 0 ? (
           <EmptyState
             title="No tabs open"

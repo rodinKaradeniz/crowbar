@@ -43,7 +43,7 @@ export default function WidgetSnippetClient({ slug }: WidgetSnippetClientProps) 
       </div>
 
       {/* Preview */}
-      <div className="rounded-lg border p-6 bg-card space-y-4">
+      <div className="border p-6 space-y-4">
         <div className="flex items-center gap-2">
           <Code2 className="w-4 h-4 text-muted-foreground" />
           <h2 className="font-medium text-sm">Embed snippet</h2>
@@ -52,7 +52,7 @@ export default function WidgetSnippetClient({ slug }: WidgetSnippetClientProps) 
           Paste this script tag anywhere on your website where you want the &quot;Book Now&quot; button to appear.
         </p>
         <div className="relative">
-          <pre className="rounded-md bg-muted px-4 py-3 text-sm font-mono overflow-x-auto whitespace-pre-wrap break-all">
+          <pre className="rounded-[var(--radius-3)] bg-muted px-4 py-3 text-sm font-mono overflow-x-auto whitespace-pre-wrap break-all">
             {snippet}
           </pre>
           <Button
@@ -75,7 +75,7 @@ export default function WidgetSnippetClient({ slug }: WidgetSnippetClientProps) 
       </div>
 
       {/* How it works */}
-      <div className="rounded-lg border p-6 bg-card space-y-4">
+      <div className="border p-6 space-y-4">
         <h2 className="font-medium text-sm">How it works</h2>
         <ol className="space-y-2 text-sm text-muted-foreground list-decimal list-inside">
           <li>Copy the snippet above and paste it into your website&apos;s HTML.</li>
@@ -86,7 +86,7 @@ export default function WidgetSnippetClient({ slug }: WidgetSnippetClientProps) 
       </div>
 
       {/* Preview link */}
-      <div className="rounded-lg border p-4 bg-muted/30 flex items-center justify-between gap-4">
+      <div className="border p-4 bg-muted/30 flex items-center justify-between gap-4">
         <div>
           <p className="text-sm font-medium">Preview your booking page</p>
           <p className="text-xs text-muted-foreground mt-0.5">See how customers experience your public profile</p>

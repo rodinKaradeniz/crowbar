@@ -44,6 +44,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/empty-state";
+import { SkeletonList } from "@/components/ui/skeleton";
 
 const STATUS_LABELS: Record<PurchaseOrder["status"], string> = {
   draft: "Draft",
@@ -319,7 +320,7 @@ export function PurchaseOrdersPanel({ businessId, canManage, canApprove }: Props
       )}
 
       {loading ? (
-        <div className="text-sm text-muted-foreground">Loading purchase orders…</div>
+        <SkeletonList rows={4} columns={["w-[22%]", "w-[24%]", "w-[16%]", "w-[16%]", "w-[12%]"]} />
       ) : orders.length === 0 ? (
         <EmptyState
           icon={ClipboardList}
@@ -339,7 +340,7 @@ export function PurchaseOrdersPanel({ businessId, canManage, canApprove }: Props
               0,
             );
             return (
-              <div key={order.id} className="rounded-lg border px-4 py-3">
+              <div key={order.id} className="border px-4 py-3">
                 <div className="flex items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="font-medium truncate">

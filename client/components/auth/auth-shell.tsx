@@ -117,7 +117,36 @@ export function AuthCard({
   );
 }
 
-/** "← Back to sign in", set on its own 44px line. */
+/**
+ * A quiet way out of an auth screen, on its own 44px line.
+ *
+ * Not a button variant: the way back is never the action on the page it is on,
+ * and giving it a border would put two things that look like controls beside
+ * each other. It is a real <Link>, so it is keyboard reachable and middle-
+ * clickable like any other.
+ */
+export function BackLink({
+  href,
+  label,
+  className,
+}: {
+  href: string;
+  label: string;
+  className?: string;
+}) {
+  return (
+    <Link
+      href={href}
+      // `muted-foreground`, not a pinned paper tone: this renders on the ink
+      // dead-link card as well as on paper, and must resolve per ground.
+      className={`inline-flex h-[var(--control-desktop)] items-center text-[length:var(--ui-size)] text-muted-foreground hover:text-primary ${className ?? ""}`}
+    >
+      {label}
+    </Link>
+  );
+}
+
+/** "← Back to sign in", the commonest one. */
 export function BackToSignIn({
   label = "← Back to sign in",
   className,
@@ -125,14 +154,5 @@ export function BackToSignIn({
   label?: string;
   className?: string;
 }) {
-  return (
-    <Link
-      href="/auth/login"
-      // `muted-foreground`, not a pinned paper tone: this renders on the ink
-      // dead-link card as well as on paper, and must resolve per ground.
-      className={`inline-flex h-11 items-center text-[length:var(--ui-size)] text-muted-foreground hover:text-primary ${className ?? ""}`}
-    >
-      {label}
-    </Link>
-  );
+  return <BackLink href="/auth/login" label={label} className={className} />;
 }

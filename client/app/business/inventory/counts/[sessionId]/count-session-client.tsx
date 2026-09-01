@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { SkeletonList } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -200,7 +201,7 @@ export function CountSessionClient({ businessId, sessionId, canManage }: Props) 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center text-sm text-muted-foreground">
-        Loading count…
+        <SkeletonList rows={6} columns={["w-[32%]", "w-[18%]", "w-[16%]", "w-[14%]"]} />
       </div>
     );
   }
@@ -208,7 +209,7 @@ export function CountSessionClient({ businessId, sessionId, canManage }: Props) 
   if (error || !session) {
     return (
       <div className="min-h-screen p-6 max-w-md mx-auto flex flex-col gap-4 justify-center">
-        <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error ?? "This count could not be loaded."}
         </div>
         <Button variant="secondary" onClick={() => router.push("/business/inventory")}>
@@ -361,7 +362,7 @@ function CountLineCard({
       : previewBase - line.bookQuantity;
 
   return (
-    <div className="rounded-lg border p-4 flex flex-col gap-3">
+    <div className="border p-4 flex flex-col gap-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="font-medium truncate">{line.itemName}</div>

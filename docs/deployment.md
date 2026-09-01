@@ -83,9 +83,7 @@ Values belong in Railway Variables, never committed environment files.
 
 At minimum:
 
-- `web`: `API_INTERNAL_URL`, `NEXT_PUBLIC_API_URL`; both
-  `DOCS_ASSISTANT_ENABLED=true` and `OPENAI_API_KEY` only when the optional docs
-  assistant is deliberately enabled; and any optional OpenAI model overrides. Set
+- `web`: `API_INTERNAL_URL`, `NEXT_PUBLIC_API_URL`. Set
   `RESERVATION_FRAME_ANCESTORS` to a comma-separated list of exact `https://`
   origins authorized to embed public reservation pages. It defaults to
   `'self'`; wildcards are rejected.

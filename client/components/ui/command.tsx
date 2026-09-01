@@ -37,10 +37,10 @@ function CommandDialog({
     <Dialog {...props}>
       <DialogPortal>
         <DialogPrimitive.Overlay
-          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm "
+          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
         />
         <DialogPrimitive.Content
-          className="fixed top-[50%] left-[50%] z-50 w-full max-w-lg translate-x-[-50%] translate-y-[-50%] rounded-lg border bg-background shadow-lg duration-200 overlay-enter overflow-hidden p-0 outline-none"
+          className="fixed top-[50%] left-[50%] z-50 w-full max-w-lg translate-x-[-50%] translate-y-[-50%] rounded-lg border bg-background shadow-lg overlay-enter overflow-hidden p-0 outline-none"
         >
           <DialogTitle className="sr-only">Search</DialogTitle>
           <DialogDescription className="sr-only">

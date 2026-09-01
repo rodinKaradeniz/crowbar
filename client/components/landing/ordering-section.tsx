@@ -13,10 +13,14 @@
  */
 export function OrderingSection() {
   return (
-    <section className="mkt-sec-ordering ground-ink bg-background text-foreground">
-      <div className="mkt-gap-split mx-auto flex max-w-[var(--grid-marketing)] flex-wrap items-start">
-        <div className="mkt-col flex-[1_1_400px]">
-          <div className="mb-3.5 flex items-baseline gap-4">
+    <section
+      id="ordering"
+      className="mkt-anchor mkt-sec-ordering ground-ink bg-background text-foreground"
+    >
+      {/* Full-bleed band, `.mkt-shell` content — see the note on `.mkt-shell`. */}
+      <div className="mkt-shell mkt-gap-split flex flex-wrap items-start">
+        <div className="mkt-col settle flex-[1_1_400px]">
+          <div className="mkt-head-lead mb-3.5">
             <span className="mkt-num text-text-on-ink-faint">03</span>
             <h3 className="mkt-d3-lg">
               QR ordering, ticket boards,
@@ -45,7 +49,7 @@ export function OrderingSection() {
           </div>
         </div>
 
-        <div className="mkt-col grid flex-[1_1_460px] grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-3.5">
+        <div className="mkt-col settle-2 grid flex-[1_1_460px] grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-3.5">
           <BarBoardPanel />
           <TabPanel />
         </div>

@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { EmptyState } from "@/components/empty-state";
+import { SkeletonList } from "@/components/ui/skeleton";
 import { DAYS_OF_WEEK } from "@/lib/days";
 import {
   clientGetHappyHourWindows,
@@ -24,7 +25,8 @@ import {
 } from "@/lib/client-api";
 import { HappyHourWindow } from "@/types";
 import { toast } from "sonner";
-import { Wine, Pencil, Trash2, Plus } from "lucide-react";
+import { Pencil, Trash2, Plus } from "lucide-react";
+import Link from "next/link";
 
 interface HappyHourSettingsClientProps {
   timezone: string;
@@ -152,11 +154,26 @@ export default function HappyHourSettingsClient({
 
   return (
     <div className="flex flex-col gap-6 px-[clamp(16px,2.5vw,32px)] py-6">
+      {/*
+        HAPPY HOUR IS TWO HALVES, AND THIS IS THE "WHEN".
+        This page owns the windows — which days, what times — and is the only UI
+        for the /happy-hour/windows endpoints. The other half, the discounted
+        price per item, lives in the menu item form, which has linked HERE since
+        it was built. The trip back did not exist, so the page read like a
+        duplicate of the menu rather than the schedule behind it.
+      */}
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="type-t1">Happy Hour</h1>
+          <h1 className="type-t1">Happy hour windows</h1>
           <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
-            Time windows when items with a happy-hour price are discounted.
+            When the discount runs. The discounted price itself is set per item
+            in{" "}
+            <Link
+              href="/business/menu"
+              className="font-medium text-primary underline-offset-2 hover:underline"
+            >
+              the menu &rarr;
+            </Link>
           </p>
         </div>
         <Button onClick={openCreate}>
@@ -165,20 +182,20 @@ export default function HappyHourSettingsClient({
       </div>
 
       {loading ? (
-        <p className="text-muted-foreground text-sm">Loading…</p>
+        <SkeletonList rows={4} columns={["w-[30%]", "w-[22%]", "w-[18%]"]} />
       ) : windows.length === 0 ? (
         <EmptyState
-          icon={Wine}
           title="No happy hour windows"
-          description="Create a window to automatically discount opted-in menu items during set hours."
+          description="A window is when the discount runs. Items only fall to their happy-hour price inside one, so nothing is discounted until you add the first."
           action={{ label: "New window", onClick: openCreate }}
+          secondaryAction={{ label: "Set item prices in the menu", href: "/business/menu" }}
         />
       ) : (
         <div className="space-y-2">
           {windows.map((w) => (
             <div
               key={w.id}
-              className="flex items-center justify-between gap-3 rounded-lg border p-3"
+              className="flex items-center justify-between gap-3 border p-3"
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-2">

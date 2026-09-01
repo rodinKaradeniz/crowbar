@@ -36,7 +36,7 @@ function PartyStepper({
       >
         <ChevronDown className="h-4 w-4" />
       </Button>
-      <span className="font-mono tabular-nums w-8 text-center text-lg">{value}</span>
+      <span className="w-8 text-center font-mono tabular-nums text-[length:var(--t1-size)]">{value}</span>
       <Button
         type="button"
         variant="secondary"
@@ -175,9 +175,9 @@ export function QueueJoinClient({ business }: { business: Business }) {
           </div>
 
           {isCalled && (
-            <div className="rounded-xl border border-primary/50 bg-card p-8 text-center live-pulse enter-rise">
+            <div className="border border-primary/50 bg-card p-8 text-center live-pulse enter-rise">
               <CheckCircle2 className="mx-auto mb-4 h-10 w-10 text-primary" />
-              <h2 className="font-display text-2xl text-primary">
+              <h2 className="type-t1 text-primary">
                 Your table is ready
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">
@@ -187,11 +187,11 @@ export function QueueJoinClient({ business }: { business: Business }) {
           )}
 
           {isDone && (
-            <div className="rounded-xl border bg-card p-8 text-center enter-rise">
+            <div className="border bg-card p-8 text-center enter-rise">
               {entry.status === "seated" ? (
                 <>
                   <CheckCircle2 className="mx-auto mb-4 h-8 w-8 text-muted-foreground" />
-                  <h2 className="font-display text-xl">Enjoy your visit</h2>
+                  <h2 className="type-t1">Enjoy your visit</h2>
                   <p className="mt-2 text-sm text-muted-foreground">
                     You&apos;ve been seated at {business.name}.
                   </p>
@@ -199,7 +199,7 @@ export function QueueJoinClient({ business }: { business: Business }) {
               ) : (
                 <>
                   <XCircle className="mx-auto mb-4 h-8 w-8 text-muted-foreground" />
-                  <h2 className="font-display text-xl">Queue entry closed</h2>
+                  <h2 className="type-t1">Queue entry closed</h2>
                   <p className="mt-2 text-sm text-muted-foreground">
                     This queue entry is no longer active.
                   </p>
@@ -277,7 +277,7 @@ export function QueueJoinClient({ business }: { business: Business }) {
       <div className="flex min-h-screen items-center justify-center bg-background px-6">
         <div className="max-w-sm space-y-4 text-center">
           <AlertCircle className="mx-auto h-8 w-8 text-muted-foreground" />
-          <h1 className="font-display text-2xl">Queue status unavailable</h1>
+          <h1 className="type-t1">Queue status unavailable</h1>
           <p className="text-sm text-muted-foreground">We couldn&apos;t confirm whether the queue is open. Please try again.</p>
           <Button onClick={() => void refreshService()}>Try again</Button>
         </div>
@@ -290,7 +290,7 @@ export function QueueJoinClient({ business }: { business: Business }) {
       <div className="flex min-h-screen items-center justify-center bg-background px-6">
         <div className="max-w-sm space-y-4 text-center">
           <p className="type-label text-muted-foreground">{business.name}</p>
-          <h1 className="font-display text-3xl">{service?.isFull ? "The queue is full" : "The queue is closed"}</h1>
+          <h1 className="type-d3">{service?.isFull ? "The queue is full" : "The queue is closed"}</h1>
           <p className="text-sm text-muted-foreground">
             {service?.isFull ? "The waiting-cover limit has been reached. Please check again later." : "Walk-in queue entries are not being accepted for this service day."}
           </p>
@@ -308,7 +308,7 @@ export function QueueJoinClient({ business }: { business: Business }) {
         {/* Header */}
         <div className="text-center enter-rise">
           <p className="type-label text-muted-foreground mb-2">Walk-in queue</p>
-          <h1 className="font-display text-3xl tracking-tight">{business.name}</h1>
+          <h1 className="type-d3">{business.name}</h1>
           <div className="border-t border-border mt-5 mx-auto max-w-36" />
           <p className="mt-4 text-sm text-muted-foreground">
             {service.estimatedWaitMinutes === undefined

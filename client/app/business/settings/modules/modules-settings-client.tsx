@@ -3,21 +3,32 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Calendar, ClipboardList, ListOrdered, Package, BrainCircuit } from "lucide-react";
+
 import { useAuth } from "@/hooks/use-auth";
 import { clientUpdateEnabledModules } from "@/lib/client-api";
 import { MODULE_KEYS, type ModuleKey } from "@/lib/modules";
-import {
-  FieldDescription,
-  FieldGroup,
-  FieldLegend,
-  FieldSet,
-} from "@/components/ui/field";
-import { Calendar, ClipboardList, ListOrdered, Package, BrainCircuit } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 interface Props {
   businessId: string;
 }
 
+/**
+ * Modules — what this venue has bought.
+ *
+ * Ruled rows, not cards. Each module is a checkbox, not a sliding switch: §06
+ * declares nine primitives and a toggle switch is not one of them, so the
+ * previous hand-rolled `role="switch"` was a tenth control with its own
+ * `rounded-full` track, its own `shadow-lg` (which the bridge maps to E1 — a
+ * dialog's elevation, on a settings row) and `disabled:opacity-50`, the
+ * disabled treatment the system explicitly forbids.
+ *
+ * Turning a module off REMOVES its nav entry rather than greying it, and its
+ * API returns 403. That is stated here because it is the consequence the
+ * operator is actually choosing.
+ */
 const MODULE_META: {
   key: ModuleKey;
   label: string;
@@ -28,32 +39,32 @@ const MODULE_META: {
   {
     key: MODULE_KEYS.RESERVATIONS,
     label: "Reservations",
-    description: "Online booking, schedule management, and reservation analytics.",
+    description: "Online booking, schedule management, and reservation reporting.",
     icon: Calendar,
     required: true,
   },
   {
     key: MODULE_KEYS.QUEUE,
     label: "Queue",
-    description: "Digital walk-in queue with live board and SMS notifications.",
+    description: "Walk-in queue with a live board and guest notifications.",
     icon: ListOrdered,
   },
   {
     key: MODULE_KEYS.ORDERING,
     label: "Ordering",
-    description: "QR menu, customer self-order, and kitchen/bar ticket board.",
+    description: "QR menu, guest self-order, and the kitchen and bar ticket board.",
     icon: ClipboardList,
   },
   {
     key: MODULE_KEYS.INVENTORY,
     label: "Inventory",
-    description: "Stock tracking, par levels, movement history, and low-stock alerts.",
+    description: "Stock levels, par levels, movement history, and purchasing.",
     icon: Package,
   },
   {
     key: MODULE_KEYS.INSIGHTS,
     label: "Insights",
-    description: "ML-powered demand forecasts, cancellation risk, and operational KPIs.",
+    description: "Demand forecasts and cancellation risk from your own booking record.",
     icon: BrainCircuit,
   },
 ];
@@ -74,80 +85,66 @@ export default function ModulesSettingsClient({ businessId }: Props) {
     try {
       await clientUpdateEnabledModules(businessId, updated);
       toast.success(
-        `${MODULE_META.find((m) => m.key === key)?.label} ${currentlyEnabled ? "disabled" : "enabled"}.`,
+        `${MODULE_META.find((m) => m.key === key)?.label} ${currentlyEnabled ? "turned off" : "turned on"}.`,
       );
       router.refresh();
     } catch {
-      toast.error("Failed to update modules. Please try again.");
+      toast.error("Could not update modules. Try again.");
     } finally {
       setSaving(null);
     }
   }
 
   return (
-    <div className="space-y-8 px-[clamp(16px,2.5vw,32px)] py-6 max-w-2xl">
+    <div className="flex flex-col gap-[var(--space-24)] px-[clamp(16px,2.5vw,32px)] py-[var(--space-24)]">
       <div>
         <h1 className="type-t1">Modules</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Enable or disable platform modules for your business.
+        <p className="mt-0.5 text-[length:var(--ui-size)] text-muted-foreground">
+          What this venue has turned on. A module that is off is removed from the
+          navigation and its endpoints stop answering — it is not hidden behind a
+          greyed-out entry.
         </p>
       </div>
 
-      <FieldGroup>
-        <FieldSet>
-          <FieldLegend>Available Modules</FieldLegend>
-          <FieldDescription>
-            Disabled modules are hidden from the sidebar and their API endpoints
-            return 403. You can re-enable them at any time.
-          </FieldDescription>
+      <div className="flex flex-col border-t border-border">
+        {MODULE_META.map(({ key, label, description, icon: Icon, required }) => {
+          const enabled = enabledModules.includes(key);
+          const isSaving = saving === key;
+          const inputId = `module-${key}`;
 
-          <div className="space-y-3 mt-2">
-            {MODULE_META.map(({ key, label, description, icon: Icon, required }) => {
-              const enabled = enabledModules.includes(key);
-              const isSaving = saving === key;
-
-              return (
-                <div key={key} className="rounded-lg border p-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted">
-                        <Icon className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                      <div>
-                        <h3 className="font-medium text-sm">{label}</h3>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {description}
-                        </p>
-                        {required && (
-                          <p className="text-xs text-muted-foreground mt-0.5 italic">
-                            Always enabled
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={enabled}
-                      disabled={isSaving || required}
-                      onClick={() => void handleToggle(key, enabled)}
-                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
-                        enabled ? "bg-primary" : "bg-input"
-                      }`}
-                    >
-                      <span
-                        className={`pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform ${
-                          enabled ? "translate-x-5" : "translate-x-0"
-                        }`}
-                      />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </FieldSet>
-      </FieldGroup>
+          return (
+            <div
+              key={key}
+              className="flex items-start gap-[var(--space-12)] border-b border-border py-[var(--space-16)]"
+            >
+              <Checkbox
+                id={inputId}
+                checked={enabled}
+                disabled={isSaving || required}
+                onCheckedChange={() => void handleToggle(key, enabled)}
+                className="mt-0.5"
+              />
+              <Icon
+                aria-hidden
+                className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+              />
+              <div className="flex-1">
+                <Label htmlFor={inputId} className="type-t2 normal-case">
+                  {label}
+                </Label>
+                <p className="mt-0.5 text-[length:var(--ui-size)] text-muted-foreground">
+                  {description}
+                </p>
+                {required && (
+                  <p className="type-label mt-[var(--space-8)] text-muted-foreground">
+                    Always on
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -240,7 +240,7 @@ export function TabOrderCompose({
                 >
                   <Minus className="h-4 w-4" />
                 </Button>
-                <span className="text-lg font-semibold w-8 text-center">
+                <span className="w-8 text-center font-mono tabular-nums text-[length:var(--t1-size)]">
                   {detailQty}
                 </span>
                 <Button
@@ -296,7 +296,7 @@ export function TabOrderCompose({
                             <button
                               key={item.id}
                               onClick={() => openDetail(item)}
-                              className="w-full text-left rounded-lg border p-3 hover:bg-muted/50 transition-colors"
+                              className="w-full text-left border p-3 hover:bg-muted/50 transition-colors"
                             >
                               <div className="flex items-start justify-between gap-3">
                                 <div className="flex-1 min-w-0">
@@ -344,7 +344,7 @@ export function TabOrderCompose({
                     {cart.map((ci, i) => (
                       <div
                         key={i}
-                        className="flex items-start gap-3 rounded-lg border p-2.5"
+                        className="flex items-start gap-3 border p-2.5"
                       >
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium">

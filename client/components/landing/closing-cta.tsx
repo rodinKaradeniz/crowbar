@@ -15,8 +15,9 @@ import { Button } from "@/components/ui/button";
 export function ClosingCta() {
   return (
     <section className="mkt-sec-cta border-t border-ink bg-primary text-[var(--brand-wash)]">
-      <div className="mkt-gap-cta mx-auto flex max-w-[var(--grid-marketing)] flex-wrap items-end">
-        <div className="min-w-[min(100%,320px)] flex-[1_1_420px]">
+      {/* Full-bleed band, `.mkt-shell` content — see the note on `.mkt-shell`. */}
+      <div className="mkt-shell mkt-gap-cta flex flex-wrap items-end">
+        <div className="settle min-w-[min(100%,320px)] flex-[1_1_420px]">
           <h2 className="mkt-d2-cta">
             Open your
             <br />
@@ -26,14 +27,14 @@ export function ClosingCta() {
           </h2>
         </div>
 
-        <div className="min-w-[min(100%,300px)] flex-[0_1_380px]">
+        <div className="settle-2 min-w-[min(100%,300px)] flex-[0_1_380px]">
           <p className="mkt-body-lg mb-6 text-[var(--brand-lit-faint)]">
             Thirty days, your real menu, your real floor, your register
             untouched. If it hasn&apos;t replaced the clipboard by the end of
             the month, walk away.
           </p>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="mkt-gap-actions flex flex-wrap items-center">
             <Button
               asChild
               size="auth"
@@ -45,7 +46,7 @@ export function ClosingCta() {
               href="/auth/login"
               className="mkt-body-sm border-b border-[var(--brand-veil)] px-2 py-4 font-semibold text-[var(--brand-wash)] hover:text-[var(--white)]"
             >
-              or sign in
+              or sign in <span aria-hidden>&#8599;</span>
             </Link>
           </div>
         </div>

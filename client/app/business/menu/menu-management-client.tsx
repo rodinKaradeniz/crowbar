@@ -8,12 +8,14 @@ import {
   clientUpdateMenu,
   clientDeleteMenu,
   clientCreateCategory,
+  clientUpdateCategory,
   clientDeleteCategory,
   clientCreateMenuItem,
   clientUpdateMenuItem,
   clientSetItemAvailability,
   clientGetPreparationStations,
   clientCreatePreparationStation,
+  clientUpdatePreparationStation,
   clientArchivePreparationStation,
   clientDeleteMenuItem,
   clientSaveItemToLibrary,
@@ -85,6 +87,7 @@ import {
 } from "lucide-react";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { EmptyState } from "@/components/empty-state";
+import { SkeletonList } from "@/components/ui/skeleton";
 import { formatMoney } from "@/lib/money";
 import { useRegionalSettings } from "@/contexts/regional-context";
 
@@ -103,6 +106,8 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
   const [taxProfiles, setTaxProfiles] = useState<TaxProfile[]>([]);
   const [stations, setStations] = useState<PreparationStation[]>([]);
   const [newStationName, setNewStationName] = useState("");
+  const [renamingStationId, setRenamingStationId] = useState<string | null>(null);
+  const [renameStationDraft, setRenameStationDraft] = useState("");
 
   // ── Public QR-menu link (share/copy) ─────────────────────────────────────────
   // The public menu route is keyed by slug (/menu/[slug]); build the absolute URL
@@ -241,6 +246,26 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
     }
   }
 
+  async function renameStation(station: PreparationStation) {
+    const next = renameStationDraft.trim();
+    if (!next || next === station.name) {
+      setRenamingStationId(null);
+      return;
+    }
+    try {
+      const updated = await clientUpdatePreparationStation(station.id, { name: next });
+      setStations((current) =>
+        current.map((item) => (item.id === station.id ? updated : item)),
+      );
+      setRenamingStationId(null);
+      toast.success("Station renamed.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not rename the station.",
+      );
+    }
+  }
+
   async function archiveStation(station: PreparationStation) {
     try {
       await clientArchivePreparationStation(station.id);
@@ -358,6 +383,35 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
       setCategoryDialog(false);
     } catch (e) {
       toast.error((e as Error).message);
+    }
+  }
+
+  // clientUpdateCategory existed from the start and nothing called it, so a
+  // category could be created and deleted but never renamed — a typo in a
+  // section heading was permanent, and deleting to fix it takes its items with
+  // it.
+  async function renameCategory(menuId: string, categoryId: string, name: string) {
+    const next = name.trim();
+    if (!next) return;
+    try {
+      const updated = await clientUpdateCategory(businessId, categoryId, { name: next });
+      setMenus((prev) =>
+        prev.map((m) =>
+          m.id === menuId
+            ? {
+                ...m,
+                categories: m.categories.map((c) =>
+                  c.id === categoryId ? { ...c, name: updated.name } : c,
+                ),
+              }
+            : m,
+        ),
+      );
+      toast.success("Category renamed.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not rename the category.",
+      );
     }
   }
 
@@ -680,7 +734,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
   if (loading) {
     return (
       <div className="p-8 flex items-center justify-center">
-        <p className="text-muted-foreground">Loading menus…</p>
+        <SkeletonList rows={5} columns={["w-[34%]", "w-[18%]", "w-[16%]", "w-[12%]"]} />
       </div>
     );
   }
@@ -714,7 +768,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
       </div>
 
       {/* Public QR-menu link — the URL customers scan/open to order */}
-      <div className="flex items-center justify-between gap-3 rounded-lg border bg-card p-3">
+      <div className="flex items-center justify-between gap-3 border bg-card p-3">
         <div className="min-w-0">
           <p className="text-sm font-medium">Public menu link</p>
           <p className="text-xs text-muted-foreground truncate">
@@ -741,13 +795,57 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
         </div>
       </div>
 
-      <section className="rounded-lg border bg-card p-4 space-y-3">
+      <section className="border bg-card p-4 space-y-3">
         <div><p className="font-medium">Preparation stations</p><p className="text-xs text-muted-foreground">Items route to one station or the shared queue.</p></div>
         <div className="flex flex-wrap gap-2">
           {stations.filter((station) => station.isActive).map((station) => (
-            <div key={station.id} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
-              <span>{station.name}</span>
-              {canManageTax && <button type="button" className="text-xs text-muted-foreground hover:text-destructive" onClick={() => void archiveStation(station)}>Archive</button>}
+            <div key={station.id} className="inline-flex items-center gap-[var(--space-8)] rounded-[var(--radius-3)] border border-border px-3 py-2 text-[length:var(--ui-size)]">
+              {renamingStationId === station.id ? (
+                <>
+                  <Input
+                    autoFocus
+                    value={renameStationDraft}
+                    onChange={(event) => setRenameStationDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") void renameStation(station);
+                      if (event.key === "Escape") setRenamingStationId(null);
+                    }}
+                    className="h-[var(--control-desktop)] w-40"
+                    aria-label={`Rename ${station.name}`}
+                  />
+                  <Button size="filter" variant="secondary" onClick={() => void renameStation(station)}>
+                    Save
+                  </Button>
+                  <Button size="filter" variant="ghost" onClick={() => setRenamingStationId(null)}>
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <span>{station.name}</span>
+                  {canManageTax && (
+                    <>
+                      <button
+                        type="button"
+                        className="type-label text-muted-foreground hover:text-foreground"
+                        onClick={() => {
+                          setRenamingStationId(station.id);
+                          setRenameStationDraft(station.name);
+                        }}
+                      >
+                        Rename
+                      </button>
+                      <button
+                        type="button"
+                        className="type-label text-muted-foreground hover:text-critical-text"
+                        onClick={() => void archiveStation(station)}
+                      >
+                        Archive
+                      </button>
+                    </>
+                  )}
+                </>
+              )}
             </div>
           ))}
           {stations.filter((station) => station.isActive).length === 0 && <p className="text-sm text-muted-foreground">No active station. Items can still use the shared queue.</p>}
@@ -787,7 +885,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
           {selectedMenu && (
             <div className="space-y-4">
               {/* Menu header */}
-              <div className="flex items-center justify-between rounded-lg border p-4">
+              <div className="flex items-center justify-between border p-4">
                 <div>
                   <p className="font-medium">{selectedMenu.name}</p>
                   {selectedMenu.description && (
@@ -831,7 +929,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
 
               {/* Categories and items */}
               {selectedMenu.categories.length === 0 ? (
-                <div className="rounded-lg border border-dashed p-8 text-center">
+                <div className="border border-dashed p-8 text-center">
                   <p className="text-sm text-muted-foreground">
                     No categories yet.{" "}
                     <button
@@ -864,6 +962,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
                       })
                     }
                     onDeleteCategory={deleteCategory}
+                    onRenameCategory={renameCategory}
                     onSaveToLibrary={saveToLibrary}
                     onEditRecipe={setRecipeItem}
                     canCreateItems={canManageTax}
@@ -985,7 +1084,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
                 Loading…
               </p>
             ) : library.length === 0 ? (
-              <div className="rounded-lg border border-dashed p-8 text-center mt-2">
+              <div className="border border-dashed p-8 text-center mt-2">
                 <BookMarked className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                 <p className="text-sm text-muted-foreground">
                   No library items yet.
@@ -1003,7 +1102,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
               library.map((item) => (
                 <div
                   key={item.id}
-                  className="flex items-center gap-3 rounded-lg border px-4 py-3"
+                  className="flex items-center gap-3 border px-4 py-3"
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
@@ -1325,6 +1424,7 @@ function CategorySection({
   onToggleAvail,
   onDeleteItem,
   onDeleteCategory,
+  onRenameCategory,
   onSaveToLibrary,
   onEditRecipe,
   canCreateItems,
@@ -1339,17 +1439,64 @@ function CategorySection({
   onToggleAvail: (item: MenuItem, categoryId: string) => void;
   onDeleteItem: (item: MenuItem, menuId: string, categoryId: string) => void;
   onDeleteCategory: (menuId: string, categoryId: string) => void;
+  onRenameCategory: (menuId: string, categoryId: string, name: string) => void;
   onSaveToLibrary: (item: MenuItem) => void;
   onEditRecipe: (item: MenuItem) => void;
   canCreateItems: boolean;
 }) {
   const { currencyCode, locale } = useRegionalSettings();
   const money = (value: number | string) => formatMoney(value, currencyCode, locale);
+  const [renaming, setRenaming] = useState(false);
+  const [draft, setDraft] = useState(category.name);
   return (
-    <div className="rounded-lg border overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 bg-muted/40 border-b">
-        <h3 className="font-medium text-sm">{category.name}</h3>
+    <div className="border border-border">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        {renaming ? (
+          <div className="flex items-center gap-[var(--space-8)]">
+            <Input
+              autoFocus
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  onRenameCategory(menu.id, category.id, draft);
+                  setRenaming(false);
+                }
+                if (event.key === "Escape") setRenaming(false);
+              }}
+              className="h-[var(--control-desktop)] w-48"
+              aria-label={`Rename ${category.name}`}
+            />
+            <Button
+              size="filter"
+              variant="secondary"
+              onClick={() => {
+                onRenameCategory(menu.id, category.id, draft);
+                setRenaming(false);
+              }}
+            >
+              Save
+            </Button>
+            <Button size="filter" variant="ghost" onClick={() => setRenaming(false)}>
+              Cancel
+            </Button>
+          </div>
+        ) : (
+          <h3 className="type-t2">{category.name}</h3>
+        )}
         <div className="flex gap-1.5">
+          {!renaming && (
+            <Button
+              size="filter"
+              variant="ghost"
+              onClick={() => {
+                setDraft(category.name);
+                setRenaming(true);
+              }}
+            >
+              Rename
+            </Button>
+          )}
           <Button
             size="filter"
             variant="ghost"
@@ -1634,7 +1781,7 @@ function RecipeEditorDialog({
               Loading…
             </p>
           ) : inventory.length === 0 ? (
-            <div className="rounded-lg border border-dashed p-6 text-center">
+            <div className="border border-dashed p-6 text-center">
               <Package className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
               <p className="text-sm text-muted-foreground">
                 No inventory items yet. Add stock items on the Inventory page

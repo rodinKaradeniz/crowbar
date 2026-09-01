@@ -210,14 +210,14 @@ export default function StaffClient({
       </div>
 
       {staffMembers.length === 0 ? (
-        <div className="rounded-lg border bg-card py-12 text-center">
+        <div className="border bg-card py-12 text-center">
           <Users className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
           <p className="text-muted-foreground">No staff members found</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {staffMembers.map((member) => (
-            <div key={member.id} className="rounded-lg border bg-card p-4">
+            <div key={member.id} className="border bg-card p-4">
               <div className="mb-3 flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
@@ -259,15 +259,15 @@ export default function StaffClient({
       {canAdminister && (
         <section className="space-y-3">
           <div>
-            <h2 className="text-lg font-semibold">Pending invitations</h2>
+            <h2 className="type-t2">Pending invitations</h2>
             <p className="text-sm text-muted-foreground">Delivery status is shown separately from invitation validity.</p>
           </div>
           {pendingInvitations.length === 0 ? (
-            <p className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">No pending invitations.</p>
+            <p className="border bg-card p-4 text-sm text-muted-foreground">No pending invitations.</p>
           ) : (
             <div className="space-y-2">
               {pendingInvitations.map((invitation) => (
-                <div key={invitation.id} className="flex flex-col justify-between gap-3 rounded-lg border bg-card p-4 sm:flex-row sm:items-center">
+                <div key={invitation.id} className="flex flex-col justify-between gap-3 border bg-card p-4 sm:flex-row sm:items-center">
                   <div>
                     <div className="font-medium">{invitation.email}</div>
                     <div className="text-sm text-muted-foreground">

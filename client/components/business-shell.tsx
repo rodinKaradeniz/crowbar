@@ -32,11 +32,9 @@ const TABLET_ACTION_ROUTES = ["/business/overview", "/business/floor"];
 
 export function BusinessShell({
   businessName,
-  docsAssistantEnabled,
   children,
 }: {
   businessName: string;
-  docsAssistantEnabled: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -49,7 +47,6 @@ export function BusinessShell({
       <div className="flex min-w-0 flex-1 flex-col">
         <BusinessTopbar
           businessName={businessName}
-          docsAssistantEnabled={docsAssistantEnabled}
           canSeatWalkIn={canSeatWalkIn}
         />
 
