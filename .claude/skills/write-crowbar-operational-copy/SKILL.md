@@ -153,7 +153,8 @@ guest (`.theme-night`) themes.
 ## Reference
 
 `docs/PRODUCT.md` (canonical vocabulary; deliberately excluded concepts),
-`docs/RULES.md` (Do Not — the external-settlement rule), `docs/DESIGN.md`
+`AGENTS.md` (the non-fiscal boundary, which RULES.md's Do-not list does not
+restate), `docs/DESIGN.md`
 (settlement copy and formatting rules), `docs/TODO.md` (stage 4 settlement,
 and the unreviewed landing FAQ copy), sibling skills `frontend-design` and
 `change-crowbar-money-and-tax`.

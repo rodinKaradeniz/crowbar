@@ -19,7 +19,7 @@ from pydantic import ValidationError
 from app.schemas.auth import LoginRequest
 from app.schemas.reservation import ReservationCreate
 
-SEED_FILE = Path(__file__).resolve().parents[2] / "db" / "seeds" / "001_seed_puzzles.sql"
+SEED_FILE = Path(__file__).resolve().parents[2] / "db" / "seeds" / "001_seed_example_lantern.sql"
 
 _EMAIL_LITERAL = re.compile(r"'([^'@\s]+@[^'\s]+)'")
 

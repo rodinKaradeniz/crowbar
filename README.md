@@ -42,10 +42,10 @@ data is optional and separate from migrations:
 SEED_DATA=true ./scripts/dev.sh
 ```
 
-The local-only seeder requires a unique `DEMO_ADMIN_PASSWORD` of at least 12
-characters and refuses non-local database hosts. `dev.sh` generates a throwaway
-value per run and prints it; export your own `DEMO_ADMIN_PASSWORD` first to pin
-a login you can reuse.
+The local-only seeder refuses non-local database hosts, which is what keeps it
+away from anything real. `DEMO_ADMIN_PASSWORD` is optional: set it to pin a login
+you can reuse, or leave it unset and the seeder falls back to a known weak
+local-only password and prints it once seeding finishes.
 
 Useful checks:
 

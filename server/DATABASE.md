@@ -15,13 +15,15 @@ than Alembic. Run commands from `server/` with `venv/` activated.
 | `../scripts/verify-fresh-db.sh` | Recreate a name-restricted disposable database, run every migration, repeat the canonical seed, and assert current invariants |
 
 `../scripts/dev.sh` applies migrations without seeding. Pass `SEED_DATA=true`
-to it to seed as well; it forwards an existing `DEMO_ADMIN_PASSWORD` or
-generates and prints a throwaway one for that run.
+to it to seed as well; it forwards whatever `DEMO_ADMIN_PASSWORD` is already in
+the environment and does not invent one.
 
 Seeding is a data mutation. The seed deletes and recreates its fixed synthetic
-tenant. The runner refuses non-local database hosts and database names that do
-not identify disposable development/test data, and it requires a fresh password
-of at least 12 characters. Do not delete Docker volumes unless the user
+tenant. What keeps it away from anything real is a single guard: the runner
+refuses any database host that is not local. `DEMO_ADMIN_PASSWORD` is optional,
+and when it is unset the runner falls back to a known weak password and prints
+it once seeding finishes — it is a local-only convenience, not a secret, which
+is why no seed file may contain it. Do not delete Docker volumes unless the user
 explicitly authorizes losing the selected local data.
 
 ## Test Database
@@ -80,10 +82,14 @@ migrations.
 
 ## Canonical Demo Tenant
 
-`db/seeds/001_seed_puzzles.sql` retains its historical filename for migration
-tooling compatibility and is the only seed file. It creates the unmistakably
-synthetic Example Lantern tenant with relative reservation dates and data
-across all current modules.
+`db/seeds/001_seed_example_lantern.sql` is the only seed file, named for what it
+carries. Seeds are discovered by globbing `seeds/*.sql` and are not tracked by
+filename the way migrations are, so renaming one is safe. It creates the
+unmistakably synthetic Example Lantern tenant with relative dates and data across
+all current modules: one primary location, three areas, twenty tables, two active
+combinations, the Bar and Kitchen preparation stations, table assignments for the
+days ahead, a live queue and waitlist, an open seating carrying an open tab, and a
+closed seating whose tab was settled externally with its settlement event.
 Migration 037 and the seed make its DE/EUR/`de-DE`/`Europe/Berlin` region plus
 19% beverage/standard, 7% food/reduced, exempt, and custom operational profiles
 explicit. Those profiles are editable demo suggestions, not fiscal rules. The
@@ -103,5 +109,8 @@ One account per role, so the permission matrix in
 [`../docs/permission-matrix.md`](../docs/permission-matrix.md) can be checked by
 signing in rather than by reading a table.
 
-The seed stores no password. Supply a one-time local value through
-`DEMO_ADMIN_PASSWORD`; the seed runner rejects known reusable demo passwords.
+The seed stores no password and cannot: the runner substitutes a bcrypt hash for
+a placeholder at run time, and `scripts/export-portfolio.sh` fails the export if a
+plaintext one ever reaches a seed file. Set `DEMO_ADMIN_PASSWORD` to choose the
+password that hash covers. It is optional — unset, the runner uses a known weak
+local-only one and prints it after seeding.

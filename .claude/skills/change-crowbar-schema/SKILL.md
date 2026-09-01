@@ -61,10 +61,11 @@ Rules that follow from that mechanism:
   Its hard-coded drop list predates many current tables, so it is destructive
   without being a reliable reset. `docs/TODO.md` carries an open item to repair
   or remove it.
-- **`SEED_DATA=true` is a data mutation, not a read.** `db/seeds/001_seed_puzzles.sql`
-  deletes and recreates the Puzzles demo tenant. Note that `./scripts/dev.sh`
-  runs `SEED_DATA=true python -m db.migrate` on every start, so a local start
-  already replaces demo data — never point that at shared data.
+- **`SEED_DATA=true` is a data mutation, not a read.**
+  `db/seeds/001_seed_example_lantern.sql` deletes and recreates the Example
+  Lantern demo tenant. `./scripts/dev.sh` does **not** seed by default — it gates
+  seeding behind `SEED_DATA=true` and otherwise logs that it left demo data
+  alone — so seeding is always something you chose. Never point it at shared data.
 
 If your migration changes a table the seed writes, update the seed in the same
 change and keep it repeat-safe: `scripts/verify-fresh-db.sh` runs the seed

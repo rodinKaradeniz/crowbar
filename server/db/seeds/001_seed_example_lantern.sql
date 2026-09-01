@@ -1,11 +1,19 @@
 -- ─── Seed: Example Lantern ───────────────────────────────────────────────────
 -- A wholly synthetic bar used as a rich demo data source showcasing all platform
--- modules: reservations, queue, ordering, inventory, insights.
+-- modules: reservations, queue, floor, ordering, tabs, inventory, insights.
 --
--- Staff : Demo Owner, Demo Manager, Demo Staff
+-- Staff : one account per pilot role — owner, manager, host/server, bar/kitchen,
+--         inventory operator
 -- Customers : 12 with diverse RFM profiles (champion/loyal/promising/at-risk/lost/new)
--- Staff passwords are injected by the local-only seed runner from the required
--- DEMO_ADMIN_PASSWORD environment variable. No reusable credential is stored.
+-- Floor : one primary location, three areas, 20 tables, two combinations, and
+--         the Bar and Kitchen preparation stations
+--
+-- No password is written here, and none may be. The runner substitutes a bcrypt
+-- hash for __DEMO_PASSWORD_HASH__ at run time. DEMO_ADMIN_PASSWORD chooses the
+-- password it hashes; it is optional, and when it is unset the runner falls back
+-- to a known weak local-only one and prints it once seeding finishes. Secrecy is
+-- therefore not what protects this — the local-host guard in db/migrate.py is,
+-- because it refuses to seed anything but a local disposable database.
 --
 -- Every address uses @example.com, reserved by RFC 2606 for documentation and
 -- owned by no one, so demo data can never reach a real mailbox. Do not switch
@@ -15,8 +23,58 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- ─── Cleanup (idempotent re-run) ──────────────────────────────────────────────
--- Deleting the business cascades to every child table (staff, menus, orders,
--- inventory, queue, reservations, ml_predictions, daily_metrics, etc.)
+-- Five tables hold business_id ON DELETE RESTRICT rather than CASCADE, so that a
+-- settlement, a correction or a status trail cannot quietly vanish with its
+-- tenant. That is the right rule and it is not being changed here — but it means
+-- DELETE FROM businesses fails outright once any of them holds a row, and this
+-- seed writes settlement events while an ordinary shift writes the other four.
+-- Clearing them first is what keeps re-running this file the reset, including on
+-- a database someone has actually worked a service through.
+-- The UPDATE has to come before the DELETE because tabs.current_settlement_event_id
+-- and tab_settlement_events.tab_id reference each other, both ON DELETE RESTRICT.
+-- All of these are no-ops on a fresh database. Do not remove them as redundant.
+UPDATE tabs SET current_settlement_event_id = NULL
+WHERE business_id = '00000000-0000-0000-0000-000000000002';
+DELETE FROM tab_settlement_events WHERE business_id = '00000000-0000-0000-0000-000000000002';
+DELETE FROM queue_entry_events WHERE business_id = '00000000-0000-0000-0000-000000000002';
+DELETE FROM order_line_status_timeline WHERE business_id = '00000000-0000-0000-0000-000000000002';
+DELETE FROM order_revisions WHERE business_id = '00000000-0000-0000-0000-000000000002';
+DELETE FROM menu_item_availability_events WHERE business_id = '00000000-0000-0000-0000-000000000002';
+
+-- The floor graph cannot be left to the cascade. Its rows are joined by FKs that
+-- are ON DELETE RESTRICT between two children of the same cascading parent — a
+-- combination member pins its table, a seating pins its reservation, a table pins
+-- its area and location — and PostgreSQL fires the parent's cascade triggers in an
+-- order that does not guarantee the referencing side goes first. Relying on that
+-- order fails on the second seed run with a foreign key violation on
+-- table_combination_members. So the graph is torn down explicitly, children first.
+DELETE FROM table_guest_sessions WHERE business_id = '00000000-0000-0000-0000-000000000002';
+DELETE FROM tabs WHERE business_id = '00000000-0000-0000-0000-000000000002';
+DELETE FROM table_seating_tables WHERE seating_id IN (
+  SELECT id FROM table_seatings WHERE business_id = '00000000-0000-0000-0000-000000000002'
+);
+DELETE FROM table_seatings WHERE business_id = '00000000-0000-0000-0000-000000000002';
+DELETE FROM reservation_table_assignments WHERE business_id = '00000000-0000-0000-0000-000000000002';
+DELETE FROM queue_table_assignments WHERE business_id = '00000000-0000-0000-0000-000000000002';
+DELETE FROM table_combination_members WHERE combination_id IN (
+  SELECT id FROM table_combinations WHERE business_id = '00000000-0000-0000-0000-000000000002'
+);
+DELETE FROM table_combinations WHERE business_id = '00000000-0000-0000-0000-000000000002';
+DELETE FROM reservation_waitlist_entries WHERE business_id = '00000000-0000-0000-0000-000000000002';
+DELETE FROM tables WHERE business_id = '00000000-0000-0000-0000-000000000002';
+DELETE FROM table_areas WHERE business_id = '00000000-0000-0000-0000-000000000002';
+
+-- Three more tables hold a RESTRICT reference to locations. queue_service_days is
+-- opened by the queue at run time rather than by this file, and the two purchasing
+-- rows carry a nullable location the app may fill in, so a database that has had a
+-- shift walked through it would otherwise refuse to be re-seeded.
+DELETE FROM queue_service_days WHERE business_id = '00000000-0000-0000-0000-000000000002';
+UPDATE purchase_orders SET location_id = NULL WHERE business_id = '00000000-0000-0000-0000-000000000002';
+UPDATE inventory_count_sessions SET location_id = NULL WHERE business_id = '00000000-0000-0000-0000-000000000002';
+DELETE FROM locations WHERE business_id = '00000000-0000-0000-0000-000000000002';
+
+-- Deleting the business cascades to every remaining child table (staff, menus,
+-- orders, inventory, queue, reservations, ml_predictions, daily_metrics, etc.)
 DELETE FROM businesses WHERE id = '00000000-0000-0000-0000-000000000002';
 -- Remove synthetic demo users (safe after cascade removed all FK references)
 DELETE FROM users WHERE id IN (
@@ -103,6 +161,83 @@ INSERT INTO staff (id, user_id, business_id, role, created_at) VALUES
 ('00000000-0000-0000-0003-000000000012', '00000000-0000-0000-0002-000000000012', '00000000-0000-0000-0000-000000000002', 'host_server',        NOW() - INTERVAL '43 days'),
 ('00000000-0000-0000-0003-000000000013', '00000000-0000-0000-0002-000000000013', '00000000-0000-0000-0000-000000000002', 'bar_kitchen',        NOW() - INTERVAL '42 days'),
 ('00000000-0000-0000-0003-000000000014', '00000000-0000-0000-0002-000000000014', '00000000-0000-0000-0000-000000000002', 'inventory_operator', NOW() - INTERVAL '41 days');
+
+-- ─── Physical Layer: location, areas, tables, combinations, stations ──────────
+-- Migrations 024 and 039 backfill a primary location, a default area and the
+-- Kitchen/Bar stations for businesses that existed WHEN THEY RAN. This tenant is
+-- created afterwards by this file, so it inherits none of them and must insert
+-- its own. This section is placed before the menu, ordering and queue sections
+-- on purpose: the station routing updates and the queue location/service-date
+-- derivation further down already join these tables, and simply matched zero
+-- rows until now.
+--
+-- IDs follow the newer convention used by the Stage 5 sections below: the third
+-- group is the migration that introduced the table.
+
+INSERT INTO locations (id, business_id, name, address, phone, is_primary, created_at, updated_at) VALUES
+('00000000-0000-0005-0000-000000000001', '00000000-0000-0000-0000-000000000002', 'Example Lantern', 'Schönhauser Allee 42, 10435 Berlin, Germany', '+493012345678', TRUE, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days');
+
+-- ─── Table Areas ──────────────────────────────────────────────────────────────
+INSERT INTO table_areas (id, business_id, location_id, name, sort_order, created_at, updated_at) VALUES
+('00000000-0000-0024-0000-000000000101', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', 'Bar Counter', 10, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days'),
+('00000000-0000-0024-0000-000000000102', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', 'Main Room',   20, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days'),
+('00000000-0000-0024-0000-000000000103', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', 'Terrace',     30, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days');
+
+-- ─── Tables (20 across three areas, 64 covers) ────────────────────────────────
+-- A spread of capacities so combination and capacity-override logic has real
+-- cases to work on. Labels T1–T7 match the free-text orders.table_identifier
+-- values already used by the historical orders below, which lets those orders be
+-- attached to real tables rather than left half-populated.
+--
+-- Occupancy is NOT a column here. The floor board derives 'occupied' from an open
+-- table_seatings row and 'reserved' from an active assignment; operational_state
+-- carries only the three states staff set by hand. One table is left cleaning and
+-- one out of service so those two board states are reachable from seeded data.
+INSERT INTO tables (id, business_id, location_id, area_id, label, capacity, shape, sort_order, operational_state, operational_state_reason, operational_state_until, operational_state_changed_at, created_at, updated_at) VALUES
+-- Bar Counter: six stools, pairs only
+('00000000-0000-0024-0000-000000000201', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0024-0000-000000000101', 'B1',  2, 'bar',       10, 'ready', NULL, NULL, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days'),
+('00000000-0000-0024-0000-000000000202', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0024-0000-000000000101', 'B2',  2, 'bar',       20, 'ready', NULL, NULL, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days'),
+('00000000-0000-0024-0000-000000000203', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0024-0000-000000000101', 'B3',  2, 'bar',       30, 'ready', NULL, NULL, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days'),
+('00000000-0000-0024-0000-000000000204', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0024-0000-000000000101', 'B4',  2, 'bar',       40, 'ready', NULL, NULL, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days'),
+('00000000-0000-0024-0000-000000000205', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0024-0000-000000000101', 'B5',  2, 'bar',       50, 'ready', NULL, NULL, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days'),
+('00000000-0000-0024-0000-000000000206', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0024-0000-000000000101', 'B6',  2, 'bar',       60, 'ready', NULL, NULL, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days'),
+-- Main Room: the working floor — pairs, fours, and two large rectangles
+('00000000-0000-0024-0000-000000000211', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0024-0000-000000000102', 'T1',  2, 'square',    10, 'ready', NULL, NULL, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days'),
+('00000000-0000-0024-0000-000000000212', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0024-0000-000000000102', 'T2',  2, 'square',    20, 'ready', NULL, NULL, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days'),
+('00000000-0000-0024-0000-000000000213', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0024-0000-000000000102', 'T3',  2, 'square',    30, 'ready', NULL, NULL, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days'),
+('00000000-0000-0024-0000-000000000214', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0024-0000-000000000102', 'T4',  2, 'square',    40, 'ready', NULL, NULL, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days'),
+('00000000-0000-0024-0000-000000000215', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0024-0000-000000000102', 'T5',  4, 'round',     50, 'ready', NULL, NULL, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days'),
+('00000000-0000-0024-0000-000000000216', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0024-0000-000000000102', 'T6',  4, 'round',     60, 'ready', NULL, NULL, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days'),
+('00000000-0000-0024-0000-000000000217', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0024-0000-000000000102', 'T7',  4, 'round',     70, 'ready', NULL, NULL, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days'),
+('00000000-0000-0024-0000-000000000218', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0024-0000-000000000102', 'T8',  4, 'round',     80, 'cleaning', 'Turning after the early sitting', NULL, NOW() - INTERVAL '20 minutes', NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days'),
+('00000000-0000-0024-0000-000000000219', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0024-0000-000000000102', 'T9',  6, 'rectangle', 90, 'ready', NULL, NULL, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days'),
+('00000000-0000-0024-0000-000000000220', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0024-0000-000000000102', 'T10', 6, 'rectangle', 100, 'ready', NULL, NULL, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days'),
+-- Terrace: four fours, one closed for a wobbling leg
+('00000000-0000-0024-0000-000000000231', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0024-0000-000000000103', 'P1',  4, 'square',    10, 'ready', NULL, NULL, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days'),
+('00000000-0000-0024-0000-000000000232', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0024-0000-000000000103', 'P2',  4, 'square',    20, 'ready', NULL, NULL, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days'),
+('00000000-0000-0024-0000-000000000233', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0024-0000-000000000103', 'P3',  4, 'square',    30, 'ready', NULL, NULL, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days'),
+('00000000-0000-0024-0000-000000000234', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0024-0000-000000000103', 'P4',  4, 'square',    40, 'out_of_service', 'Wobbling leg, repair booked', NOW() + INTERVAL '2 days', NOW() - INTERVAL '2 days', NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days');
+
+-- ─── Table Combinations ───────────────────────────────────────────────────────
+-- A multi-table allocation is only permitted when the exact set of tables matches
+-- an active combination, and every member must sit in one area. Without at least
+-- one of these the floor board's multi-table path is unreachable.
+INSERT INTO table_combinations (id, business_id, location_id, area_id, name, capacity_override, is_active, created_at, updated_at) VALUES
+('00000000-0000-0024-0000-000000000301', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0024-0000-000000000102', 'Main Room T5 + T6', 8, TRUE, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days'),
+('00000000-0000-0024-0000-000000000302', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0024-0000-000000000103', 'Terrace P1 + P2',   8, TRUE, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days');
+
+INSERT INTO table_combination_members (combination_id, table_id) VALUES
+('00000000-0000-0024-0000-000000000301', '00000000-0000-0024-0000-000000000215'),
+('00000000-0000-0024-0000-000000000301', '00000000-0000-0024-0000-000000000216'),
+('00000000-0000-0024-0000-000000000302', '00000000-0000-0024-0000-000000000231'),
+('00000000-0000-0024-0000-000000000302', '00000000-0000-0024-0000-000000000232');
+
+-- ─── Preparation Stations ─────────────────────────────────────────────────────
+-- Named exactly as migration 039 names them, because the menu_items, item_library
+-- and order_line_items routing updates further down match on ps.name.
+INSERT INTO preparation_stations (id, business_id, name, sort_order, is_active, created_at, updated_at) VALUES
+('00000000-0000-0039-0000-000000000001', '00000000-0000-0000-0000-000000000002', 'Bar',     10, TRUE, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days'),
+('00000000-0000-0039-0000-000000000002', '00000000-0000-0000-0000-000000000002', 'Kitchen', 20, TRUE, NOW() - INTERVAL '45 days', NOW() - INTERVAL '45 days');
 
 -- ─── Customers ────────────────────────────────────────────────────────────────
 -- Business-scoped customer identities (Phase 5.9: reservations.customer_id → customers).
@@ -321,7 +456,19 @@ INSERT INTO reservations (id, business_id, customer_id, service_type_id, time, p
 -- Drew Nakamura — New (first reservation: tomorrow evening)
 ('00000000-0000-0000-0005-000000000034', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000021', '00000000-0000-0000-0004-000000000010',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') + INTERVAL '1 day' + INTERVAL '20 hours') AT TIME ZONE 'Europe/Berlin',
-  '+12025550121', 'drew.nakamura@example.com', NULL, 'confirmed', 2, NOW() - INTERVAL '1 hour');
+  '+12025550121', 'drew.nakamura@example.com', NULL, 'confirmed', 2, NOW() - INTERVAL '1 hour'),
+
+-- Tonight's service. These two are the reservations the seated parties below hang
+-- off, so unlike every row above them they are anchored to NOW() rather than to a
+-- Berlin wall-clock hour: a seating that opened forty minutes ago has to stay forty
+-- minutes old whenever this file is run, or the demo contradicts itself.
+-- Maria Santos ate early, settled at the register and left; Sam Lee is still here.
+('00000000-0000-0000-0005-000000000039', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000011', '00000000-0000-0000-0004-000000000011',
+  NOW() - INTERVAL '3 hours',
+  '+12025550111', 'maria.santos@example.com', 'Table by the window if free', 'completed', 4, NOW() - INTERVAL '2 days'),
+('00000000-0000-0000-0005-000000000040', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0001-000000000014', '00000000-0000-0000-0004-000000000010',
+  NOW() - INTERVAL '40 minutes',
+  '+12025550114', 'sam.lee@example.com', NULL, 'confirmed', 2, NOW() - INTERVAL '1 day');
 
 -- ─── Menus ─────────────────────────────────────────────────────────────────────
 INSERT INTO menus (id, business_id, name, description, is_active) VALUES
@@ -562,7 +709,16 @@ FROM (VALUES
 ('00000000-0000-0000-0011-000000000017', '00000000-0000-0000-0000-000000000002', 'pzl-s-sun-002', 'T2', 'served', 'puzzles-order-sun-002', 36.00, DATE_TRUNC('day', NOW()) - INTERVAL '5 days' + INTERVAL '20 hours 30 minutes'),
 ('00000000-0000-0000-0011-000000000018', '00000000-0000-0000-0000-000000000002', 'pzl-s-sun-003', 'T3', 'served', 'puzzles-order-sun-003', 39.00, DATE_TRUNC('day', NOW()) - INTERVAL '5 days' + INTERVAL '21 hours'),
 ('00000000-0000-0000-0011-000000000019', '00000000-0000-0000-0000-000000000002', 'pzl-s-sun-004', 'T4', 'served', 'puzzles-order-sun-004', 38.00, DATE_TRUNC('day', NOW()) - INTERVAL '5 days' + INTERVAL '21 hours 30 minutes'),
-('00000000-0000-0000-0011-000000000020', '00000000-0000-0000-0000-000000000002', 'pzl-s-sun-005', 'T5', 'served', 'puzzles-order-sun-005', 38.00, DATE_TRUNC('day', NOW()) - INTERVAL '5 days' + INTERVAL '22 hours')
+('00000000-0000-0000-0011-000000000020', '00000000-0000-0000-0000-000000000002', 'pzl-s-sun-005', 'T5', 'served', 'puzzles-order-sun-005', 38.00, DATE_TRUNC('day', NOW()) - INTERVAL '5 days' + INTERVAL '22 hours'),
+-- Tonight, on the two live tabs below. NOW()-relative for the same reason the two
+-- tonight reservations are. 21 and 22 are the open tab on T3: a round the guest
+-- placed from the table QR and a second the bartender added, which is what makes
+-- "both rounds share one tab" checkable on seeded data. 23 and 24 are the tab on
+-- T5+T6 that was settled at the venue register before the party left.
+('00000000-0000-0000-0011-000000000021', '00000000-0000-0000-0000-000000000002', 'lantern-s-tonight-001', 'T3', 'served',    'lantern-order-tonight-001', 27.00, NOW() - INTERVAL '30 minutes'),
+('00000000-0000-0000-0011-000000000022', '00000000-0000-0000-0000-000000000002', 'lantern-s-tonight-002', 'T3', 'preparing', 'lantern-order-tonight-002', 39.00, NOW() - INTERVAL '8 minutes'),
+('00000000-0000-0000-0011-000000000023', '00000000-0000-0000-0000-000000000002', 'lantern-s-tonight-003', 'T5', 'served',    'lantern-order-tonight-003', 78.00, NOW() - INTERVAL '2 hours 30 minutes'),
+('00000000-0000-0000-0011-000000000024', '00000000-0000-0000-0000-000000000002', 'lantern-s-tonight-004', 'T5', 'served',    'lantern-order-tonight-004', 38.00, NOW() - INTERVAL '1 hour 50 minutes')
 ) AS seeded_orders(
   id, business_id, session_token, table_identifier, status, idempotency_key,
   total_amount, placed_at
@@ -628,7 +784,21 @@ INSERT INTO order_line_items (id, order_id, item_id, item_name, quantity, unit_p
 (gen_random_uuid(), '00000000-0000-0000-0011-000000000019', '00000000-0000-0000-0008-000000000019', 'Cheese Board',       1, 16.00, 'kitchen'),
 -- Order 20: Negroni x2 + Draft Lager x2 = €38
 (gen_random_uuid(), '00000000-0000-0000-0011-000000000020', '00000000-0000-0000-0008-000000000009', 'Negroni',            2, 13.00, 'bar'),
-(gen_random_uuid(), '00000000-0000-0000-0011-000000000020', '00000000-0000-0000-0008-000000000004', 'Draft Lager',        2,  6.00, 'bar');
+(gen_random_uuid(), '00000000-0000-0000-0011-000000000020', '00000000-0000-0000-0008-000000000004', 'Draft Lager',        2,  6.00, 'bar'),
+-- Tonight. The Mojito is deliberate: it is the one menu item carrying a recipe, so
+-- it is what gives the served round real 'sale' movements to inspect further down.
+-- Order 21: Happy Hour Mojito x2 + Nachos x1 = EUR 27 (guest, from the table QR)
+(gen_random_uuid(), '00000000-0000-0000-0011-000000000021', '00000000-0000-0000-0008-000000000001', 'Happy Hour Mojito',  2,  9.00, 'bar'),
+(gen_random_uuid(), '00000000-0000-0000-0011-000000000021', '00000000-0000-0000-0008-000000000007', 'Nachos',             1,  9.00, 'kitchen'),
+-- Order 22: Espresso Martini x2 + Loaded Fries x1 = EUR 39 (staff, still in progress)
+(gen_random_uuid(), '00000000-0000-0000-0011-000000000022', '00000000-0000-0000-0008-000000000010', 'Espresso Martini',   2, 14.00, 'bar'),
+(gen_random_uuid(), '00000000-0000-0000-0011-000000000022', '00000000-0000-0000-0008-000000000018', 'Loaded Fries',       1, 11.00, 'kitchen'),
+-- Order 23: Aperol Spritz x4 + Beef Sliders x2 = EUR 78
+(gen_random_uuid(), '00000000-0000-0000-0011-000000000023', '00000000-0000-0000-0008-000000000011', 'Aperol Spritz',      4, 12.00, 'bar'),
+(gen_random_uuid(), '00000000-0000-0000-0011-000000000023', '00000000-0000-0000-0008-000000000020', 'Beef Sliders',       2, 15.00, 'kitchen'),
+-- Order 24: House Red x2 + Cheese Board x1 = EUR 38
+(gen_random_uuid(), '00000000-0000-0000-0011-000000000024', '00000000-0000-0000-0008-000000000015', 'House Red',          2, 11.00, 'bar'),
+(gen_random_uuid(), '00000000-0000-0000-0011-000000000024', '00000000-0000-0000-0008-000000000019', 'Cheese Board',       1, 16.00, 'kitchen');
 
 UPDATE order_line_items li
 SET preparation_station_id = ps.id,
@@ -702,7 +872,40 @@ FROM orders o
 CROSS JOIN (
   VALUES ('received', 0), ('preparing', 2), ('ready', 10), ('served', 15)
 ) AS s(status, offset_minutes)
-WHERE o.business_id = '00000000-0000-0000-0000-000000000002';
+WHERE o.business_id = '00000000-0000-0000-0000-000000000002'
+  -- Only a served order has walked the whole ladder. Tonight's in-progress round
+  -- would otherwise be handed a 'served' entry it has not reached.
+  AND o.status = 'served';
+
+INSERT INTO order_status_timeline (id, business_id, order_id, status, changed_by, changed_at)
+SELECT
+  gen_random_uuid(), o.business_id, o.id, s.status,
+  '00000000-0000-0000-0002-000000000013',  -- Demo Bartender
+  o.placed_at + s.offset_minutes * INTERVAL '1 minute'
+FROM orders o
+CROSS JOIN (
+  VALUES ('received', 0), ('preparing', 2)
+) AS s(status, offset_minutes)
+WHERE o.business_id = '00000000-0000-0000-0000-000000000002'
+  AND o.status = 'preparing';
+
+-- Line status tracks the order it belongs to. Migration 039 backfilled this for
+-- rows that existed when it ran; seed rows are inserted afterwards and would
+-- otherwise all sit at the 'received' default, so every historical ticket would
+-- read as never started. The bar line of tonight's in-progress round is already
+-- poured while the kitchen line is still on, which is what gives the two station
+-- boards different work to show.
+UPDATE order_line_items li
+SET line_status = o.status
+FROM orders o
+WHERE o.id = li.order_id
+  AND o.business_id = '00000000-0000-0000-0000-000000000002'
+  AND o.status <> 'cancelled';
+
+UPDATE order_line_items
+SET line_status = 'ready'
+WHERE order_id = '00000000-0000-0000-0011-000000000022'
+  AND routing_tag = 'bar';
 
 -- ─── Queue Entries (12 across 2 evenings) ─────────────────────────────────────
 -- Friday -7 days: 5 entries (4 seated, 1 removed)
@@ -773,7 +976,19 @@ FROM (VALUES
 ('00000000-0000-0000-0013-000000000012', '00000000-0000-0000-0000-000000000002', 'pzl-q-sat-007', 'Hannah Park',    3, '+14155552012', 'removed',
   DATE_TRUNC('day', NOW()) - INTERVAL '6 days' + INTERVAL '22 hours',
   NULL, NULL,
-  DATE_TRUNC('day', NOW()) - INTERVAL '6 days' + INTERVAL '22 hours 15 minutes')
+  DATE_TRUNC('day', NOW()) - INTERVAL '6 days' + INTERVAL '22 hours 15 minutes'),
+-- Tonight, still waiting. The twelve entries above are all terminal and days old,
+-- so on their own they leave the live queue board empty and nothing to seat: an
+-- assignment only reads as active while its entry is waiting or called. These
+-- three are the ones a host actually works. Phones must differ from each other —
+-- a partial unique index forbids two active entries sharing a number.
+('00000000-0000-0000-0013-000000000013', '00000000-0000-0000-0000-000000000002', 'pzl-q-tonight-001', 'Nina Brandt',    2, '+14155552013', 'waiting',
+  NOW() - INTERVAL '12 minutes', NULL, NULL, NULL),
+('00000000-0000-0000-0013-000000000014', '00000000-0000-0000-0000-000000000002', 'pzl-q-tonight-002', 'Omar Haddad',    4, '+14155552014', 'called',
+  NOW() - INTERVAL '25 minutes',
+  NOW() - INTERVAL '5 minutes', NULL, NULL),
+('00000000-0000-0000-0013-000000000015', '00000000-0000-0000-0000-000000000002', 'pzl-q-tonight-003', 'Ines Vogel',     3, '+14155552015', 'waiting',
+  NOW() - INTERVAL '6 minutes', NULL, NULL, NULL)
 ) AS seeded_queue_entries(
   id, business_id, raw_token, name, party_size, phone, status,
   joined_at, called_at, seated_at, removed_at
@@ -928,6 +1143,168 @@ INSERT INTO inventory_count_sessions
 INSERT INTO inventory_count_lines
   (id, business_id, session_id, inventory_item_id, book_quantity, counted_quantity, variance_quantity, shrinkage_reason, note, movement_id, entry_mode, entry_value, entry_pack_conversion_id) VALUES
 ('00000000-0000-0046-0000-000000000011', '00000000-0000-0000-0000-000000000002', '00000000-0000-0046-0000-000000000001', '00000000-0000-0000-0010-000000000022', 10200, 10150, -50, 'spillage', 'Measured short at the rail', '00000000-0000-0011-0000-000000000002', 'base_unit', NULL, NULL);
+
+-- ─── Tonight's service: assignments, seatings, tabs, external settlement ──────
+-- Everything from here to the cost stamp below is the live state that makes the
+-- pilot journey walkable on seeded data: a party that ate and settled at the
+-- venue's own register, a party still at the table with an open tab, planned
+-- tables for the days ahead, a queue with people in it, and a waitlist with one
+-- live offer. Placed before the cost stamp so the sale movements it writes are
+-- picked up by it rather than needing a second copy of that statement.
+
+-- One location means every row belongs to it. Leaving these NULL is what made the
+-- queue read as location-less and the table figures half-populated.
+UPDATE reservations SET location_id = '00000000-0000-0005-0000-000000000001'
+WHERE business_id = '00000000-0000-0000-0000-000000000002';
+
+UPDATE orders SET location_id = '00000000-0000-0005-0000-000000000001'
+WHERE business_id = '00000000-0000-0000-0000-000000000002';
+
+-- The historical orders already carry a free-text table label. Now that the
+-- labels exist as real tables, point the orders at them so table utilisation
+-- reports over a whole floor rather than a seventh of one.
+UPDATE orders o
+SET table_id = t.id
+FROM tables t
+WHERE t.business_id = o.business_id
+  AND t.label = o.table_identifier
+  AND o.business_id = '00000000-0000-0000-0000-000000000002';
+
+UPDATE orders SET channel = 'qr',    customer_id = '00000000-0000-0000-0001-000000000014' WHERE id = '00000000-0000-0000-0011-000000000021';
+UPDATE orders SET channel = 'staff', customer_id = '00000000-0000-0000-0001-000000000014' WHERE id = '00000000-0000-0000-0011-000000000022';
+UPDATE orders SET channel = 'staff', customer_id = '00000000-0000-0000-0001-000000000011' WHERE id IN ('00000000-0000-0000-0011-000000000023', '00000000-0000-0000-0011-000000000024');
+
+-- ─── Table Assignments (planning, not occupancy) ──────────────────────────────
+-- An assignment plans a table for a booking; the table stays available to walk-ins
+-- until a seating opens. The two tonight rows are assigned as well as seated,
+-- because that is the order the floor board itself does it in.
+INSERT INTO reservation_table_assignments (reservation_id, table_id, business_id, location_id, assigned_by, assigned_at) VALUES
+-- Tonight, both now seated
+('00000000-0000-0000-0005-000000000039', '00000000-0000-0024-0000-000000000215', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0000-0002-000000000012', NOW() - INTERVAL '3 hours 10 minutes'),
+('00000000-0000-0000-0005-000000000039', '00000000-0000-0024-0000-000000000216', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0000-0002-000000000012', NOW() - INTERVAL '3 hours 10 minutes'),
+('00000000-0000-0000-0005-000000000040', '00000000-0000-0024-0000-000000000213', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0000-0002-000000000012', NOW() - INTERVAL '50 minutes'),
+-- Planned for the days ahead, nobody seated
+('00000000-0000-0000-0005-000000000034', '00000000-0000-0024-0000-000000000211', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0000-0002-000000000012', NOW() - INTERVAL '1 hour'),
+('00000000-0000-0000-0005-000000000035', '00000000-0000-0024-0000-000000000212', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0000-0002-000000000012', NOW() - INTERVAL '1 hour'),
+('00000000-0000-0000-0005-000000000022', '00000000-0000-0024-0000-000000000220', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0000-0002-000000000012', NOW() - INTERVAL '1 hour');
+
+-- The called queue party has a table held for it but has not sat down yet.
+INSERT INTO queue_table_assignments (queue_entry_id, table_id, business_id, location_id, assigned_by, assigned_at) VALUES
+('00000000-0000-0000-0013-000000000014', '00000000-0000-0024-0000-000000000217', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0000-0002-000000000012', NOW() - INTERVAL '5 minutes');
+
+-- ─── Seatings (occupancy) ─────────────────────────────────────────────────────
+-- A seating is what actually makes a table read as occupied; there is no column
+-- for it. The closed one used the Main Room T5 + T6 combination, which is the
+-- only way a multi-table allocation is permitted.
+INSERT INTO table_seatings (id, business_id, location_id, reservation_id, queue_entry_id, party_size, status, opened_by, opened_at, closed_by, closed_at, created_at, updated_at) VALUES
+('00000000-0000-0024-0000-000000000401', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0000-0005-000000000039', NULL, 4, 'closed', '00000000-0000-0000-0002-000000000012', NOW() - INTERVAL '2 hours 45 minutes', '00000000-0000-0000-0002-000000000012', NOW() - INTERVAL '45 minutes', NOW() - INTERVAL '2 hours 45 minutes', NOW() - INTERVAL '45 minutes'),
+('00000000-0000-0024-0000-000000000402', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0000-0005-000000000040', NULL, 2, 'open',   '00000000-0000-0000-0002-000000000012', NOW() - INTERVAL '40 minutes', NULL, NULL, NOW() - INTERVAL '40 minutes', NOW() - INTERVAL '40 minutes');
+
+INSERT INTO table_seating_tables (seating_id, table_id) VALUES
+('00000000-0000-0024-0000-000000000401', '00000000-0000-0024-0000-000000000215'),
+('00000000-0000-0024-0000-000000000401', '00000000-0000-0024-0000-000000000216'),
+('00000000-0000-0024-0000-000000000402', '00000000-0000-0024-0000-000000000213');
+
+-- ─── Tabs ─────────────────────────────────────────────────────────────────────
+-- No running total is stored: a tab's total is summed from its orders on demand.
+-- The settled tab leaves closed_at, closed_by and the legacy settled_method NULL
+-- because recording an external settlement does not write them — the settlement
+-- event is the record, and seeded rows should look like rows the product wrote.
+INSERT INTO tabs (id, business_id, table_id, customer_id, seating_id, status, channel, opened_by, opened_at, created_at, updated_at) VALUES
+('00000000-0000-0016-0000-000000000001', '00000000-0000-0000-0000-000000000002', '00000000-0000-0024-0000-000000000215', '00000000-0000-0000-0001-000000000011', '00000000-0000-0024-0000-000000000401', 'settled_externally', 'staff', '00000000-0000-0000-0002-000000000012', NOW() - INTERVAL '2 hours 40 minutes', NOW() - INTERVAL '2 hours 40 minutes', NOW() - INTERVAL '50 minutes'),
+('00000000-0000-0016-0000-000000000002', '00000000-0000-0000-0000-000000000002', '00000000-0000-0024-0000-000000000213', '00000000-0000-0000-0001-000000000014', '00000000-0000-0024-0000-000000000402', 'open',               'qr',    '00000000-0000-0000-0002-000000000012', NOW() - INTERVAL '38 minutes',       NOW() - INTERVAL '38 minutes',       NOW() - INTERVAL '8 minutes');
+
+UPDATE orders SET tab_id = '00000000-0000-0016-0000-000000000001'
+WHERE id IN ('00000000-0000-0000-0011-000000000023', '00000000-0000-0000-0011-000000000024');
+UPDATE orders SET tab_id = '00000000-0000-0016-0000-000000000002'
+WHERE id IN ('00000000-0000-0000-0011-000000000021', '00000000-0000-0000-0011-000000000022');
+
+-- ─── External settlement ──────────────────────────────────────────────────────
+-- Crowbar does not take payment and holds no fiscal authority. This row records a
+-- staff assertion that the venue's own compliant register completed settlement,
+-- and snapshots the tab total at the moment it was recorded. informational_method
+-- stays deliberately unspecific: the register, not this record, knows how it was
+-- settled. The snapshot is summed rather than written by hand so it cannot drift
+-- from the totals the line rollup above computed.
+INSERT INTO tab_settlement_events (id, business_id, tab_id, event_type, actor_id, occurred_at, currency_code, total_snapshot, informational_method, note, external_register_reference)
+SELECT
+  '00000000-0000-0040-0000-000000000001',
+  '00000000-0000-0000-0000-000000000002',
+  '00000000-0000-0016-0000-000000000001',
+  'settled_externally',
+  '00000000-0000-0000-0002-000000000012',
+  NOW() - INTERVAL '50 minutes',
+  'EUR',
+  COALESCE(SUM(o.total_amount), 0),
+  'other',
+  'Recorded at the register before the party left.',
+  'REG-1/0247'
+FROM orders o
+WHERE o.tab_id = '00000000-0000-0016-0000-000000000001'
+  AND o.status <> 'cancelled';
+
+UPDATE tabs SET current_settlement_event_id = '00000000-0000-0040-0000-000000000001'
+WHERE id = '00000000-0000-0016-0000-000000000001';
+
+-- ─── Stock deducted by what was actually served ───────────────────────────────
+-- Written the way fulfilment writes it: one movement per recipe ingredient,
+-- carrying both the order and the line it came from, so a reversal can undo
+-- exactly what was deducted instead of re-reading the current recipe.
+INSERT INTO stock_movements (id, business_id, item_id, movement_type, quantity_delta, notes, created_by, order_id, order_line_item_id, created_at)
+SELECT
+  gen_random_uuid(),
+  li.business_id,
+  ing.inventory_item_id,
+  'sale',
+  -(ing.quantity * li.quantity),
+  'Deducted on fulfilment',
+  '00000000-0000-0000-0002-000000000013',
+  li.order_id,
+  li.id,
+  o.placed_at + INTERVAL '15 minutes'
+FROM order_line_items li
+JOIN menu_item_ingredients ing ON ing.menu_item_id = li.item_id
+JOIN orders o ON o.id = li.order_id
+WHERE o.id = '00000000-0000-0000-0011-000000000021';
+
+-- On-hand has to agree with the ledger, or the first screen a reader opens
+-- contradicts the second.
+UPDATE inventory_items i
+SET current_quantity = i.current_quantity + m.delta
+FROM (
+  SELECT sm.item_id, SUM(sm.quantity_delta) AS delta
+  FROM stock_movements sm
+  WHERE sm.order_id = '00000000-0000-0000-0011-000000000021'
+  GROUP BY sm.item_id
+) m
+WHERE i.id = m.item_id;
+
+-- ─── Waitlist (future-booking interest, not the queue) ────────────────────────
+-- One guest waiting to be offered a slot, and one holding a live offer. An
+-- offered row must carry all three offer columns, and its expiry has to be in the
+-- future or the expiry sweep turns it terminal the moment anything reads it.
+INSERT INTO reservation_waitlist_entries (id, business_id, service_type_id, customer_id, requested_starts_at, flexible_until, guests, status, offered_at, offered_reservation_time, offer_expires_at, created_by, created_at, updated_at) VALUES
+('00000000-0000-0030-0000-000000000001', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0004-000000000010', '00000000-0000-0000-0001-000000000020',
+  (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') + INTERVAL '2 days' + INTERVAL '20 hours') AT TIME ZONE 'Europe/Berlin',
+  (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') + INTERVAL '2 days' + INTERVAL '23 hours') AT TIME ZONE 'Europe/Berlin',
+  2, 'waiting', NULL, NULL, NULL, '00000000-0000-0000-0002-000000000012', NOW() - INTERVAL '2 hours', NOW() - INTERVAL '2 hours'),
+('00000000-0000-0030-0000-000000000002', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0004-000000000010', '00000000-0000-0000-0001-000000000017',
+  (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') + INTERVAL '1 day' + INTERVAL '20 hours') AT TIME ZONE 'Europe/Berlin',
+  (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') + INTERVAL '1 day' + INTERVAL '23 hours') AT TIME ZONE 'Europe/Berlin',
+  2, 'offered', NOW() - INTERVAL '10 minutes',
+  (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') + INTERVAL '1 day' + INTERVAL '20 hours') AT TIME ZONE 'Europe/Berlin',
+  NOW() + INTERVAL '20 minutes', '00000000-0000-0000-0002-000000000012', NOW() - INTERVAL '1 day', NOW() - INTERVAL '10 minutes');
+
+-- ─── A guest waiting to be let onto the table's tab ───────────────────────────
+-- Scanning a table QR creates a session a staff member approves. This one is left
+-- pending so the approval queue is not empty. Its token hash is opaque by design
+-- and no browser holds the plaintext, so it can only ever be approved or denied
+-- from the staff side — it is a fixture for that screen, not a usable credential.
+INSERT INTO table_guest_sessions (id, business_id, location_id, table_id, seating_id, table_qr_revision, browser_nonce_hash, token_hash, status, expires_at, created_at, updated_at) VALUES
+('00000000-0000-0041-0000-000000000001', '00000000-0000-0000-0000-000000000002', '00000000-0000-0005-0000-000000000001', '00000000-0000-0024-0000-000000000213', '00000000-0000-0024-0000-000000000402', 1,
+  encode(digest('lantern-guest-nonce-tonight-001', 'sha256'), 'hex'),
+  encode(digest('lantern-guest-token-tonight-001', 'sha256'), 'hex'),
+  'pending', NOW() + INTERVAL '25 minutes', NOW() - INTERVAL '3 minutes', NOW() - INTERVAL '3 minutes');
 
 -- Migration 044 stamps a cost onto movements that existed when it ran. Seed rows
 -- are inserted afterwards, so the demo's historic movements would otherwise carry

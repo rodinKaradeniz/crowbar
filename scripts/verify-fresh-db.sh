@@ -138,6 +138,48 @@ BEGIN
   IF EXISTS (SELECT 1 FROM tabs WHERE status NOT IN ('open', 'settled_externally')) THEN
     RAISE EXCEPTION 'external settlement status migration failed';
   END IF;
+  -- Stage 8 part one: the physical layer the pilot journey needs. Migrations 024
+  -- and 039 backfill these only for businesses that already existed, so the seed
+  -- has to insert its own and a silent regression would leave the floor empty.
+  IF (SELECT COUNT(*) FROM locations l JOIN businesses b ON b.id = l.business_id
+      WHERE b.slug = 'example-lantern' AND l.is_primary) <> 1 THEN
+    RAISE EXCEPTION 'the demo tenant has no single primary location';
+  END IF;
+  IF (SELECT COUNT(*) FROM table_areas a JOIN businesses b ON b.id = a.business_id
+      WHERE b.slug = 'example-lantern' AND a.deleted_at IS NULL) = 0
+     OR (SELECT COUNT(*) FROM tables t JOIN businesses b ON b.id = t.business_id
+         WHERE b.slug = 'example-lantern' AND t.deleted_at IS NULL) = 0 THEN
+    RAISE EXCEPTION 'the demo tenant has no floor plan to seat anyone on';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM table_combinations c
+    JOIN businesses b ON b.id = c.business_id
+    JOIN table_combination_members m ON m.combination_id = c.id
+    WHERE b.slug = 'example-lantern' AND c.is_active
+    GROUP BY c.id HAVING COUNT(m.table_id) > 1
+  ) THEN
+    RAISE EXCEPTION 'no active table combination with members, so multi-table allocation is unreachable';
+  END IF;
+  IF (SELECT COUNT(*) FROM preparation_stations p JOIN businesses b ON b.id = p.business_id
+      WHERE b.slug = 'example-lantern' AND p.is_active
+        AND p.name IN ('Bar', 'Kitchen')) <> 2 THEN
+    RAISE EXCEPTION 'the demo tenant is missing its bar or kitchen preparation station';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM tabs t JOIN businesses b ON b.id = t.business_id
+    WHERE b.slug = 'example-lantern' AND t.status = 'open' AND t.seating_id IS NOT NULL
+  ) THEN
+    RAISE EXCEPTION 'the demo tenant has no open tab on a seating';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM tabs t
+    JOIN businesses b ON b.id = t.business_id
+    JOIN tab_settlement_events e ON e.id = t.current_settlement_event_id
+    WHERE b.slug = 'example-lantern' AND t.status = 'settled_externally'
+      AND e.event_type = 'settled_externally'
+  ) THEN
+    RAISE EXCEPTION 'the demo tenant has no externally settled tab with its settlement event';
+  END IF;
 END $$;
 SQL
 

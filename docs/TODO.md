@@ -234,7 +234,7 @@ runtime legal rules engine.
   policy, net subtotal, tax, and gross total on every line plus order totals.
   Later profile changes do not rewrite old orders. Public checkout and menu
   disclosures label this as estimated operational/non-fiscal tax.
-- **Complete — editable German seed:** The Puzzles demo uses DE/EUR/`de-DE`/
+- **Complete — editable German seed:** The Example Lantern demo uses DE/EUR/`de-DE`/
   `Europe/Berlin` and editable 19% beverage/standard, 7% food/reduced, 0%
   exempt, and 0% custom examples. These are demo suggestions to verify with the
   venue's adviser, not automatic classification or legal advice. Non-German
@@ -696,12 +696,14 @@ is a data mutation that needs explicit authorization.
 
 ### 8. Demo environment and local release gate — ready after stage 7
 
-- Expand the canonical demo tenant with areas, tables, combinations, current
-  and future reservations, offer-ready waitlist, active queue, open seating and
-  tab, kitchen/bar orders, externally settled history, recipes, stock risks,
-  suppliers, purchase orders, stock counts, cost/margin examples, guest
-  profiles, and printable table QR sheets. Role-limited staff ship as of stage
-  6 — the seed carries one account per role.
+- **Complete — the demo tenant can run a shift.** The canonical seed carries one
+  primary location, three areas, twenty tables, two active combinations, the Bar
+  and Kitchen preparation stations, table assignments for the days ahead, a live
+  queue, an offer-ready waitlist plus one live offer, an open seating with an open
+  tab across a QR and a staff round, and a closed seating whose tab was settled
+  externally with its settlement event. Steps 3–11 of `run-crowbar-service-loop`
+  are walkable on seeded data; `scripts/verify-fresh-db.sh` asserts the floor
+  exists. Still open here: printable table QR sheets.
 - Automate the critical browser journey: book → assign/seat → QR/staff order →
   fulfill → deduct/reconcile stock → record waste → settle externally → close
   seating → inspect guest and cost history.
@@ -985,6 +987,19 @@ roadmap and feed its stages 1–8.
   15-minute offer, and an atomic acceptance recheck. Guests can join from a
   fully booked date with a preferred-time flexibility window; staff can add,
   review, and offer only live slots inside that window.
+- **Marking a no-show fails on a migrated database.** `reservations_status_check`,
+  written inline at `001_initial_schema.sql:85-86`, restricts status to
+  `('confirmed', 'pending', 'cancelled', 'completed')` and no later migration drops
+  it. Migration 030 then added `ck_reservations_no_show_audit`, which presumes a
+  `'no_show'` status, and `reservation_service.mark_reservation_no_show` writes
+  exactly that — so the write violates the older check. The suite does not catch it
+  because `tests/conftest.py` builds its schema with `Base.metadata.create_all` and
+  the ORM declares no status check, so every test runs against a database whose
+  constraint does not exist. Found while planning the stage 8 seed and confirmed
+  against the live migrated schema; not fixed here because the fix is a migration
+  and this pass adds none. *Trigger:* the next migration to the reservations table,
+  or the first time a host tries to mark a no-show.
+
 - **Deferred beyond MVP:** Deposits, card holds, fees, blacklists, and automatic
   punitive action remain part of the post-MVP fiscal POS/payment program.
 

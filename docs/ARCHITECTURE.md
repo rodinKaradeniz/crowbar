@@ -107,7 +107,8 @@ components and FastAPI dependencies perform the authoritative auth checks.
   reminder batch.
 - `db/migrations/`: ordered, append-only SQL migrations.
 - `db/migrate.py`: custom filename-tracked migration and seed runner.
-- `db/seeds/001_seed_puzzles.sql`: canonical rich demo tenant.
+- `db/seeds/001_seed_example_lantern.sql`: canonical rich demo tenant,
+  including the floor plan, seatings and tabs the pilot journey runs on.
 - `tests/`: pytest unit and PostgreSQL-backed integration tests.
 
 The async session dependency commits at the end of a successful request and

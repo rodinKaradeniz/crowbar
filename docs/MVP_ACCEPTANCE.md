@@ -168,7 +168,7 @@ added here before implementation so there remains one release ledger.
 | BASE-01 | P1 | Frontend lint currently reports errors and material warnings even though the test suite and production build complete. | 1A | Zero lint errors; every warning fixed or explicitly justified; focused tests and build pass. |
 | BASE-02 | P1 | `ServiceTypeCreate.max_concurrent_bookings` defaults to `None` while product/schema tests require a positive default of one. | 1A | Migration, ORM, create/update/response schema and regression test agree. |
 | BASE-03 | P1 | ML has only sparse tests and no reproducible local test environment in the audited checkout. | 1A, 6 | Reproducible install/import/test command first; later data, model, persistence and scheduling acceptance. |
-| BASE-04 | P2 | The seed exercises reservations/orders/inventory but has no tables, tabs, or future waitlist scenario. | 1A, 8 | Stage 1 proves schema/relationship validity; stage 8 supplies the full deterministic pilot scenario. |
+| BASE-04 | P2 | The seed exercises reservations/orders/inventory but has no tables, tabs, or future waitlist scenario. | 1A, 8 | Stage 1 proves schema/relationship validity; stage 8 supplies the full deterministic pilot scenario. **Stage 8 part one seeded the floor plan, seatings, tabs, external settlement, live queue and waitlist, and the eleven-step loop was walked on it; the remaining evidence is the automated browser journey (part two).** Not closed here — closing a risk needs more than an edit to this file. |
 | AUTH-01 | P1 | Login/register still expose customer accounts, phone OTP, and redirects to nonexistent `/customer/*` pages although guests are account-free. | 1B, 1E | Branches/routes/search entries removed; staff auth and public guest journeys regression-tested. |
 | AUTH-02 | P1 | Forgot/reset password pages have no authoritative backend workflow. | 1B | Generic rate-limited request, hashed single-use expiring token, policy enforcement, revocation, and tests. |
 | AUTH-03 | P0 | Account disablement only prefixes `user_type`; authentication does not reject it and existing JWTs remain usable. Staff removal/password changes also lack session revocation. | 1B | Disabled/removed users fail new and existing sessions across HTTP and WS; revocation tests cover every trigger. |
@@ -645,9 +645,10 @@ warnings in the guest-profile and floor clients remain and are unrelated
 maintenance debt.
 
 **Not exercised.** Table utilization and tab-value figures were reconciled
-against a seed that contains no seatings and no tabs, so their populated path is
-covered by integration tests rather than by the live walk; the seed lacks the
-stage-8 pilot scenario. The frontend Reports page was verified by TypeScript,
+against a seed that contained no seatings and no tabs, so their populated path
+was covered by integration tests rather than by the live walk. Stage 8 part one
+closed that gap in the seed: both figures have since been read against seeded
+seatings and tabs during a live loop walk. The frontend Reports page was verified by TypeScript,
 lint, build and unit tests, not by a browser session. Scheduled jobs were not
 run. Redis was up; the ML service was down, which is what made its degradation
 observable.

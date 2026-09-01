@@ -1297,7 +1297,7 @@ carries one account per role so the matrix is demonstrable by signing in.
 pricing is preserved by splitting `menu.edit` from `menu.pricing`.
 
 **References:** `server/db/migrations/049_role_matrix_and_ml_snapshots.sql`,
-`server/app/services/staff_service.py`, `server/db/seeds/001_seed_puzzles.sql`
+`server/app/services/staff_service.py`, `server/db/seeds/001_seed_example_lantern.sql`
 
 ## 2026-08-26 — Withdrawn consent suppresses marketing, never the guest's own booking
 
@@ -1427,7 +1427,7 @@ not be moved to a reserved special-use TLD (`.invalid`, `.test`, `.example`,
 `server/tests/unit/test_seed_credentials.py` reads the seed file and asserts
 every address in it passes `LoginRequest`, so that regression fails the suite.
 
-**References:** `server/db/seeds/001_seed_puzzles.sql`,
+**References:** `server/db/seeds/001_seed_example_lantern.sql`,
 `server/app/schemas/reservation.py`,
 `server/app/services/reservation_waitlist_service.py`,
 `server/app/routers/reservations.py`,
@@ -1702,3 +1702,56 @@ archive-plus-recreate, **which loses the table's QR code**.
 correct caller already exists before assuming the UI is missing one.
 
 **References.** `docs/TODO.md` §7c, `client/lib/client-api.ts`.
+
+## 2026-09-01 — The demo tenant gained a floor, and the cascade would not carry it
+
+**Context.** Example Lantern was rich in reservations, orders, inventory and
+purchasing and had nothing physical: no location, areas, tables, combinations,
+seatings, tabs, settlement events, preparation stations or waitlist. Migrations
+024 and 039 backfill a primary location, a default area and the Kitchen/Bar
+stations, but only for businesses that already existed when they ran — and the
+demo tenant is created afterwards by a seed file, so it inherited none of them.
+Three statements already in the seed had been silently matching zero rows for
+that reason, leaving every menu item unrouted and every queue entry
+location-less. Steps 3 through 11 of the pilot journey could not be walked on
+seeded data at all.
+
+**Decision.** Seed the physical layer in the same file, positioned before the
+statements that were already waiting for it, so those statements start working
+unchanged rather than being rewritten.
+
+The load-bearing discovery was in the teardown, not the data. Five tables hold
+`business_id` `ON DELETE RESTRICT` rather than `CASCADE`, so that a settlement, a
+correction or a status trail cannot vanish with its tenant. That is the right
+rule, and it means `DELETE FROM businesses` fails outright once any of them holds
+a row. Worse, the floor graph is joined by RESTRICT edges *between two children of
+the same cascading parent* — a combination member pins its table, a seating pins
+its reservation, a table pins its area and location — and PostgreSQL fires a
+parent's cascade triggers in an order that does not guarantee the referencing side
+goes first. The existing seed survived the equivalent `stock_movements` →
+`inventory_items` edge purely by that ordering. The new graph did not: the second
+seed run failed on `table_combination_members`. The teardown is now explicit and
+ordered, children first, and it also clears the four tables an ordinary shift
+writes — which is what lets a database someone has actually worked a service
+through still be reset by re-running the seed.
+
+**Consequences.** "Deleting the business cascades to everything" is no longer
+true and should not be assumed by the next person to add a section. Adding rows to
+a table whose `business_id` is RESTRICT, or that sits behind a RESTRICT edge from
+another child, means adding an explicit delete to the cleanup block in dependency
+order. `scripts/verify-fresh-db.sh` is what catches this, because it seeds twice;
+a single seed run proves nothing about replayability.
+
+Two further things fell out of walking the journey. `reservations_status_check`
+still forbids the `'no_show'` status that migration 030 and
+`reservation_service` both assume, and the suite cannot see it because
+`tests/conftest.py` builds its schema from `Base.metadata` rather than from the
+migrations — recorded in `docs/TODO.md`, not fixed here. And the guest management
+link is revoked on cancel and no-show but deliberately **not** on reschedule, so
+the guest who just rescheduled keeps the link they are holding;
+`run-crowbar-service-loop` had claimed the opposite and has been corrected against
+`docs/PRODUCT.md`.
+
+**References.** `server/db/seeds/001_seed_example_lantern.sql` (renamed from
+`001_seed_puzzles.sql`), `scripts/verify-fresh-db.sh`, `docs/TODO.md` stage 8,
+`.claude/skills/run-crowbar-service-loop/SKILL.md`.
