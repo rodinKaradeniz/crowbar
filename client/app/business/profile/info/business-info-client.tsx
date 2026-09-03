@@ -21,6 +21,8 @@ import { clientUpdateBusiness } from "@/lib/client-api";
 import { TimezoneCombobox } from "@/components/timezone-combobox";
 import { toast } from "sonner";
 
+import { PageBody, PageHeader } from "@/components/page-header";
+
 interface BusinessInfoClientProps {
   businessId: string;
   initialBusiness: Business | undefined;
@@ -99,15 +101,14 @@ export default function BusinessInfoClient({
   };
 
   return (
-    <div className="flex flex-col gap-6 lg:flex-row px-[clamp(16px,2.5vw,32px)] py-6">
-      <div className="flex-1">
-        <div className="mb-6">
-          <h1 className="type-t1">Business Information</h1>
-          <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
-            Basic details visible to customers
-          </p>
-        </div>
+    <>
+      <PageHeader
+        title="Business Information"
+        description="Basic details visible to customers"
+      />
 
+      <PageBody className="lg:flex-row">
+      <div className="flex-1">
         <form onSubmit={handleSubmit}>
           <FieldGroup>
             <FieldSet>
@@ -260,7 +261,17 @@ export default function BusinessInfoClient({
       </div>
 
       <div className="lg:w-80">
-        <div className="sticky top-6">
+        {/* Centred AND pinned, which are in tension: an element centred by
+            `self-center` is only as tall as its content, so a `sticky` inside
+            it has no range to travel and scrolls away with the page. So the
+            sticky box is the full height under the topbar and the card is
+            centred INSIDE it — the card then sits level with the middle of the
+            form it previews, and stays there.
+
+            The offset is --workspace-header, never a bare number. At `top-6`
+            this stuck 52px under the topbar and lost its own top edge, the
+            same defect the docs nav and the floor aside had. */}
+        <div className="sticky top-[calc(var(--workspace-header)+var(--page-header))] flex flex-col justify-center gap-[var(--space-24)] lg:h-[calc(100svh-var(--workspace-header)-var(--page-header))] lg:overflow-y-auto lg:py-[var(--space-24)]">
           <div className="border bg-card overflow-hidden">
             <div className="relative h-32 w-full">
               {businessImage && (
@@ -333,6 +344,7 @@ export default function BusinessInfoClient({
           )}
         </div>
       </div>
-    </div>
+    </PageBody>
+    </>
   );
 }

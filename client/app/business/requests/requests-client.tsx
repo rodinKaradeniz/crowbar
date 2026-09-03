@@ -13,6 +13,7 @@ import { CustomerResponse } from "@/lib/api-client";
 import { clientUpdateReservation } from "@/lib/client-api";
 import { toast } from "sonner";
 import { isReservationReschedulable } from "@/lib/availability";
+import { PageBody, PageHeader } from "@/components/page-header";
 
 interface RequestsClientProps {
   initialReservations: Reservation[];
@@ -113,87 +114,89 @@ export default function RequestsClient({
   };
 
   return (
-    <div className="flex flex-col gap-6 px-[clamp(16px,2.5vw,32px)] py-6">
-      <div>
-        <h1 className="type-t1">Requests</h1>
-        <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
-          Bookings waiting on a yes or a no.
-        </p>
-      </div>
-
-      <ReservationSearchFilter
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        serviceTypeFilter={serviceTypeFilter}
-        onServiceTypeFilterChange={setServiceTypeFilter}
-        serviceTypes={serviceTypes}
-      />
-
-      {initialReservations.length === 0 ? (
-        <EmptyState
-          title="Nothing waiting"
-          description="When a guest asks for a time you have set as request-only, it lands here for someone to accept."
-          action={{ label: "Booking settings", href: "/business/profile/booking" }}
-        />
-      ) : (
-        <ReservationTable
-          reservations={reservations}
+    <>
+      <PageHeader
+        wide
+        title="Requests"
+        description="Bookings waiting on a yes or a no."
+      >
+        <ReservationSearchFilter
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          serviceTypeFilter={serviceTypeFilter}
+          onServiceTypeFilterChange={setServiceTypeFilter}
           serviceTypes={serviceTypes}
-          customers={customers}
-          businessTimezone={businessTimezone}
-          emptyMessage="Nothing matches that search."
-          rowActions={(reservation) => {
-            const segment = customerSegments?.[reservation.customerId];
+        />
+      </PageHeader>
 
-            return (
-              <>
-                {segment ? <Badge tone="neutral">{segment}</Badge> : null}
-                {isReservationReschedulable(reservation, currentTime) ? (
+      <PageBody wide>
+
+        {initialReservations.length === 0 ? (
+          <EmptyState
+            title="Nothing waiting"
+            description="When a guest asks for a time you have set as request-only, it lands here for someone to accept."
+            action={{ label: "Booking settings", href: "/business/profile/booking" }}
+          />
+        ) : (
+          <ReservationTable
+            reservations={reservations}
+            serviceTypes={serviceTypes}
+            customers={customers}
+            businessTimezone={businessTimezone}
+            emptyMessage="Nothing matches that search."
+            rowActions={(reservation) => {
+              const segment = customerSegments?.[reservation.customerId];
+
+              return (
+                <>
+                  {segment ? <Badge tone="neutral">{segment}</Badge> : null}
+                  {isReservationReschedulable(reservation, currentTime) ? (
+                    <Button
+                      size="filter"
+                      variant="secondary"
+                      disabled={actionLoading === reservation.id}
+                      onClick={() => setReschedulingReservation(reservation)}
+                    >
+                      Move
+                    </Button>
+                  ) : null}
+                  <Button
+                    size="filter"
+                    disabled={actionLoading === reservation.id}
+                    onClick={() => handleAccept(reservation)}
+                  >
+                    Accept
+                  </Button>
+                  {/* Declining a request is routine. The item is not in trouble. */}
                   <Button
                     size="filter"
                     variant="secondary"
                     disabled={actionLoading === reservation.id}
-                    onClick={() => setReschedulingReservation(reservation)}
+                    onClick={() => handleReject(reservation)}
                   >
-                    Move
+                    Decline
                   </Button>
-                ) : null}
-                <Button
-                  size="filter"
-                  disabled={actionLoading === reservation.id}
-                  onClick={() => handleAccept(reservation)}
-                >
-                  Accept
-                </Button>
-                {/* Declining a request is routine. The item is not in trouble. */}
-                <Button
-                  size="filter"
-                  variant="secondary"
-                  disabled={actionLoading === reservation.id}
-                  onClick={() => handleReject(reservation)}
-                >
-                  Decline
-                </Button>
-              </>
-            );
+                </>
+              );
+            }}
+          />
+        )}
+
+        <StaffReservationDialog
+          reservation={reschedulingReservation}
+          open={!!reschedulingReservation}
+          onOpenChange={(open) => !open && setReschedulingReservation(null)}
+          serviceTypes={serviceTypes}
+          businessTimezone={businessTimezone}
+          businessMaxGuests={businessMaxGuests}
+          canOverride={canOverride}
+          mode="reschedule"
+          onCompleted={() => {
+            setReschedulingReservation(null);
+            router.refresh();
           }}
         />
-      )}
-
-      <StaffReservationDialog
-        reservation={reschedulingReservation}
-        open={!!reschedulingReservation}
-        onOpenChange={(open) => !open && setReschedulingReservation(null)}
-        serviceTypes={serviceTypes}
-        businessTimezone={businessTimezone}
-        businessMaxGuests={businessMaxGuests}
-        canOverride={canOverride}
-        mode="reschedule"
-        onCompleted={() => {
-          setReschedulingReservation(null);
-          router.refresh();
-        }}
-      />
-    </div>
+      </PageBody>
+    </>
   );
 }

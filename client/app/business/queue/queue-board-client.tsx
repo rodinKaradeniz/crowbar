@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Check, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -32,6 +33,7 @@ import { useQueueSocket } from "@/hooks/use-queue-socket";
 import type { FloorPlanBoardTable, FloorPlanParty, QueueEntry, QueueServiceDay } from "@/types";
 import { toast } from "sonner";
 import { FloorPlanSeatingSheet } from "@/components/floor-plan-seating-sheet";
+import { PageBody, PageHeader } from "@/components/page-header";
 
 /**
  * How long a party has been waiting. NEUTRAL, always.
@@ -411,230 +413,245 @@ export function QueueBoardClient({
         onRetry={() => void refresh()}
       />
 
-      <div className="flex flex-1 flex-col gap-6 px-[clamp(16px,2.5vw,32px)] py-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="type-t1">Walk-in queue</h1>
-          <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
-            {waiting.length + called.length} active{" "}
-            {waiting.length + called.length === 1 ? "party" : "parties"}
-          </p>
-        </div>
-
-        <Button variant="secondary" size="filter" onClick={() => void handleCopy()}>
-          {copied ? "Link copied" : "Copy queue link"}
-        </Button>
-      </div>
-
-      {loadError ? (
-        <div className="flex flex-wrap items-center gap-3 border-l-2 border-critical-fill bg-critical-tint px-4 py-3">
-          <p className="flex-1 text-[length:var(--ui-size)] text-critical-text">
-            {loadError}
-          </p>
-          <Button variant="secondary" size="filter" onClick={() => void refresh()}>
-            Retry
+      <>
+      <PageHeader
+        wide
+        title="Walk-in queue"
+        description={`${waiting.length + called.length} active ${
+          waiting.length + called.length === 1 ? "party" : "parties"
+        }`}
+        actions={
+          <>
+          {/* Icon alone below --bp-phone. The copied confirmation is the icon
+              swap there — a tick where the copy glyph was — which is the same
+              acknowledgement the label gives at wider widths. */}
+          <Button
+            variant="secondary"
+            size="filter"
+            className="min-w-[var(--control-desktop-min)]"
+            aria-label={copied ? "Link copied" : "Copy queue link"}
+            onClick={() => void handleCopy()}
+          >
+            {copied ? <Check aria-hidden /> : <Copy aria-hidden />}
+            <span className="hidden phone:inline">
+              {copied ? "Link copied" : "Copy queue link"}
+            </span>
           </Button>
-        </div>
-      ) : null}
+          </>
+        }
+      />
 
-      <section className="grid border border-border bg-card lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-        <div className="flex flex-col gap-3 border-b border-border p-4 lg:border-r lg:border-b-0">
-          <div>
-            <p className="type-t2">This service day</p>
-            <p className="mt-1 font-mono text-[12.5px] tabular-nums text-muted-foreground">
-              {service?.serviceDate ?? "—"} · {service?.waitingCovers ?? 0} waiting
-              covers
+      <PageBody wide>
+        {loadError ? (
+          <div className="flex flex-wrap items-center gap-3 border-l-2 border-critical-fill bg-critical-tint px-4 py-3">
+            <p className="flex-1 text-[length:var(--ui-size)] text-critical-text">
+              {loadError}
+            </p>
+            <Button variant="secondary" size="filter" onClick={() => void refresh()}>
+              Retry
+            </Button>
+          </div>
+        ) : null}
+
+        <section className="grid border border-border bg-card lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+          <div className="flex flex-col gap-3 border-b border-border p-4 lg:border-r lg:border-b-0">
+            <div>
+              <p className="type-t2">This service day</p>
+              <p className="mt-1 font-mono text-[12.5px] tabular-nums text-muted-foreground">
+                {service?.serviceDate ?? "—"} · {service?.waitingCovers ?? 0} waiting
+                covers
+              </p>
+            </div>
+
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <Label htmlFor="queue-cover-cap" className="mb-[7px]">
+                  Waiting-cover cap
+                </Label>
+                <Input
+                  id="queue-cover-cap"
+                  type="number"
+                  min={1}
+                  max={1000}
+                  value={coverCap}
+                  onChange={(event) => setCoverCap(Number(event.target.value))}
+                />
+              </div>
+              <Button
+                size="md"
+                variant="secondary"
+                disabled={policySaving || coverCap < 1}
+                onClick={() => void updatePolicy(service?.isOpen ? "closed" : "open")}
+              >
+                {service?.isOpen ? "Close queue" : "Open queue"}
+              </Button>
+            </div>
+
+            {/* Neutral. Whether the queue is open, and how long the wait is
+                running, are facts about the night — not things to act on now. */}
+            <p className="text-[13px] text-muted-foreground">
+              {service?.isOpen
+                ? service.isFull
+                  ? "Open, but at the cover cap."
+                  : "Open to new walk-ins."
+                : "Closed to new walk-ins. Parties already in the queue still work normally."}{" "}
+              {service?.estimatedWaitMinutes !== undefined
+                ? `Measured wait, from tonight's own turn times: ${service.estimatedWaitMinutes} min.`
+                : "No measured wait yet tonight."}
             </p>
           </div>
 
-          <div className="flex items-end gap-2">
-            <div className="flex-1">
-              <Label htmlFor="queue-cover-cap" className="mb-[7px]">
-                Waiting-cover cap
-              </Label>
+          <div className="flex flex-col gap-3 p-4">
+            <p className="type-t2">Add a walk-in</p>
+            <div className="grid gap-2 sm:grid-cols-[1fr_100px_1fr_auto]">
               <Input
-                id="queue-cover-cap"
+                aria-label="Guest name"
+                placeholder="Guest name"
+                value={walkInName}
+                onChange={(event) => setWalkInName(event.target.value)}
+              />
+              <Input
+                aria-label="Party size"
                 type="number"
                 min={1}
-                max={1000}
-                value={coverCap}
-                onChange={(event) => setCoverCap(Number(event.target.value))}
+                max={20}
+                value={walkInPartySize}
+                onChange={(event) => setWalkInPartySize(Number(event.target.value))}
               />
-            </div>
-            <Button
-              size="md"
-              variant="secondary"
-              disabled={policySaving || coverCap < 1}
-              onClick={() => void updatePolicy(service?.isOpen ? "closed" : "open")}
-            >
-              {service?.isOpen ? "Close queue" : "Open queue"}
-            </Button>
-          </div>
-
-          {/* Neutral. Whether the queue is open, and how long the wait is
-              running, are facts about the night — not things to act on now. */}
-          <p className="text-[13px] text-muted-foreground">
-            {service?.isOpen
-              ? service.isFull
-                ? "Open, but at the cover cap."
-                : "Open to new walk-ins."
-              : "Closed to new walk-ins. Parties already in the queue still work normally."}{" "}
-            {service?.estimatedWaitMinutes !== undefined
-              ? `Measured wait, from tonight's own turn times: ${service.estimatedWaitMinutes} min.`
-              : "No measured wait yet tonight."}
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-3 p-4">
-          <p className="type-t2">Add a walk-in</p>
-          <div className="grid gap-2 sm:grid-cols-[1fr_100px_1fr_auto]">
-            <Input
-              aria-label="Guest name"
-              placeholder="Guest name"
-              value={walkInName}
-              onChange={(event) => setWalkInName(event.target.value)}
-            />
-            <Input
-              aria-label="Party size"
-              type="number"
-              min={1}
-              max={20}
-              value={walkInPartySize}
-              onChange={(event) => setWalkInPartySize(Number(event.target.value))}
-            />
-            <Input
-              aria-label="Phone, optional"
-              placeholder="Phone (optional)"
-              value={walkInPhone}
-              onChange={(event) => setWalkInPhone(event.target.value)}
-            />
-            <Button
-              size="md"
-              disabled={
-                walkInSaving ||
-                !service?.isOpen ||
-                service?.isFull ||
-                !walkInName.trim()
-              }
-              onClick={() => void addWalkIn()}
-            >
-              Add
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      {!loadError && waiting.length === 0 && called.length === 0 ? (
-        <EmptyState
-          title="Nobody waiting"
-          description="Guests scan the code by the door and hold their place without an app. Parties appear here the moment they join, in the order they arrived."
-          action={{ label: "Copy the queue link", onClick: () => void handleCopy() }}
-        />
-      ) : null}
-
-      {/* Board */}
-      {(waiting.length > 0 || called.length > 0) && (
-        <div className="grid gap-6 sm:grid-cols-2">
-          <QueueColumn title="Waiting" entries={waiting} emptyText="No parties waiting">
-            {(entry) => (
-              <WaitingEntryCard
-                entry={entry}
-                now={now}
-                onNotify={() => void handleNotify(entry)}
-                onSeat={() => void openSeating(entry)}
-              />
-            )}
-          </QueueColumn>
-
-          <QueueColumn title="Called" entries={called} emptyText="No parties called yet">
-            {(entry) => (
-              <CalledEntryCard
-                entry={entry}
-                now={now}
-                onSeat={() => void openSeating(entry)}
-                onRemove={() => handleRemove(entry)}
-                onRetry={() => void retryDelivery(entry)}
-              />
-            )}
-          </QueueColumn>
-        </div>
-      )}
-
-      {/* A real dialog, not a panel pinned to the bottom of the viewport.
-          Removing a party is a decision that cannot be undone from here. */}
-      <Dialog
-        open={removeTarget !== null}
-        onOpenChange={(open) => !open && setRemoveTarget(null)}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              Take {removeTarget?.name} off the queue?
-            </DialogTitle>
-            <DialogDescription>
-              They lose their place, and the reason stays in the queue history
-              against your name.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex flex-col gap-3">
-            <div>
-              <Label htmlFor="remove-reason" className="mb-[7px]">
-                Reason
-              </Label>
-              <select
-                id="remove-reason"
-                className="h-10 w-full rounded-[var(--radius-3)] border border-input bg-input-background px-[13px] text-[length:var(--ui-size)] text-foreground"
-                value={removeReason}
-                onChange={(event) =>
-                  setRemoveReason(event.target.value as typeof removeReason)
-                }
-              >
-                <option value="guest_left">Guest left</option>
-                <option value="no_show">No-show</option>
-                <option value="staff_removed">Staff removed</option>
-              </select>
-            </div>
-
-            <div>
-              <Label htmlFor="remove-note" className="mb-[7px]">
-                Note
-              </Label>
               <Input
-                id="remove-note"
-                placeholder="Optional"
-                value={removeNote}
-                onChange={(event) => setRemoveNote(event.target.value)}
+                aria-label="Phone, optional"
+                placeholder="Phone (optional)"
+                value={walkInPhone}
+                onChange={(event) => setWalkInPhone(event.target.value)}
               />
+              <Button
+                size="md"
+                disabled={
+                  walkInSaving ||
+                  !service?.isOpen ||
+                  service?.isFull ||
+                  !walkInName.trim()
+                }
+                onClick={() => void addWalkIn()}
+              >
+                Add
+              </Button>
             </div>
           </div>
+        </section>
 
-          <DialogFooter>
-            <Button onClick={() => setRemoveTarget(null)}>Keep the party</Button>
-            <Button
-              variant="destructive-quiet"
-              onClick={() => {
-                if (removeTarget) void confirmRemove(removeTarget);
-                setRemoveTarget(null);
-              }}
-            >
-              Take them off
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        {!loadError && waiting.length === 0 && called.length === 0 ? (
+          <EmptyState
+            title="Nobody waiting"
+            description="Guests scan the code by the door and hold their place without an app. Parties appear here the moment they join, in the order they arrived."
+            action={{ label: "Copy the queue link", onClick: () => void handleCopy() }}
+          />
+        ) : null}
 
-      <FloorPlanSeatingSheet
-        key={seatingTarget?.id ?? "no-queue-party"}
-        open={seatingTarget !== null}
-        onOpenChange={(open) => !open && setSeatingTarget(null)}
-        party={seatingParty}
-        tables={floorTables}
-        canOverride={canOverride}
-        submitting={seatingLoading}
-        onConfirm={(tableIds, reason) => void confirmSeating(tableIds, reason)}
-      />
-      </div>
+        {/* Board */}
+        {(waiting.length > 0 || called.length > 0) && (
+          <div className="grid gap-6 sm:grid-cols-2">
+            <QueueColumn title="Waiting" entries={waiting} emptyText="No parties waiting">
+              {(entry) => (
+                <WaitingEntryCard
+                  entry={entry}
+                  now={now}
+                  onNotify={() => void handleNotify(entry)}
+                  onSeat={() => void openSeating(entry)}
+                />
+              )}
+            </QueueColumn>
+
+            <QueueColumn title="Called" entries={called} emptyText="No parties called yet">
+              {(entry) => (
+                <CalledEntryCard
+                  entry={entry}
+                  now={now}
+                  onSeat={() => void openSeating(entry)}
+                  onRemove={() => handleRemove(entry)}
+                  onRetry={() => void retryDelivery(entry)}
+                />
+              )}
+            </QueueColumn>
+          </div>
+        )}
+
+        {/* A real dialog, not a panel pinned to the bottom of the viewport.
+            Removing a party is a decision that cannot be undone from here. */}
+        <Dialog
+          open={removeTarget !== null}
+          onOpenChange={(open) => !open && setRemoveTarget(null)}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                Take {removeTarget?.name} off the queue?
+              </DialogTitle>
+              <DialogDescription>
+                They lose their place, and the reason stays in the queue history
+                against your name.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex flex-col gap-3">
+              <div>
+                <Label htmlFor="remove-reason" className="mb-[7px]">
+                  Reason
+                </Label>
+                <select
+                  id="remove-reason"
+                  className="h-10 w-full rounded-[var(--radius-3)] border border-input bg-input-background px-[13px] text-[length:var(--ui-size)] text-foreground"
+                  value={removeReason}
+                  onChange={(event) =>
+                    setRemoveReason(event.target.value as typeof removeReason)
+                  }
+                >
+                  <option value="guest_left">Guest left</option>
+                  <option value="no_show">No-show</option>
+                  <option value="staff_removed">Staff removed</option>
+                </select>
+              </div>
+
+              <div>
+                <Label htmlFor="remove-note" className="mb-[7px]">
+                  Note
+                </Label>
+                <Input
+                  id="remove-note"
+                  placeholder="Optional"
+                  value={removeNote}
+                  onChange={(event) => setRemoveNote(event.target.value)}
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button onClick={() => setRemoveTarget(null)}>Keep the party</Button>
+              <Button
+                variant="destructive-quiet"
+                onClick={() => {
+                  if (removeTarget) void confirmRemove(removeTarget);
+                  setRemoveTarget(null);
+                }}
+              >
+                Take them off
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <FloorPlanSeatingSheet
+          key={seatingTarget?.id ?? "no-queue-party"}
+          open={seatingTarget !== null}
+          onOpenChange={(open) => !open && setSeatingTarget(null)}
+          party={seatingParty}
+          tables={floorTables}
+          canOverride={canOverride}
+          submitting={seatingLoading}
+          onConfirm={(tableIds, reason) => void confirmSeating(tableIds, reason)}
+        />
+      </PageBody>
+    </>
     </>
   );
 }

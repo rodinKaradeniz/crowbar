@@ -1,11 +1,14 @@
 "use client";
 
+import { Menu } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
+import { BusinessMobileNav } from "@/components/business-mobile-nav";
 import { DashboardHeaderTrailing } from "@/components/dashboard-header-trailing";
 import { DashboardSearch } from "@/components/dashboard-search";
 import { Button } from "@/components/ui/button";
+import type { NavGroup } from "@/lib/nav";
 import { useServiceClock } from "@/hooks/use-service-clock";
 import { useRegionalSettings } from "@/contexts/regional-context";
 import {
@@ -27,16 +30,40 @@ import {
  *
  * The clock IS real, and worth its space: it runs in the venue's configured
  * timezone, which is not necessarily the timezone of the laptop behind the bar.
+ *
+ * ONE LINE BELOW --bp-phone. The bar used to wrap onto two: a 280px search
+ * field, a bell and a 44px action beside a venue name will not sit on 390px,
+ * and `flex-wrap` resolved that by stacking them under the name. So on a phone
+ * the header holds exactly what a header is for — where you are, and the way to
+ * everywhere else — and search, notifications and the whole navigation move
+ * into `BusinessMobileNav`. `flex-nowrap` there is the guard that keeps it
+ * honest: nothing can quietly wrap back.
+ *
+ * The search FIELD survives at tablet and desktop, placeholder and ⌘K hint
+ * intact; only the phone gets the bare magnifying glass, because only the phone
+ * cannot afford the field.
  */
 export function BusinessTopbar({
   businessName,
   canSeatWalkIn,
+  groups,
+  queueCount,
 }: {
   businessName: string;
   /** Desktop only — on tablet this action moves to the bottom-right corner. */
   canSeatWalkIn: boolean;
+  /** Phone only: the nav sheet's entries, from the one shared `useWorkspaceNav`. */
+  groups: NavGroup[];
+  queueCount: number | null;
 }) {
   const [searchOpen, setSearchOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [unread, setUnread] = useState(0);
+
+  // Referentially stable: NotificationTrigger reports the count from an effect
+  // keyed on it, and a fresh function each render would re-run that effect.
+  const onUnreadChange = useCallback((count: number) => setUnread(count), []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -57,21 +84,42 @@ export function BusinessTopbar({
         variant="business"
       />
 
+      <BusinessMobileNav
+        open={navOpen}
+        onOpenChange={setNavOpen}
+        groups={groups}
+        queueCount={queueCount}
+        unreadCount={unread}
+        // Close the menu FIRST. Both panels are sheets, and a sheet opened over
+        // another sheet leaves two scrims and two focus traps stacked.
+        onOpenSearch={() => {
+          setNavOpen(false);
+          setSearchOpen(true);
+        }}
+        onOpenNotifications={() => {
+          setNavOpen(false);
+          setNotificationsOpen(true);
+        }}
+      />
+
       {/* `min-h`, not `h`: a floor, the same way the marketing header bar is a
           floor. The value is declared because it is also a SCROLL OFFSET — a
           sticky sibling that does not know how tall this bar is ends up
           underneath it. See --workspace-header and the Schedule calendar. */}
-      <header className="sticky top-0 z-20 flex min-h-[var(--workspace-header)] flex-wrap items-center gap-4 border-b border-border bg-[var(--scrim-ink)] px-[clamp(16px,2.5vw,32px)] py-3.5 backdrop-blur-[8px]">
+      <header className="sticky top-0 z-20 flex min-h-[var(--workspace-header)] flex-nowrap items-center gap-4 border-b border-border bg-[var(--scrim-ink)] px-[clamp(16px,2.5vw,32px)] py-3.5 backdrop-blur-[8px] phone:flex-wrap">
         <div className="min-w-0">
           <h1 className="type-t1 mb-[3px] truncate">{businessName}</h1>
           <ServiceClock />
         </div>
 
-        <div className="ml-auto flex flex-wrap items-center gap-6">
+        <div className="ml-auto flex shrink-0 items-center gap-2 phone:flex-wrap phone:gap-6">
+          {/* The field on tablet and desktop; the bare glass on a phone. One
+              control either way — same handler, same panel, same shortcut. */}
           <button
             type="button"
             onClick={() => setSearchOpen(true)}
-            className="flex h-[var(--control-desktop)] w-[min(280px,44vw)] items-center gap-2 rounded-[var(--radius-3)] border border-border bg-sidebar px-3 text-left text-[length:var(--ui-size)] text-muted-foreground transition-colors hover:border-border-strong"
+            aria-label="Search"
+            className="hidden h-[var(--control-desktop)] w-[min(280px,44vw)] items-center gap-2 rounded-[var(--radius-3)] border border-border bg-sidebar px-3 text-left text-[length:var(--ui-size)] text-muted-foreground transition-colors hover:border-border-strong phone:flex"
           >
             <span className="flex-1 truncate">Find a guest, table or item</span>
             {/* The shortcut hint is desktop-only: a tablet has no ⌘. */}
@@ -81,7 +129,11 @@ export function BusinessTopbar({
           </button>
 
           <div className="flex shrink-0 items-center gap-2">
-            <DashboardHeaderTrailing />
+            <DashboardHeaderTrailing
+              notificationsOpen={notificationsOpen}
+              onNotificationsOpenChange={setNotificationsOpen}
+              onUnreadChange={onUnreadChange}
+            />
           </div>
 
           {/* Desktop only. On a tablet this lives in the bottom-right corner,
@@ -91,6 +143,30 @@ export function BusinessTopbar({
               <Link href="/business/queue">Seat a walk-in</Link>
             </Button>
           ) : null}
+
+          {/* Phone only. The unread count rides on this button because the bell
+              it normally sits on is not rendered at this width — see
+              NotificationTrigger's `onUnreadChange`. */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="relative shrink-0 phone:hidden"
+            aria-label={`Menu${unread > 0 ? `, ${unread} unread notifications` : ""}`}
+            aria-haspopup="dialog"
+            aria-expanded={navOpen}
+            onClick={() => setNavOpen(true)}
+          >
+            <Menu className="size-5" />
+            {unread > 0 ? (
+              <span
+                className="absolute -top-0.5 -right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-none font-semibold text-primary-foreground"
+                aria-hidden
+              >
+                {unread > 99 ? "99+" : unread}
+              </span>
+            ) : null}
+          </Button>
         </div>
       </header>
     </>

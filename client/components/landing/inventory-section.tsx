@@ -21,94 +21,89 @@ const STOCK: [string, number, string, boolean][] = [
 
 export function InventorySection() {
   return (
-    <section id="inventory" className="mkt-anchor mkt-shell mkt-sec-inventory">
-      <div className="mkt-head settle mb-2">
-        <div className="mkt-head-lead">
-          <span className="mkt-num text-text-faint">04</span>
-          <p className="type-label text-text-muted">
-            One Negroni leaves the bar at 19:04. Nobody types anything.
-          </p>
-        </div>
-      </div>
-
-      <div className="settle-2 mb-[26px] flex flex-wrap items-stretch border border-ink">
-        <div className="mkt-pad-wide min-w-[min(100%,190px)] flex-[1_1_200px] border-r border-border bg-paper-raised">
-          <p className="type-label mb-2.5 text-text-faint">
-            Ticket cleared
-          </p>
-          <p className="mkt-panel-title">1 × Negroni</p>
-          <p className="mkt-stamp mt-2 text-text-muted">
-            Theo · Bar · 19:04
-          </p>
+    <section
+      id="inventory"
+      className="mkt-anchor mkt-band mkt-sec-feature bg-paper-tint"
+    >
+      <div className="mkt-shell">
+        <div className="mkt-head settle mb-2">
+          <div className="mkt-head-lead">
+            <span className="mkt-num text-text-faint">04</span>
+            <p className="type-label text-text-muted">
+              One Negroni leaves the bar at 19:04. Nobody types anything.
+            </p>
+          </div>
         </div>
 
-        <div className="mkt-pad-wide min-w-[min(100%,300px)] flex-[2_1_340px] border-r border-border bg-paper">
-          <p className="type-label mb-3 text-text-faint">
-            Recipe deducts
-          </p>
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-2.5">
-            {DEDUCTIONS.map(([name, amount]) => (
+        <div className="settle-2 mb-[26px] flex flex-wrap items-stretch border border-ink">
+          <div className="mkt-pad-wide min-w-[min(100%,190px)] flex-[1_1_200px] border-b border-border bg-paper-raised phone:border-b-0 phone:border-r">
+            <p className="type-label mb-2.5 text-text-faint">Ticket cleared</p>
+            <p className="mkt-panel-title">1 × Negroni</p>
+            <p className="mkt-stamp mt-2 text-text-muted">Theo · Bar · 19:04</p>
+          </div>
+
+          <div className="mkt-pad-wide min-w-[min(100%,300px)] flex-[2_1_340px] border-b border-border bg-paper phone:border-b-0 phone:border-r">
+            <p className="type-label mb-3 text-text-faint">Recipe deducts</p>
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-2.5">
+              {DEDUCTIONS.map(([name, amount]) => (
+                <div key={name} className="border-l-2 border-ink py-0.5 pl-2.5">
+                  <p className="mkt-item font-medium">{name}</p>
+                  <p className="mkt-note-sm mt-0.5 font-mono text-text-muted">
+                    {amount}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mkt-pad-wide min-w-[min(100%,240px)] flex-[1.4_1_260px] bg-paper-raised">
+            <p className="type-label mb-3 text-text-faint">
+              Stock, immediately
+            </p>
+            {STOCK.map(([name, percent, remaining, isLow], index) => (
               <div
-                key={name}
-                className="border-l-2 border-ink py-0.5 pl-2.5"
+                key={name as string}
+                className={
+                  index === STOCK.length - 1
+                    ? "flex items-center gap-2.5 py-[7px]"
+                    : "flex items-center gap-2.5 border-b border-line-soft py-[7px]"
+                }
               >
-                <p className="mkt-item font-medium">{name}</p>
-                <p className="mkt-note-sm mt-0.5 font-mono text-text-muted">
-                  {amount}
-                </p>
+                <span className="mkt-item flex-1">{name}</span>
+                <span className="mkt-meter block bg-line-soft-2" aria-hidden>
+                  <span
+                    className={
+                      isLow
+                        ? "block h-full bg-text-faint"
+                        : "block h-full bg-ink"
+                    }
+                    style={{ width: `${percent}%` }}
+                  />
+                </span>
+                <span className="mkt-meter-val mkt-note-sm text-right font-mono">
+                  {remaining}
+                </span>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="mkt-pad-wide min-w-[min(100%,240px)] flex-[1.4_1_260px] bg-paper-raised">
-          <p className="type-label mb-3 text-text-faint">
-            Stock, immediately
+        <div className="mkt-gap-split mkt-pb-row settle-3 flex flex-wrap border-b border-border">
+          <h3 className="mkt-d3 flex-[1_1_320px]">
+            Inventory, down to the pour
+          </h3>
+          <p className="mkt-body max-w-[48ch] flex-[1_1_300px] text-text-body">
+            Every drink has a recipe, so serving is the only data entry.
+            Sunday&apos;s count becomes a check rather than a reconstruction,
+            and the variance between poured and counted is a number you can
+            actually act on.
           </p>
-          {STOCK.map(([name, percent, remaining, isLow], index) => (
-            <div
-              key={name as string}
-              className={
-                index === STOCK.length - 1
-                  ? "flex items-center gap-2.5 py-[7px]"
-                  : "flex items-center gap-2.5 border-b border-line-soft py-[7px]"
-              }
-            >
-              <span className="mkt-item flex-1">{name}</span>
-              <span
-                className="mkt-meter block bg-line-soft-2"
-                aria-hidden
-              >
-                <span
-                  className={
-                    isLow
-                      ? "block h-full bg-text-faint"
-                      : "block h-full bg-ink"
-                  }
-                  style={{ width: `${percent}%` }}
-                />
-              </span>
-              <span className="mkt-meter-val mkt-note-sm text-right font-mono">
-                {remaining}
-              </span>
-            </div>
-          ))}
+          <p className="mkt-body max-w-[36ch] flex-[1_1_240px] text-text-body">
+            Par levels sit in the background: Campari falls below par on
+            Saturday at this rate, which is a note for Tuesday&apos;s order —
+            not an alarm during service.
+          </p>
         </div>
-      </div>
-
-      <div className="mkt-gap-split mkt-pb-row settle-3 flex flex-wrap border-b border-border">
-        <h3 className="mkt-d3 flex-[1_1_320px]">Inventory, down to the pour</h3>
-        <p className="mkt-body max-w-[48ch] flex-[1_1_300px] text-text-body">
-          Every drink has a recipe, so serving is the only data entry.
-          Sunday&apos;s count becomes a check rather than a reconstruction, and
-          the variance between poured and counted is a number you can actually
-          act on.
-        </p>
-        <p className="mkt-body max-w-[36ch] flex-[1_1_240px] text-text-body">
-          Par levels sit in the background: Campari falls below par on Saturday
-          at this rate, which is a note for Tuesday&apos;s order — not an alarm
-          during service.
-        </p>
       </div>
     </section>
   );

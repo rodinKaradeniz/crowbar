@@ -26,6 +26,7 @@ import type { GuestListItem, GuestProfile } from "@/types";
 import { formatMoney } from "@/lib/money";
 import { formatBusinessDate, formatBusinessDateTime } from "@/lib/business-time";
 import { useRegionalSettings } from "@/contexts/regional-context";
+import { PageBody, PageHeader } from "@/components/page-header";
 
 const SUGGESTED_TAGS = ["VIP", "Regular", "No-show risk", "Birthday"];
 
@@ -116,12 +117,35 @@ export default function GuestProfileClient({ customerId, canManage, businessTime
   );
   if (!guest) return <div className="px-[clamp(16px,2.5vw,32px)] py-6"><Link className="text-sm underline" href="/business/customers">Back to customers</Link><p className="mt-6 text-muted-foreground">Guest profile not found.</p></div>;
 
-  return <div className="flex flex-col gap-6 px-[clamp(16px,2.5vw,32px)] py-6">
-    <div className="flex flex-wrap items-start justify-between gap-4">
-      <div><Link href="/business/customers" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="mr-1 size-4" /> Guests</Link><h1 className="type-t1 mt-3">{guest.name ?? "Guest"}</h1><p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">One business-scoped hospitality profile and operational history.</p></div>
-      {canManage && <div className="flex gap-2"><Button variant="secondary" size="filter" onClick={() => void downloadExport()} disabled={busy}><Download /> Export</Button><Button variant="secondary" size="filter" onClick={() => setDeleteOpen(true)} disabled={busy}><Trash2 /> Anonymise</Button></div>}
-    </div>
+  return (
+    <>
+      <PageHeader
+        wide
+        above={
+          <Link
+            href="/business/customers"
+            className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="mr-1 size-4" /> Guests
+          </Link>
+        }
+        title={guest.name ?? "Guest"}
+        description="One business-scoped hospitality profile and operational history."
+        actions={
+          canManage ? (
+            <>
+              <Button variant="secondary" size="filter" onClick={() => void downloadExport()} disabled={busy}>
+                <Download /> Export
+              </Button>
+              <Button variant="secondary" size="filter" onClick={() => setDeleteOpen(true)} disabled={busy}>
+                <Trash2 /> Anonymise
+              </Button>
+            </>
+          ) : null
+        }
+      />
 
+      <PageBody wide>
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
       <div className="space-y-6">
         <section className="border bg-card p-5"><div className="flex items-center justify-between gap-3"><h2 className="font-semibold">Guest details</h2>{/* Neutral. §08 names dietary notes as the case that does NOT
@@ -151,5 +175,7 @@ export default function GuestProfileClient({ customerId, canManage, businessTime
       </aside>
     </div>
     <ConfirmationDialog open={deleteOpen} onOpenChange={setDeleteOpen} title="Anonymise this guest?" description="Contact details, notes, preferences, dietary details, tags, and marketing consent will be removed. Anonymous operational history remains." confirmLabel="Anonymise guest" variant="destructive" onConfirm={() => void clientRequestGuestDeletion(customerId).then(() => { toast.success("Guest data anonymised."); window.location.assign("/business/customers"); }).catch((error) => toast.error(error instanceof Error ? error.message : "Could not anonymise guest."))} />
-  </div>;
+      </PageBody>
+    </>
+  );
 }

@@ -30,6 +30,7 @@ import {
   clientDeleteServiceType,
 } from "@/lib/client-api";
 import { toast } from "sonner";
+import { PageBody, PageHeader } from "@/components/page-header";
 
 interface BusinessTypesClientProps {
   businessId: string;
@@ -165,275 +166,275 @@ export default function BusinessTypesClient({
   };
 
   return (
-    <div className="flex flex-col gap-6 px-[clamp(16px,2.5vw,32px)] py-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="type-t1">Booking Types</h1>
-          <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
-            Configure the types of reservations your business accepts
-          </p>
-        </div>
-        {canEdit && (
-          <Button onClick={handleCreate}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Booking Type
-          </Button>
-        )}
-      </div>
-
-      {!canEdit && (
-        <div className="mb-6 border bg-muted/40 p-4 text-sm text-muted-foreground">
-          You have read-only access. An owner or manager can change booking types.
-        </div>
-      )}
-
-      {serviceTypes.length === 0 ? (
-        <div className="text-center py-12 border bg-card">
-          <Tag className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-          <p className="text-muted-foreground mb-4">
-            No booking types configured yet
-          </p>
-          {canEdit && (
-            <Button onClick={handleCreate} variant="secondary">
+    <>
+      <PageHeader
+        title="Booking Types"
+        description="Configure the types of reservations your business accepts"
+        actions={
+          canEdit ? (
+            <Button onClick={handleCreate}>
               <Plus className="h-4 w-4 mr-2" />
-              Create Your First Booking Type
+              Add Booking Type
             </Button>
-          )}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {serviceTypes.map((type) => (
-            <div
-              key={type.id}
-              className="border p-4 bg-card transition-shadow"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-2 flex-1">
-                  <div
-                    className="w-4 h-4 rounded-full shrink-0"
-                    style={{ backgroundColor: type.color }}
-                  />
-                  <h3 className="font-medium">{type.name}</h3>
+          ) : null
+        }
+      />
+
+      <PageBody>
+        {!canEdit && (
+          <div className="mb-6 border bg-muted/40 p-4 text-sm text-muted-foreground">
+            You have read-only access. An owner or manager can change booking types.
+          </div>
+        )}
+
+        {serviceTypes.length === 0 ? (
+          <div className="text-center py-12 border bg-card">
+            <Tag className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+            <p className="text-muted-foreground mb-4">
+              No booking types configured yet
+            </p>
+            {canEdit && (
+              <Button onClick={handleCreate} variant="secondary">
+                <Plus className="h-4 w-4 mr-2" />
+                Create Your First Booking Type
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {serviceTypes.map((type) => (
+              <div
+                key={type.id}
+                className="border p-4 bg-card transition-shadow"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-2 flex-1">
+                    <div
+                      className="w-4 h-4 rounded-full shrink-0"
+                      style={{ backgroundColor: type.color }}
+                    />
+                    <h3 className="font-medium">{type.name}</h3>
+                  </div>
+                  {canEdit && <div className="flex gap-1">
+                    <Button
+                      size="filter"
+                      variant="secondary"
+                      onClick={() => handleEdit(type)}
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      size="filter"
+                      variant="destructive"
+                      onClick={() => handleDelete(type)}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>}
                 </div>
-                {canEdit && <div className="flex gap-1">
-                  <Button
-                    size="filter"
-                    variant="secondary"
-                    onClick={() => handleEdit(type)}
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    size="filter"
-                    variant="destructive"
-                    onClick={() => handleDelete(type)}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>}
-              </div>
 
-              {type.description && (
-                <p className="text-sm text-muted-foreground mb-2">
-                  {type.description}
-                </p>
-              )}
-
-              <div className="space-y-1 text-xs text-muted-foreground">
-                <div>Maximum party: {type.capacity}</div>
-                <div>{type.availabilityResourceMode === "tables" ? "Table-backed availability" : type.availabilityResourceMode === "covers" ? `${type.reservableCoverCapacity} reservable covers` : "Needs resource setup"}</div>
-                {type.maxConcurrentBookings && <div>Operational booking guard: {type.maxConcurrentBookings}</div>}
-                {(type.resourceTurnBufferMinutes ?? 0) > 0 && <div>{type.resourceTurnBufferMinutes}-minute turn buffer</div>}
-                {type.duration && <div>Duration: {type.duration} min</div>}
-                {type.isPendingEnabled && (
-                  <div>Requires confirmation</div>
+                {type.description && (
+                  <p className="text-sm text-muted-foreground mb-2">
+                    {type.description}
+                  </p>
                 )}
+
+                <div className="space-y-1 text-xs text-muted-foreground">
+                  <div>Maximum party: {type.capacity}</div>
+                  <div>{type.availabilityResourceMode === "tables" ? "Table-backed availability" : type.availabilityResourceMode === "covers" ? `${type.reservableCoverCapacity} reservable covers` : "Needs resource setup"}</div>
+                  {type.maxConcurrentBookings && <div>Operational booking guard: {type.maxConcurrentBookings}</div>}
+                  {(type.resourceTurnBufferMinutes ?? 0) > 0 && <div>{type.resourceTurnBufferMinutes}-minute turn buffer</div>}
+                  {type.duration && <div>Duration: {type.duration} min</div>}
+                  {type.isPendingEnabled && (
+                    <div>Requires confirmation</div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>
-              {editingType ? "Edit Booking Type" : "Create Booking Type"}
-            </DialogTitle>
-            <DialogDescription>
-              {editingType
-                ? "Update this booking type"
-                : "Add a new type of reservation for your business"}
-            </DialogDescription>
-          </DialogHeader>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>
+                {editingType ? "Edit Booking Type" : "Create Booking Type"}
+              </DialogTitle>
+              <DialogDescription>
+                {editingType
+                  ? "Update this booking type"
+                  : "Add a new type of reservation for your business"}
+              </DialogDescription>
+            </DialogHeader>
 
-          <form onSubmit={handleSubmit}>
-            <FieldGroup>
-              <Field>
-                <FieldLabel>Name *</FieldLabel>
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g., Standard Table, VIP Booth, Private Room"
-                  required
-                />
-              </Field>
-
-              <Field>
-                <FieldLabel>Capacity *</FieldLabel>
-                <Input
-                  type="number"
-                  min="1"
-                  value={capacity}
-                  onChange={(e) => setCapacity(e.target.value)}
-                  placeholder="e.g., 4"
-                  required
-                />
-                <FieldDescription>
-                  Maximum number of guests for this booking type
-                </FieldDescription>
-              </Field>
-
-              <Field>
-                <FieldLabel>Description</FieldLabel>
-                <Textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe this booking type"
-                  rows={2}
-                />
-              </Field>
-
-              <Field>
-                <FieldLabel>How is this service reserved? *</FieldLabel>
-                <select
-                  value={availabilityResourceMode}
-                  onChange={(event) => setAvailabilityResourceMode(event.target.value as "legacy" | "tables" | "covers")}
-                  className="mt-2 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
-                >
-                  <option value="covers">Shared cover capacity</option>
-                  <option value="tables">Physical tables and configured combinations</option>
-                  <option value="legacy">Needs resource setup (compatibility only)</option>
-                </select>
-                <FieldDescription>
-                  Cover-backed services work without a floor plan. Table-backed services automatically hold a suitable table; add tables in Floor setup first.
-                </FieldDescription>
-              </Field>
-
-              {availabilityResourceMode === "covers" && (
+            <form onSubmit={handleSubmit}>
+              <FieldGroup>
                 <Field>
-                  <FieldLabel>Reservable covers *</FieldLabel>
+                  <FieldLabel>Name *</FieldLabel>
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g., Standard Table, VIP Booth, Private Room"
+                    required
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel>Capacity *</FieldLabel>
                   <Input
                     type="number"
                     min="1"
-                    value={reservableCoverCapacity}
-                    onChange={(e) => setReservableCoverCapacity(e.target.value)}
-                    placeholder="e.g., 30"
+                    value={capacity}
+                    onChange={(e) => setCapacity(e.target.value)}
+                    placeholder="e.g., 4"
                     required
                   />
-                  <FieldDescription>Maximum guests who may hold overlapping reservations for this service.</FieldDescription>
+                  <FieldDescription>
+                    Maximum number of guests for this booking type
+                  </FieldDescription>
                 </Field>
-              )}
 
-              <Field>
-                <FieldLabel>Operational booking guard (optional)</FieldLabel>
-                <Input
-                  type="number"
-                  min="1"
-                  value={maxConcurrentBookings}
-                  onChange={(e) => setMaxConcurrentBookings(e.target.value)}
-                  placeholder="e.g., 1"
-                />
-                <FieldDescription>
-                  Optional maximum number of overlapping reservation groups, in addition to the resource limit.
-                </FieldDescription>
-              </Field>
-
-              <Field>
-                <FieldLabel>Turn buffer (minutes)</FieldLabel>
-                <Input
-                  type="number"
-                  min="0"
-                  value={resourceTurnBufferMinutes}
-                  onChange={(e) => setResourceTurnBufferMinutes(e.target.value)}
-                />
-                <FieldDescription>
-                  Holds the resource after the expected end time. A reservation may begin exactly when this buffer ends.
-                </FieldDescription>
-              </Field>
-
-              <Field>
-                <FieldLabel>Color *</FieldLabel>
-                <ColorPicker value={color} onChange={setColor} />
-              </Field>
-
-              <Field>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="isPendingEnabled"
-                    checked={isPendingEnabled}
-                    onChange={(e) => setIsPendingEnabled(e.target.checked)}
-                    className="rounded border-input"
+                <Field>
+                  <FieldLabel>Description</FieldLabel>
+                  <Textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Describe this booking type"
+                    rows={2}
                   />
-                  <FieldLabel htmlFor="isPendingEnabled" className="mb-0">
-                    Require confirmation
-                  </FieldLabel>
-                </div>
-                <FieldDescription>
-                  When enabled, reservations start as pending until you confirm them
-                </FieldDescription>
-              </Field>
+                </Field>
 
-              <Field>
-                <FieldLabel>Duration (minutes, optional)</FieldLabel>
-                <Input
-                  type="number"
-                  min="1"
-                  value={duration}
-                  onChange={(e) => setDuration(e.target.value)}
-                  placeholder="e.g., 90"
-                />
-                <FieldDescription>
-                  Expected duration for this booking in minutes
-                </FieldDescription>
-              </Field>
-            </FieldGroup>
+                <Field>
+                  <FieldLabel>How is this service reserved? *</FieldLabel>
+                  <select
+                    value={availabilityResourceMode}
+                    onChange={(event) => setAvailabilityResourceMode(event.target.value as "legacy" | "tables" | "covers")}
+                    className="mt-2 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                  >
+                    <option value="covers">Shared cover capacity</option>
+                    <option value="tables">Physical tables and configured combinations</option>
+                    <option value="legacy">Needs resource setup (compatibility only)</option>
+                  </select>
+                  <FieldDescription>
+                    Cover-backed services work without a floor plan. Table-backed services automatically hold a suitable table; add tables in Floor setup first.
+                  </FieldDescription>
+                </Field>
 
-            <DialogFooter className="mt-6">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  setIsDialogOpen(false);
-                  resetForm();
-                }}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting
-                  ? "Saving..."
-                  : editingType
-                  ? "Update"
-                  : "Create"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+                {availabilityResourceMode === "covers" && (
+                  <Field>
+                    <FieldLabel>Reservable covers *</FieldLabel>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={reservableCoverCapacity}
+                      onChange={(e) => setReservableCoverCapacity(e.target.value)}
+                      placeholder="e.g., 30"
+                      required
+                    />
+                    <FieldDescription>Maximum guests who may hold overlapping reservations for this service.</FieldDescription>
+                  </Field>
+                )}
 
-      <ConfirmationDialog
-        open={!!deletingType}
-        onOpenChange={(open) => !open && setDeletingType(null)}
-        title="Delete Booking Type"
-        description={`Are you sure you want to delete "${deletingType?.name}"? This action cannot be undone.`}
-        confirmLabel="Delete"
-        cancelLabel="Cancel"
-        onConfirm={handleConfirmDelete}
-        variant="destructive"
-      />
-    </div>
+                <Field>
+                  <FieldLabel>Operational booking guard (optional)</FieldLabel>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={maxConcurrentBookings}
+                    onChange={(e) => setMaxConcurrentBookings(e.target.value)}
+                    placeholder="e.g., 1"
+                  />
+                  <FieldDescription>
+                    Optional maximum number of overlapping reservation groups, in addition to the resource limit.
+                  </FieldDescription>
+                </Field>
+
+                <Field>
+                  <FieldLabel>Turn buffer (minutes)</FieldLabel>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={resourceTurnBufferMinutes}
+                    onChange={(e) => setResourceTurnBufferMinutes(e.target.value)}
+                  />
+                  <FieldDescription>
+                    Holds the resource after the expected end time. A reservation may begin exactly when this buffer ends.
+                  </FieldDescription>
+                </Field>
+
+                <Field>
+                  <FieldLabel>Color *</FieldLabel>
+                  <ColorPicker value={color} onChange={setColor} />
+                </Field>
+
+                <Field>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="isPendingEnabled"
+                      checked={isPendingEnabled}
+                      onChange={(e) => setIsPendingEnabled(e.target.checked)}
+                      className="rounded border-input"
+                    />
+                    <FieldLabel htmlFor="isPendingEnabled" className="mb-0">
+                      Require confirmation
+                    </FieldLabel>
+                  </div>
+                  <FieldDescription>
+                    When enabled, reservations start as pending until you confirm them
+                  </FieldDescription>
+                </Field>
+
+                <Field>
+                  <FieldLabel>Duration (minutes, optional)</FieldLabel>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={duration}
+                    onChange={(e) => setDuration(e.target.value)}
+                    placeholder="e.g., 90"
+                  />
+                  <FieldDescription>
+                    Expected duration for this booking in minutes
+                  </FieldDescription>
+                </Field>
+              </FieldGroup>
+
+              <DialogFooter className="mt-6">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setIsDialogOpen(false);
+                    resetForm();
+                  }}
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting
+                    ? "Saving..."
+                    : editingType
+                    ? "Update"
+                    : "Create"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        <ConfirmationDialog
+          open={!!deletingType}
+          onOpenChange={(open) => !open && setDeletingType(null)}
+          title="Delete Booking Type"
+          description={`Are you sure you want to delete "${deletingType?.name}"? This action cannot be undone.`}
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          onConfirm={handleConfirmDelete}
+          variant="destructive"
+        />
+      </PageBody>
+    </>
   );
 }

@@ -98,15 +98,11 @@ function SampleNightPanel() {
 
       <div className="flex border-b border-border">
         <div className="mkt-cell-tall flex-1 border-r border-border">
-          <p className="type-label mb-1.5 text-text-muted">
-            Covers expected
-          </p>
+          <p className="type-label mb-1.5 text-text-muted">Covers expected</p>
           <p className="mkt-fig-md">84</p>
         </div>
         <div className="mkt-cell-tall flex-1">
-          <p className="type-label mb-1.5 text-text-muted">
-            In the queue
-          </p>
+          <p className="type-label mb-1.5 text-text-muted">In the queue</p>
           <p className="mkt-fig-md">3</p>
         </div>
       </div>
@@ -149,8 +145,9 @@ function SampleNightPanel() {
       <div className="mkt-cell mkt-item flex items-baseline gap-2.5 border-b border-line-soft">
         <span className="mkt-stamp text-text-muted">19:21</span>
         <span className="text-text-secondary">
-          Gin, Monkey 47 — <strong className="font-mono font-semibold">60 ml</strong>{" "}
-          out of stock
+          Gin, Monkey 47 —{" "}
+          <strong className="font-mono font-semibold">60 ml</strong> out of
+          stock
         </span>
       </div>
 
@@ -158,8 +155,8 @@ function SampleNightPanel() {
       <div className="mkt-cell mkt-item flex items-baseline gap-2.5">
         <span className="mkt-stamp text-text-muted">19:52</span>
         <span className="text-text-secondary">
-          Tisch 2 <strong className="font-semibold">settled externally</strong> —
-          Theo, 19:52
+          Tisch 2 <strong className="font-semibold">settled externally</strong>{" "}
+          — Theo, 19:52
         </span>
       </div>
     </figure>
@@ -172,24 +169,29 @@ function SampleNightPanel() {
  * coloured — it is a fact about scope, not a warning.
  */
 function ReplacesStrip() {
+  // The four cells are a ROW above --bp-phone and a STACK below it, and the
+  // two need opposite gutters. The row wants 22px between neighbours, which is
+  // why the first cell pads right only and the last pads left only. Stacked,
+  // that same padding indents cells 2-4 against a flush cell 1 — the ragged
+  // left edge you can see on a phone. So the horizontal padding and the
+  // vertical rules are both `phone:`-only, and the stack divides with a bottom
+  // hairline instead, which is the divider a stacked list actually wants.
   return (
     <div className="mkt-mt-strip flex flex-wrap border-t border-ink border-b border-b-border">
-      <div className="flex-[1_1_240px] border-r border-border py-5 pr-[22px]">
+      <div className="flex-[1_1_240px] border-b border-border py-5 phone:border-b-0 phone:border-r phone:pr-[22px]">
         <p className="type-label mb-1.5 text-text-muted">It replaces</p>
         <p className="mkt-strip-title">The clipboard at the door</p>
       </div>
-      <div className="flex-[1_1_240px] border-r border-border px-[22px] py-5">
+      <div className="flex-[1_1_240px] border-b border-border py-5 phone:border-b-0 phone:border-r phone:px-[22px]">
         <p className="type-label mb-1.5 text-text-muted">And</p>
         <p className="mkt-strip-title">The notebook behind the bar</p>
       </div>
-      <div className="flex-[1_1_240px] border-r border-border px-[22px] py-5">
+      <div className="flex-[1_1_240px] border-b border-border py-5 phone:border-b-0 phone:border-r phone:px-[22px]">
         <p className="type-label mb-1.5 text-text-muted">And</p>
-        <p className="mkt-strip-title">The spreadsheet in the back office</p>
+        <p className="mkt-strip-title">The back-office spreadsheet</p>
       </div>
-      <div className="flex-[1_1_240px] py-5 pl-[22px]">
-        <p className="type-label mb-1.5 text-text-muted">
-          It does not replace
-        </p>
+      <div className="flex-[1_1_240px] py-5 phone:pl-[22px]">
+        <p className="type-label mb-1.5 text-text-muted">But not</p>
         <p className="mkt-strip-title text-text-muted">Your register</p>
       </div>
     </div>

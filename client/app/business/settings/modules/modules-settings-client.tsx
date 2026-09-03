@@ -10,6 +10,7 @@ import { clientUpdateEnabledModules } from "@/lib/client-api";
 import { MODULE_KEYS, type ModuleKey } from "@/lib/modules";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { PageBody, PageHeader } from "@/components/page-header";
 
 interface Props {
   businessId: string;
@@ -96,55 +97,53 @@ export default function ModulesSettingsClient({ businessId }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-[var(--space-24)] px-[clamp(16px,2.5vw,32px)] py-[var(--space-24)]">
-      <div>
-        <h1 className="type-t1">Modules</h1>
-        <p className="mt-0.5 text-[length:var(--ui-size)] text-muted-foreground">
-          What this venue has turned on. A module that is off is removed from the
-          navigation and its endpoints stop answering — it is not hidden behind a
-          greyed-out entry.
-        </p>
-      </div>
+    <>
+      <PageHeader
+        title="Modules"
+        description="What this venue has turned on. A module that is off is removed from the navigation and its endpoints stop answering — it is not hidden behind a greyed-out entry."
+      />
 
-      <div className="flex flex-col border-t border-border">
-        {MODULE_META.map(({ key, label, description, icon: Icon, required }) => {
-          const enabled = enabledModules.includes(key);
-          const isSaving = saving === key;
-          const inputId = `module-${key}`;
+      <PageBody>
+        <div className="flex flex-col border-t border-border">
+          {MODULE_META.map(({ key, label, description, icon: Icon, required }) => {
+            const enabled = enabledModules.includes(key);
+            const isSaving = saving === key;
+            const inputId = `module-${key}`;
 
-          return (
-            <div
-              key={key}
-              className="flex items-start gap-[var(--space-12)] border-b border-border py-[var(--space-16)]"
-            >
-              <Checkbox
-                id={inputId}
-                checked={enabled}
-                disabled={isSaving || required}
-                onCheckedChange={() => void handleToggle(key, enabled)}
-                className="mt-0.5"
-              />
-              <Icon
-                aria-hidden
-                className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-              />
-              <div className="flex-1">
-                <Label htmlFor={inputId} className="type-t2 normal-case">
-                  {label}
-                </Label>
-                <p className="mt-0.5 text-[length:var(--ui-size)] text-muted-foreground">
-                  {description}
-                </p>
-                {required && (
-                  <p className="type-label mt-[var(--space-8)] text-muted-foreground">
-                    Always on
+            return (
+              <div
+                key={key}
+                className="flex items-start gap-[var(--space-12)] border-b border-border py-[var(--space-16)]"
+              >
+                <Checkbox
+                  id={inputId}
+                  checked={enabled}
+                  disabled={isSaving || required}
+                  onCheckedChange={() => void handleToggle(key, enabled)}
+                  className="mt-0.5"
+                />
+                <Icon
+                  aria-hidden
+                  className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                />
+                <div className="flex-1">
+                  <Label htmlFor={inputId} className="type-t2 normal-case">
+                    {label}
+                  </Label>
+                  <p className="mt-0.5 text-[length:var(--ui-size)] text-muted-foreground">
+                    {description}
                   </p>
-                )}
+                  {required && (
+                    <p className="type-label mt-[var(--space-8)] text-muted-foreground">
+                      Always on
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+            );
+          })}
+        </div>
+      </PageBody>
+    </>
   );
 }

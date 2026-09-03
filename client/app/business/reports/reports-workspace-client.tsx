@@ -14,6 +14,7 @@ import { ServicePanel } from "@/components/reports/service-panel";
 import { ValuePanel } from "@/components/reports/value-panel";
 import { CostPanel } from "@/components/reports/cost-panel";
 import { StaffActionsPanel } from "@/components/reports/staff-actions-panel";
+import { PageBody, PageHeader } from "@/components/page-header";
 
 interface Props {
   hasQueue: boolean;
@@ -46,42 +47,46 @@ export function ReportsWorkspaceClient({
   const [range, setRange] = useState<ReportRange>(DEFAULT_RANGE);
 
   return (
-    <div className="flex flex-col gap-6 px-[clamp(16px,2.5vw,32px)] py-6">
-      <div>
-        <h1 className="type-t1">Reports</h1>
-        <p className="mt-0.5 text-[length:var(--ui-size)] text-muted-foreground">
-          Operational records from this venue&apos;s own service log. Not accounting or
-          fiscal reports.
-        </p>
-      </div>
+    <>
+      {/* The Tabs root wraps the header AND the body: Radix requires TabsList
+          and TabsContent under one root, and the list belongs in the pinned
+          header so the branch you are on stays visible with the title that
+          owns it. `contents` keeps the root out of the layout entirely, so the
+          header and body remain the flow siblings that sticky needs. */}
+      <Tabs value={tab} onValueChange={setTab} className="contents">
+        <PageHeader
+          wide
+          title="Reports"
+          description="Operational records from this venue's own service log. Not accounting or fiscal reports."
+        >
+          <ReportRangePicker value={range} onChange={setRange} />
+          <TabsList>
+            <TabsTrigger value="service">
+              <Utensils className="mr-1.5 h-4 w-4" />
+              Service
+            </TabsTrigger>
+            {hasOrdering && (
+              <TabsTrigger value="value">
+                <Coins className="mr-1.5 h-4 w-4" />
+                Orders and tabs
+              </TabsTrigger>
+            )}
+            {canViewCost && (
+              <TabsTrigger value="cost">
+                <Package className="mr-1.5 h-4 w-4" />
+                Stock and purchasing
+              </TabsTrigger>
+            )}
+            {canViewStaffActions && (
+              <TabsTrigger value="staff">
+                <UserCog className="mr-1.5 h-4 w-4" />
+                Staff actions
+              </TabsTrigger>
+            )}
+          </TabsList>
+        </PageHeader>
 
-      <ReportRangePicker value={range} onChange={setRange} />
-
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="service">
-            <Utensils className="mr-1.5 h-4 w-4" />
-            Service
-          </TabsTrigger>
-          {hasOrdering && (
-            <TabsTrigger value="value">
-              <Coins className="mr-1.5 h-4 w-4" />
-              Orders and tabs
-            </TabsTrigger>
-          )}
-          {canViewCost && (
-            <TabsTrigger value="cost">
-              <Package className="mr-1.5 h-4 w-4" />
-              Stock and purchasing
-            </TabsTrigger>
-          )}
-          {canViewStaffActions && (
-            <TabsTrigger value="staff">
-              <UserCog className="mr-1.5 h-4 w-4" />
-              Staff actions
-            </TabsTrigger>
-          )}
-        </TabsList>
+        <PageBody wide>
 
         <TabsContent value="service" className="mt-6">
           <ServicePanel range={range} hasQueue={hasQueue} />
@@ -104,7 +109,8 @@ export function ReportsWorkspaceClient({
             <StaffActionsPanel range={range} />
           </TabsContent>
         )}
+        </PageBody>
       </Tabs>
-    </div>
+    </>
   );
 }

@@ -5,10 +5,10 @@ import { usePathname } from "next/navigation";
 import { useSyncExternalStore } from "react";
 import { ChevronDown } from "lucide-react";
 
+import { AccountMenu } from "@/components/account-menu";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/use-auth";
 import { flattenNavItems, isNavItemActive, type NavGroup, type NavItem } from "@/lib/nav";
-import { roleLabel } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
 /**
@@ -275,7 +275,25 @@ function RailItem({
   );
 }
 
-/** Who is signed in, at the foot — the last thing, furthest from the actions. */
+/**
+ * Who is signed in, at the foot — the last thing, furthest from the actions.
+ *
+ * And, beneath it, the way out. Sign out belongs with the identity it ends
+ * rather than in the nav above: it is not a place you can go. It is also the
+ * furthest control in the rail from "Seat a walk-in", which is the rule the
+ * system already applies to shift-ending actions.
+ *
+ * It renders only WITH a name. Without one there is nobody to sign out — the
+ * rail is waiting on `/me`, and a sign-out button on a session that has not
+ * resolved is a control whose effect nobody can predict.
+ */
+/**
+ * The foot of the rail: who is signed in, and the menu behind them.
+ *
+ * It was a static block with a sign-out button under it. Settings and Docs now
+ * live in the menu it opens — see `components/account-menu.tsx` for why those
+ * two left the navigation.
+ */
 function RailIdentity({
   name,
   role,
@@ -286,25 +304,8 @@ function RailIdentity({
   if (!name) return null;
 
   return (
-    <div className="flex shrink-0 items-center gap-2.5 border-t border-border p-3.5">
-      <span className="flex size-[30px] shrink-0 items-center justify-center rounded-full bg-surface-raised font-mono text-[11px] font-semibold text-text-on-ink-2">
-        {initials(name)}
-      </span>
-      <span className="min-w-0">
-        <span className="block truncate text-[13px] font-medium">{name}</span>
-        <span className="type-micro block text-muted-foreground">
-          {roleLabel(role)}
-        </span>
-      </span>
+    <div className="shrink-0 border-t border-border p-3.5">
+      <AccountMenu name={name} role={role} />
     </div>
   );
-}
-
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("");
 }

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Armchair, ChevronRight, Copy, Plus, Wrench } from "lucide-react";
+import { Armchair, ChevronRight, Copy, Plus, RefreshCw, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,7 @@ import {
   clientUpdateFloorPlanTableState,
 } from "@/lib/client-api";
 import { cn } from "@/lib/utils";
+import { PageBody, PageHeader } from "@/components/page-header";
 import type {
   FloorPlanArea,
   FloorPlanBoard,
@@ -529,281 +530,304 @@ export default function FloorClient({ businessId, canManage, hasReservations, ha
         onRetry={() => void refresh()}
       />
 
-      <div className="px-[clamp(16px,2.5vw,32px)] py-6">
-      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
-        <div>
+      <>
+      <PageHeader
+        wide
+        above={
           <p className="type-label text-muted-foreground">
             Service day · {board?.serviceDate ?? "—"}
           </p>
-          <h1 className="type-t1 mt-1">Floor map</h1>
-          <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
-            Live tables, arrivals and walk-ins for this service day.
-          </p>
-        </div>
-        <Button size="filter" variant="secondary" onClick={() => void refresh()}>
-          Refresh
-        </Button>
-      </div>
+        }
+        title="Floor map"
+        description="Live tables, arrivals and walk-ins for this service day."
+        actions={
+          <>
+            {/* Icon alone below --bp-phone: the label is what makes this control
+                too wide for a 390px header row beside an h1. `aria-label` carries
+                it at every width, so nothing is lost to a screen reader.
 
-      {error ? (
-        <div className="mb-5 border-l-2 border-critical-fill bg-critical-tint px-4 py-3 text-[length:var(--ui-size)] text-critical-text">
-          {error}
-        </div>
-      ) : null}
-      <Tabs defaultValue="board">
-        <TabsList><TabsTrigger value="board"><Armchair /> Host board</TabsTrigger>{canManage && <TabsTrigger value="setup"><Wrench /> Floor setup</TabsTrigger>}</TabsList>
-        <TabsContent value="board" className="mt-6">
-          {board && (
-            <div className="grid gap-7 xl:grid-cols-[minmax(0,1fr)_20rem]">
-              <div className="space-y-7">
-                {board.areas.length === 0 ? (
-                  <EmptyState
-                    title="No tables yet"
-                    description={
-                      canManage
-                        ? "Draw your room once — areas, then tables and their seats — and the floor map, the QR codes and seating all work from it."
-                        : "A manager needs to draw the room before this board can seat anyone."
-                    }
-                  />
-                ) : board.areas.map((area) => (
-                  <section key={area.id}>
-                    <div className="mb-3 flex items-baseline justify-between"><h2 className="type-t2">{area.name}</h2><span className="font-mono tabular-nums text-xs text-muted-foreground">{area.tables.length} tables</span></div>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{area.tables.map((table) => <TableCard key={table.id} table={table} businessTimezone={businessTimezone} onClick={() => { setQrUrl(null); setSelectedTable(table); }} />)}</div>
-                  </section>
-                ))}
+                The min-width is the other half of that. Dropping the label leaves
+                `size="filter"`'s px-3 around a 16px icon — 42px measured, against
+                the 48px height the tablet token takeover already gives it. Setting
+                the width from the same token squares the target instead of leaving
+                it 6px under the floor every other control on this surface clears.
+                Above --bp-phone the label makes the button wider than 48 anyway,
+                so the rule does nothing there. */}
+            <Button
+              size="filter"
+              variant="secondary"
+              className="min-w-[var(--control-desktop-min)]"
+              aria-label="Refresh"
+              onClick={() => void refresh()}
+            >
+              <RefreshCw aria-hidden />
+              <span className="hidden phone:inline">Refresh</span>
+            </Button>
+          </>
+        }
+      />
+
+      <PageBody wide>
+        {error ? (
+          <div className="mb-5 border-l-2 border-critical-fill bg-critical-tint px-4 py-3 text-[length:var(--ui-size)] text-critical-text">
+            {error}
+          </div>
+        ) : null}
+        <Tabs defaultValue="board">
+          <TabsList><TabsTrigger value="board"><Armchair /> Host board</TabsTrigger>{canManage && <TabsTrigger value="setup"><Wrench /> Floor setup</TabsTrigger>}</TabsList>
+          <TabsContent value="board" className="mt-6">
+            {board && (
+              <div className="grid gap-7 xl:grid-cols-[minmax(0,1fr)_20rem]">
+                <div className="space-y-7">
+                  {board.areas.length === 0 ? (
+                    <EmptyState
+                      title="No tables yet"
+                      description={
+                        canManage
+                          ? "Draw your room once — areas, then tables and their seats — and the floor map, the QR codes and seating all work from it."
+                          : "A manager needs to draw the room before this board can seat anyone."
+                      }
+                    />
+                  ) : board.areas.map((area) => (
+                    <section key={area.id}>
+                      <div className="mb-3 flex items-baseline justify-between"><h2 className="type-t2">{area.name}</h2><span className="font-mono tabular-nums text-xs text-muted-foreground">{area.tables.length} tables</span></div>
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{area.tables.map((table) => <TableCard key={table.id} table={table} businessTimezone={businessTimezone} onClick={() => { setQrUrl(null); setSelectedTable(table); }} />)}</div>
+                    </section>
+                  ))}
+                </div>
+                <aside className="space-y-6 xl:sticky xl:top-[calc(var(--workspace-header)+var(--page-header))] xl:self-start">
+                  {hasReservations && <section><div className="mb-2 flex items-center justify-between"><p className="type-label text-muted-foreground">Unassigned arrivals</p><span className="font-mono tabular-nums text-xs text-muted-foreground">{board.unassignedReservations.length}</span></div><div className="space-y-2">{board.unassignedReservations.length ? board.unassignedReservations.map((party) => <PartyCard key={party.sourceId} party={party} actionLabel="Seat" secondaryLabel="Assign" businessTimezone={businessTimezone} onAction={() => startSelection(party, "seat")} onSecondary={() => startSelection(party, "assign")} />) : <p className="bg-muted/40 px-3 py-4 text-sm text-muted-foreground">No unassigned arrivals.</p>}</div></section>}
+                  {hasQueue && <section><div className="mb-2 flex items-center justify-between"><p className="type-label text-muted-foreground">Walk-ins</p><span className="font-mono tabular-nums text-xs text-muted-foreground">{board.queueEntries.length}</span></div><div className="space-y-2">{board.queueEntries.length ? board.queueEntries.map((party) => <PartyCard key={party.sourceId} party={party} actionLabel="Seat" secondaryLabel={party.assignedTableIds.length ? "Reassign" : "Assign"} businessTimezone={businessTimezone} onAction={() => startSelection(party, "seat", party.assignedTableIds)} onSecondary={() => startSelection(party, "assign", party.assignedTableIds)} />) : <p className="bg-muted/40 px-3 py-4 text-sm text-muted-foreground">No active walk-ins.</p>}</div></section>}
+                </aside>
               </div>
-              <aside className="space-y-6 xl:sticky xl:top-4 xl:self-start">
-                {hasReservations && <section><div className="mb-2 flex items-center justify-between"><p className="type-label text-muted-foreground">Unassigned arrivals</p><span className="font-mono tabular-nums text-xs text-muted-foreground">{board.unassignedReservations.length}</span></div><div className="space-y-2">{board.unassignedReservations.length ? board.unassignedReservations.map((party) => <PartyCard key={party.sourceId} party={party} actionLabel="Seat" secondaryLabel="Assign" businessTimezone={businessTimezone} onAction={() => startSelection(party, "seat")} onSecondary={() => startSelection(party, "assign")} />) : <p className="bg-muted/40 px-3 py-4 text-sm text-muted-foreground">No unassigned arrivals.</p>}</div></section>}
-                {hasQueue && <section><div className="mb-2 flex items-center justify-between"><p className="type-label text-muted-foreground">Walk-ins</p><span className="font-mono tabular-nums text-xs text-muted-foreground">{board.queueEntries.length}</span></div><div className="space-y-2">{board.queueEntries.length ? board.queueEntries.map((party) => <PartyCard key={party.sourceId} party={party} actionLabel="Seat" secondaryLabel={party.assignedTableIds.length ? "Reassign" : "Assign"} businessTimezone={businessTimezone} onAction={() => startSelection(party, "seat", party.assignedTableIds)} onSecondary={() => startSelection(party, "assign", party.assignedTableIds)} />) : <p className="bg-muted/40 px-3 py-4 text-sm text-muted-foreground">No active walk-ins.</p>}</div></section>}
-              </aside>
-            </div>
-          )}
-        </TabsContent>
-        {canManage && <TabsContent value="setup" className="mt-6"><SetupPanel onChanged={refresh} /></TabsContent>}
-      </Tabs>
+            )}
+          </TabsContent>
+          {canManage && <TabsContent value="setup" className="mt-6"><SetupPanel onChanged={refresh} /></TabsContent>}
+        </Tabs>
 
-      {/* The table detail is a SIDE PANEL, per §06 — not a modal pinned to the
-          bottom of the viewport. It never takes the floor away from the host,
-          which is the point: you seat a party while looking at the room. */}
-      <Sheet
-        open={selectedTable !== null}
-        onOpenChange={(open) => !open && setSelectedTable(null)}
-      >
-        <SheetContent side="right" className="flex flex-col">
-          {selectedTable ? (
-            <>
-              <SheetHeader>
-                <p className="type-label text-muted-foreground">
-                  {stateLabel(selectedTable.displayState)}
-                </p>
-                <SheetTitle>Table {selectedTable.label}</SheetTitle>
-                <SheetDescription>
-                  {selectedTable.capacity} seats
-                </SheetDescription>
-              </SheetHeader>
+        {/* The table detail is a SIDE PANEL, per §06 — not a modal pinned to the
+            bottom of the viewport. It never takes the floor away from the host,
+            which is the point: you seat a party while looking at the room. */}
+        <Sheet
+          open={selectedTable !== null}
+          onOpenChange={(open) => !open && setSelectedTable(null)}
+        >
+          <SheetContent side="right" className="flex flex-col">
+            {selectedTable ? (
+              <>
+                <SheetHeader>
+                  <p className="type-label text-muted-foreground">
+                    {stateLabel(selectedTable.displayState)}
+                  </p>
+                  <SheetTitle>Table {selectedTable.label}</SheetTitle>
+                  <SheetDescription>
+                    {selectedTable.capacity} seats
+                  </SheetDescription>
+                </SheetHeader>
 
-              <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
-                {selectedTable.activeSeating ? (
-                  <>
-                    <p className="text-[length:var(--ui-size)]">
-                      <span className="font-medium">
-                        {selectedTable.activeSeating.source.name}
-                      </span>{" "}
-                      is seated here.
-                    </p>
-                    <Button
-                      variant="secondary"
-                      onClick={() =>
-                        void openSeatingTab(selectedTable.activeSeating!.seatingId)
-                      }
-                      disabled={actionLoading}
-                    >
-                      {selectedTable.activeSeating.openTabId
-                        ? "Open tab"
-                        : "Start tab"}
-                    </Button>
-                    {selectedTable.activeSeating.openTabId ? (
-                      <p className="border-l-2 border-border-strong bg-secondary px-3 py-2.5 text-[13px] text-muted-foreground">
-                        The tab has to be settled externally before this seating
-                        can close.
+                <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
+                  {selectedTable.activeSeating ? (
+                    <>
+                      <p className="text-[length:var(--ui-size)]">
+                        <span className="font-medium">
+                          {selectedTable.activeSeating.source.name}
+                        </span>{" "}
+                        is seated here.
                       </p>
-                    ) : (
-                      <Button onClick={() => setCloseTarget(selectedTable)}>
-                        Close seating
-                      </Button>
-                    )}
-                  </>
-                ) : selectedTable.activeAssignment ? (
-                  <>
-                    <p className="text-[length:var(--ui-size)]">
-                      <span className="font-medium">
-                        {selectedTable.activeAssignment.name}
-                      </span>{" "}
-                      is assigned here.
-                    </p>
-                    <Button
-                      onClick={() =>
-                        startSelection(
-                          selectedTable.activeAssignment!,
-                          "seat",
-                          selectedTable.activeAssignment!.assignedTableIds,
-                        )
-                      }
-                    >
-                      Seat party
-                    </Button>
-                  </>
-                ) : selectedTable.displayState === "cleaning" ? (
-                  <>
-                    <p className="text-[length:var(--ui-size)] text-muted-foreground">
-                      Needs a reset before it can take a party.
-                    </p>
-                    <Button
-                      onClick={() => void updateTableState(selectedTable, "ready")}
-                      disabled={actionLoading}
-                    >
-                      Mark ready
-                    </Button>
-                  </>
-                ) : selectedTable.displayState === "out_of_service" ? (
-                  <>
-                    <p className="text-[length:var(--ui-size)] text-muted-foreground">
-                      {selectedTable.operationalStateReason ||
-                        "Out of service for now."}
-                    </p>
-                    <Button
-                      onClick={() => void updateTableState(selectedTable, "ready")}
-                      disabled={actionLoading}
-                    >
-                      Return to service
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-[length:var(--ui-size)] text-muted-foreground">
-                      Pick an arrival or a walk-in to seat here.
-                    </p>
-                    {availableParties.length ? (
-                      <div className="flex flex-col gap-2">
-                        {availableParties.map((party) => (
-                          <Button
-                            key={party.sourceId}
-                            variant="secondary"
-                            className="justify-between"
-                            onClick={() =>
-                              startSelection(party, "seat", [selectedTable.id])
-                            }
-                          >
-                            <span className="truncate">{party.name}</span>
-                            <ChevronRight />
-                          </Button>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="border-l-2 border-border-strong bg-secondary px-3 py-2.5 text-[13px] text-muted-foreground">
-                        Nobody is waiting to be seated.
-                      </p>
-                    )}
-                  </>
-                )}
-
-                {canManage ? (
-                  <details className="border border-border p-3">
-                    <summary className="cursor-pointer text-[length:var(--ui-size)] font-medium">
-                      Guest QR code
-                    </summary>
-                    <p className="mt-2 text-[13px] text-muted-foreground">
-                      Guests can only order while this table has a party seated
-                      on it.
-                    </p>
-                    <div className="mt-3 flex gap-2">
                       <Button
                         variant="secondary"
-                        size="filter"
-                        onClick={() => void showTableQr(selectedTable.id)}
+                        onClick={() =>
+                          void openSeatingTab(selectedTable.activeSeating!.seatingId)
+                        }
                         disabled={actionLoading}
                       >
-                        Show link
+                        {selectedTable.activeSeating.openTabId
+                          ? "Open tab"
+                          : "Start tab"}
                       </Button>
+                      {selectedTable.activeSeating.openTabId ? (
+                        <p className="border-l-2 border-border-strong bg-secondary px-3 py-2.5 text-[13px] text-muted-foreground">
+                          The tab has to be settled externally before this seating
+                          can close.
+                        </p>
+                      ) : (
+                        <Button onClick={() => setCloseTarget(selectedTable)}>
+                          Close seating
+                        </Button>
+                      )}
+                    </>
+                  ) : selectedTable.activeAssignment ? (
+                    <>
+                      <p className="text-[length:var(--ui-size)]">
+                        <span className="font-medium">
+                          {selectedTable.activeAssignment.name}
+                        </span>{" "}
+                        is assigned here.
+                      </p>
                       <Button
-                        variant="secondary"
-                        size="filter"
-                        onClick={() => setQrRotateTarget(selectedTable)}
+                        onClick={() =>
+                          startSelection(
+                            selectedTable.activeAssignment!,
+                            "seat",
+                            selectedTable.activeAssignment!.assignedTableIds,
+                          )
+                        }
+                      >
+                        Seat party
+                      </Button>
+                    </>
+                  ) : selectedTable.displayState === "cleaning" ? (
+                    <>
+                      <p className="text-[length:var(--ui-size)] text-muted-foreground">
+                        Needs a reset before it can take a party.
+                      </p>
+                      <Button
+                        onClick={() => void updateTableState(selectedTable, "ready")}
                         disabled={actionLoading}
                       >
-                        Rotate
+                        Mark ready
                       </Button>
-                    </div>
-                    {qrUrl ? (
+                    </>
+                  ) : selectedTable.displayState === "out_of_service" ? (
+                    <>
+                      <p className="text-[length:var(--ui-size)] text-muted-foreground">
+                        {selectedTable.operationalStateReason ||
+                          "Out of service for now."}
+                      </p>
+                      <Button
+                        onClick={() => void updateTableState(selectedTable, "ready")}
+                        disabled={actionLoading}
+                      >
+                        Return to service
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-[length:var(--ui-size)] text-muted-foreground">
+                        Pick an arrival or a walk-in to seat here.
+                      </p>
+                      {availableParties.length ? (
+                        <div className="flex flex-col gap-2">
+                          {availableParties.map((party) => (
+                            <Button
+                              key={party.sourceId}
+                              variant="secondary"
+                              className="justify-between"
+                              onClick={() =>
+                                startSelection(party, "seat", [selectedTable.id])
+                              }
+                            >
+                              <span className="truncate">{party.name}</span>
+                              <ChevronRight />
+                            </Button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="border-l-2 border-border-strong bg-secondary px-3 py-2.5 text-[13px] text-muted-foreground">
+                          Nobody is waiting to be seated.
+                        </p>
+                      )}
+                    </>
+                  )}
+
+                  {canManage ? (
+                    <details className="border border-border p-3">
+                      <summary className="cursor-pointer text-[length:var(--ui-size)] font-medium">
+                        Guest QR code
+                      </summary>
+                      <p className="mt-2 text-[13px] text-muted-foreground">
+                        Guests can only order while this table has a party seated
+                        on it.
+                      </p>
                       <div className="mt-3 flex gap-2">
-                        <Input value={qrUrl} readOnly aria-label="Guest QR link" />
                         <Button
-                          size="icon-md"
                           variant="secondary"
-                          aria-label="Copy guest QR link"
-                          onClick={() =>
-                            void navigator.clipboard
-                              .writeText(qrUrl)
-                              .then(() => toast.success("QR link copied."))
-                          }
+                          size="filter"
+                          onClick={() => void showTableQr(selectedTable.id)}
+                          disabled={actionLoading}
                         >
-                          <Copy />
+                          Show link
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="filter"
+                          onClick={() => setQrRotateTarget(selectedTable)}
+                          disabled={actionLoading}
+                        >
+                          Rotate
                         </Button>
                       </div>
-                    ) : null}
-                  </details>
-                ) : null}
+                      {qrUrl ? (
+                        <div className="mt-3 flex gap-2">
+                          <Input value={qrUrl} readOnly aria-label="Guest QR link" />
+                          <Button
+                            size="icon-md"
+                            variant="secondary"
+                            aria-label="Copy guest QR link"
+                            onClick={() =>
+                              void navigator.clipboard
+                                .writeText(qrUrl)
+                                .then(() => toast.success("QR link copied."))
+                            }
+                          >
+                            <Copy />
+                          </Button>
+                        </div>
+                      ) : null}
+                    </details>
+                  ) : null}
 
-                {selectedTable.operationalState === "ready" &&
-                !selectedTable.activeSeating ? (
-                  <details className="border border-border p-3">
-                    <summary className="cursor-pointer text-[length:var(--ui-size)] font-medium">
-                      More table actions
-                    </summary>
-                    <Button
-                      variant="secondary"
-                      size="filter"
-                      className="mt-3"
-                      onClick={() =>
-                        void updateTableState(selectedTable, "cleaning")
-                      }
-                      disabled={actionLoading}
-                    >
-                      Mark needs reset
-                    </Button>
-                    <Textarea
-                      value={outOfServiceReason}
-                      onChange={(event) =>
-                        setOutOfServiceReason(event.target.value)
-                      }
-                      className="mt-3 min-h-20"
-                      placeholder="Why is it coming out of service?"
-                    />
-                    {/* Quiet outline in red text — the risky choice, not the
-                        loud one. */}
-                    <Button
-                      variant="destructive-quiet"
-                      size="filter"
-                      className="mt-2"
-                      onClick={() =>
-                        void updateTableState(selectedTable, "out_of_service")
-                      }
-                      disabled={actionLoading || !outOfServiceReason.trim()}
-                    >
-                      Take out of service
-                    </Button>
-                  </details>
-                ) : null}
-              </div>
-            </>
-          ) : null}
-        </SheetContent>
-      </Sheet>
+                  {selectedTable.operationalState === "ready" &&
+                  !selectedTable.activeSeating ? (
+                    <details className="border border-border p-3">
+                      <summary className="cursor-pointer text-[length:var(--ui-size)] font-medium">
+                        More table actions
+                      </summary>
+                      <Button
+                        variant="secondary"
+                        size="filter"
+                        className="mt-3"
+                        onClick={() =>
+                          void updateTableState(selectedTable, "cleaning")
+                        }
+                        disabled={actionLoading}
+                      >
+                        Mark needs reset
+                      </Button>
+                      <Textarea
+                        value={outOfServiceReason}
+                        onChange={(event) =>
+                          setOutOfServiceReason(event.target.value)
+                        }
+                        className="mt-3 min-h-20"
+                        placeholder="Why is it coming out of service?"
+                      />
+                      {/* Quiet outline in red text — the risky choice, not the
+                          loud one. */}
+                      <Button
+                        variant="destructive-quiet"
+                        size="filter"
+                        className="mt-2"
+                        onClick={() =>
+                          void updateTableState(selectedTable, "out_of_service")
+                        }
+                        disabled={actionLoading || !outOfServiceReason.trim()}
+                      >
+                        Take out of service
+                      </Button>
+                    </details>
+                  ) : null}
+                </div>
+              </>
+            ) : null}
+          </SheetContent>
+        </Sheet>
 
-      <FloorPlanSeatingSheet key={`${selectedParty?.sourceId ?? "no-party"}-${selectionMode}-${selectionInitialTableIds.join("-")}`} open={seatingOpen} onOpenChange={setSeatingOpen} party={selectedParty} tables={allTables} initialTableIds={selectionInitialTableIds} canOverride={canManage} mode={selectionMode} submitting={actionLoading} onConfirm={(tableIds, reason) => void submitSelection(tableIds, reason)} />
-      <ConfirmationDialog open={closeTarget !== null} onOpenChange={(open) => !open && setCloseTarget(null)} title="Close seating?" description="This completes the visit and returns each table to ready." confirmLabel="Close seating" onConfirm={() => void confirmCloseSeating()} />
-      <ConfirmationDialog open={qrRotateTarget !== null} onOpenChange={(open) => !open && setQrRotateTarget(null)} title="Rotate this table QR code?" description="The code printed on the table stops working the moment you do. Anyone holding a menu from the old code will have to scan again." confirmLabel="Rotate the code" variant="destructive" onConfirm={() => void rotateTableQr()} />
-      </div>
+        <FloorPlanSeatingSheet key={`${selectedParty?.sourceId ?? "no-party"}-${selectionMode}-${selectionInitialTableIds.join("-")}`} open={seatingOpen} onOpenChange={setSeatingOpen} party={selectedParty} tables={allTables} initialTableIds={selectionInitialTableIds} canOverride={canManage} mode={selectionMode} submitting={actionLoading} onConfirm={(tableIds, reason) => void submitSelection(tableIds, reason)} />
+        <ConfirmationDialog open={closeTarget !== null} onOpenChange={(open) => !open && setCloseTarget(null)} title="Close seating?" description="This completes the visit and returns each table to ready." confirmLabel="Close seating" onConfirm={() => void confirmCloseSeating()} />
+        <ConfirmationDialog open={qrRotateTarget !== null} onOpenChange={(open) => !open && setQrRotateTarget(null)} title="Rotate this table QR code?" description="The code printed on the table stops working the moment you do. Anyone holding a menu from the old code will have to scan again." confirmLabel="Rotate the code" variant="destructive" onConfirm={() => void rotateTableQr()} />
+      </PageBody>
+    </>
     </>
   );
 }

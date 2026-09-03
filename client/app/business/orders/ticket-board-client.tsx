@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
 import { toast } from "sonner";
 
 import { EmptyState } from "@/components/empty-state";
@@ -35,6 +35,7 @@ import {
 } from "@/lib/client-api";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { PageBody, PageHeader } from "@/components/page-header";
 import type {
   Order,
   OrderAllDayCount,
@@ -292,161 +293,176 @@ export function TicketBoardClient({ businessId }: { businessId: string }) {
         onRetry={() => void refresh()}
       />
 
-      <div className="px-[clamp(16px,2.5vw,32px)] py-6">
-        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="type-t1">Tickets</h1>
-            <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
-              Each preparation line moves on its own.
-            </p>
-          </div>
-
-          <Button
-            variant="secondary"
-            size="filter"
-            onClick={() => void toggleAcceptingOrders()}
-            disabled={togglingOrders}
-          >
-            {isAcceptingOrders ? "Pause ordering" : "Resume ordering"}
-          </Button>
-        </div>
-
-        {/* Loud by position and weight, not by hue: a manager switched this
-            off on purpose, and a deliberate setting is not a failure. */}
-        {!isAcceptingOrders ? (
-          <div className="mb-6 border-l-2 border-primary bg-secondary px-4 py-3">
-            <p className="type-label mb-1 text-foreground">Ordering is paused</p>
-            <p className="text-[length:var(--ui-size)] text-muted-foreground">
-              Guests cannot place new rounds from the QR menu. Tickets already on
-              the board are unaffected.
-            </p>
-          </div>
-        ) : null}
-
-        {loadError ? (
-          <div className="mb-6 flex flex-wrap items-center gap-3 border-l-2 border-critical-fill bg-critical-tint px-4 py-3">
-            <p className="flex-1 text-[length:var(--ui-size)] text-critical-text">
-              {loadError}
-            </p>
-            <Button variant="secondary" size="filter" onClick={() => void refresh()}>
-              Retry
+      <>
+      <PageHeader
+        wide
+        title="Tickets"
+        description="Each preparation line moves on its own."
+        actions={
+          <>
+            {/* Icon alone below --bp-phone. This one's label also carries STATE,
+                so the icon has to as well — pause bars while ordering is open,
+                a play triangle while it is paused — and `aria-label` says the
+                whole thing at every width. The banner below is the other half:
+                a paused board says so in words regardless of this control. */}
+            <Button
+              variant="secondary"
+              size="filter"
+              className="min-w-[var(--control-desktop-min)]"
+              aria-label={isAcceptingOrders ? "Pause ordering" : "Resume ordering"}
+              onClick={() => void toggleAcceptingOrders()}
+              disabled={togglingOrders}
+            >
+              {isAcceptingOrders ? (
+                <Pause aria-hidden />
+              ) : (
+                <Play aria-hidden />
+              )}
+              <span className="hidden phone:inline">
+                {isAcceptingOrders ? "Pause ordering" : "Resume ordering"}
+              </span>
             </Button>
-          </div>
-        ) : null}
+          </>
+        }
+      />
 
-        <div className="mb-5 flex flex-wrap items-center gap-2">
-          <StationTab
-            active={stationId === "all"}
-            onClick={() => setStationId("all")}
-            label="All stations"
-          />
-          {stations.map((station) => (
-            <StationTab
-              key={station.id}
-              active={stationId === station.id}
-              onClick={() => setStationId(station.id)}
-              label={station.name}
-            />
-          ))}
-        </div>
-
-        {visibleCounts.length > 0 ? (
-          <section className="mb-6 border-t border-border-strong pt-3">
-            <p className="type-micro mb-2 text-muted-foreground">All-day counts</p>
-            <div className="flex flex-wrap gap-2">
-              {visibleCounts.map((count, index) => (
-                <Badge
-                  key={`${count.preparationStationId}-${count.itemName}-${count.lineStatus}-${index}`}
-                  tone="neutral"
-                >
-                  {count.quantity}× {count.itemName} ·{" "}
-                  {LABELS[count.lineStatus] ?? count.lineStatus}
-                  {count.routesToAllStations ? " · Shared" : ""}
-                </Badge>
-              ))}
+      <PageBody wide>
+          {/* Loud by position and weight, not by hue: a manager switched this
+              off on purpose, and a deliberate setting is not a failure. */}
+          {!isAcceptingOrders ? (
+            <div className="mb-6 border-l-2 border-primary bg-secondary px-4 py-3">
+              <p className="type-label mb-1 text-foreground">Ordering is paused</p>
+              <p className="text-[length:var(--ui-size)] text-muted-foreground">
+                Guests cannot place new rounds from the QR menu. Tickets already on
+                the board are unaffected.
+              </p>
             </div>
-          </section>
-        ) : null}
+          ) : null}
 
-        {loading ? (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
-            {STATUSES.map((status, column) => (
-              <div key={status}>
-                <p className="type-micro border-b border-border-strong pb-2 text-muted-foreground">
-                  {LABELS[status]}
-                </p>
-                {[0, 1].map((row) => (
-                  <SkeletonRow
-                    key={row}
-                    index={column * 2 + row}
-                    columns={["w-1/3", "w-1/2"]}
-                  />
-                ))}
-              </div>
+          {loadError ? (
+            <div className="mb-6 flex flex-wrap items-center gap-3 border-l-2 border-critical-fill bg-critical-tint px-4 py-3">
+              <p className="flex-1 text-[length:var(--ui-size)] text-critical-text">
+                {loadError}
+              </p>
+              <Button variant="secondary" size="filter" onClick={() => void refresh()}>
+                Retry
+              </Button>
+            </div>
+          ) : null}
+
+          <div className="mb-5 flex flex-wrap items-center gap-2">
+            <StationTab
+              active={stationId === "all"}
+              onClick={() => setStationId("all")}
+              label="All stations"
+            />
+            {stations.map((station) => (
+              <StationTab
+                key={station.id}
+                active={stationId === station.id}
+                onClick={() => setStationId(station.id)}
+                label={station.name}
+              />
             ))}
           </div>
-        ) : orders.length === 0 ? (
-          // The whole board empty is one state, not four empty columns plus a
-          // panel underneath saying the same thing.
-          <EmptyState
-            title="No tickets tonight"
-            description="Orders from the QR menu and from a server's tablet land here the moment they are placed, in the order they arrived."
-            action={{ label: "Open the menu", href: "/business/menu" }}
-          />
-        ) : (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
-            {STATUSES.map((status) => {
-              const statusOrders = orders.filter(
-                (order) =>
-                  order.status !== "cancelled" &&
-                  order.lineItems.some(
-                    (line) =>
-                      line.lineStatus === status &&
-                      lineMatchesStation(line, stationId),
-                  ),
-              );
 
-              return (
-                <section key={status}>
-                  <div className="mb-3 flex items-center gap-2 border-b border-border-strong pb-2">
-                    <h2 className="type-micro flex-1 text-muted-foreground">
-                      {LABELS[status]}
-                    </h2>
-                    {statusOrders.length > 0 ? (
-                      <Badge tone="neutral">{statusOrders.length}</Badge>
-                    ) : null}
-                  </div>
+          {visibleCounts.length > 0 ? (
+            <section className="mb-6 border-t border-border-strong pt-3">
+              <p className="type-micro mb-2 text-muted-foreground">All-day counts</p>
+              <div className="flex flex-wrap gap-2">
+                {visibleCounts.map((count, index) => (
+                  <Badge
+                    key={`${count.preparationStationId}-${count.itemName}-${count.lineStatus}-${index}`}
+                    tone="neutral"
+                  >
+                    {count.quantity}× {count.itemName} ·{" "}
+                    {LABELS[count.lineStatus] ?? count.lineStatus}
+                    {count.routesToAllStations ? " · Shared" : ""}
+                  </Badge>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
-                  {statusOrders.length === 0 ? (
-                    <p className="py-6 text-center text-[length:var(--ui-size)] text-text-on-ink-faint">
-                      Nothing here
-                    </p>
-                  ) : (
-                    <div className="flex flex-col gap-3">
-                      {statusOrders.map((order) => (
-                        <OrderTicket
-                          key={order.id}
-                          order={order}
-                          status={status}
-                          stationId={stationId}
-                          now={now}
-                          onMoveLine={moveLine}
-                          onCorrect={openCorrection}
-                          onCancel={(target) => {
-                            setCancelTarget(target);
-                            setCancelReason("");
-                          }}
-                        />
-                      ))}
+          {loading ? (
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
+              {STATUSES.map((status, column) => (
+                <div key={status}>
+                  <p className="type-micro border-b border-border-strong pb-2 text-muted-foreground">
+                    {LABELS[status]}
+                  </p>
+                  {[0, 1].map((row) => (
+                    <SkeletonRow
+                      key={row}
+                      index={column * 2 + row}
+                      columns={["w-1/3", "w-1/2"]}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          ) : orders.length === 0 ? (
+            // The whole board empty is one state, not four empty columns plus a
+            // panel underneath saying the same thing.
+            <EmptyState
+              title="No tickets tonight"
+              description="Orders from the QR menu and from a server's tablet land here the moment they are placed, in the order they arrived."
+              action={{ label: "Open the menu", href: "/business/menu" }}
+            />
+          ) : (
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
+              {STATUSES.map((status) => {
+                const statusOrders = orders.filter(
+                  (order) =>
+                    order.status !== "cancelled" &&
+                    order.lineItems.some(
+                      (line) =>
+                        line.lineStatus === status &&
+                        lineMatchesStation(line, stationId),
+                    ),
+                );
+
+                return (
+                  <section key={status}>
+                    <div className="mb-3 flex items-center gap-2 border-b border-border-strong pb-2">
+                      <h2 className="type-micro flex-1 text-muted-foreground">
+                        {LABELS[status]}
+                      </h2>
+                      {statusOrders.length > 0 ? (
+                        <Badge tone="neutral">{statusOrders.length}</Badge>
+                      ) : null}
                     </div>
-                  )}
-                </section>
-              );
-            })}
-          </div>
-        )}
 
-      </div>
+                    {statusOrders.length === 0 ? (
+                      <p className="py-6 text-center text-[length:var(--ui-size)] text-text-on-ink-faint">
+                        Nothing here
+                      </p>
+                    ) : (
+                      <div className="flex flex-col gap-3">
+                        {statusOrders.map((order) => (
+                          <OrderTicket
+                            key={order.id}
+                            order={order}
+                            status={status}
+                            stationId={stationId}
+                            now={now}
+                            onMoveLine={moveLine}
+                            onCorrect={openCorrection}
+                            onCancel={(target) => {
+                              setCancelTarget(target);
+                              setCancelReason("");
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                );
+              })}
+            </div>
+          )}
+      </PageBody>
+    </>
 
       <Dialog
         open={correctTarget !== null}

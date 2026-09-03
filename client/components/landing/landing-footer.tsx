@@ -1,17 +1,23 @@
 import Link from "next/link";
 
-const COLUMNS: { heading: string; basis: string; links: { href: string; label: string }[] }[] = [
+const COLUMNS: {
+  heading: string;
+  basis: string;
+  links: { href: string; label: string }[];
+}[] = [
   {
     heading: "Product",
-    // Every one of these resolved before, but three of them resolved to the
-    // WRONG section: #capabilities covers rows 01 (reservations) and 02 (the
-    // queue) only, so "QR ordering", "Inventory" and "Insights" all landed a
-    // reader on the reservations comparison. The sections they describe now
-    // carry the ids they should always have had.
+    // Every one of these resolved before, but four of them resolved to the
+    // WRONG place. "QR ordering", "Inventory" and "Insights" all landed a
+    // reader on #capabilities — rows 01 and 02 — rather than on the section
+    // they name; those sections now carry the ids they should always have had.
+    // And "Reservations" and "Walk-in queue" both pointed at #capabilities,
+    // which is the pair's shared heading: two different links, one landing.
+    // Each row is its own band now, so each can be addressed on its own.
     basis: "flex-[0_1_160px]",
     links: [
-      { href: "#capabilities", label: "Reservations" },
-      { href: "#capabilities", label: "Walk-in queue" },
+      { href: "#reservations", label: "Reservations" },
+      { href: "#queue", label: "Walk-in queue" },
       { href: "#ordering", label: "QR ordering" },
       { href: "#inventory", label: "Inventory" },
       { href: "#demand", label: "Insights" },
@@ -73,7 +79,9 @@ export function LandingFooter() {
         </div>
 
         <div className="mkt-kicker flex flex-wrap justify-between gap-4 pt-[22px] tracking-[0.06em] normal-case text-text-on-ink-faint">
-          <span>© {new Date().getFullYear()} Crowbar Systems GmbH · Berlin</span>
+          <span>
+            © {new Date().getFullYear()} Crowbar Systems GmbH · Berlin
+          </span>
         </div>
       </div>
     </footer>

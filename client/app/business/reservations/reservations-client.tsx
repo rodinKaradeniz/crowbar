@@ -21,6 +21,7 @@ import { CustomerResponse } from "@/lib/api-client";
 import { clientMarkReservationNoShow, clientUpdateReservation } from "@/lib/client-api";
 import { toast } from "sonner";
 import { isReservationReschedulable } from "@/lib/availability";
+import { PageBody, PageHeader } from "@/components/page-header";
 
 interface ReservationsClientProps {
   initialReservations: Reservation[];
@@ -159,205 +160,206 @@ export default function ReservationsClient({
     : null;
 
   return (
-    <div className="flex flex-col gap-6 px-[clamp(16px,2.5vw,32px)] py-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="type-t1">Reservations</h1>
-          <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
-            The book, for every device and every shift.
-          </p>
-        </div>
-        <Button type="button" onClick={() => setCreatingReservation(true)}>
-          New reservation
-        </Button>
-      </div>
-
-      <ReservationSearchFilter
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        serviceTypeFilter={serviceTypeFilter}
-        onServiceTypeFilterChange={setServiceTypeFilter}
-        serviceTypes={serviceTypes}
-      />
-
-      {initialReservations.length === 0 ? (
-        <EmptyState
-          title="Nothing on the book"
-          description="Bookings from your public page and from staff land here on one schedule, kept by everyone at once."
-          action={{
-            label: "Take a booking",
-            onClick: () => setCreatingReservation(true),
-          }}
-        />
-      ) : (
-        <ReservationTable
-          reservations={reservations}
+    <>
+      <PageHeader
+        wide
+        title="Reservations"
+        description="The book, for every device and every shift."
+        actions={
+          <Button type="button" onClick={() => setCreatingReservation(true)}>
+            New reservation
+          </Button>
+        }
+      >
+        <ReservationSearchFilter
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          serviceTypeFilter={serviceTypeFilter}
+          onServiceTypeFilterChange={setServiceTypeFilter}
           serviceTypes={serviceTypes}
-          customers={customers}
-          businessTimezone={businessTimezone}
-          now={ready ? now : null}
-          onOpen={setOpenReservation}
-          emptyMessage="Nothing matches that search."
-          rowActions={(reservation) => (
-            <>
-              <Button
-                size="filter"
-                variant="secondary"
-                disabled={actionLoading === reservation.id}
-                onClick={() => handleEdit(reservation)}
-              >
-                Edit
-              </Button>
-              {isReservationReschedulable(reservation, currentTime) ? (
+        />
+      </PageHeader>
+
+      <PageBody wide>
+
+        {initialReservations.length === 0 ? (
+          <EmptyState
+            title="Nothing on the book"
+            description="Bookings from your public page and from staff land here on one schedule, kept by everyone at once."
+            action={{
+              label: "Take a booking",
+              onClick: () => setCreatingReservation(true),
+            }}
+          />
+        ) : (
+          <ReservationTable
+            reservations={reservations}
+            serviceTypes={serviceTypes}
+            customers={customers}
+            businessTimezone={businessTimezone}
+            now={ready ? now : null}
+            onOpen={setOpenReservation}
+            emptyMessage="Nothing matches that search."
+            rowActions={(reservation) => (
+              <>
                 <Button
                   size="filter"
                   variant="secondary"
                   disabled={actionLoading === reservation.id}
-                  onClick={() => setReschedulingReservation(reservation)}
+                  onClick={() => handleEdit(reservation)}
                 >
-                  Move
+                  Edit
                 </Button>
-              ) : null}
-              {/* Not destructive. Cancelling a booking is routine work; the
-                  red belongs on the confirmation, not on every row. */}
-              <Button
-                size="filter"
-                variant="secondary"
-                disabled={actionLoading === reservation.id}
-                onClick={() => handleCancel(reservation)}
-              >
-                Cancel
-              </Button>
-            </>
-          )}
-        />
-      )}
-
-      <ReservationPanel
-        reservation={panelReservation}
-        customer={
-          panelReservation
-            ? customerMap.get(panelReservation.customerId)
-            : undefined
-        }
-        serviceType={
-          panelReservation
-            ? serviceTypeMap.get(panelReservation.serviceTypeId)
-            : undefined
-        }
-        businessTimezone={businessTimezone}
-        open={panelReservation !== null}
-        onOpenChange={(open) => !open && setOpenReservation(null)}
-        tablePlan={
-          panelReservation ? (
-            <ReservationTablePlan
-              reservation={panelReservation}
-              guestName={customerMap.get(panelReservation.customerId)?.name}
-              canOverride={canOverride}
-            />
-          ) : null
-        }
-        actions={
-          panelReservation ? (
-            <>
-              <Button
-                size="filter"
-                onClick={() => handleEdit(panelReservation)}
-              >
-                Edit
-              </Button>
-              {panelReservation.status === "pending" ||
-              panelReservation.status === "confirmed" ? (
+                {isReservationReschedulable(reservation, currentTime) ? (
+                  <Button
+                    size="filter"
+                    variant="secondary"
+                    disabled={actionLoading === reservation.id}
+                    onClick={() => setReschedulingReservation(reservation)}
+                  >
+                    Move
+                  </Button>
+                ) : null}
+                {/* Not destructive. Cancelling a booking is routine work; the
+                    red belongs on the confirmation, not on every row. */}
                 <Button
                   size="filter"
                   variant="secondary"
-                  onClick={() => setNoShowReservation(panelReservation)}
+                  disabled={actionLoading === reservation.id}
+                  onClick={() => handleCancel(reservation)}
                 >
-                  No-show
+                  Cancel
                 </Button>
-              ) : null}
-              <Button
-                size="filter"
-                variant="destructive-quiet"
-                onClick={() => handleCancel(panelReservation)}
-              >
-                Cancel booking
-              </Button>
-            </>
-          ) : null
-        }
-      />
+              </>
+            )}
+          />
+        )}
 
-      <ReservationWaitlistPanel
-        initialEntries={initialWaitlistEntries}
-        businessId={businessId}
-        businessTimezone={businessTimezone}
-        businessMaxGuests={businessMaxGuests}
-        serviceTypes={serviceTypes}
-        customers={customers}
-      />
-
-      {/* Edit Reservation Dialog */}
-      {editingReservation && (
-        <ReservationEditDialog
-          reservation={editingReservation}
-          open={!!editingReservation}
-          onOpenChange={(open) => !open && setEditingReservation(null)}
-          onSave={handleSave}
+        <ReservationPanel
+          reservation={panelReservation}
+          customer={
+            panelReservation
+              ? customerMap.get(panelReservation.customerId)
+              : undefined
+          }
+          serviceType={
+            panelReservation
+              ? serviceTypeMap.get(panelReservation.serviceTypeId)
+              : undefined
+          }
+          businessTimezone={businessTimezone}
+          open={panelReservation !== null}
+          onOpenChange={(open) => !open && setOpenReservation(null)}
+          tablePlan={
+            panelReservation ? (
+              <ReservationTablePlan
+                reservation={panelReservation}
+                guestName={customerMap.get(panelReservation.customerId)?.name}
+                canOverride={canOverride}
+              />
+            ) : null
+          }
+          actions={
+            panelReservation ? (
+              <>
+                <Button
+                  size="filter"
+                  onClick={() => handleEdit(panelReservation)}
+                >
+                  Edit
+                </Button>
+                {panelReservation.status === "pending" ||
+                panelReservation.status === "confirmed" ? (
+                  <Button
+                    size="filter"
+                    variant="secondary"
+                    onClick={() => setNoShowReservation(panelReservation)}
+                  >
+                    No-show
+                  </Button>
+                ) : null}
+                <Button
+                  size="filter"
+                  variant="destructive-quiet"
+                  onClick={() => handleCancel(panelReservation)}
+                >
+                  Cancel booking
+                </Button>
+              </>
+            ) : null
+          }
         />
-      )}
-      <ConfirmationDialog
-        open={noShowReservation !== null}
-        onOpenChange={(open) => !open && setNoShowReservation(null)}
-        title="Mark as no-show?"
-        description={`This is available after the venue's arrival grace period and immediately releases ${noShowReservation?.guests ?? 1} covers back to availability.`}
-        confirmLabel="Mark no-show"
-        variant="destructive"
-        onConfirm={() => void handleNoShowConfirm()}
-      />
 
-      <StaffReservationDialog
-        reservation={reschedulingReservation}
-        open={!!reschedulingReservation}
-        onOpenChange={(open) => !open && setReschedulingReservation(null)}
-        serviceTypes={serviceTypes}
-        businessTimezone={businessTimezone}
-        businessMaxGuests={businessMaxGuests}
-        canOverride={canOverride}
-        mode="reschedule"
-        onCompleted={() => {
-          setReschedulingReservation(null);
-          router.refresh();
-        }}
-      />
+        <ReservationWaitlistPanel
+          initialEntries={initialWaitlistEntries}
+          businessId={businessId}
+          businessTimezone={businessTimezone}
+          businessMaxGuests={businessMaxGuests}
+          serviceTypes={serviceTypes}
+          customers={customers}
+        />
 
-      <StaffReservationDialog
-        reservation={null}
-        open={creatingReservation}
-        onOpenChange={setCreatingReservation}
-        serviceTypes={serviceTypes}
-        businessTimezone={businessTimezone}
-        businessMaxGuests={businessMaxGuests}
-        canOverride={canOverride}
-        mode="create"
-        onCompleted={() => {
-          setCreatingReservation(false);
-          router.refresh();
-        }}
-      />
+        {/* Edit Reservation Dialog */}
+        {editingReservation && (
+          <ReservationEditDialog
+            reservation={editingReservation}
+            open={!!editingReservation}
+            onOpenChange={(open) => !open && setEditingReservation(null)}
+            onSave={handleSave}
+          />
+        )}
+        <ConfirmationDialog
+          open={noShowReservation !== null}
+          onOpenChange={(open) => !open && setNoShowReservation(null)}
+          title="Mark as no-show?"
+          description={`This is available after the venue's arrival grace period and immediately releases ${noShowReservation?.guests ?? 1} covers back to availability.`}
+          confirmLabel="Mark no-show"
+          variant="destructive"
+          onConfirm={() => void handleNoShowConfirm()}
+        />
 
-      {/* Cancel Confirmation Dialog */}
-      <ConfirmationDialog
-        open={!!cancellingReservation}
-        onOpenChange={(open) => !open && setCancellingReservation(null)}
-        title="Cancel Reservation"
-        description="Are you sure you want to cancel this reservation? This action cannot be undone."
-        confirmLabel="Yes, Cancel"
-        cancelLabel="No"
-        onConfirm={handleCancelConfirm}
-        variant="destructive"
-      />
+        <StaffReservationDialog
+          reservation={reschedulingReservation}
+          open={!!reschedulingReservation}
+          onOpenChange={(open) => !open && setReschedulingReservation(null)}
+          serviceTypes={serviceTypes}
+          businessTimezone={businessTimezone}
+          businessMaxGuests={businessMaxGuests}
+          canOverride={canOverride}
+          mode="reschedule"
+          onCompleted={() => {
+            setReschedulingReservation(null);
+            router.refresh();
+          }}
+        />
 
-    </div>
+        <StaffReservationDialog
+          reservation={null}
+          open={creatingReservation}
+          onOpenChange={setCreatingReservation}
+          serviceTypes={serviceTypes}
+          businessTimezone={businessTimezone}
+          businessMaxGuests={businessMaxGuests}
+          canOverride={canOverride}
+          mode="create"
+          onCompleted={() => {
+            setCreatingReservation(false);
+            router.refresh();
+          }}
+        />
+
+        {/* Cancel Confirmation Dialog */}
+        <ConfirmationDialog
+          open={!!cancellingReservation}
+          onOpenChange={(open) => !open && setCancellingReservation(null)}
+          title="Cancel Reservation"
+          description="Are you sure you want to cancel this reservation? This action cannot be undone."
+          confirmLabel="Yes, Cancel"
+          cancelLabel="No"
+          onConfirm={handleCancelConfirm}
+          variant="destructive"
+        />
+      </PageBody>
+    </>
   );
 }

@@ -32,12 +32,37 @@ export function AuthSplit({
 }) {
   const form = (
     <div className="auth-pane flex min-w-[min(100%,320px)] flex-[1_1_420px] flex-col justify-center">
-      <div className="w-full max-w-[410px]">{children}</div>
+      <div className="w-full max-w-[410px]">
+        {/* The panel carries the lockup on a wide screen. Below --bp-phone the
+            panel is gone, so the mark comes back here — otherwise the first
+            screen of the product introduces itself with no name on it. */}
+        <div className="mb-8 phone:hidden">
+          <AuthMark size="sm" />
+        </div>
+        {children}
+      </div>
     </div>
   );
 
+  /*
+   * BELOW --bp-phone THE INK PANEL IS NOT RENDERED.
+   *
+   * Stacked, the panel put roughly a screen of marketing above the form, so
+   * signing in on a phone began by scrolling past it. The panel is pure
+   * marketing — it names no venue and carries nothing you need in order to
+   * sign in — and someone opening /auth/login on a phone is staff starting a
+   * shift, not a prospect being sold to.
+   *
+   * `hidden` rather than a second copy of the form: one form, one DOM node,
+   * nothing to keep in sync. It also keeps the screen on ONE ground, where
+   * stacking would have put ink under paper inside a single hairline box —
+   * §"grounds are fixed by surface", which stacking would quietly break.
+   *
+   * `min-h-[600px]` is also phone-only-off: it is a floor for a two-column box
+   * and on a phone it is just empty space under a short form.
+   */
   return (
-    <div className="flex min-h-[600px] flex-wrap border border-ink bg-paper">
+    <div className="flex flex-wrap border border-ink bg-paper phone:min-h-[600px]">
       {panelSide === "start" ? panel : form}
       {panelSide === "start" ? form : panel}
     </div>
@@ -47,7 +72,7 @@ export function AuthSplit({
 /** The ink half. Everything inside it resolves against the ink ground. */
 export function AuthPanel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="auth-panel ground-ink flex min-w-[min(100%,300px)] flex-[1_1_380px] flex-col justify-between gap-10 bg-background text-foreground">
+    <div className="auth-panel ground-ink hidden min-w-[min(100%,300px)] flex-[1_1_380px] flex-col justify-between gap-10 bg-background text-foreground phone:flex">
       {children}
     </div>
   );

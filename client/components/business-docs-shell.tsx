@@ -16,7 +16,12 @@ export function BusinessDocsShell({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-6 p-4 md:flex-row md:gap-8 md:p-6">
-      <aside className="w-full shrink-0 md:sticky md:top-0 md:max-h-[calc(100vh-3rem)] md:w-56 md:overflow-y-auto">
+      {/* Sticks from --workspace-header, not 0. At `top-0` this pinned itself
+          to the viewport top, which is UNDERNEATH the 76px topbar, so the
+          section label and the first entries were hidden the moment the page
+          scrolled — the defect that prompted this pass. The max-height is the
+          same number so the nav can scroll inside whatever is left. */}
+      <aside className="w-full shrink-0 md:sticky md:top-[var(--workspace-header)] md:max-h-[calc(100svh-var(--workspace-header))] md:w-56 md:overflow-y-auto">
         <nav className="space-y-6 border border-border bg-card p-3">
           {nav.map((section) => (
             <div key={section.label}>

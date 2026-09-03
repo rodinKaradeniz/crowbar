@@ -88,6 +88,33 @@ inherit it. The retired `.dark` / `.theme-night` toggle and the
 
 Ink is warm, not black: pure `#000` under white type flickers in venue light.
 
+### The marketing page's band rhythm
+
+The landing page runs on paper and is cut by bands. Which sections get a band
+is a design decision, and it went wrong once in a way worth recording.
+
+**A ground change ranks things.** The five numbered capabilities are a run of
+five peers, and §03 was the only one on ink — so it read as a different KIND of
+thing rather than the third of five. Meanwhile 01 and 02 were separated by
+hairlines inside a shared section and 04 and 05 by nothing at all: three
+different separators for one relationship.
+
+The rule that came out of it: **within a run of peers, the separator is the
+same device every time, and a ground change is not it.** All five are now
+full-bleed bands with one padding (`.mkt-sec-feature`) and one opening rule
+(`.mkt-band`), alternating down the declared paper ladder — `--paper`,
+`--paper-tint`, `--paper-tint` is the whole vocabulary, and no new value was
+needed. Alternating tint is a *rhythm*; ink against paper is a *rank*.
+
+Two panels inside §03 stay on ink, and that is not an exception to the rule. The
+bar board and the tab **are** the ink product, and the section is showing them —
+so each carries `.ground-ink` and resolves every token against it, exactly as
+`AuthPanel` does. Depicting the other ground is not the same as being on it.
+
+The page's dark bands are now the night timeline (which narrates a shift in the
+product) and the FAQ, neither of which is one of the five and neither of which
+ranks anything.
+
 ## Severity is a rank — the load-bearing part of this system
 
 This is not a palette decision. It decides what a manager looks at first during
@@ -303,8 +330,55 @@ above carry E1.
 
 Both headers are sticky, so both are also a **scroll offset**: `--mkt-header`
 sizes `scroll-margin-top` on every in-page anchor target (`.mkt-anchor`), and
-`--workspace-header` is where the Schedule calendar sticks. Each is a
-`min-height` floor on its own bar, never a fixed height.
+`--workspace-header` is where every in-page sticky element in the workspace
+begins. Each is a `min-height` floor on its own bar, never a fixed height.
+
+**Nothing in the workspace may stick at `top-0`.** The topbar is already there.
+An element that sticks at 0 pins itself to the viewport top, which is
+*underneath* that bar, and silently loses its first 76px — and only once the
+page is long enough to scroll, so it survives every review of a short one. Four
+surfaces shipped with this defect before it was named: the docs nav (`top-0`,
+fully hidden), the floor aside (`top-4`), and both preview columns on
+profile/settings (`top-6`). The offset is always the token.
+
+**There are two offsets, and the second one is measured.** A workspace page
+also has its own pinned title bar (`components/page-header.tsx`), and its
+height is not a constant — a page with sub-tabs is taller than one without,
+actions wrap on a narrow screen, a description can run to two lines. Reports is
+236px; Tabs is 81. So `PageHeader` measures itself with a `ResizeObserver` and
+publishes `--page-header`, and anything that sticks *below* it offsets by
+`calc(var(--workspace-header) + var(--page-header))`. `--page-header` is
+declared `0px` so a sibling is merely flush before hydration, never overlapped.
+A hard-coded second number would have been wrong on the first page that gained
+a tab.
+
+### Two page widths, decided by what the page is for
+
+| | Width | Pages |
+| --- | --- | --- |
+| **Board** | full bleed | overview, floor, tickets, tabs, reservations, requests, queue, schedule, customers, inventory, insights, reports |
+| **Document** | `--grid-workspace` (1024px), centred | menu, staff, happy hour, all of `profile/*`, all of `settings/*`, guest profile |
+
+Width is the working surface on a board: a floor map or a ticket wall on a
+1920px monitor should use the monitor. A document is read and filled in, and a
+1900px-wide text input is not a form anyone wants to complete — the same
+argument as a measure in prose. `PageHeader`/`PageBody` take a `wide` prop and
+apply this once; before it, exactly two pages had invented their own cap
+(`menu` had `max-w-5xl mx-auto`, `region-tax` had `max-w-5xl` with no centring)
+and the other 24 ran edge to edge.
+
+Both halves carry the same gutter and the same measure so the title lines up
+with the body under it. They are **siblings, not nested**: a `position: sticky`
+element only sticks within its own parent's box, so a header inside the
+scrolling body would stop sticking the moment that body scrolled past.
+
+**Sub-navigation belongs in the pinned header, and it scrolls sideways.** Where
+a page branches — Inventory's Stock/Counts/Suppliers, Reports' four panels —
+the `TabsList` sits beside the title, so the branch you are on stays visible
+above a table of rows that could otherwise belong to any screen in the product.
+A five-entry `TabsList` is `w-fit` and measures 593px, so the slot is
+`overflow-x-auto`: at 390px it scrolls rather than pushing the whole document
+sideways.
 
 `.mkt-shell` is the single containment primitive for marketing — max width,
 centring and the one horizontal gutter. Full-bleed bands carry their background
@@ -406,23 +480,71 @@ which is neither an animation nor a transition and needs its own rule.
 
 ## Responsive
 
-Two targets, and no others. There is no phone design; if a task needs one, that
-is a design question. Stage 7's exit gate once required a phone-capable staff
-surface and never met it; that clause now sits in `docs/TODO.md` stage 11,
-where the answer is a React Native client rather than a narrower web layout.
-Nothing here is expected to serve a phone in the meantime — see open question
-3 below.
+Two **designed** targets, and a floor under everything narrower.
 
-| | Desktop | Tablet |
-| --- | --- | --- |
-| Width | ≥ `--bp-desktop` (1280) | 1024×768 |
-| Navigation | 228px rail, three groups | 76px bottom bar, four service screens + More |
-| Primary action | In the header | Bottom-right, 20px in — on screens whose corner is free |
-| Controls | 34–44px | **≥ 48px, a floor** |
-| Table rows | 44px | 56px |
-| UI text | 14px | 15px |
-| Figure band | 52px, four | 66px, **two** |
-| Hover | May refine | **Never load-bearing** |
+The two designed targets are desktop and the 1024×768 tablet. They are what the
+canvases draw, and they are where every layout decision is made. Below them
+`--bp-phone: 640px` is a **floor, not a third target** — it keeps a surface
+usable on a phone; it does not claim a phone was designed for.
+
+**The floor now covers the product too, and that reverses a rule this document
+carried for one day.** It previously read "nothing in `app/business/*` may use
+it". That held while the workspace was only ever opened on a laptop or a tablet,
+and stopped holding the moment anyone opened it on a phone: the header wrapped
+to two lines, the tablet's five-slot bottom bar became five 78px slots, and the
+overview showed two figures of four with no way to reach the others. None of
+that is a design question — it is a surface that does not work, and the answer
+is not a design canvas but the same floor the marketing page already had.
+
+**What has not changed:** the phone is still not a designed target, the tablet
+canvas still rules the tablet range, and the staff phone answer is still a React
+Native client in stage 11. `phone:` in `app/business/*` may make a surface
+usable at 390px; it may not invent a phone layout, and it may not move anything
+inside the tablet range. Stage 7's exit gate once required a phone-capable staff
+surface and never met it; that clause sits in `docs/TODO.md` stage 11.
+
+| | Desktop | Tablet | Phone (floor) |
+| --- | --- | --- | --- |
+| Width | ≥ `--bp-desktop` (1280) | 640–1279, drawn at 1024×768 | < `--bp-phone` (640) |
+| Navigation | 228px rail, three groups | 76px bottom bar, four service screens + More | Sheet behind a header menu button |
+| Primary action | In the header | Bottom-right, 20px in — on screens whose corner is free | In the header |
+| Controls | 34–44px | **≥ 48px, a floor** | **≥ 48px** (inherits the tablet tokens) |
+| Table rows | 44px | 56px | 56px |
+| UI text | 14px | 15px | 15px |
+| Figure band | 52px, four | 66px, **two** | 66px, four in 2×2 |
+| Hover | May refine | **Never load-bearing** | **Never load-bearing** |
+
+**Why the figure band goes back to four on a phone.** §07's "two per screen, not
+four" is an argument about a tablet — held at arm's length, read at a glance,
+mid-service. A phone is held close and read on purpose. Hiding half the band
+there buys nothing and costs a second screen. The tablet range keeps the canvas
+rule exactly.
+
+**Three navigation shapes, one set of gates.** The rail, the bottom bar and the
+phone sheet all take their entries from `hooks/use-workspace-nav.ts`, so they
+can never disagree about what an operator may open. All three are always in the
+tree; the breakpoints decide which paints, so rotation does not remount.
+
+**Icon-only is a phone treatment, not a style.** Where a header action's label
+makes it too wide at 390px, the label is hidden below `--bp-phone` and the icon
+carries it, with `aria-label` at every width. It is never icon-only above the
+breakpoint: a label removed where there is room to show it is information
+thrown away. Where the label carries STATE — "Pause ordering" / "Resume
+ordering" — the icon must carry that state too.
+
+**And the width must be pinned back.** Hiding the label collapses the button to
+its icon plus `size="filter"`'s horizontal padding — 42px measured at 390px,
+while the tablet token takeover has already given the same button a height of
+48. The result passes every gate and still hands the operator a target 6px
+under the floor every other control on the surface clears. So an icon-only
+header action carries `min-w-[var(--control-desktop-min)]`, squaring it from
+the token that already sets its height. Above `--bp-phone` the returning label
+makes the button wider than 48 on its own, so the rule costs nothing there.
+
+*Found by measuring, not by reading.* Both grep gates, `tsc`, `lint` and the
+build all passed on the 42px version — nothing in the toolchain measures a
+rendered box. This is the class of defect that only a browser at the real
+viewport will produce, which is the argument for checking one.
 
 The tablet half of this is one media query in `globals.css` that redefines five
 tokens below the breakpoint. Because the product reads its sizes through those
@@ -573,6 +695,13 @@ sequential nor unique across the blocks.
    stage 11's gate; stage 7's gate claims only the two targets that exist. It
    moved because the answer belongs to a different client, not because the
    requirement went away.
+
+   **Amended 2026-09-03.** The workspace now carries a `phone:` floor — a
+   header that stays on one line, a navigation sheet, a 2×2 figure band and
+   icon-only header actions. That is *not* the phone answer and does not
+   re-open or close this question: a floor keeps a surface usable at 390px, a
+   canvas decides what a phone surface should be. Stage 11 still owns the
+   second. See § Responsive.
 4. ~~**440px side-panel breakpoint.**~~ **Closed — declared.** It is now
    `--bp-panel: 440px` in the token block beside `--bp-desktop`, bridged as
    `--breakpoint-panel`, which generates the `panel:` variant `ui/sheet.tsx`

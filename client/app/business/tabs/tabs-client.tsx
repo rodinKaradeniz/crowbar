@@ -43,6 +43,7 @@ import { openTabSeverity } from "@/lib/severity";
 import { cn } from "@/lib/utils";
 import type { Tab, TabSettledMethod } from "@/types";
 import { TabOrderCompose } from "./tab-order-compose";
+import { PageBody, PageHeader } from "@/components/page-header";
 
 const METHODS: Array<{ value: TabSettledMethod; label: string }> = [
   { value: "cash", label: "Cash" },
@@ -212,240 +213,240 @@ export function TabsClient({
         onRetry={() => void refreshTabs()}
       />
 
-      <div className="px-[clamp(16px,2.5vw,32px)] py-6">
-        <div className="mb-6">
-          <h1 className="type-t1">Tabs</h1>
-          <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
-            What each table ordered, and what it comes to. Your register does the
-            settling.
-          </p>
-        </div>
+      <>
+      <PageHeader
+        wide
+        title="Tabs"
+        description="What each table ordered, and what it comes to. Your register does the settling."
+      />
 
-        {loadError ? (
-          <div className="mb-6 flex flex-wrap items-center gap-3 border-l-2 border-critical-fill bg-critical-tint px-4 py-3">
-            <p className="flex-1 text-[length:var(--ui-size)] text-critical-text">
-              {loadError}
-            </p>
-            <Button variant="secondary" size="filter" onClick={() => void refreshTabs()}>
-              Retry
-            </Button>
-          </div>
-        ) : null}
-
-        {!loaded ? (
-          // NOT wrapped in a <p>. `Skeleton` renders a <div>, and a <div> inside
-          // a <p> is invalid HTML — the browser closes the paragraph early, the
-          // server and client trees stop matching, and React reports a
-          // hydration error. The skeleton carries its own sizing and its own
-          // role="status", so the wrapper bought nothing to begin with.
-          <SkeletonList rows={5} columns={["w-[26%]", "w-[20%]", "w-[18%]", "w-[14%]"]} />
-        ) : tabs.length === 0 ? (
-          <EmptyState
-            title="No tabs open"
-            description="A tab opens when a table orders, and stays open until the party closes out. Start one from an occupied table on the floor map."
-            action={{ label: "Open the floor map", href: "/business/floor" }}
-          />
-        ) : (
-          <div className="grid gap-6 md:grid-cols-[280px_1fr]">
-            <div className="flex flex-col border-t border-border-strong">
-              {tabs.map((tab) => {
-                const severity = staleness(tab);
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setSelectedId(tab.id)}
-                    aria-current={tab.id === selectedId ? "true" : undefined}
-                    className={cn(
-                      "border-b border-border p-3 text-left transition-colors",
-                      tab.id === selectedId
-                        ? "bg-accent shadow-[inset_2px_0_0_var(--primary)]"
-                        : "hover:bg-accent",
-                      severity === "attend" && "bg-attend-tint",
-                    )}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-[12px] text-muted-foreground">
-                        #{tab.id.slice(0, 8)}
-                      </span>
-                      {tab.status === "open" ? (
-                        severity === "attend" ? (
-                          <Badge tone="attend">Since last night</Badge>
-                        ) : (
-                          <Badge tone="neutral">Open</Badge>
-                        )
-                      ) : (
-                        <Badge tone="neutral">Settled</Badge>
-                      )}
-                    </div>
-                    <div className="mt-1.5 flex items-baseline justify-between gap-2">
-                      <span className="text-[13px] text-muted-foreground">
-                        {tab.orders.length} order
-                        {tab.orders.length === 1 ? "" : "s"}
-                      </span>
-                      <span className="font-mono text-[length:var(--data-size)] font-semibold tabular-nums">
-                        {money(tab.total)}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
+      <PageBody wide>
+          {loadError ? (
+            <div className="mb-6 flex flex-wrap items-center gap-3 border-l-2 border-critical-fill bg-critical-tint px-4 py-3">
+              <p className="flex-1 text-[length:var(--ui-size)] text-critical-text">
+                {loadError}
+              </p>
+              <Button variant="secondary" size="filter" onClick={() => void refreshTabs()}>
+                Retry
+              </Button>
             </div>
+          ) : null}
 
-            {selected ? (
-              <section className="border border-border bg-card">
-                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border p-4">
-                  <div>
-                    <h2 className="type-t2 font-mono">
-                      Tab #{selected.id.slice(0, 8)}
-                    </h2>
-                    <p className="mt-1 text-[13px] text-muted-foreground">
-                      Opened{" "}
-                      {formatBusinessDateTime(
-                        selected.openedAt,
-                        businessTimezone,
-                        locale,
+          {!loaded ? (
+            // NOT wrapped in a <p>. `Skeleton` renders a <div>, and a <div> inside
+            // a <p> is invalid HTML — the browser closes the paragraph early, the
+            // server and client trees stop matching, and React reports a
+            // hydration error. The skeleton carries its own sizing and its own
+            // role="status", so the wrapper bought nothing to begin with.
+            <SkeletonList rows={5} columns={["w-[26%]", "w-[20%]", "w-[18%]", "w-[14%]"]} />
+          ) : tabs.length === 0 ? (
+            <EmptyState
+              title="No tabs open"
+              description="A tab opens when a table orders, and stays open until the party closes out. Start one from an occupied table on the floor map."
+              action={{ label: "Open the floor map", href: "/business/floor" }}
+            />
+          ) : (
+            <div className="grid gap-6 md:grid-cols-[280px_1fr]">
+              <div className="flex flex-col border-t border-border-strong">
+                {tabs.map((tab) => {
+                  const severity = staleness(tab);
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setSelectedId(tab.id)}
+                      aria-current={tab.id === selectedId ? "true" : undefined}
+                      className={cn(
+                        "border-b border-border p-3 text-left transition-colors",
+                        tab.id === selectedId
+                          ? "bg-accent shadow-[inset_2px_0_0_var(--primary)]"
+                          : "hover:bg-accent",
+                        severity === "attend" && "bg-attend-tint",
                       )}
-                      {selected.seatingId ? " · seating tab" : " · standalone tab"}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap justify-end gap-2">
-                    <Button
-                      variant="secondary"
-                      size="filter"
-                      onClick={() => void refreshTab(selected.id)}
-                      disabled={busy}
                     >
-                      Refresh
-                    </Button>
-                    {selected.status === "open" ? (
-                      <>
-                        <Button
-                          variant="secondary"
-                          size="filter"
-                          onClick={() => setComposeOpen(true)}
-                        >
-                          Add order
-                        </Button>
-                        <Button
-                          size="filter"
-                          onClick={() => {
-                            setMethod("not_recorded");
-                            setNote("");
-                            setRegisterReference("");
-                            setSettleOpen(true);
-                          }}
-                        >
-                          Settle externally
-                        </Button>
-                      </>
-                    ) : null}
-                    {selected.status === "settled_externally" && canReopen ? (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-[12px] text-muted-foreground">
+                          #{tab.id.slice(0, 8)}
+                        </span>
+                        {tab.status === "open" ? (
+                          severity === "attend" ? (
+                            <Badge tone="attend">Since last night</Badge>
+                          ) : (
+                            <Badge tone="neutral">Open</Badge>
+                          )
+                        ) : (
+                          <Badge tone="neutral">Settled</Badge>
+                        )}
+                      </div>
+                      <div className="mt-1.5 flex items-baseline justify-between gap-2">
+                        <span className="text-[13px] text-muted-foreground">
+                          {tab.orders.length} order
+                          {tab.orders.length === 1 ? "" : "s"}
+                        </span>
+                        <span className="font-mono text-[length:var(--data-size)] font-semibold tabular-nums">
+                          {money(tab.total)}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {selected ? (
+                <section className="border border-border bg-card">
+                  <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border p-4">
+                    <div>
+                      <h2 className="type-t2 font-mono">
+                        Tab #{selected.id.slice(0, 8)}
+                      </h2>
+                      <p className="mt-1 text-[13px] text-muted-foreground">
+                        Opened{" "}
+                        {formatBusinessDateTime(
+                          selected.openedAt,
+                          businessTimezone,
+                          locale,
+                        )}
+                        {selected.seatingId ? " · seating tab" : " · standalone tab"}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap justify-end gap-2">
                       <Button
                         variant="secondary"
                         size="filter"
-                        onClick={() => setReopenOpen(true)}
+                        onClick={() => void refreshTab(selected.id)}
+                        disabled={busy}
                       >
-                        Reopen
+                        Refresh
                       </Button>
-                    ) : null}
+                      {selected.status === "open" ? (
+                        <>
+                          <Button
+                            variant="secondary"
+                            size="filter"
+                            onClick={() => setComposeOpen(true)}
+                          >
+                            Add order
+                          </Button>
+                          <Button
+                            size="filter"
+                            onClick={() => {
+                              setMethod("not_recorded");
+                              setNote("");
+                              setRegisterReference("");
+                              setSettleOpen(true);
+                            }}
+                          >
+                            Settle externally
+                          </Button>
+                        </>
+                      ) : null}
+                      {selected.status === "settled_externally" && canReopen ? (
+                        <Button
+                          variant="secondary"
+                          size="filter"
+                          onClick={() => setReopenOpen(true)}
+                        >
+                          Reopen
+                        </Button>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
 
-                <div className="border-b border-border p-4">
-                  <Figure
-                    label={selected.status === "open" ? "Running" : "Tab total"}
-                    value={money(selected.total)}
-                  />
-                </div>
+                  <div className="border-b border-border p-4">
+                    <Figure
+                      label={selected.status === "open" ? "Running" : "Tab total"}
+                      value={money(selected.total)}
+                    />
+                  </div>
 
-                {selected.orders.length === 0 ? (
-                  <p className="p-4 text-[length:var(--ui-size)] text-muted-foreground">
-                    Nothing on this tab yet.
-                  </p>
-                ) : (
-                  <ul className="m-0 list-none p-0">
-                    {selected.orders.map((order) => (
-                      <li key={order.id} className="border-b border-border p-4">
-                        <div className="flex items-center justify-between gap-2">
-                          <Badge tone="neutral">{order.status}</Badge>
-                          <span className="font-mono text-[length:var(--data-size)] font-medium tabular-nums">
-                            {money(order.totalAmount)}
-                          </span>
-                        </div>
-                        <ul className="m-0 mt-2 list-none p-0">
-                          {order.lineItems.map((line) => (
-                            <li
-                              key={line.id}
-                              className="flex justify-between gap-3 py-1 text-[length:var(--ui-size)] text-muted-foreground"
-                            >
-                              <span>
-                                {line.quantity}× {line.itemName}
-                              </span>
-                              <span className="font-mono tabular-nums">
-                                {money(line.unitPrice * line.quantity)}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                {selected.settlementEvents.length > 0 ? (
-                  <div className="p-4">
-                    <p className="type-micro mb-3 text-muted-foreground">
-                      Settlement history
+                  {selected.orders.length === 0 ? (
+                    <p className="p-4 text-[length:var(--ui-size)] text-muted-foreground">
+                      Nothing on this tab yet.
                     </p>
-                    {selected.settlementEvents.map((event) => (
-                      <div
-                        key={event.id}
-                        className="border-b border-surface-3 py-3 last:border-0"
-                      >
-                        <div className="flex justify-between gap-3">
-                          <span className="text-[length:var(--ui-size)] font-medium">
-                            {event.eventType === "settled_externally"
-                              ? "Settled externally"
-                              : "Reopened"}
-                          </span>
-                          <span className="font-mono text-[12.5px] tabular-nums text-muted-foreground">
-                            {formatBusinessDateTime(
-                              event.occurredAt,
-                              businessTimezone,
-                              locale,
-                            )}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-[13px] text-muted-foreground">
-                          Snapshot: {money(event.totalSnapshot)}{" "}
-                          {event.currencyCode}
-                          {event.informationalMethod
-                            ? ` · ${event.informationalMethod}`
-                            : ""}
-                          {event.externalRegisterReference
-                            ? ` · register ${event.externalRegisterReference}`
-                            : ""}
-                        </p>
-                        {event.note ? (
+                  ) : (
+                    <ul className="m-0 list-none p-0">
+                      {selected.orders.map((order) => (
+                        <li key={order.id} className="border-b border-border p-4">
+                          <div className="flex items-center justify-between gap-2">
+                            <Badge tone="neutral">{order.status}</Badge>
+                            <span className="font-mono text-[length:var(--data-size)] font-medium tabular-nums">
+                              {money(order.totalAmount)}
+                            </span>
+                          </div>
+                          <ul className="m-0 mt-2 list-none p-0">
+                            {order.lineItems.map((line) => (
+                              <li
+                                key={line.id}
+                                className="flex justify-between gap-3 py-1 text-[length:var(--ui-size)] text-muted-foreground"
+                              >
+                                <span>
+                                  {line.quantity}× {line.itemName}
+                                </span>
+                                <span className="font-mono tabular-nums">
+                                  {money(line.unitPrice * line.quantity)}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {selected.settlementEvents.length > 0 ? (
+                    <div className="p-4">
+                      <p className="type-micro mb-3 text-muted-foreground">
+                        Settlement history
+                      </p>
+                      {selected.settlementEvents.map((event) => (
+                        <div
+                          key={event.id}
+                          className="border-b border-surface-3 py-3 last:border-0"
+                        >
+                          <div className="flex justify-between gap-3">
+                            <span className="text-[length:var(--ui-size)] font-medium">
+                              {event.eventType === "settled_externally"
+                                ? "Settled externally"
+                                : "Reopened"}
+                            </span>
+                            <span className="font-mono text-[12.5px] tabular-nums text-muted-foreground">
+                              {formatBusinessDateTime(
+                                event.occurredAt,
+                                businessTimezone,
+                                locale,
+                              )}
+                            </span>
+                          </div>
                           <p className="mt-1 text-[13px] text-muted-foreground">
-                            {event.note}
+                            Snapshot: {money(event.totalSnapshot)}{" "}
+                            {event.currencyCode}
+                            {event.informationalMethod
+                              ? ` · ${event.informationalMethod}`
+                              : ""}
+                            {event.externalRegisterReference
+                              ? ` · register ${event.externalRegisterReference}`
+                              : ""}
                           </p>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </section>
-            ) : (
-              <p className="flex items-center justify-center border border-border p-8 text-[length:var(--ui-size)] text-muted-foreground">
-                Pick a tab to see what is on it.
-              </p>
-            )}
-          </div>
-        )}
-      </div>
+                          {event.note ? (
+                            <p className="mt-1 text-[13px] text-muted-foreground">
+                              {event.note}
+                            </p>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </section>
+              ) : (
+                <p className="flex items-center justify-center border border-border p-8 text-[length:var(--ui-size)] text-muted-foreground">
+                  Pick a tab to see what is on it.
+                </p>
+              )}
+            </div>
+          )}
+      </PageBody>
+    </>
 
       {selected?.status === "open" ? (
         <TabOrderCompose

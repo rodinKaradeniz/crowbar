@@ -236,8 +236,15 @@
   --side-panel: 400px;
   --offline-bar: 38px;
   --grid-marketing: 1360px;
+  /* The reading measure for a WORKSPACE DOCUMENT page — settings, profile,
+     menu, staff, docs. Boards (floor, tickets, tabs, reservations, queue,
+     overview) ignore it and run full-bleed, because width is the working
+     surface there. 1024 is the width the menu page already used as
+     `max-w-5xl`, so adopting the token moved nothing. */
+  --grid-workspace: 1024px;
   --bp-desktop: 1280px;
   --bp-panel: 440px;          /* a side panel stops being full-width  */
+  --bp-phone: 640px;          /* marketing + auth stop being two-column */
   /* Both headers are sticky, so both are also a scroll offset: an anchor or a
      sticky sibling that ignores them lands underneath the bar. Declared here so
      the bar and the thing that must clear it read the same number. Each is a
@@ -246,6 +253,12 @@
   --mkt-head-body: 380px;     /* the body column in a section header row */
   --mkt-header: 66px;         /* the landing header bar     */
   --workspace-header: 76px;   /* the /business topbar       */
+  /* The second offset: a workspace page's own pinned title bar. Unlike the
+     three above it has no fixed value — a page with sub-tabs is taller than
+     one without — so `components/page-header.tsx` measures itself and writes
+     the real number here. This 0 is the pre-mount default, so a sibling that
+     offsets by it is merely flush before hydration, never overlapped. */
+  --page-header: 0px;
 }
 
 /*
@@ -523,6 +536,18 @@
      uses to give a side panel its fixed width once the viewport can
      hold one. */
   --breakpoint-panel: 440px;
+  /* Same constraint again, and it MUST match --bp-phone above. Generates the
+     `phone:` variant.
+
+     This is NOT a third product target. Desktop 1280+ and tablet 1024x768
+     remain the only two designed surfaces, and nothing in `app/business/*`
+     may use this variant — the staff phone answer is a React Native client
+     (stage 11), not a narrower web layout. `phone:` exists for the two
+     surfaces a stranger reaches on their own phone and cannot be told to open
+     on a laptop: the marketing page and the auth screens. Those already
+     leaned on Tailwind's undeclared `sm:`, which is the same 640px; declaring
+     it is what stops that from being an invented value. */
+  --breakpoint-phone: 640px;
 }
 
 /* ── The tablet target · 1024×768 ────────────────────────────────────────────
@@ -693,6 +718,103 @@
   /* An in-page anchor target under the sticky header. Without this the header
      covers the heading you just jumped to. */
   .mkt-anchor { scroll-margin-top: calc(var(--mkt-header) + var(--space-24)); }
+  /* ── The phone nav disclosure ────────────────────────────────────────
+   * Below --bp-phone the five nav items collapse behind a native <details>.
+   * The panel is positioned, not in flow, so opening it cannot grow the
+   * sticky header and shove the page down.
+   */
+  .mkt-nav-disclosure { position: relative; }
+  /* The default triangle is a UA affordance we replace with our own icon.
+     Both properties are needed: `list-style` covers Firefox/Chrome, the
+     WebKit pseudo-element covers Safari. */
+  .mkt-nav-toggle { list-style: none; cursor: pointer; }
+  .mkt-nav-toggle::-webkit-details-marker { display: none; }
+  /* A real 48px target, the same floor every other control on a touch
+     surface answers to. */
+  .mkt-nav-toggle {
+    width: var(--control-tablet-min);
+    height: var(--control-tablet-min);
+    margin-right: -12px;   /* optical: pulls the glyph flush to the gutter */
+  }
+  .mkt-nav-toggle:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .mkt-nav-sheet {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: -12px;
+    z-index: 50;
+    min-width: 232px;
+    padding: var(--space-8) var(--space-16) var(--space-16);
+    border: 1px solid var(--ink);
+    background: var(--paper);
+    box-shadow: var(--shadow-e1);
+  }
+  .mkt-nav-sheet-link {
+    display: flex;
+    align-items: center;
+    /* Same 48px floor as the toggle: these are the page's primary navigation
+       on the one surface guaranteed to be touched rather than clicked. */
+    min-height: var(--control-tablet-min);
+    font-size: var(--ui-size);
+    font-weight: 500;
+  }
+  .mkt-nav-sheet-link:last-of-type { border-bottom: 0; }
+
+  /* ── The FAQ disclosure ──────────────────────────────────────────────
+   * Every answer is collapsed behind its question, AT EVERY WIDTH. This was
+   * briefly phone-only, with a media query restoring the canvas's two-column
+   * row above --bp-phone — and that row hid the +/- while leaving the
+   * <details> collapsible, so a desktop reader got an element that folded
+   * when clicked and gave no sign it could. The sign is the affordance; if
+   * the sign is hidden the disclosure has to be too. One behaviour now.
+   *
+   * The vertical padding lives on the item rather than on the summary, so the
+   * question and the answer it reveals share one padding box. `padding-inline`
+   * insets both from the item's own edges while the rule between items stays
+   * full width — the questions ran flush to the column edge without it.
+   */
+  .mkt-faq-item { padding-block: 20px; padding-inline: var(--space-16); }
+  .mkt-faq-item-lead { padding-block: 22px; }
+
+  .mkt-faq-summary {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-16);
+    list-style: none;
+    cursor: pointer;
+  }
+  .mkt-faq-summary::-webkit-details-marker { display: none; }
+  .mkt-faq-summary:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .mkt-faq-q { flex: 1 1 auto; }
+  /* Breathing room between a question and the answer it just revealed. */
+  .mkt-faq-answer { padding-top: var(--space-12); }
+
+  /* A +/- drawn from two hairlines, so it needs no icon font and no SVG. The
+     horizontal bar stays; the vertical one goes when the item opens. */
+  .mkt-faq-sign {
+    position: relative;
+    flex: 0 0 auto;
+    width: 13px;
+    height: 13px;
+    align-self: center;
+  }
+  .mkt-faq-sign::before,
+  .mkt-faq-sign::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    background: currentColor;
+  }
+  .mkt-faq-sign::before { width: 100%; height: 1px; }
+  .mkt-faq-sign::after  { width: 1px; height: 100%; }
+  .mkt-faq-item[open] .mkt-faq-sign::after { display: none; }
+
   .mkt-logo-mark { width: 11px; height: 11px; }
   .mkt-logo-type { font-family: var(--font-display); font-weight: 800; font-size: 19px; letter-spacing: -0.035em; }
 
@@ -754,16 +876,41 @@
    */
   .mkt-sec-hero { padding-top: clamp(52px, 8vw, 112px); padding-bottom: clamp(36px, 5vw, 72px); }
   .mkt-sec-night { margin-top: clamp(48px, 6vw, 80px); padding-block: clamp(60px, 7.4vw, 116px); }
-  .mkt-sec-cap { padding-block: clamp(64px, 8.4vw, 120px); }
-  .mkt-sec-ordering { margin-top: clamp(48px, 6vw, 80px); padding-block: clamp(56px, 6.8vw, 104px); }
-  .mkt-sec-inventory { padding-block: clamp(52px, 6.2vw, 92px); }
-  .mkt-sec-demand { padding-block: clamp(44px, 5vw, 76px); }
+  /* The heading that introduces the five. It opens the run and carries no
+     bottom rule, so its lower padding IS the gap before band 01. */
+  .mkt-sec-cap-head { padding-block: clamp(64px, 8.4vw, 120px); }
+
+  /*
+   * ── The five feature bands ─────────────────────────────────────────────
+   *
+   * 01-05 were separated three different ways: 01 and 02 by hairlines inside
+   * one shell section, 03 by being the only one of the five on ink, and 04
+   * and 05 by nothing at all. The cost was not evenness for its own sake —
+   * 03 read as a DIFFERENT KIND OF THING rather than the third of five, and
+   * two of the five had no edge at all.
+   *
+   * One device now, used five times: a full-bleed band opened by an ink rule,
+   * its ground alternating down the declared paper ladder —
+   * paper / paper-tint / paper / paper-tint / paper. Every one of the five
+   * stays light, and the boundary between any two is a ground change and a
+   * hairline rather than an absence.
+   *
+   * The ink the page loses at 03 is spent on the FAQ, which is not one of the
+   * five and can carry a dark band without ranking anything against anything.
+   *
+   * ONE PADDING FOR ALL FIVE. They had four — 64-120 (01 and 02, which shared
+   * a section), 56-104 (03), 52-92 (04) and 44-76 (05): a run of five that got
+   * quieter as it went, for no reason a reader could see. The widest wins,
+   * because a band whose ground changes at its own edge needs the room to read
+   * as its own thing. No new value enters here: this is the clamp 01 and 02
+   * already used, applied to all five.
+   */
+  .mkt-band { border-top: 1px solid var(--ink); }
+  .mkt-sec-feature { padding-block: clamp(64px, 8.4vw, 120px); }
   .mkt-sec-faq { padding-block: clamp(60px, 7.4vw, 112px); }
   .mkt-sec-cta { padding-block: clamp(56px, 7.4vw, 108px); }
   .mkt-sec-footer { padding-top: clamp(52px, 6.2vw, 88px); padding-bottom: clamp(28px, 3vw, 40px); }
 
-  .mkt-row { padding-block: clamp(24px, 3vw, 40px); }
-  .mkt-row-head { margin-bottom: clamp(24px, 3vw, 40px); }
   .mkt-band-head { margin-bottom: clamp(32px, 4vw, 56px); }
   .mkt-mt-strip { margin-top: clamp(44px, 6vw, 84px); }
   .mkt-pb-row { padding-bottom: clamp(24px, 3vw, 40px); }

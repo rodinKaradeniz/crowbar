@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { DAYS_OF_WEEK } from "@/lib/days";
+import { PageBody, PageHeader } from "@/components/page-header";
 import {
   clientCopyOperatingHoursToDefault,
   clientDeleteServiceBookingSchedule,
@@ -350,448 +351,448 @@ export default function BusinessBookingClient({
   };
 
   return (
-    <div className="flex flex-col gap-6 px-[clamp(16px,2.5vw,32px)] py-6 space-y-6">
-      <div className="mb-6">
-        <h1 className="type-t1">Booking Configuration</h1>
-        <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
-          Manage reservation policy, weekly availability, and one-off exceptions.
-        </p>
-      </div>
+    <>
+      <PageHeader
+        title="Booking Configuration"
+        description="Manage reservation policy, weekly availability, and one-off exceptions."
+      />
 
-      {!canEdit && (
-        <div className="border bg-muted/40 p-4 text-sm text-muted-foreground">
-          You have read-only access. An owner or manager can change booking configuration.
-        </div>
-      )}
-
-      <div className="border bg-card p-4">
-        <label className="mb-2 block text-sm font-medium" htmlFor="booking-scope">
-          Configuration scope
-        </label>
-        <Select value={scope} onValueChange={setScope}>
-          <SelectTrigger id="booking-scope" className="max-w-md">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="default">Business default</SelectItem>
-            {serviceTypes.map((service) => (
-              <SelectItem key={service.id} value={service.id}>
-                {service.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Times use {initialBusiness.timezone ?? "UTC"}. Booking types inherit the business default until customized.
-        </p>
-      </div>
-
-      {scope !== "default" && (
-        <div className="flex flex-col gap-3 border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="font-medium">{selectedService?.name}</p>
-            <p className="text-sm text-muted-foreground">
-              {customEnabled
-                ? "This booking type has its own complete schedule."
-                : "This booking type currently inherits the business default."}
-            </p>
+      <PageBody>
+        {!canEdit && (
+          <div className="border bg-muted/40 p-4 text-sm text-muted-foreground">
+            You have read-only access. An owner or manager can change booking configuration.
           </div>
-          {canEdit && (
-            <label className="flex items-center gap-2 text-sm font-medium">
-              <input
-                type="checkbox"
-                checked={customEnabled}
-                onChange={(event) => {
-                  if (!event.target.checked && selectedOverride) {
-                    setConfirmRevert(true);
-                  } else {
-                    setCustomEnabled(event.target.checked);
-                    setDraft(toDraft(schedules.defaultSchedule));
-                  }
-                }}
-                className="size-4 rounded border-input"
-              />
-              Use custom schedule
-            </label>
-          )}
+        )}
+
+        <div className="border bg-card p-4">
+          <label className="mb-2 block text-sm font-medium" htmlFor="booking-scope">
+            Configuration scope
+          </label>
+          <Select value={scope} onValueChange={setScope}>
+            <SelectTrigger id="booking-scope" className="max-w-md">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="default">Business default</SelectItem>
+              {serviceTypes.map((service) => (
+                <SelectItem key={service.id} value={service.id}>
+                  {service.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Times use {initialBusiness.timezone ?? "UTC"}. Booking types inherit the business default until customized.
+          </p>
         </div>
-      )}
 
-      <Tabs defaultValue="policy">
-        <TabsList className="w-full sm:w-auto">
-          <TabsTrigger value="policy">Policy</TabsTrigger>
-          <TabsTrigger value="weekly">Weekly Hours</TabsTrigger>
-          <TabsTrigger value="exceptions">Date Exceptions</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="policy" className="space-y-4 pt-4">
-          {scope === "default" && (
-            <>
-              <section className="border bg-card p-4">
-                <h2 className="font-semibold">Public online bookings</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {publicReservationsEnabled
-                    ? "Guests can use your public reservation page. Staff can always create and manage reservations."
-                    : "Only staff can create reservations; guests see a contact-the-venue message instead of booking slots."}
-                </p>
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 p-3">
-                  <p className="text-sm font-medium">
-                    {publicReservationsEnabled ? "Accepting online reservations" : "Staff-only reservation book"}
-                  </p>
-                  {canEdit && (
-                    <Button
-                      type="button"
-                      variant={publicReservationsEnabled ? "secondary" : "primary"}
-                      disabled={savingPublicReservations}
-                      onClick={() => {
-                        if (publicReservationsEnabled) setConfirmDisablePublicReservations(true);
-                        else void savePublicReservations(true);
-                      }}
-                    >
-                      {savingPublicReservations
-                        ? "Saving…"
-                        : publicReservationsEnabled
-                          ? "Make staff-only"
-                          : "Enable online bookings"}
-                    </Button>
-                  )}
-                </div>
-              </section>
-
-              <section className="border bg-card p-4">
-                <h2 className="font-semibold">Business-wide party limit</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  This caps every reservation; a booking type&apos;s capacity can lower it further.
-                </p>
-                <div className="mt-4 flex max-w-sm items-end gap-2">
-                  <label className="flex-1 text-sm font-medium">
-                    Maximum party size
-                    <Input
-                      type="number"
-                      min="1"
-                      value={maxGuests}
-                      onChange={(event) => setMaxGuests(event.target.value)}
-                      disabled={!canEdit}
-                      className="mt-2"
-                    />
-                  </label>
-                  {canEdit && (
-                    <Button type="button" variant="secondary" onClick={savePartySize} disabled={savingPartySize}>
-                      {savingPartySize ? "Saving…" : "Save limit"}
-                    </Button>
-                  )}
-                </div>
-              </section>
-            </>
-          )}
-
-          <section className="border bg-card p-4">
-            <h2 className="font-semibold">Scheduling policy</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {([
-                ["minimumNoticeMinutes", "Minimum notice", "Minutes before a booking"],
-                ["advanceBookingDays", "Booking horizon", "Days customers can book ahead"],
-                ["slotIntervalMinutes", "Slot interval", "Minutes between offered start times"],
-                ["defaultDurationMinutes", "Default duration", "Minutes reserved when the type has no duration"],
-              ] as const).map(([key, label, help]) => (
-                <label key={key} className="text-sm font-medium">
-                  {label}
-                  <Input
-                    type="number"
-                    min={key === "minimumNoticeMinutes" ? 0 : 1}
-                    value={draft[key]}
-                    onChange={(event) => updateDraftNumber(key, event.target.value)}
-                    disabled={!editable}
-                    className="mt-2"
-                  />
-                  <span className="mt-1 block text-xs font-normal text-muted-foreground">{help}</span>
-                </label>
-              ))}
-            </div>
-            {scope !== "default" && selectedService && (
-              <div className="mt-5 rounded-md bg-muted/50 p-3 text-sm text-muted-foreground">
-                Maximum party: {selectedService.capacity} guests · {selectedService.availabilityResourceMode === "tables" ? "Table-backed availability" : selectedService.availabilityResourceMode === "covers" ? `${selectedService.reservableCoverCapacity} reservable covers` : "Needs resource setup"} · Duration: {selectedService.duration ?? draft.defaultDurationMinutes} min. Manage these service controls on the{" "}
-                <Link href="/business/profile/types" className="font-medium text-foreground underline underline-offset-4">
-                  Booking Types page
-                </Link>
-                .
-              </div>
-            )}
-          </section>
-
-          <section className="border bg-card p-4">
-            <h2 className="font-semibold">Reservation protection</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Guests can still cancel or reschedule until their reservation starts; changes inside the window are recorded as late so staff can respond.
-            </p>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {([
-                ["cancellationWindowMinutes", "Late-change window", "Minutes before arrival that count as late"],
-                ["arrivalGracePeriodMinutes", "Arrival grace period", "Minutes after start before staff can mark no-show"],
-                ["reminderLeadMinutes", "Reminder lead time", "Minutes before arrival"],
-              ] as const).map(([key, label, help]) => (
-                <label key={key} className="text-sm font-medium">
-                  {label}
-                  <Input
-                    type="number"
-                    min={key === "reminderLeadMinutes" ? 1 : 0}
-                    value={draft[key]}
-                    onChange={(event) => updateDraftNumber(key, event.target.value)}
-                    disabled={!editable}
-                    className="mt-2"
-                  />
-                  <span className="mt-1 block text-xs font-normal text-muted-foreground">{help}</span>
-                </label>
-              ))}
-            </div>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <label className="flex items-start gap-3 rounded-md border p-3 text-sm">
-                <input
-                  type="checkbox"
-                  checked={draft.reminderEnabled}
-                  onChange={(event) => setDraft((current) => ({ ...current, reminderEnabled: event.target.checked }))}
-                  disabled={!editable}
-                  className="mt-0.5 size-4 rounded border-input"
-                />
-                <span><span className="block font-medium">Send reminder</span><span className="text-muted-foreground">Send the configured transactional reminder before the reservation.</span></span>
-              </label>
-              <label className="flex items-start gap-3 rounded-md border p-3 text-sm">
-                <input
-                  type="checkbox"
-                  checked={draft.reconfirmationEnabled}
-                  onChange={(event) => setDraft((current) => ({ ...current, reconfirmationEnabled: event.target.checked }))}
-                  disabled={!editable}
-                  className="mt-0.5 size-4 rounded border-input"
-                />
-                <span><span className="block font-medium">Allow guest reconfirmation</span><span className="text-muted-foreground">Show “I&apos;m still coming” on the secure reservation link; no reply never cancels a booking.</span></span>
-              </label>
-            </div>
-          </section>
-        </TabsContent>
-
-        <TabsContent value="weekly" className="space-y-4 pt-4">
-          <section className="border bg-card p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h2 className="font-semibold">Recurring weekly hours</h2>
-                <p className="text-sm text-muted-foreground">
-                  Add multiple windows for split service. An end time before its start continues into the next day.
-                </p>
-              </div>
-              {scope === "default" && canEdit && (
-                <Button type="button" variant="secondary" onClick={openCopyPreview} disabled={loadingPreview}>
-                  <Copy /> {loadingPreview ? "Loading…" : "Copy operating hours"}
-                </Button>
-              )}
-            </div>
-            <div className="mt-5 divide-y rounded-md border">
-              {DAYS_OF_WEEK.map((day) => {
-                const dayWindows = draft.windows.filter((window) => window.weekday === day.index);
-                return (
-                  <div key={day.index} className="grid gap-3 p-4 md:grid-cols-[8rem_1fr]">
-                    <div>
-                      <p className="font-medium">{day.label}</p>
-                      {dayWindows.length === 0 && <p className="text-xs text-muted-foreground">Closed</p>}
-                    </div>
-                    <WindowEditor
-                      windows={dayWindows}
-                      includeDay={day.index}
-                      disabled={!editable}
-                      onChange={(windows) =>
-                        setDraft((current) => ({
-                          ...current,
-                          windows: [
-                            ...current.windows.filter((window) => window.weekday !== day.index),
-                            ...windows.map((window) => ({ ...window, weekday: day.index })),
-                          ],
-                        }))
-                      }
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        </TabsContent>
-
-        <TabsContent value="exceptions" className="space-y-4 pt-4">
-          <section className="border bg-card p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="font-semibold">Date exceptions</h2>
-                <p className="text-sm text-muted-foreground">
-                  Close a date or replace its recurring hours with custom windows.
-                </p>
-              </div>
-              {editable && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() =>
-                    setDraft((current) => ({
-                      ...current,
-                      exceptions: [
-                        ...current.exceptions,
-                        { localDate: "", isClosed: true, windows: [] },
-                      ],
-                    }))
-                  }
-                >
-                  <Plus /> Add exception
-                </Button>
-              )}
-            </div>
-            {draft.exceptions.length === 0 ? (
-              <p className="mt-6 rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-                No date exceptions configured.
+        {scope !== "default" && (
+          <div className="flex flex-col gap-3 border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-medium">{selectedService?.name}</p>
+              <p className="text-sm text-muted-foreground">
+                {customEnabled
+                  ? "This booking type has its own complete schedule."
+                  : "This booking type currently inherits the business default."}
               </p>
-            ) : (
-              <div className="mt-5 space-y-3">
-                {draft.exceptions.map((exception, index) => (
-                  <div key={`${exception.id ?? "new"}-${index}`} className="rounded-md border p-4">
-                    <div className="flex flex-wrap items-end gap-4">
-                      <label className="text-sm font-medium">
-                        Date
-                        <Input
-                          type="date"
-                          value={exception.localDate}
-                          onChange={(event) =>
-                            setDraft((current) => ({
-                              ...current,
-                              exceptions: current.exceptions.map((item, candidate) =>
-                                candidate === index ? { ...item, localDate: event.target.value } : item,
-                              ),
-                            }))
-                          }
-                          disabled={!editable}
-                          className="mt-2 w-44"
-                          required
-                        />
-                      </label>
-                      <label className="mb-2 flex items-center gap-2 text-sm font-medium">
-                        <input
-                          type="checkbox"
-                          checked={exception.isClosed}
-                          onChange={(event) =>
-                            setDraft((current) => ({
-                              ...current,
-                              exceptions: current.exceptions.map((item, candidate) =>
-                                candidate === index
-                                  ? {
-                                      ...item,
-                                      isClosed: event.target.checked,
-                                      windows: event.target.checked
-                                        ? []
-                                        : [{ startTime: "18:00", endTime: "20:00", endsNextDay: false }],
-                                    }
-                                  : item,
-                              ),
-                            }))
-                          }
-                          disabled={!editable}
-                          className="size-4 rounded border-input"
-                        />
-                        Closed all day
-                      </label>
-                      {editable && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label="Remove date exception"
-                          onClick={() =>
-                            setDraft((current) => ({
-                              ...current,
-                              exceptions: current.exceptions.filter((_, candidate) => candidate !== index),
-                            }))
-                          }
-                        >
-                          <Trash2 />
-                        </Button>
-                      )}
-                    </div>
-                    {!exception.isClosed && (
-                      <div className="mt-4">
-                        <WindowEditor
-                          windows={exception.windows}
-                          disabled={!editable}
-                          onChange={(windows) =>
-                            setDraft((current) => ({
-                              ...current,
-                              exceptions: current.exceptions.map((item, candidate) =>
-                                candidate === index ? { ...item, windows } : item,
-                              ),
-                            }))
-                          }
-                        />
-                      </div>
+            </div>
+            {canEdit && (
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input
+                  type="checkbox"
+                  checked={customEnabled}
+                  onChange={(event) => {
+                    if (!event.target.checked && selectedOverride) {
+                      setConfirmRevert(true);
+                    } else {
+                      setCustomEnabled(event.target.checked);
+                      setDraft(toDraft(schedules.defaultSchedule));
+                    }
+                  }}
+                  className="size-4 rounded border-input"
+                />
+                Use custom schedule
+              </label>
+            )}
+          </div>
+        )}
+
+        <Tabs defaultValue="policy">
+          <TabsList className="w-full sm:w-auto">
+            <TabsTrigger value="policy">Policy</TabsTrigger>
+            <TabsTrigger value="weekly">Weekly Hours</TabsTrigger>
+            <TabsTrigger value="exceptions">Date Exceptions</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="policy" className="space-y-4 pt-4">
+            {scope === "default" && (
+              <>
+                <section className="border bg-card p-4">
+                  <h2 className="font-semibold">Public online bookings</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {publicReservationsEnabled
+                      ? "Guests can use your public reservation page. Staff can always create and manage reservations."
+                      : "Only staff can create reservations; guests see a contact-the-venue message instead of booking slots."}
+                  </p>
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 p-3">
+                    <p className="text-sm font-medium">
+                      {publicReservationsEnabled ? "Accepting online reservations" : "Staff-only reservation book"}
+                    </p>
+                    {canEdit && (
+                      <Button
+                        type="button"
+                        variant={publicReservationsEnabled ? "secondary" : "primary"}
+                        disabled={savingPublicReservations}
+                        onClick={() => {
+                          if (publicReservationsEnabled) setConfirmDisablePublicReservations(true);
+                          else void savePublicReservations(true);
+                        }}
+                      >
+                        {savingPublicReservations
+                          ? "Saving…"
+                          : publicReservationsEnabled
+                            ? "Make staff-only"
+                            : "Enable online bookings"}
+                      </Button>
                     )}
                   </div>
+                </section>
+
+                <section className="border bg-card p-4">
+                  <h2 className="font-semibold">Business-wide party limit</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    This caps every reservation; a booking type&apos;s capacity can lower it further.
+                  </p>
+                  <div className="mt-4 flex max-w-sm items-end gap-2">
+                    <label className="flex-1 text-sm font-medium">
+                      Maximum party size
+                      <Input
+                        type="number"
+                        min="1"
+                        value={maxGuests}
+                        onChange={(event) => setMaxGuests(event.target.value)}
+                        disabled={!canEdit}
+                        className="mt-2"
+                      />
+                    </label>
+                    {canEdit && (
+                      <Button type="button" variant="secondary" onClick={savePartySize} disabled={savingPartySize}>
+                        {savingPartySize ? "Saving…" : "Save limit"}
+                      </Button>
+                    )}
+                  </div>
+                </section>
+              </>
+            )}
+
+            <section className="border bg-card p-4">
+              <h2 className="font-semibold">Scheduling policy</h2>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {([
+                  ["minimumNoticeMinutes", "Minimum notice", "Minutes before a booking"],
+                  ["advanceBookingDays", "Booking horizon", "Days customers can book ahead"],
+                  ["slotIntervalMinutes", "Slot interval", "Minutes between offered start times"],
+                  ["defaultDurationMinutes", "Default duration", "Minutes reserved when the type has no duration"],
+                ] as const).map(([key, label, help]) => (
+                  <label key={key} className="text-sm font-medium">
+                    {label}
+                    <Input
+                      type="number"
+                      min={key === "minimumNoticeMinutes" ? 0 : 1}
+                      value={draft[key]}
+                      onChange={(event) => updateDraftNumber(key, event.target.value)}
+                      disabled={!editable}
+                      className="mt-2"
+                    />
+                    <span className="mt-1 block text-xs font-normal text-muted-foreground">{help}</span>
+                  </label>
                 ))}
               </div>
+              {scope !== "default" && selectedService && (
+                <div className="mt-5 rounded-md bg-muted/50 p-3 text-sm text-muted-foreground">
+                  Maximum party: {selectedService.capacity} guests · {selectedService.availabilityResourceMode === "tables" ? "Table-backed availability" : selectedService.availabilityResourceMode === "covers" ? `${selectedService.reservableCoverCapacity} reservable covers` : "Needs resource setup"} · Duration: {selectedService.duration ?? draft.defaultDurationMinutes} min. Manage these service controls on the{" "}
+                  <Link href="/business/profile/types" className="font-medium text-foreground underline underline-offset-4">
+                    Booking Types page
+                  </Link>
+                  .
+                </div>
+              )}
+            </section>
+
+            <section className="border bg-card p-4">
+              <h2 className="font-semibold">Reservation protection</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Guests can still cancel or reschedule until their reservation starts; changes inside the window are recorded as late so staff can respond.
+              </p>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {([
+                  ["cancellationWindowMinutes", "Late-change window", "Minutes before arrival that count as late"],
+                  ["arrivalGracePeriodMinutes", "Arrival grace period", "Minutes after start before staff can mark no-show"],
+                  ["reminderLeadMinutes", "Reminder lead time", "Minutes before arrival"],
+                ] as const).map(([key, label, help]) => (
+                  <label key={key} className="text-sm font-medium">
+                    {label}
+                    <Input
+                      type="number"
+                      min={key === "reminderLeadMinutes" ? 1 : 0}
+                      value={draft[key]}
+                      onChange={(event) => updateDraftNumber(key, event.target.value)}
+                      disabled={!editable}
+                      className="mt-2"
+                    />
+                    <span className="mt-1 block text-xs font-normal text-muted-foreground">{help}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <label className="flex items-start gap-3 rounded-md border p-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={draft.reminderEnabled}
+                    onChange={(event) => setDraft((current) => ({ ...current, reminderEnabled: event.target.checked }))}
+                    disabled={!editable}
+                    className="mt-0.5 size-4 rounded border-input"
+                  />
+                  <span><span className="block font-medium">Send reminder</span><span className="text-muted-foreground">Send the configured transactional reminder before the reservation.</span></span>
+                </label>
+                <label className="flex items-start gap-3 rounded-md border p-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={draft.reconfirmationEnabled}
+                    onChange={(event) => setDraft((current) => ({ ...current, reconfirmationEnabled: event.target.checked }))}
+                    disabled={!editable}
+                    className="mt-0.5 size-4 rounded border-input"
+                  />
+                  <span><span className="block font-medium">Allow guest reconfirmation</span><span className="text-muted-foreground">Show “I&apos;m still coming” on the secure reservation link; no reply never cancels a booking.</span></span>
+                </label>
+              </div>
+            </section>
+          </TabsContent>
+
+          <TabsContent value="weekly" className="space-y-4 pt-4">
+            <section className="border bg-card p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h2 className="font-semibold">Recurring weekly hours</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Add multiple windows for split service. An end time before its start continues into the next day.
+                  </p>
+                </div>
+                {scope === "default" && canEdit && (
+                  <Button type="button" variant="secondary" onClick={openCopyPreview} disabled={loadingPreview}>
+                    <Copy /> {loadingPreview ? "Loading…" : "Copy operating hours"}
+                  </Button>
+                )}
+              </div>
+              <div className="mt-5 divide-y rounded-md border">
+                {DAYS_OF_WEEK.map((day) => {
+                  const dayWindows = draft.windows.filter((window) => window.weekday === day.index);
+                  return (
+                    <div key={day.index} className="grid gap-3 p-4 md:grid-cols-[8rem_1fr]">
+                      <div>
+                        <p className="font-medium">{day.label}</p>
+                        {dayWindows.length === 0 && <p className="text-xs text-muted-foreground">Closed</p>}
+                      </div>
+                      <WindowEditor
+                        windows={dayWindows}
+                        includeDay={day.index}
+                        disabled={!editable}
+                        onChange={(windows) =>
+                          setDraft((current) => ({
+                            ...current,
+                            windows: [
+                              ...current.windows.filter((window) => window.weekday !== day.index),
+                              ...windows.map((window) => ({ ...window, weekday: day.index })),
+                            ],
+                          }))
+                        }
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          </TabsContent>
+
+          <TabsContent value="exceptions" className="space-y-4 pt-4">
+            <section className="border bg-card p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold">Date exceptions</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Close a date or replace its recurring hours with custom windows.
+                  </p>
+                </div>
+                {editable && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() =>
+                      setDraft((current) => ({
+                        ...current,
+                        exceptions: [
+                          ...current.exceptions,
+                          { localDate: "", isClosed: true, windows: [] },
+                        ],
+                      }))
+                    }
+                  >
+                    <Plus /> Add exception
+                  </Button>
+                )}
+              </div>
+              {draft.exceptions.length === 0 ? (
+                <p className="mt-6 rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                  No date exceptions configured.
+                </p>
+              ) : (
+                <div className="mt-5 space-y-3">
+                  {draft.exceptions.map((exception, index) => (
+                    <div key={`${exception.id ?? "new"}-${index}`} className="rounded-md border p-4">
+                      <div className="flex flex-wrap items-end gap-4">
+                        <label className="text-sm font-medium">
+                          Date
+                          <Input
+                            type="date"
+                            value={exception.localDate}
+                            onChange={(event) =>
+                              setDraft((current) => ({
+                                ...current,
+                                exceptions: current.exceptions.map((item, candidate) =>
+                                  candidate === index ? { ...item, localDate: event.target.value } : item,
+                                ),
+                              }))
+                            }
+                            disabled={!editable}
+                            className="mt-2 w-44"
+                            required
+                          />
+                        </label>
+                        <label className="mb-2 flex items-center gap-2 text-sm font-medium">
+                          <input
+                            type="checkbox"
+                            checked={exception.isClosed}
+                            onChange={(event) =>
+                              setDraft((current) => ({
+                                ...current,
+                                exceptions: current.exceptions.map((item, candidate) =>
+                                  candidate === index
+                                    ? {
+                                        ...item,
+                                        isClosed: event.target.checked,
+                                        windows: event.target.checked
+                                          ? []
+                                          : [{ startTime: "18:00", endTime: "20:00", endsNextDay: false }],
+                                      }
+                                    : item,
+                                ),
+                              }))
+                            }
+                            disabled={!editable}
+                            className="size-4 rounded border-input"
+                          />
+                          Closed all day
+                        </label>
+                        {editable && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label="Remove date exception"
+                            onClick={() =>
+                              setDraft((current) => ({
+                                ...current,
+                                exceptions: current.exceptions.filter((_, candidate) => candidate !== index),
+                              }))
+                            }
+                          >
+                            <Trash2 />
+                          </Button>
+                        )}
+                      </div>
+                      {!exception.isClosed && (
+                        <div className="mt-4">
+                          <WindowEditor
+                            windows={exception.windows}
+                            disabled={!editable}
+                            onChange={(windows) =>
+                              setDraft((current) => ({
+                                ...current,
+                                exceptions: current.exceptions.map((item, candidate) =>
+                                  candidate === index ? { ...item, windows } : item,
+                                ),
+                              }))
+                            }
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          </TabsContent>
+        </Tabs>
+
+        {editable && (
+          <div className="flex justify-end">
+            <Button type="button" onClick={saveSchedule} disabled={saving}>
+              {saving ? "Saving…" : scope === "default" ? "Save default schedule" : "Save custom schedule"}
+            </Button>
+          </div>
+        )}
+
+        <ConfirmationDialog
+          open={confirmDisablePublicReservations}
+          onOpenChange={setConfirmDisablePublicReservations}
+          title="Make reservations staff-only?"
+          description="Guests will no longer see booking slots or be able to submit reservations from your public page. Staff booking and table planning stay available."
+          confirmLabel="Make staff-only"
+          variant="destructive"
+          onConfirm={() => void savePublicReservations(false)}
+        />
+
+        <ConfirmationDialog
+          open={confirmRevert}
+          onOpenChange={setConfirmRevert}
+          title="Revert to the business default?"
+          description={`This deletes the custom schedule for ${selectedService?.name ?? "this booking type"}. Future changes to the business default will then apply.`}
+          confirmLabel="Revert schedule"
+          onConfirm={revertOverride}
+          variant="destructive"
+        />
+
+        <Dialog open={Boolean(preview)} onOpenChange={(open) => !open && setPreview(null)}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Replace weekly booking hours?</DialogTitle>
+              <DialogDescription>
+                This copies the current operating hours once. Policy and date exceptions stay unchanged, and later operating-hour edits will not sync automatically.
+              </DialogDescription>
+            </DialogHeader>
+            {preview && (
+              <div className="grid gap-4 text-sm sm:grid-cols-2">
+                <div className="rounded-md border p-3">
+                  <p className="mb-2 font-medium">Current booking hours</p>
+                  <WindowSummary windows={preview.currentWindows} />
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="mb-2 font-medium">Proposed operating hours</p>
+                  <WindowSummary windows={preview.proposedWindows} />
+                </div>
+              </div>
             )}
-          </section>
-        </TabsContent>
-      </Tabs>
-
-      {editable && (
-        <div className="flex justify-end">
-          <Button type="button" onClick={saveSchedule} disabled={saving}>
-            {saving ? "Saving…" : scope === "default" ? "Save default schedule" : "Save custom schedule"}
-          </Button>
-        </div>
-      )}
-
-      <ConfirmationDialog
-        open={confirmDisablePublicReservations}
-        onOpenChange={setConfirmDisablePublicReservations}
-        title="Make reservations staff-only?"
-        description="Guests will no longer see booking slots or be able to submit reservations from your public page. Staff booking and table planning stay available."
-        confirmLabel="Make staff-only"
-        variant="destructive"
-        onConfirm={() => void savePublicReservations(false)}
-      />
-
-      <ConfirmationDialog
-        open={confirmRevert}
-        onOpenChange={setConfirmRevert}
-        title="Revert to the business default?"
-        description={`This deletes the custom schedule for ${selectedService?.name ?? "this booking type"}. Future changes to the business default will then apply.`}
-        confirmLabel="Revert schedule"
-        onConfirm={revertOverride}
-        variant="destructive"
-      />
-
-      <Dialog open={Boolean(preview)} onOpenChange={(open) => !open && setPreview(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Replace weekly booking hours?</DialogTitle>
-            <DialogDescription>
-              This copies the current operating hours once. Policy and date exceptions stay unchanged, and later operating-hour edits will not sync automatically.
-            </DialogDescription>
-          </DialogHeader>
-          {preview && (
-            <div className="grid gap-4 text-sm sm:grid-cols-2">
-              <div className="rounded-md border p-3">
-                <p className="mb-2 font-medium">Current booking hours</p>
-                <WindowSummary windows={preview.currentWindows} />
-              </div>
-              <div className="rounded-md border p-3">
-                <p className="mb-2 font-medium">Proposed operating hours</p>
-                <WindowSummary windows={preview.proposedWindows} />
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button type="button" variant="secondary" onClick={() => setPreview(null)} disabled={copyingHours}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={copyOperatingHours} disabled={copyingHours}>
-              {copyingHours ? "Replacing…" : "Replace weekly hours"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+            <DialogFooter>
+              <Button type="button" variant="secondary" onClick={() => setPreview(null)} disabled={copyingHours}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={copyOperatingHours} disabled={copyingHours}>
+                {copyingHours ? "Replacing…" : "Replace weekly hours"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </PageBody>
+    </>
   );
 }

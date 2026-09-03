@@ -82,11 +82,18 @@ export default function BusinessOverviewClient({
 
   return (
     <div className="pb-[clamp(32px,4vw,56px)]">
-      {/* TWO figures on tablet, four on desktop — §07: "at arm's length in a
-          dark room, 66px is the size that reads without looking. Two per
-          screen, not four." The two that survive are the two the canvas keeps:
-          how many people are coming, and what has been ordered. The other two
-          are not deleted, they are desktop-only. */}
+      {/* FOUR on a phone, TWO on tablet, four on desktop — and the middle one
+          is the deliberate case, not the odd one out.
+
+          §07: "at arm's length in a dark room, 66px is the size that reads
+          without looking. Two per screen, not four." That is an argument about
+          a TABLET: a device held at arm's length, read at a glance, mid-service.
+          A phone is held close and read on purpose, and hiding half the band
+          there buys nothing — it just makes the operator open another screen to
+          see the other two. So the two extra cells are shown below --bp-phone,
+          hidden across the tablet range where the canvas rules, and shown again
+          on desktop. `grid-cols-2` was already the phone/tablet column count,
+          so four cells fall into 2x2 with no new rule. */}
       <div className="grid grid-cols-2 border-b border-border desktop:grid-cols-[repeat(auto-fit,minmax(190px,1fr))]">
         <FigureCell>
           <Figure
@@ -119,7 +126,7 @@ export default function BusinessOverviewClient({
         ) : null}
 
         {ops.orders_today !== undefined ? (
-          <FigureCell className="hidden desktop:order-2 desktop:block">
+          <FigureCell className="block phone:hidden desktop:order-2 desktop:block">
             <Figure
               size="headline"
               label="Orders placed"
@@ -133,7 +140,7 @@ export default function BusinessOverviewClient({
           </FigureCell>
         ) : null}
 
-        <FigureCell last className="hidden desktop:order-4 desktop:block">
+        <FigureCell last className="block phone:hidden desktop:order-4 desktop:block">
           <Figure
             size="headline"
             label="Next 7 nights"

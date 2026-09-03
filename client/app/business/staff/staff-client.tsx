@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { StaffResponse } from "@/lib/api-client";
+import { PageBody, PageHeader } from "@/components/page-header";
 import {
   clientDeleteStaff,
   clientListInvitations,
@@ -193,174 +194,178 @@ export default function StaffClient({
   );
 
   return (
-    <div className="flex flex-col gap-6 px-[clamp(16px,2.5vw,32px)] py-6 space-y-8">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="type-t1">Staff</h1>
-          <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
-            {canAdminister ? "Manage staff access and invitations" : "View your business team"}
-          </p>
-        </div>
-        {canAdminister && (
-          <Button onClick={handleInvite}>
-            <Mail className="mr-2 h-4 w-4" />
-            Invite staff
-          </Button>
-        )}
-      </div>
-
-      {staffMembers.length === 0 ? (
-        <div className="border bg-card py-12 text-center">
-          <Users className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-          <p className="text-muted-foreground">No staff members found</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {staffMembers.map((member) => (
-            <div key={member.id} className="border bg-card p-4">
-              <div className="mb-3 flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
-                    <span className="text-sm font-medium">
-                      {(member.user_name || member.role).charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="truncate font-medium">
-                      {member.user_name || `Staff #${member.id.slice(0, 8)}`}
-                      {member.user_id === currentUserId ? " (you)" : ""}
-                    </h3>
-                    <Badge tone="neutral">
-                      {roleLabel(member.role)}
-                    </Badge>
-                  </div>
-                </div>
-                {canManageMember(member) && (
-                  <div className="flex gap-1">
-                    <Button size="icon" variant="secondary" aria-label="Edit role" onClick={() => handleEdit(member)}>
-                      <Pencil className="h-3 w-3" />
-                    </Button>
-                    {/* Not destructive on the row. The confirmation owns the red. */}
-                    <Button size="icon" variant="secondary" aria-label="Remove staff access" onClick={() => setDeletingStaff(member)}>
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-              <div className="space-y-1 text-sm text-muted-foreground">
-                {member.user_email && <div className="truncate">{member.user_email}</div>}
-                {member.user_phone && <div>{member.user_phone}</div>}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {canAdminister && (
-        <section className="space-y-3">
-          <div>
-            <h2 className="type-t2">Pending invitations</h2>
-            <p className="text-sm text-muted-foreground">Delivery status is shown separately from invitation validity.</p>
-          </div>
-          {pendingInvitations.length === 0 ? (
-            <p className="border bg-card p-4 text-sm text-muted-foreground">No pending invitations.</p>
-          ) : (
-            <div className="space-y-2">
-              {pendingInvitations.map((invitation) => (
-                <div key={invitation.id} className="flex flex-col justify-between gap-3 border bg-card p-4 sm:flex-row sm:items-center">
-                  <div>
-                    <div className="font-medium">{invitation.email}</div>
-                    <div className="text-sm text-muted-foreground">
-                      <span>{roleLabel(invitation.role)}</span>
-                      {" · "}
-                      {invitation.deliveryStatus === "sent" ? "Email sent" : "Email delivery failed"}
-                    </div>
-                    {invitation.deliveryError && (
-                      <div className="mt-1 text-sm text-destructive">{invitation.deliveryError}</div>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="secondary" size="filter" disabled={actionInvitationId === invitation.id} onClick={() => handleInvitationAction(invitation, "resend")}>
-                      <RefreshCw className="mr-2 h-3 w-3" />
-                      Resend
-                    </Button>
-                    <Button variant="secondary" size="filter" disabled={actionInvitationId === invitation.id} onClick={() => handleInvitationAction(invitation, "revoke")}>
-                      <Ban className="mr-2 h-3 w-3" />
-                      Revoke
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
-      <Dialog open={isDialogOpen} onOpenChange={(open) => {
-        setIsDialogOpen(open);
-        if (!open) setEditingStaff(null);
-      }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{editingStaff ? "Edit staff role" : "Invite staff member"}</DialogTitle>
-            <DialogDescription>
-              {editingStaff
-                ? "The member will need to sign in again after this change."
-                : "Create a seven-day invitation and attempt email delivery."}
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleSubmit}>
-            <FieldGroup>
-              {!editingStaff && (
-                <Field>
-                  <FieldLabel>Email *</FieldLabel>
-                  <Input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} required />
-                </Field>
-              )}
-              <Field>
-                <FieldLabel>Role *</FieldLabel>
-                <Select
-                  value={editingStaff ? editRole : role}
-                  onValueChange={(value) => {
-                    if (editingStaff) setEditRole(value as StaffRole);
-                    else setRole(value as StaffRole);
-                  }}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {assignableRoles.map((assignableRole) => (
-                      <SelectItem key={assignableRole} value={assignableRole}>
-                        {roleLabel(assignableRole)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FieldDescription>
-                  Owners may assign any role. Managers may assign the host/server,
-                  bar/kitchen and inventory operator roles, but not owner or manager.
-                </FieldDescription>
-              </Field>
-            </FieldGroup>
-            <DialogFooter className="mt-6">
-              <Button type="button" variant="secondary" onClick={() => setIsDialogOpen(false)} disabled={isSubmitting}>Cancel</Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Saving…" : editingStaff ? "Update role" : "Create invitation"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      <ConfirmationDialog
-        open={!!deletingStaff}
-        onOpenChange={(open) => !open && setDeletingStaff(null)}
-        title="Remove staff access"
-        description="This immediately disables the account and revokes its active sessions."
-        confirmLabel="Remove access"
-        cancelLabel="Cancel"
-        onConfirm={handleConfirmDelete}
-        variant="destructive"
+    <>
+      <PageHeader
+        title="Staff"
+        description={
+          canAdminister
+            ? "Manage staff access and invitations"
+            : "View your business team"
+        }
+        actions={
+          canAdminister ? (
+            <Button onClick={handleInvite}>
+              <Mail className="mr-2 h-4 w-4" />
+              Invite staff
+            </Button>
+          ) : null
+        }
       />
-    </div>
+
+      <PageBody>
+        {staffMembers.length === 0 ? (
+          <div className="border bg-card py-12 text-center">
+            <Users className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+            <p className="text-muted-foreground">No staff members found</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {staffMembers.map((member) => (
+              <div key={member.id} className="border bg-card p-4">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
+                      <span className="text-sm font-medium">
+                        {(member.user_name || member.role).charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="truncate font-medium">
+                        {member.user_name || `Staff #${member.id.slice(0, 8)}`}
+                        {member.user_id === currentUserId ? " (you)" : ""}
+                      </h3>
+                      <Badge tone="neutral">
+                        {roleLabel(member.role)}
+                      </Badge>
+                    </div>
+                  </div>
+                  {canManageMember(member) && (
+                    <div className="flex gap-1">
+                      <Button size="icon" variant="secondary" aria-label="Edit role" onClick={() => handleEdit(member)}>
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                      {/* Not destructive on the row. The confirmation owns the red. */}
+                      <Button size="icon" variant="secondary" aria-label="Remove staff access" onClick={() => setDeletingStaff(member)}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-1 text-sm text-muted-foreground">
+                  {member.user_email && <div className="truncate">{member.user_email}</div>}
+                  {member.user_phone && <div>{member.user_phone}</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {canAdminister && (
+          <section className="space-y-3">
+            <div>
+              <h2 className="type-t2">Pending invitations</h2>
+              <p className="text-sm text-muted-foreground">Delivery status is shown separately from invitation validity.</p>
+            </div>
+            {pendingInvitations.length === 0 ? (
+              <p className="border bg-card p-4 text-sm text-muted-foreground">No pending invitations.</p>
+            ) : (
+              <div className="space-y-2">
+                {pendingInvitations.map((invitation) => (
+                  <div key={invitation.id} className="flex flex-col justify-between gap-3 border bg-card p-4 sm:flex-row sm:items-center">
+                    <div>
+                      <div className="font-medium">{invitation.email}</div>
+                      <div className="text-sm text-muted-foreground">
+                        <span>{roleLabel(invitation.role)}</span>
+                        {" · "}
+                        {invitation.deliveryStatus === "sent" ? "Email sent" : "Email delivery failed"}
+                      </div>
+                      {invitation.deliveryError && (
+                        <div className="mt-1 text-sm text-destructive">{invitation.deliveryError}</div>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="secondary" size="filter" disabled={actionInvitationId === invitation.id} onClick={() => handleInvitationAction(invitation, "resend")}>
+                        <RefreshCw className="mr-2 h-3 w-3" />
+                        Resend
+                      </Button>
+                      <Button variant="secondary" size="filter" disabled={actionInvitationId === invitation.id} onClick={() => handleInvitationAction(invitation, "revoke")}>
+                        <Ban className="mr-2 h-3 w-3" />
+                        Revoke
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        <Dialog open={isDialogOpen} onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          if (!open) setEditingStaff(null);
+        }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>{editingStaff ? "Edit staff role" : "Invite staff member"}</DialogTitle>
+              <DialogDescription>
+                {editingStaff
+                  ? "The member will need to sign in again after this change."
+                  : "Create a seven-day invitation and attempt email delivery."}
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmit}>
+              <FieldGroup>
+                {!editingStaff && (
+                  <Field>
+                    <FieldLabel>Email *</FieldLabel>
+                    <Input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} required />
+                  </Field>
+                )}
+                <Field>
+                  <FieldLabel>Role *</FieldLabel>
+                  <Select
+                    value={editingStaff ? editRole : role}
+                    onValueChange={(value) => {
+                      if (editingStaff) setEditRole(value as StaffRole);
+                      else setRole(value as StaffRole);
+                    }}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {assignableRoles.map((assignableRole) => (
+                        <SelectItem key={assignableRole} value={assignableRole}>
+                          {roleLabel(assignableRole)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FieldDescription>
+                    Owners may assign any role. Managers may assign the host/server,
+                    bar/kitchen and inventory operator roles, but not owner or manager.
+                  </FieldDescription>
+                </Field>
+              </FieldGroup>
+              <DialogFooter className="mt-6">
+                <Button type="button" variant="secondary" onClick={() => setIsDialogOpen(false)} disabled={isSubmitting}>Cancel</Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? "Saving…" : editingStaff ? "Update role" : "Create invitation"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        <ConfirmationDialog
+          open={!!deletingStaff}
+          onOpenChange={(open) => !open && setDeletingStaff(null)}
+          title="Remove staff access"
+          description="This immediately disables the account and revokes its active sessions."
+          confirmLabel="Remove access"
+          cancelLabel="Cancel"
+          onConfirm={handleConfirmDelete}
+          variant="destructive"
+        />
+      </PageBody>
+    </>
   );
 }

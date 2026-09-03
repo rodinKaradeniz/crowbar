@@ -15,6 +15,7 @@ import { Business } from "@/types";
 import { clientUpdateBusiness } from "@/lib/client-api";
 import { DAYS_OF_WEEK } from "@/lib/days";
 import { toast } from "sonner";
+import { PageBody, PageHeader } from "@/components/page-header";
 
 interface BusinessHoursClientProps {
   businessId: string;
@@ -103,86 +104,86 @@ export default function BusinessHoursClient({
   };
 
   return (
-    <div className="flex flex-col gap-6 px-[clamp(16px,2.5vw,32px)] py-6">
-      <div className="mb-6">
-        <h1 className="type-t1">Operating Hours</h1>
-        <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
-          Set your business&apos;s opening and closing times
-        </p>
-      </div>
+    <>
+      <PageHeader
+        title="Operating Hours"
+        description="Set your business's opening and closing times"
+      />
 
-      <form onSubmit={handleSubmit}>
-        <FieldGroup>
-          <FieldSet>
-            <FieldLegend>Weekly Schedule</FieldLegend>
-            <FieldDescription>
-              Configure hours for each day of the week
-            </FieldDescription>
+      <PageBody>
+        <form onSubmit={handleSubmit}>
+          <FieldGroup>
+            <FieldSet>
+              <FieldLegend>Weekly Schedule</FieldLegend>
+              <FieldDescription>
+                Configure hours for each day of the week
+              </FieldDescription>
 
-            {DAYS_OF_WEEK.map((day) => {
-              const dayHours = operatingHours[day.key] || {
-                open: "09:00",
-                close: "22:00",
-              };
-              const isClosed = dayHours.closed === true;
-              const openValue = isClosed ? "09:00" : dayHours.open;
-              const closeValue = isClosed ? "22:00" : dayHours.close;
+              {DAYS_OF_WEEK.map((day) => {
+                const dayHours = operatingHours[day.key] || {
+                  open: "09:00",
+                  close: "22:00",
+                };
+                const isClosed = dayHours.closed === true;
+                const openValue = isClosed ? "09:00" : dayHours.open;
+                const closeValue = isClosed ? "22:00" : dayHours.close;
 
-              return (
-                <div key={day.key} className="flex items-center gap-4">
-                  <div className="w-28 text-sm font-medium">{day.label}</div>
-                  <div className="flex-1 flex items-center gap-2">
-                    <Input
-                      type="time"
-                      value={openValue}
-                      onChange={(e) =>
-                        handleDayChange(day.key, "open", e.target.value)
-                      }
-                      disabled={isClosed}
-                      className="w-32"
-                    />
-                    <span className="text-muted-foreground text-sm">to</span>
-                    <Input
-                      type="time"
-                      value={closeValue}
-                      onChange={(e) =>
-                        handleDayChange(day.key, "close", e.target.value)
-                      }
-                      disabled={isClosed}
-                      className="w-32"
-                    />
-                    <div className="flex items-center gap-2 ml-4">
-                      <input
-                        type="checkbox"
-                        id={`closed-${day.key}`}
-                        checked={isClosed}
+                return (
+                  <div key={day.key} className="flex items-center gap-4">
+                    <div className="w-28 text-sm font-medium">{day.label}</div>
+                    <div className="flex-1 flex items-center gap-2">
+                      <Input
+                        type="time"
+                        value={openValue}
                         onChange={(e) =>
-                          handleDayChange(day.key, "closed", e.target.checked)
+                          handleDayChange(day.key, "open", e.target.value)
                         }
-                        className="h-4 w-4 rounded border-input"
+                        disabled={isClosed}
+                        className="w-32"
                       />
-                      <label
-                        htmlFor={`closed-${day.key}`}
-                        className="text-sm text-muted-foreground cursor-pointer"
-                      >
-                        Closed
-                      </label>
+                      <span className="text-muted-foreground text-sm">to</span>
+                      <Input
+                        type="time"
+                        value={closeValue}
+                        onChange={(e) =>
+                          handleDayChange(day.key, "close", e.target.value)
+                        }
+                        disabled={isClosed}
+                        className="w-32"
+                      />
+                      <div className="flex items-center gap-2 ml-4">
+                        <input
+                          type="checkbox"
+                          id={`closed-${day.key}`}
+                          checked={isClosed}
+                          onChange={(e) =>
+                            handleDayChange(day.key, "closed", e.target.checked)
+                          }
+                          className="h-4 w-4 rounded border-input"
+                        />
+                        <label
+                          htmlFor={`closed-${day.key}`}
+                          className="text-sm text-muted-foreground cursor-pointer"
+                        >
+                          Closed
+                        </label>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </FieldSet>
+                );
+              })}
+            </FieldSet>
 
-          <Field>
-            <div className="flex justify-end">
-              <Button type="submit" disabled={isSaving}>
-                {isSaving ? "Saving..." : "Save Changes"}
-              </Button>
-            </div>
-          </Field>
-        </FieldGroup>
-      </form>
-    </div>
+            <Field>
+              <div className="flex justify-end">
+                <Button type="submit" disabled={isSaving}>
+                  {isSaving ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </Field>
+          </FieldGroup>
+        </form>
+      </PageBody>
+    </>
   );
 }

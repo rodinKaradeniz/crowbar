@@ -159,8 +159,6 @@ export const NAV_GROUPS: NavGroup[] = [
         capability: "business.configure",
         matchPrefix: true,
       },
-      { href: "/business/settings/profile", label: "Settings", matchPrefix: true },
-      { href: "/business/docs", label: "Docs" },
     ],
   },
 ];

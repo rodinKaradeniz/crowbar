@@ -24,6 +24,20 @@ To use a different password, set DEMO_ADMIN_PASSWORD before seeding. The
 plaintext is never written to a seed file — only its bcrypt hash is
 substituted in.
 
+IF password123 IS REJECTED, the last seed ran with DEMO_ADMIN_PASSWORD set.
+Nothing records what it was: the hash is all that is stored, and the plaintext
+only ever existed in that one shell command. The seeder prints the password it
+used, so it is in that run's scrollback and nowhere else. Reseed (section 4)
+without the variable to get back to the documented one — or, to keep the demo
+data you have been working through, replace just the hashes:
+
+  cd /Users/rodinkaradeniz/projects/crowbar/server
+  HASH=$(venv/bin/python -c "import bcrypt; \
+    print(bcrypt.hashpw(b'password123', bcrypt.gensalt()).decode())")
+  docker exec crowbar-db psql -U postgres -d crowbar \
+    -c "UPDATE users SET password_hash = '$HASH' \
+        WHERE email LIKE '%@example.com';"
+
 
 ────────────────────────────────────────────────────────────────────────
 2. RUN THE WHOLE APP
@@ -75,9 +89,17 @@ Docker only, without the script:
 4. SEED / RESET DEMO DATA
 ────────────────────────────────────────────────────────────────────────
 
-Seeding IS the reset. The seed file first deletes the demo business — which
-cascades to every child table — and the demo users, then re-inserts
-everything. There is no separate reset command.
+Seeding IS the reset. The seed file tears the demo tenant down and re-inserts
+it. There is no separate reset command.
+
+It is NOT a plain cascade, and it matters if you add to the seed. Five tables
+hold business_id ON DELETE RESTRICT rather than CASCADE, so that a settlement,
+a correction or a status trail cannot vanish with its tenant — which means
+DELETE FROM businesses fails outright once any of them holds a row. The seed
+clears those explicitly first, in dependency order, and that is what lets you
+re-run it against a database someone has actually worked a shift through.
+Adding rows to a RESTRICT table without adding its delete to the cleanup block
+breaks re-seeding, and only the SECOND run shows it.
 
 Full stack, seeded:
 

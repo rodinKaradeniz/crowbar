@@ -10,6 +10,7 @@ import { SuppliersPanel } from "@/components/inventory/suppliers-panel";
 import { PurchaseOrdersPanel } from "@/components/inventory/purchase-orders-panel";
 import { CountsPanel } from "@/components/inventory/counts-panel";
 import { CostControlPanel } from "@/components/inventory/cost-control-panel";
+import { PageBody, PageHeader } from "@/components/page-header";
 
 interface Props {
   businessId: string;
@@ -48,45 +49,52 @@ export function InventoryWorkspaceClient({
   );
 
   return (
-    <div className="flex flex-col gap-6 px-[clamp(16px,2.5vw,32px)] py-6">
-      <div>
-        <h1 className="type-t1">Inventory</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Stock, purchasing and cost control from one ledger.
-        </p>
-      </div>
+    <>
+      {/* The Tabs root wraps the header AND the body: Radix requires TabsList
+          and TabsContent under one root, and Stock / Counts / Suppliers is
+          this page's own navigation — it belongs beside the title, pinned, not
+          scrolled away above a table of rows that could belong to any screen.
+          `contents` keeps the root out of the layout so the header and body
+          stay the flow siblings that sticky needs. */}
+      <Tabs value={tab} onValueChange={setTab} className="contents">
+        <PageHeader
+          wide
+          title="Inventory"
+          description="Stock, purchasing and cost control from one ledger."
+        >
+          <TabsList>
+            <TabsTrigger value="stock">
+              <Package className="h-4 w-4 mr-1.5" />
+              Stock
+            </TabsTrigger>
+            <TabsTrigger value="counts">
+              <ClipboardCheck className="h-4 w-4 mr-1.5" />
+              Counts
+            </TabsTrigger>
+            {canManagePurchasing && (
+              <TabsTrigger value="suppliers">
+                <Building2 className="h-4 w-4 mr-1.5" />
+                Suppliers
+              </TabsTrigger>
+            )}
+            {canManagePurchasing && (
+              <TabsTrigger value="orders">
+                <ClipboardList className="h-4 w-4 mr-1.5" />
+                Purchase orders
+              </TabsTrigger>
+            )}
+            {canViewCost && (
+              <TabsTrigger value="cost">
+                <TrendingUp className="h-4 w-4 mr-1.5" />
+                Cost control
+              </TabsTrigger>
+            )}
+          </TabsList>
+        </PageHeader>
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="stock">
-            <Package className="h-4 w-4 mr-1.5" />
-            Stock
-          </TabsTrigger>
-          <TabsTrigger value="counts">
-            <ClipboardCheck className="h-4 w-4 mr-1.5" />
-            Counts
-          </TabsTrigger>
-          {canManagePurchasing && (
-            <TabsTrigger value="suppliers">
-              <Building2 className="h-4 w-4 mr-1.5" />
-              Suppliers
-            </TabsTrigger>
-          )}
-          {canManagePurchasing && (
-            <TabsTrigger value="orders">
-              <ClipboardList className="h-4 w-4 mr-1.5" />
-              Purchase orders
-            </TabsTrigger>
-          )}
-          {canViewCost && (
-            <TabsTrigger value="cost">
-              <TrendingUp className="h-4 w-4 mr-1.5" />
-              Cost control
-            </TabsTrigger>
-          )}
-        </TabsList>
+        <PageBody wide>
 
-        <TabsContent value="stock" className="mt-6">
+        <TabsContent value="stock">
           <InventoryManagementClient
             businessId={businessId}
             businessTimezone={businessTimezone}
@@ -94,7 +102,7 @@ export function InventoryWorkspaceClient({
           />
         </TabsContent>
 
-        <TabsContent value="counts" className="mt-6">
+        <TabsContent value="counts">
           <CountsPanel
             businessId={businessId}
             businessTimezone={businessTimezone}
@@ -103,13 +111,13 @@ export function InventoryWorkspaceClient({
         </TabsContent>
 
         {canManagePurchasing && (
-          <TabsContent value="suppliers" className="mt-6">
+          <TabsContent value="suppliers">
             <SuppliersPanel businessId={businessId} canManage={canManagePurchasing} />
           </TabsContent>
         )}
 
         {canManagePurchasing && (
-          <TabsContent value="orders" className="mt-6">
+          <TabsContent value="orders">
             <PurchaseOrdersPanel
               businessId={businessId}
               canManage={canManagePurchasing}
@@ -119,11 +127,12 @@ export function InventoryWorkspaceClient({
         )}
 
         {canViewCost && (
-          <TabsContent value="cost" className="mt-6">
+          <TabsContent value="cost">
             <CostControlPanel businessId={businessId} />
           </TabsContent>
         )}
+        </PageBody>
       </Tabs>
-    </div>
+    </>
   );
 }

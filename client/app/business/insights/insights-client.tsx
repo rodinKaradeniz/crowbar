@@ -27,6 +27,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { seriesVar } from "@/lib/series-palette";
+import { PageBody, PageHeader } from "@/components/page-header";
 import {
   BarChart,
   Bar,
@@ -140,74 +141,76 @@ export default function InsightsClient({
   };
 
   return (
-    <div className="px-[clamp(16px,2.5vw,32px)] py-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="type-t1 flex items-center gap-2">
+    <>
+      <PageHeader
+        wide
+        title={
+          <span className="flex items-center gap-2">
             <BrainCircuit className="h-6 w-6" />
             Insights
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            ML-powered analytics and predictions for your business
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {lastRun && (
-            <span className="text-xs text-muted-foreground">
-              Last updated: {formatTimestamp(lastRun.timestamp)}
-            </span>
-          )}
-          <Button
-            onClick={handleRunPipeline}
-            disabled={isRunning}
-            size="filter"
-          >
-            <RefreshCw className="h-4 w-4 mr-2" aria-hidden />
-            {isRunning ? "Running..." : "Run Pipeline"}
-          </Button>
-        </div>
-      </div>
-
-      {/* No data state */}
-      {!hasData && (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <BrainCircuit className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="type-t2 mb-2">No insights yet</h3>
-            <p className="text-sm text-muted-foreground text-center max-w-md mb-6">
-              Run the ML pipeline to generate demand forecasts from operational
-              reservation data.
-            </p>
-            <Button onClick={handleRunPipeline} disabled={isRunning}>
+          </span>
+        }
+        description="ML-powered analytics and predictions for your business"
+        actions={
+          <>
+            {lastRun && (
+              <span className="text-xs text-muted-foreground">
+                Last updated: {formatTimestamp(lastRun.timestamp)}
+              </span>
+            )}
+            <Button
+              onClick={handleRunPipeline}
+              disabled={isRunning}
+              size="filter"
+            >
               <RefreshCw className="h-4 w-4 mr-2" aria-hidden />
-              {isRunning ? "Running Pipeline..." : "Run Pipeline"}
+              {isRunning ? "Running..." : "Run Pipeline"}
             </Button>
-          </CardContent>
-        </Card>
-      )}
+          </>
+        }
+      />
 
-      {hasData && (
-        <>
-          {/* Section 1: Demand Forecast */}
-          <DemandForecastSection demandForecast={demandForecast} locale={locale} />
+      <PageBody wide>
+        {/* No data state */}
+        {!hasData && (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-16">
+              <BrainCircuit className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="type-t2 mb-2">No insights yet</h3>
+              <p className="text-sm text-muted-foreground text-center max-w-md mb-6">
+                Run the ML pipeline to generate demand forecasts from operational
+                reservation data.
+              </p>
+              <Button onClick={handleRunPipeline} disabled={isRunning}>
+                <RefreshCw className="h-4 w-4 mr-2" aria-hidden />
+                {isRunning ? "Running Pipeline..." : "Run Pipeline"}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
-          {/* Section 2: Customer Segmentation + Cancellation side by side */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <SegmentationSection segmentation={segmentation} />
-            <CancellationSection
-              cancellation={cancellation}
-              highRiskReservations={rawHighRisk ?? []}
-              businessTimezone={businessTimezone}
-              locale={locale}
-            />
-          </div>
+        {hasData && (
+          <>
+            {/* Section 1: Demand Forecast */}
+            <DemandForecastSection demandForecast={demandForecast} locale={locale} />
 
-          {/* Section 3: Operational KPIs */}
-          {rawKpis && <OperationalKpisSection kpis={rawKpis} />}
-        </>
-      )}
-    </div>
+            {/* Section 2: Customer Segmentation + Cancellation side by side */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <SegmentationSection segmentation={segmentation} />
+              <CancellationSection
+                cancellation={cancellation}
+                highRiskReservations={rawHighRisk ?? []}
+                businessTimezone={businessTimezone}
+                locale={locale}
+              />
+            </div>
+
+            {/* Section 3: Operational KPIs */}
+            {rawKpis && <OperationalKpisSection kpis={rawKpis} />}
+          </>
+        )}
+      </PageBody>
+    </>
   );
 }
 

@@ -1,5 +1,13 @@
 /**
- * §03 — QR ordering, ticket boards, running tabs. The second ink band.
+ * §03 — QR ordering, ticket boards, running tabs.
+ *
+ * THIS WAS THE ONLY ONE OF THE FIVE ON INK, which made it read as a different
+ * kind of thing rather than the third of five. The band is paper now, like the
+ * other four — but the two panels stay ink, and that is not a compromise: the
+ * bar board and the tab really are the ink product, and the section is showing
+ * them. `.ground-ink` on each panel is the mechanism, exactly as `AuthPanel`
+ * uses it — every token inside resolves against the ink ground while the
+ * section around it resolves against paper.
  *
  * The bar board shows one ticket timer in the attend colour. That is the
  * design's depiction of a ticket approaching its target time — a capability the
@@ -15,13 +23,13 @@ export function OrderingSection() {
   return (
     <section
       id="ordering"
-      className="mkt-anchor mkt-sec-ordering ground-ink bg-background text-foreground"
+      className="mkt-anchor mkt-band mkt-sec-feature bg-paper"
     >
       {/* Full-bleed band, `.mkt-shell` content — see the note on `.mkt-shell`. */}
       <div className="mkt-shell mkt-gap-split flex flex-wrap items-start">
         <div className="mkt-col settle flex-[1_1_400px]">
-          <div className="mkt-head-lead mb-3.5">
-            <span className="mkt-num text-text-on-ink-faint">03</span>
+          <div className="mkt-head-lead mb-[var(--space-16)]">
+            <span className="mkt-num text-text-faint">03</span>
             <h3 className="mkt-d3-lg">
               QR ordering, ticket boards,
               <br />
@@ -29,7 +37,7 @@ export function OrderingSection() {
             </h3>
           </div>
 
-          <p className="mkt-body-lg mb-[22px] max-w-[50ch] text-muted-foreground">
+          <p className="mkt-body-lg mb-[22px] max-w-[50ch] text-text-body">
             The guest orders from the table. The kitchen and the bar each get
             only their own tickets, in the order they arrived, ageing as they
             wait. The tab stays open until the party closes out.
@@ -40,7 +48,7 @@ export function OrderingSection() {
               (chip) => (
                 <span
                   key={chip}
-                  className="mkt-chip rounded-[var(--radius-2)] border border-surface-raised px-2.5 py-2 text-center text-muted-foreground"
+                  className="mkt-chip rounded-[var(--radius-2)] border border-border-strong px-2.5 py-2 text-center text-text-muted"
                 >
                   {chip}
                 </span>
@@ -60,7 +68,7 @@ export function OrderingSection() {
 
 function BarBoardPanel() {
   return (
-    <div className="border border-surface-raised bg-surface">
+    <div className="ground-ink border border-surface-raised bg-surface text-foreground">
       <div className="mkt-cell-head type-label flex items-center justify-between border-b border-surface-raised text-text-on-ink-faint">
         <span>Bar board</span>
         <span className="rounded-[var(--radius-2)] border border-border-strong px-[5px] text-text-on-ink-2">
@@ -92,7 +100,9 @@ function BarBoardPanel() {
           <span>T2</span>
           <span>Served</span>
         </div>
-        <p className="mkt-item-lg font-medium line-through">1 × Old Fashioned</p>
+        <p className="mkt-item-lg font-medium line-through">
+          1 × Old Fashioned
+        </p>
       </div>
     </div>
   );
@@ -106,7 +116,7 @@ function TabPanel() {
   ];
 
   return (
-    <div className="border border-surface-raised bg-surface">
+    <div className="ground-ink border border-surface-raised bg-surface text-foreground">
       <div className="mkt-cell-head type-label flex items-center justify-between border-b border-surface-raised text-text-on-ink-faint">
         <span>Tab · Tisch 4</span>
         {/* Brand, not severity: an open tab during service is the normal case. */}
@@ -124,9 +134,7 @@ function TabPanel() {
       ))}
 
       <div className="flex items-baseline justify-between px-3 py-[13px]">
-        <span className="type-label text-text-on-ink-faint">
-          Running
-        </span>
+        <span className="type-label text-text-on-ink-faint">Running</span>
         <span className="mkt-fig-sm">50,50 €</span>
       </div>
     </div>

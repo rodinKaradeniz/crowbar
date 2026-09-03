@@ -9,6 +9,7 @@ import BusinessBookingClient from "./business-booking-client";
 import { ModuleDisabled } from "@/components/module-disabled";
 import { hasModule, MODULE_KEYS } from "@/lib/modules";
 import { hasCapability } from "@/lib/permissions";
+import { PageHeader } from "@/components/page-header";
 
 export default async function BusinessBooking() {
   const user = await getCurrentUser();
@@ -34,12 +35,10 @@ export default async function BusinessBooking() {
 
   if (!schedules) {
     return (
-      <div className="flex flex-col gap-6 px-[clamp(16px,2.5vw,32px)] py-6">
-        <h1 className="type-t1">Booking Configuration</h1>
-        <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
-          Booking settings could not be loaded. Please try again.
-        </p>
-      </div>
+      <PageHeader
+        title="Booking Configuration"
+        description="Booking settings could not be loaded. Please try again."
+      />
     );
   }
 

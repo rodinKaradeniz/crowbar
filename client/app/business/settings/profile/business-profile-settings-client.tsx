@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { clientUpdateProfile } from "@/lib/client-api";
 import { toast } from "sonner";
+import { PageBody, PageHeader } from "@/components/page-header";
 
 interface BusinessProfileSettingsClientProps {
   initialName: string;
@@ -55,106 +56,110 @@ export default function BusinessProfileSettingsClient({
   };
 
   return (
-    <div className="flex flex-col gap-6 lg:flex-row px-[clamp(16px,2.5vw,32px)] py-6">
-      <div className="flex-1">
-        <div className="mb-6">
-          <h1 className="type-t1">Profile Settings</h1>
-          <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
-            Update your personal information
-          </p>
+    <>
+      <PageHeader
+        title="Profile Settings"
+        description="Update your personal information"
+      />
+
+      <PageBody className="lg:flex-row">
+        <div className="flex-1">
+          <form onSubmit={handleSubmit}>
+            <FieldGroup>
+              <FieldSet>
+                <FieldLegend>Personal Information</FieldLegend>
+                <FieldDescription>
+                  This information is visible to your team members
+                </FieldDescription>
+
+                <Field>
+                  <FieldLabel htmlFor="name">Full Name</FieldLabel>
+                  <Input
+                    id="name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="phone">Phone Number</FieldLabel>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="Enter your phone number"
+                  />
+                  <FieldDescription>
+                    Used for internal contact purposes only
+                  </FieldDescription>
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="avatar">Avatar URL</FieldLabel>
+                  <Input
+                    id="avatar"
+                    type="url"
+                    value={avatar}
+                    onChange={(e) => setAvatar(e.target.value)}
+                    placeholder="https://example.com/avatar.jpg"
+                  />
+                  <FieldDescription>
+                    URL to your profile picture (optional)
+                  </FieldDescription>
+                </Field>
+              </FieldSet>
+
+              <Field>
+                <div className="flex justify-end">
+                  <Button type="submit" disabled={isSaving}>
+                    {isSaving ? "Saving..." : "Save Changes"}
+                  </Button>
+                </div>
+              </Field>
+            </FieldGroup>
+          </form>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          <FieldGroup>
-            <FieldSet>
-              <FieldLegend>Personal Information</FieldLegend>
-              <FieldDescription>
-                This information is visible to your team members
-              </FieldDescription>
-
-              <Field>
-                <FieldLabel htmlFor="name">Full Name</FieldLabel>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                />
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="phone">Phone Number</FieldLabel>
-                <Input
-                  id="phone"
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="Enter your phone number"
-                />
-                <FieldDescription>
-                  Used for internal contact purposes only
-                </FieldDescription>
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="avatar">Avatar URL</FieldLabel>
-                <Input
-                  id="avatar"
-                  type="url"
-                  value={avatar}
-                  onChange={(e) => setAvatar(e.target.value)}
-                  placeholder="https://example.com/avatar.jpg"
-                />
-                <FieldDescription>
-                  URL to your profile picture (optional)
-                </FieldDescription>
-              </Field>
-            </FieldSet>
-
-            <Field>
-              <div className="flex justify-end">
-                <Button type="submit" disabled={isSaving}>
-                  {isSaving ? "Saving..." : "Save Changes"}
-                </Button>
-              </div>
-            </Field>
-          </FieldGroup>
-        </form>
-      </div>
-
-      {/* Preview Card */}
-      <div className="lg:w-80">
-        <div className="sticky top-6">
-          <div className="flex flex-col gap-4 border border-border p-6">
-            <div className="flex items-center gap-4">
-              {avatar ? (
-                <div className="relative h-16 w-16 overflow-hidden rounded-full">
-                  <Image
-                    src={avatar}
-                    alt={name}
-                    fill
-                    className="object-cover"
-                  />
+        {/* Preview Card */}
+        <div className="lg:w-80">
+          {/* Centred beside the form and pinned under the topbar — see the same
+              block in profile/info for why those two need a full-height sticky
+              box rather than `self-center`. `top-6` stuck it 52px under the
+              topbar and clipped its own top edge. */}
+          <div className="sticky top-[calc(var(--workspace-header)+var(--page-header))] flex flex-col justify-center lg:h-[calc(100svh-var(--workspace-header)-var(--page-header))] lg:overflow-y-auto lg:py-[var(--space-24)]">
+            <div className="flex flex-col gap-4 border border-border p-6">
+              <div className="flex items-center gap-4">
+                {avatar ? (
+                  <div className="relative h-16 w-16 overflow-hidden rounded-full">
+                    <Image
+                      src={avatar}
+                      alt={name}
+                      fill
+                      className="object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex size-16 items-center justify-center rounded-full bg-primary type-t1 text-primary-foreground">
+                    {getInitials(name || "U")}
+                  </div>
+                )}
+                <div>
+                  <h2 className="font-semibold">{name || "Your Name"}</h2>
+                  <p className="text-sm text-muted-foreground">Staff Member</p>
                 </div>
-              ) : (
-                <div className="flex size-16 items-center justify-center rounded-full bg-primary type-t1 text-primary-foreground">
-                  {getInitials(name || "U")}
+              </div>
+              {phone && (
+                <div className="mt-4 pt-4 border-t">
+                  <p className="text-sm text-muted-foreground">{phone}</p>
                 </div>
               )}
-              <div>
-                <h2 className="font-semibold">{name || "Your Name"}</h2>
-                <p className="text-sm text-muted-foreground">Staff Member</p>
-              </div>
             </div>
-            {phone && (
-              <div className="mt-4 pt-4 border-t">
-                <p className="text-sm text-muted-foreground">{phone}</p>
-              </div>
-            )}
+            <p className="type-micro mt-2 text-center text-muted-foreground">Preview of your profile</p>
           </div>
-          <p className="type-micro mt-2 text-center text-muted-foreground">Preview of your profile</p>
         </div>
-      </div>
-    </div>
+      </PageBody>
+    </>
   );
 }

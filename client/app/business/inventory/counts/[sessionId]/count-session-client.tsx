@@ -223,7 +223,7 @@ export function CountSessionClient({ businessId, sessionId, canManage }: Props) 
 
   return (
     <div className="min-h-screen bg-background pb-32">
-      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b px-4 py-3">
+      <div className="sticky top-[var(--workspace-header)] z-10 bg-background/95 backdrop-blur border-b px-4 py-3">
         <div className="max-w-md mx-auto flex items-center gap-2">
           <Button
             variant="ghost"

@@ -26,6 +26,7 @@ import {
 import { formatBusinessDateTime } from "@/lib/business-time";
 import { venueLocalDateTimeToIso } from "@/lib/availability";
 import type { Business, RegionalAudit, RegionalOption, TaxProfile } from "@/types";
+import { PageBody, PageHeader } from "@/components/page-header";
 
 type ProfileDraft = {
   code: string;
@@ -173,42 +174,44 @@ export function RegionTaxSettingsClient({ business }: { business: Business }) {
   }
 
   return (
-    <div className="flex flex-col gap-6 px-[clamp(16px,2.5vw,32px)] py-6 max-w-5xl">
-      <div className="mb-6">
-        <h1 className="type-t1">Region & operational tax</h1>
-        <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">Country-neutral venue formatting and non-fiscal tax estimates. Your compliant register remains authoritative.</p>
-      </div>
+    <>
+      <PageHeader
+        title="Region & operational tax"
+        description="Country-neutral venue formatting and non-fiscal tax estimates. Your compliant register remains authoritative."
+      />
 
-      <form className="border-t border-border p-5 space-y-5" onSubmit={saveRegion}>
-        <div>
-          <h2 className="font-semibold">Regional configuration</h2>
-          <p className="text-sm text-muted-foreground">Country suggestions never overwrite settings until you apply and save them.</p>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5"><Label>Country</Label><Select value={countryCode} onValueChange={setCountryCode}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{countries.map((option) => <SelectItem key={option.code} value={option.code}>{option.name}</SelectItem>)}</SelectContent></Select></div>
-          <div className="space-y-1.5"><Label>Currency</Label><Select value={currencyCode} onValueChange={setCurrencyCode}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{currencies.map((option) => <SelectItem key={option.code} value={option.code}>{option.name} ({option.code})</SelectItem>)}</SelectContent></Select><p className="text-xs text-muted-foreground">Locked after priced or monetary records exist.</p></div>
-          <div className="space-y-1.5"><Label htmlFor="format-locale">Formatting locale</Label><Input id="format-locale" value={locale} onChange={(event) => setLocale(event.target.value)} placeholder="de-DE" /></div>
-          <div className="space-y-1.5"><Label htmlFor="tax-label">Tax label</Label><Input id="tax-label" value={taxLabel} onChange={(event) => setTaxLabel(event.target.value)} placeholder="VAT, GST, MwSt., Tax" /></div>
-          <div className="space-y-1.5 sm:col-span-2"><Label>Timezone</Label><TimezoneCombobox value={timezone} onChange={setTimezone} /></div>
-        </div>
-        <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="secondary" onClick={applySuggestion}><RefreshCw /> Apply country suggestions</Button><Button disabled={saving}>{saving ? "Saving…" : "Save regional settings"}</Button></div>
-      </form>
+      <PageBody>
+        <form className="border-t border-border p-5 space-y-5" onSubmit={saveRegion}>
+          <div>
+            <h2 className="font-semibold">Regional configuration</h2>
+            <p className="text-sm text-muted-foreground">Country suggestions never overwrite settings until you apply and save them.</p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5"><Label>Country</Label><Select value={countryCode} onValueChange={setCountryCode}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{countries.map((option) => <SelectItem key={option.code} value={option.code}>{option.name}</SelectItem>)}</SelectContent></Select></div>
+            <div className="space-y-1.5"><Label>Currency</Label><Select value={currencyCode} onValueChange={setCurrencyCode}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{currencies.map((option) => <SelectItem key={option.code} value={option.code}>{option.name} ({option.code})</SelectItem>)}</SelectContent></Select><p className="text-xs text-muted-foreground">Locked after priced or monetary records exist.</p></div>
+            <div className="space-y-1.5"><Label htmlFor="format-locale">Formatting locale</Label><Input id="format-locale" value={locale} onChange={(event) => setLocale(event.target.value)} placeholder="de-DE" /></div>
+            <div className="space-y-1.5"><Label htmlFor="tax-label">Tax label</Label><Input id="tax-label" value={taxLabel} onChange={(event) => setTaxLabel(event.target.value)} placeholder="VAT, GST, MwSt., Tax" /></div>
+            <div className="space-y-1.5 sm:col-span-2"><Label>Timezone</Label><TimezoneCombobox value={timezone} onChange={setTimezone} /></div>
+          </div>
+          <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="secondary" onClick={applySuggestion}><RefreshCw /> Apply country suggestions</Button><Button disabled={saving}>{saving ? "Saving…" : "Save regional settings"}</Button></div>
+        </form>
 
-      <section className="mt-6 border-t border-border p-5">
-        <div className="flex items-start justify-between gap-4"><div><h2 className="font-semibold">Tax profiles</h2><p className="text-sm text-muted-foreground">Profile changes append a dated version. Placed order lines retain their original calculation forever.</p></div><Button onClick={openCreate}><Plus /> New profile</Button></div>
-        <div className="mt-4 divide-y">
-          {profiles.map((profile) => {
-            const current = profile.currentVersion;
-            return <article className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center" key={profile.id}><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><p className="font-medium">{current?.name ?? profile.code}</p><span className="rounded bg-muted px-2 py-0.5 text-xs font-mono tabular-nums">{profile.code}</span>{!profile.isActive && <span className="text-xs text-muted-foreground">Archived</span>}</div><p className="mt-1 text-sm text-muted-foreground">{current ? `${current.rate}% · prices ${current.priceIncludesTax ? "include" : "exclude"} ${taxLabel}` : "No effective version"} · {profile.versions.length} version{profile.versions.length === 1 ? "" : "s"}</p></div>{profile.isActive && <div className="flex gap-2"><Button size="filter" variant="secondary" onClick={() => openVersion(profile)}>New version</Button><Button size="icon" variant="ghost" aria-label={`Archive ${profile.code}`} onClick={() => setArchiveProfile(profile)}><Archive /></Button></div>}</article>;
-          })}
-        </div>
-      </section>
+        <section className="mt-6 border-t border-border p-5">
+          <div className="flex items-start justify-between gap-4"><div><h2 className="font-semibold">Tax profiles</h2><p className="text-sm text-muted-foreground">Profile changes append a dated version. Placed order lines retain their original calculation forever.</p></div><Button onClick={openCreate}><Plus /> New profile</Button></div>
+          <div className="mt-4 divide-y">
+            {profiles.map((profile) => {
+              const current = profile.currentVersion;
+              return <article className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center" key={profile.id}><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><p className="font-medium">{current?.name ?? profile.code}</p><span className="rounded bg-muted px-2 py-0.5 text-xs font-mono tabular-nums">{profile.code}</span>{!profile.isActive && <span className="text-xs text-muted-foreground">Archived</span>}</div><p className="mt-1 text-sm text-muted-foreground">{current ? `${current.rate}% · prices ${current.priceIncludesTax ? "include" : "exclude"} ${taxLabel}` : "No effective version"} · {profile.versions.length} version{profile.versions.length === 1 ? "" : "s"}</p></div>{profile.isActive && <div className="flex gap-2"><Button size="filter" variant="secondary" onClick={() => openVersion(profile)}>New version</Button><Button size="icon" variant="ghost" aria-label={`Archive ${profile.code}`} onClick={() => setArchiveProfile(profile)}><Archive /></Button></div>}</article>;
+            })}
+          </div>
+        </section>
 
-      <section className="mt-6 border-t border-border p-5"><div className="flex items-center gap-2"><History className="h-4 w-4" /><h2 className="font-semibold">Regional audit</h2></div><div className="mt-3 space-y-3">{audits.length ? audits.map((audit) => <div className="border-b border-border py-[var(--space-12)] text-[length:var(--ui-size)]" key={audit.id}><p>{formatBusinessDateTime(audit.changedAt, timezone, locale)}</p><p className="mt-1 text-xs text-muted-foreground">{Object.keys(audit.newValues).filter((key) => audit.previousValues[key] !== audit.newValues[key]).map((key) => `${key}: ${audit.previousValues[key]} → ${audit.newValues[key]}`).join(" · ")}</p></div>) : <p className="text-sm text-muted-foreground">No regional changes recorded yet.</p>}</div></section>
+        <section className="mt-6 border-t border-border p-5"><div className="flex items-center gap-2"><History className="h-4 w-4" /><h2 className="font-semibold">Regional audit</h2></div><div className="mt-3 space-y-3">{audits.length ? audits.map((audit) => <div className="border-b border-border py-[var(--space-12)] text-[length:var(--ui-size)]" key={audit.id}><p>{formatBusinessDateTime(audit.changedAt, timezone, locale)}</p><p className="mt-1 text-xs text-muted-foreground">{Object.keys(audit.newValues).filter((key) => audit.previousValues[key] !== audit.newValues[key]).map((key) => `${key}: ${audit.previousValues[key]} → ${audit.newValues[key]}`).join(" · ")}</p></div>) : <p className="text-sm text-muted-foreground">No regional changes recorded yet.</p>}</div></section>
 
-      <Dialog open={profileOpen} onOpenChange={setProfileOpen}><DialogContent><DialogHeader><DialogTitle>{editingProfile ? `New ${editingProfile.code} version` : "New tax profile"}</DialogTitle></DialogHeader><div className="space-y-4">{!editingProfile && <div className="space-y-1.5"><Label>Code</Label><Input value={draft.code} onChange={(event) => setDraft((value) => ({ ...value, code: event.target.value }))} placeholder="STANDARD" /></div>}<div className="space-y-1.5"><Label>Name</Label><Input value={draft.name} onChange={(event) => setDraft((value) => ({ ...value, name: event.target.value }))} /></div><div className="space-y-1.5"><Label>Rate (%)</Label><Input type="number" min="0" max="100" step="0.0001" value={draft.rate} onChange={(event) => setDraft((value) => ({ ...value, rate: event.target.value }))} /></div><div className="flex items-center justify-between border border-border p-3"><div><Label>Prices include {taxLabel}</Label><p className="text-xs text-muted-foreground">Turn off when catalogue prices are before tax.</p></div><Checkbox checked={draft.priceIncludesTax} onCheckedChange={(checked) => setDraft((value) => ({ ...value, priceIncludesTax: checked === true }))} /></div><div className="space-y-1.5"><Label>Effective from</Label><Input type="datetime-local" value={draft.effectiveFrom} onChange={(event) => setDraft((value) => ({ ...value, effectiveFrom: event.target.value }))} /><p className="text-xs text-muted-foreground">Venue local time ({timezone}). Leave blank to apply immediately.</p></div><div className="space-y-1.5"><Label>Audit note</Label><Textarea value={draft.note} onChange={(event) => setDraft((value) => ({ ...value, note: event.target.value }))} placeholder="Why this treatment changed" /></div></div><DialogFooter><Button variant="secondary" onClick={() => setProfileOpen(false)}>Cancel</Button><Button onClick={saveProfile} disabled={saving}>Save version</Button></DialogFooter></DialogContent></Dialog>
+        <Dialog open={profileOpen} onOpenChange={setProfileOpen}><DialogContent><DialogHeader><DialogTitle>{editingProfile ? `New ${editingProfile.code} version` : "New tax profile"}</DialogTitle></DialogHeader><div className="space-y-4">{!editingProfile && <div className="space-y-1.5"><Label>Code</Label><Input value={draft.code} onChange={(event) => setDraft((value) => ({ ...value, code: event.target.value }))} placeholder="STANDARD" /></div>}<div className="space-y-1.5"><Label>Name</Label><Input value={draft.name} onChange={(event) => setDraft((value) => ({ ...value, name: event.target.value }))} /></div><div className="space-y-1.5"><Label>Rate (%)</Label><Input type="number" min="0" max="100" step="0.0001" value={draft.rate} onChange={(event) => setDraft((value) => ({ ...value, rate: event.target.value }))} /></div><div className="flex items-center justify-between border border-border p-3"><div><Label>Prices include {taxLabel}</Label><p className="text-xs text-muted-foreground">Turn off when catalogue prices are before tax.</p></div><Checkbox checked={draft.priceIncludesTax} onCheckedChange={(checked) => setDraft((value) => ({ ...value, priceIncludesTax: checked === true }))} /></div><div className="space-y-1.5"><Label>Effective from</Label><Input type="datetime-local" value={draft.effectiveFrom} onChange={(event) => setDraft((value) => ({ ...value, effectiveFrom: event.target.value }))} /><p className="text-xs text-muted-foreground">Venue local time ({timezone}). Leave blank to apply immediately.</p></div><div className="space-y-1.5"><Label>Audit note</Label><Textarea value={draft.note} onChange={(event) => setDraft((value) => ({ ...value, note: event.target.value }))} placeholder="Why this treatment changed" /></div></div><DialogFooter><Button variant="secondary" onClick={() => setProfileOpen(false)}>Cancel</Button><Button onClick={saveProfile} disabled={saving}>Save version</Button></DialogFooter></DialogContent></Dialog>
 
-      <ConfirmationDialog open={Boolean(archiveProfile)} onOpenChange={(open) => !open && setArchiveProfile(null)} title="Archive tax profile?" description="Assigned menu or library items must be moved first. Historical order snapshots remain intact." confirmLabel="Archive" variant="destructive" onConfirm={async () => { if (!archiveProfile) return; try { await clientArchiveTaxProfile(archiveProfile.id); toast.success("Tax profile archived"); await load(); } catch (error) { toast.error(error instanceof Error ? error.message : "Could not archive profile"); } finally { setArchiveProfile(null); } }} />
-    </div>
+        <ConfirmationDialog open={Boolean(archiveProfile)} onOpenChange={(open) => !open && setArchiveProfile(null)} title="Archive tax profile?" description="Assigned menu or library items must be moved first. Historical order snapshots remain intact." confirmLabel="Archive" variant="destructive" onConfirm={async () => { if (!archiveProfile) return; try { await clientArchiveTaxProfile(archiveProfile.id); toast.success("Tax profile archived"); await load(); } catch (error) { toast.error(error instanceof Error ? error.message : "Could not archive profile"); } finally { setArchiveProfile(null); } }} />
+      </PageBody>
+    </>
   );
 }

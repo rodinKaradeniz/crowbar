@@ -77,15 +77,19 @@ const FAQS: Faq[] = [
 
 export function FaqSection() {
   return (
-    <section id="faq" className="mkt-anchor mkt-shell mkt-sec-faq">
-      <div className="mkt-gap-faq flex flex-wrap">
+    <section
+      id="faq"
+      className="mkt-anchor mkt-sec-faq ground-ink bg-background text-foreground"
+    >
+      {/* Full-bleed band, `.mkt-shell` content — see the note on `.mkt-shell`. */}
+      <div className="mkt-shell mkt-gap-faq flex flex-wrap">
         <div className="settle min-w-[min(100%,280px)] flex-[0_1_320px]">
           <h2 className="mkt-d2-faq mb-3.5">
             The practical
             <br />
             questions.
           </h2>
-          <p className="mkt-body-sm text-text-secondary">
+          <p className="mkt-body-sm text-muted-foreground">
             Anything else, ask a person:{" "}
             <Link
               href="mailto:hallo@crowbar.co"
@@ -96,36 +100,58 @@ export function FaqSection() {
           </p>
         </div>
 
-        <dl className="settle-2 min-w-[min(100%,320px)] flex-[1_1_520px] border-t border-ink">
+        {/*
+          Seven questions with every answer open is a very long column at any
+          width — on a phone the section outruns the rest of the page. Each
+          item is a native `<details>`, closed by default, AT EVERY WIDTH.
+
+          It was a phone-only accordion at first, with a media query restoring
+          the old two-column row above --bp-phone. That was wrong in a way you
+          could see: the row hid the +, so a desktop reader got an element that
+          collapsed when clicked and gave no sign it could. One behaviour now,
+          one affordance, every width.
+
+          `<details>` rather than a client accordion: this page ships no
+          JavaScript at all, and the element is already keyboard operable and
+          announced as expandable. The trade is that the markup stops being a
+          `<dl>` — a `<details>` is not a permitted child of one — which costs
+          the description-list semantics and buys a disclosure that works with
+          scripting off. On this page that is the better half of the trade.
+        */}
+        <div className="mkt-faq-list settle-2 min-w-[min(100%,320px)] flex-[1_1_520px] border-t border-border-strong">
           {FAQS.map((faq) => (
-            <div
+            <details
               key={faq.question}
               className={
                 faq.lead
-                  ? "flex flex-wrap gap-4 border-b border-border bg-paper-tint-2 py-[22px]"
-                  : "flex flex-wrap gap-4 border-b border-border py-5"
+                  ? "mkt-faq-item mkt-faq-item-lead border-b border-border bg-surface"
+                  : "mkt-faq-item border-b border-border"
               }
             >
-              <dt className="mkt-faq-q flex-[1_1_240px]">{faq.question}</dt>
-              <dd className="m-0 flex-[1_1_300px]">
+              <summary className="mkt-faq-summary">
+                <span className="mkt-faq-q">{faq.question}</span>
+                <span className="mkt-faq-sign" aria-hidden />
+              </summary>
+
+              <div className="mkt-faq-answer">
                 {faq.answer.map((paragraph, index) => (
                   <p
                     key={index}
                     className={
                       index === 0
                         ? faq.lead
-                          ? "mkt-body-sm mb-2.5 text-text-body"
-                          : "mkt-body-sm text-text-secondary"
-                        : "mkt-body-sm text-text-body"
+                          ? "mkt-body-sm mb-2.5 text-text-on-ink-2"
+                          : "mkt-body-sm text-muted-foreground"
+                        : "mkt-body-sm text-text-on-ink-2"
                     }
                   >
                     {paragraph}
                   </p>
                 ))}
-              </dd>
-            </div>
+              </div>
+            </details>
           ))}
-        </dl>
+        </div>
       </div>
     </section>
   );

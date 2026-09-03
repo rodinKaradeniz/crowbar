@@ -650,11 +650,18 @@ missing is a design question, not an implementation choice.
     age-confirmation block wraps. `--bottom-nav` describes the *staff* bar, not
     this one. A declared height that both the bar and its spacer read would
     make the class of bug impossible.
-  - **No declared phone breakpoint.** `@theme` declares only `--breakpoint-desktop`
-    and `--breakpoint-panel`, yet the guest pages already lean on Tailwind's
-    undeclared `sm:` and `md:` defaults. Anything that needs to reflow at phone
-    width — the booking sheet's `grid-cols-3` slot grid is the live example —
-    has no declared width to reflow at.
+  - ~~**No declared phone breakpoint.**~~ **Answered — `--bp-phone: 640px`.**
+    Declared in the token block beside `--bp-panel`, bridged as
+    `--breakpoint-phone`, generating a `phone:` variant. It is deliberately
+    scoped: the **marketing page and the auth screens only**, because both are
+    reached by a stranger on their own phone and neither can be told to come
+    back on a laptop. It is **not** a third product target — nothing in
+    `app/business/*` may use it, and stage 11's React Native client still owns
+    the staff phone answer. 640px is where these two-column marketing and auth
+    layouts actually collapse, and it coincides with Tailwind's `sm:`, so the
+    ad-hoc `sm:` usages already in the tree stop being an undeclared value.
+    The remaining items in this entry are still open: they concern the
+    *product* guest surfaces, where the phone question is not answered.
   - **Minor, same cause:** `p-7` (28px) on the two waitlist cards, and
     `text-[11px]` / `text-[13px]` on the menu, sit between declared steps.
 
@@ -739,10 +746,10 @@ is a data mutation that needs explicit authorization.
   Fixed: `break-all` on the venue email/website and the privacy contact,
   `break-words` on the not-found slug in four pages, the queue party stepper's
   `h-9 w-9` override, an undeclared `text-6xl`, a dead `border-t-brass/40`, a
-  missing `min-w-0`, and the item sheet's missing horizontal padding. **Not
-  verified in a browser** — `chrome-devtools-axi` fails with `Required at pageId`
-  on `snapshot`/`screenshot`/`eval`, and jsdom does no layout. Left unconfirmed and
-  needing a real 390px look: whether the `/order/[business]` fixed footer exceeds
+  missing `min-w-0`, and the item sheet's missing horizontal padding. **Not yet verified in a browser**, though it now can be: the
+  driver was repaired on 2026-09-03 and `playwright-cli` reaches a true 390px
+  viewport. Nobody has walked the guest pages at that width yet. Still needing
+  a real 390px look: whether the `/order/[business]` fixed footer exceeds
   its `pb-32` reserve once the age-confirmation block wraps (the most likely
   remaining bug), the menu cart button's `whitespace-nowrap` label, and the booking
   sheet's `grid-cols-3` slot grid in a 12-hour locale.
@@ -754,6 +761,140 @@ is a data mutation that needs explicit authorization.
   four need a control step the token block does not declare — see `docs/DESIGN.md`
   §7b. *Trigger:* the phone-width design question being answered, or a pilot guest
   failing to hit one of them.
+- **The workspace now has a phone floor, and sign-out finally has a door.**
+  `/business/*` was only ever opened on a laptop or a tablet, and at 390px the
+  header wrapped to two lines, the tablet's five-slot bottom bar became five
+  78px slots, and the overview showed two figures of four with no way to reach
+  the other two. Fixed with the `phone:` variant, which this pass extends to the
+  product — see `docs/DESIGN.md` § Responsive for the scope rule that replaces
+  "nothing in `app/business/*` may use it". The header is one line below
+  `--bp-phone` (venue name and service clock left, a menu button right); search,
+  notifications and the whole navigation moved into a left-hand sheet; the
+  bottom bar is now `phone:flex desktop:hidden` so the **tablet keeps it
+  unchanged**; the figure band is 2×2; and three header actions (`Refresh`,
+  `Pause ordering`, `Copy queue link`) drop their labels below the breakpoint
+  with `aria-label` intact. Separately: `logout()` had been on the auth context
+  since the beginning with no caller but the account screen's three forced
+  re-signin flows, so there was no way to sign out on purpose on a shared
+  laptop. `components/sign-out-button.tsx` now sits in the rail foot and the
+  phone sheet. **Verified in a browser at 390x844 on 2026-09-03**, after the
+  driver was repaired — `chrome-devtools-axi` was a version behind
+  `chrome-devtools-mcp` and is fixed by upgrading it, but it drives the real
+  Chrome window and so clamps to a 500px minimum; `playwright-cli` uses a CDP
+  device-metrics override and reaches a true 390. Confirmed: one-line header,
+  no horizontal overflow on overview/floor/tickets/queue, the 2x2 band, the
+  sheet's contents, notifications opening *from* the sheet, sign-out end to
+  end, and 1024x768 unchanged. It found one defect nothing else could — the
+  three icon-only actions measured 42x48, under the 48px floor, because
+  dropping the label collapses the width; they now carry
+  `min-w-[var(--control-desktop-min)]`.
+
+- **Four workspace pages overflow sideways at 390px, and all four predate the
+  phone pass.** Measured across all 25 workspace pages on 2026-09-03:
+  `/business/inventory` (573px), `/business/profile/hours` (525),
+  `/business/menu` (464) and `/business/schedule` (400). Everything else is
+  clean at 390, 1024 and 1440, with no console errors anywhere.
+
+  Confirmed pre-existing, not caused by the page-header pass. Every offending
+  element is page CONTENT, never the pinned header — checked by walking the DOM
+  for boxes whose right edge clears the viewport with no clipping ancestor, and
+  none of them sits inside a `.sticky`. The four culprits: the per-row action
+  clusters on a stock row (`flex gap-1 shrink-0`, four icon buttons) and a menu
+  item row (`flex gap-1.5`); the weekly-schedule time-input rows on Operating
+  Hours (`flex items-center gap-4`); and the day-ledger time spans on Schedule
+  (`font-mono tabular-nums inline-flex`). All four exist at `HEAD`, and the
+  page-header migration touched only the title block in each file — 13/11 and
+  9/8 lines ignoring whitespace on Schedule and Hours, and no diff at all on
+  `inventory-management-client.tsx`.
+
+  Inventory is the worst of them by a distance: at 390 the item names truncate
+  to two characters, the par/price text collides with the stock badge, and the
+  action icons run off the edge. Not a token change — each row needs to decide
+  whether its action cluster wraps under the content below `--bp-phone` or the
+  row becomes its own horizontal scroller. They were never caught because the
+  phone pass only measured overview, floor, tickets and queue. *Trigger:*
+  whenever the workspace phone floor is next worked on, and before any pilot
+  venue is told the workspace is usable on a phone.
+
+- **Menus should own their own active windows, and happy hour should stop
+  being a page. Design before the MVP release.** Right now "happy hour" is
+  spread across three places: `/business/happy-hour` owns the WINDOWS (which
+  days, what times), the menu item form owns the discounted PRICE, and the menu
+  page carries a "Happy Hour" menu alongside "Classic Menu" as though it were a
+  peer. So a venue that wants a breakfast menu or a late-night menu has no way
+  to express it, while the one time-boxed menu the product does understand needs
+  a dedicated settings screen to schedule.
+
+  **The shape that collapses all three.** Give every menu its own activation:
+  either *always on* (a classic menu) or *one or more windows* (days plus a time
+  range). Happy hour then stops being a feature and becomes what it always was —
+  a menu with a window and lower prices on some items. Breakfast, late-night and
+  seasonal menus fall out of the same mechanism for free, and
+  `/business/happy-hour` disappears into the menu it belongs to. The menu page
+  also sheds two things that are not menu content: preparation-station
+  management (a venue setting, configured once) and the happy-hour block.
+
+  **What has to be decided first, because none of it is mechanical.**
+  - *Overlap.* Two active windows can both claim an item. Which price wins —
+    most recently activated, lowest, or an explicit menu priority? The guest
+    ordering page needs one answer and so does the ticket that prints.
+  - *The price model.* Today the discount is a second price column on the item.
+    If any menu can have a window, is the price per (item x menu), or does a
+    menu carry a modifier? Per-pair is more flexible and more rows; a modifier
+    is simpler and cannot express "this one cocktail is half price but the rest
+    are 20% off".
+  - *Migration.* The existing happy-hour windows and per-item discounted prices
+    are live in the seed and in any pilot data. Whatever shape wins needs a
+    migration that preserves them, not a fresh start.
+  - *Order history.* `order_items` snapshot their price at placement, so past
+    orders are safe either way — worth confirming rather than assuming.
+  - *Timezone.* Windows are interpreted in the venue timezone (the
+    profile/info copy already says so). Overnight windows that cross midnight
+    are the case that breaks naive comparisons.
+
+  Not started. No code was written for this in the 2026-09-03 pass — the menu
+  page's own crowding was noted and left, because the fix is this redesign and
+  not a rearrangement. *Trigger:* before the MVP release, and before any pilot
+  venue configures a second menu.
+
+- **Account DELETION does not exist, and it is not the same thing as the
+  disable that does. Decide before the pilot.** `POST /auth/disable-account`
+  sets `is_active = False` and bumps `session_version`; the row, the name, the
+  email and the phone all stay exactly where they were. That is deactivation.
+  Nothing in the product erases a person, and the account screen does not
+  promise otherwise — but a pilot venue in Germany will ask, and GDPR Art. 17
+  is not answered by a flag.
+
+  **Why it needs designing rather than implementing.** 48 foreign keys point at
+  `users`. Forty-three are `ON DELETE SET NULL`, and every one of them is an
+  audit trail — who changed a ticket's status, who reconciled a stock count, who
+  merged two guest records, who received a transfer. A plain `DELETE` succeeds
+  and quietly empties all forty-three, turning "Theo settled Tisch 2 at 19:52"
+  into "somebody did". Five more block the delete outright: `staff.user_id`,
+  `tabs.opened_by`, `tabs.closed_by`, `notifications.user_id` and
+  `password_reset_tokens.user_id`. So the schema already refuses the naive
+  answer, which is the right refusal — the operational record is the thing the
+  product exists to keep.
+
+  **The shape the answer probably takes** is the one the product already uses
+  for guests: `customer_service.anonymize_customer` erases the personal fields,
+  stamps `anonymized_at`, and leaves the rows that reference the record intact.
+  A staff equivalent would scrub name / email / phone / avatar, keep the row so
+  the trails still resolve to a stable "former staff member", and be recorded as
+  a `CustomerDataRequest`-style audit of its own. **That is a decision, not a
+  chore:** it trades the letter of erasure against a fiscal-adjacent record the
+  venue may be legally required to keep, and the two obligations genuinely pull
+  against each other.
+
+  **Two more questions inside it.** An OWNER deleting their account is tenant
+  deletion, which is a different and larger question — the five business tables
+  that are `ON DELETE RESTRICT` exist precisely so a settlement cannot vanish
+  with its tenant. And an operator who deletes their own account while holding
+  the only `owner` role would strand the venue. Neither is answered here.
+
+  *Trigger:* before the pilot (stage 10) — a real venue with real staff makes
+  this a live obligation rather than a design question.
+
 - Automate the critical browser journey: book → assign/seat → QR/staff order →
   fulfill → deduct/reconcile stock → record waste → settle externally → close
   seating → inspect guest and cost history.

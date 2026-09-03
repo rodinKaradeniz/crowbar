@@ -1806,3 +1806,305 @@ the suite.**
 `server/app/models/reservation.py`, `server/tests/conftest.py`,
 `server/tests/integration/test_reservation_routes.py`, `scripts/verify-fresh-db.sh`,
 `docs/TODO.md`.
+
+## 2026-09-02 — A phone breakpoint exists, for two surfaces and no more
+
+**Context.** The design contract said "two targets, and no others" and recorded
+the missing phone breakpoint as an open question. That held for the product, but
+it left the two surfaces a stranger reaches on their own phone — the marketing
+page and the auth screens — with no declared width to reflow at, so they had
+drifted onto Tailwind's undeclared `sm:` and `md:` defaults anyway. On a phone
+the landing nav wrapped its five items into a pile, a four-cell strip stacked
+with the row's side padding still on it, and signing in began by scrolling past
+a screen of marketing to reach the form.
+
+**Decision.** `--bp-phone: 640px` is declared in the token block beside
+`--bp-panel`, bridged as `--breakpoint-phone`, generating a `phone:` variant.
+It is scoped by rule, not by convention: **marketing and auth only**. Nothing
+in `app/business/*` may use it. This is not a third designed target — the staff
+phone answer is still a React Native client in stage 11, and the product's own
+guest surfaces still have no phone design. 640px is where these particular
+two-column layouts collapse, and it coincides with `sm:`, which is what stops
+the existing ad-hoc usages from being an invented value.
+
+Three things follow from it. The landing nav collapses behind a native
+`<details>` disclosure rather than a client component, because that page ships
+no JavaScript at all and a menu is not a good enough reason to give it a client
+boundary and a hydration gate. The FAQ uses the same element, closed on a phone
+and force-opened above the breakpoint by CSS, so the desktop reading is
+unchanged. And the auth ink panel is simply not rendered below the breakpoint,
+with the lockup moved above the form — merging the two panes would have stacked
+ink under paper inside one hairline box, which breaks "grounds are fixed by
+surface" to solve a problem that hiding one marketing pane solves outright.
+
+**Consequences.** `phone:` is now the fourth declared breakpoint and the easiest
+one to misuse, because almost any cramped screen looks like it wants it. The
+scoping rule above is the whole guard: if a *product* surface needs a phone
+layout, that is still an open design question, not a licence to reach for this
+variant. A CSS media query cannot read a custom property, so `--breakpoint-phone`
+and the one hand-written `@media (width >= 640px)` block in the FAQ rules both
+repeat the literal and both say so — the same constraint `--breakpoint-desktop`
+and `--breakpoint-panel` already carry.
+
+**Superseded in part, 2026-09-03.** The FAQ's force-open `@media (width >= 640px)`
+block described above no longer exists — the disclosure is now an accordion at
+every width. The breakpoint, its scoping rule and the other two consequences
+stand. See the 2026-09-03 entry below.
+
+**References.** `client/app/globals.css` (token block, `@theme` bridge, the
+`.mkt-nav-*` and `.mkt-faq-*` rules), `client/components/landing/landing-header.tsx`,
+`client/components/landing/faq-section.tsx`, `client/components/auth/auth-shell.tsx`,
+`docs/DESIGN.md` § Responsive, `docs/TODO.md` §7b.
+
+
+## 2026-09-03 — A ground change ranks; within a run of peers, it is the wrong separator
+
+**Context.** The landing page's five numbered capabilities were separated three
+different ways: 01 and 02 by hairlines inside one shared section, 03 by being
+the only one of the five on the ink ground, and 04 and 05 by nothing at all.
+The user's report was that "only 03 having a dark background is confusing" —
+which is the correct diagnosis. Ink against paper is the page's strongest
+available contrast, and spending it on one member of a run of five says that
+member is a different kind of thing. It is not; it is the third of five.
+
+**Decision.** One separator, used five times. Each capability is a full-bleed
+band with one padding (`.mkt-sec-feature`) and one opening rule (`.mkt-band`),
+its ground alternating down the already-declared paper ladder — `--paper`,
+`--paper-tint`, `--paper`, `--paper-tint`, `--paper`. **Alternating tint is a
+rhythm; ink against paper is a rank.** The ink the page loses at 03 is spent on
+the FAQ, which is not one of the five and can carry a dark band without ranking
+anything against anything.
+
+The five had four different vertical paddings — 64–120, 56–104, 52–92 and
+44–76 — a run that got quieter as it went for no reason a reader could see. The
+widest wins, because a band whose ground changes at its own edge needs the room
+to read as its own thing. **No new value entered:** the winning clamp is the one
+01 and 02 already used, and the three band grounds were all already declared.
+
+Two panels inside §03 stay on ink and carry `.ground-ink` to say so. The bar
+board and the tab *are* the ink product and the section is depicting them —
+depicting the other ground is not the same as being on it, which is the
+distinction `AuthPanel` already relies on.
+
+**Consequences.** 01 and 02 became addressable. They had been the only two
+footer links sharing a destination (`#capabilities`, which is the pair's shared
+heading and not either row); each row is now its own `<section>` with its own
+id, so "Reservations" and "Walk-in queue" land where they say they do.
+`.mkt-row` and `.mkt-row-head` retired with the wrapper section they served.
+
+The FAQ became an accordion at **every** width, reversing one day-old decision.
+The media query that restored the canvas's two-column row above `--bp-phone`
+also hid the `+`, so a desktop reader got an element that folded when clicked
+and gave no sign that it could. **The sign is the affordance; if the sign is
+hidden the disclosure must be too.** One behaviour, one affordance, every width.
+
+**References.** `client/app/globals.css` (the `.mkt-band` / `.mkt-sec-feature`
+and `.mkt-faq-*` rules), `client/components/landing/capabilities-section.tsx`,
+`ordering-section.tsx`, `inventory-section.tsx`, `demand-section.tsx`,
+`faq-section.tsx`, `landing-footer.tsx`, `docs/DESIGN.md` § Grounds.
+
+
+## 2026-09-03 — A floor is not a target, and the workspace needed one
+
+**Context.** `--bp-phone` was declared the day before with an explicit scope
+rule: marketing and auth only, *nothing in `app/business/*` may use it*, because
+the staff phone answer is a React Native client in stage 11. The rule lasted one
+day. Someone opened the workspace on a phone, and the reasoning behind the rule
+turned out to answer a question nobody had asked. The rule was about whether a
+phone is a **designed target**; what the workspace actually needed was for its
+existing design not to **break** at 390px — a header wrapped onto two lines, a
+five-slot bottom bar at 78px per slot, and an overview showing two figures of
+four with no way to reach the others.
+
+**Decision.** `phone:` is a **floor**, and floors apply everywhere. It may make
+a surface usable at 390px; it may not invent a phone layout, and it may not move
+anything inside the tablet range. The phone is still not a designed target and
+stage 11 still owns that answer. `docs/DESIGN.md` § Responsive carries the rule
+and the amended open question 3.
+
+**The load-bearing distinction was the bottom bar.** It reads like phone
+furniture and is not: it is `desktop:hidden`, so it was live from 0 to 1279px,
+and the Tablet canvas §07 specifies it deliberately — a tablet is held, so the
+reachable part of the screen is the bottom. "Remove the bottom bar" would have
+taken navigation away from the 1024×768 target, which is the device staff
+actually use during service. It is now `hidden phone:flex desktop:hidden`: the
+bar keeps the device it was designed for and yields the one it was not. **The
+general rule: before deleting a responsive branch, check which target it
+belongs to. `desktop:hidden` means "everything below desktop", not "phone".**
+
+The same test settled the figure band. §07's "two per screen, not four" is an
+argument about a tablet — held at arm's length, glanced at mid-service. A phone
+is held close and read on purpose, so the band is 2×2 there and the canvas rule
+is untouched across the tablet range.
+
+**Consequences.** The workspace now has three navigation shapes — rail, bottom
+bar, phone sheet — all fed by `hooks/use-workspace-nav.ts`, so they cannot
+disagree about what an operator may open. Two components needed real surgery for
+that: the notification panel cannot live inside the phone sheet, because a sheet
+unmounts its contents when it closes and would take the panel with it, so
+`NotificationTrigger` gained optional controlled `open` and stays mounted in the
+topbar while being driven from the sheet. It also reports its unread count
+outward, because with the bell hidden on a phone the count would otherwise be
+invisible until the menu was opened — reusing the poll it already runs rather
+than adding a second one.
+
+**Icon-only is a phone treatment, not a style.** Three header actions lose their
+labels below the breakpoint and keep `aria-label` at every width. Above it the
+label stays: removing it where there is room is information thrown away. Where a
+label carries STATE — "Pause ordering" / "Resume ordering" — the icon has to
+carry that state too, which is why that one swaps glyph rather than just
+shrinking.
+
+**Sign-out existed and had no door.** `logout()` has been on the auth context
+since the beginning; its only callers were the account screen's three "you must
+sign in again" flows. There was no way for an operator to sign out on purpose,
+on a laptop shared by a whole shift. A mechanism with no entry point is not a
+feature, and nothing in the type system or the tests notices the difference.
+
+**References.** `client/components/business-shell.tsx`, `business-topbar.tsx`,
+`business-mobile-nav.tsx`, `business-bottom-bar.tsx`, `business-rail.tsx`,
+`sign-out-button.tsx`, `notification-trigger.tsx`,
+`app/business/overview/business-overview-client.tsx`, `docs/DESIGN.md`
+§ Responsive, `docs/TODO.md` stage 8.
+
+## 2026-09-03 — The gates all passed and the button was still the wrong size
+
+**Context.** The phone pass above shipped with an explicit caveat: the browser
+driver was broken, so nothing had been seen at 390px. `tsc`, `lint`, both
+`globals.css` grep gates, the build and the whole client suite passed on it.
+That was the entire basis for the claim.
+
+**The driver was fixable.** `chrome-devtools-axi` spawns
+`npx -y chrome-devtools-mcp@latest`; chrome-devtools-mcp released a 1.x that
+made `pageId` required on page-scoped tools, and the installed wrapper (0.1.29)
+does not send it. So `open`, `pages` and `resize` kept working while
+`snapshot`, `eval` and `screenshot` all failed with `Required at pageId` — a
+mismatch that looks like a live browser. Pinning the MCP to 0.26.0 restored it.
+
+**And it still could not do the job.** Its `resize` drives the real Chrome
+window, which clamps to a 500px minimum: `resize 390 844` reports success while
+`innerWidth` stays 500. `playwright-cli` uses `page.setViewportSize` — a CDP
+device-metrics override with no window floor — and gives a true 390.
+
+**What the browser found that nothing else could.** The three header actions
+made icon-only in the previous entry measured **42×48**. The height was right,
+because the tablet token takeover sets it; the width was not, because dropping
+the label left the icon inside `size="filter"`'s `px-3` and nothing pins the
+other axis. Every control beside them, including the new menu button, is 48.
+They are now `min-w-[var(--control-desktop-min)]` — the same token that already
+sets the height, so no new value enters the system, and a no-op above
+`--bp-phone` where the returning label makes the button wider than 48 anyway.
+
+**The lesson is about what a gate is.** Every check this project runs reads
+source or types. Not one of them measures a rendered box, so a control 6px under
+the touch floor is invisible to all of them, at every effort level, forever. A
+green suite is evidence about the code; it is not evidence about the interface.
+Where a change is *about* rendered geometry — a breakpoint, a hidden label, a
+collapsed layout — the verification has to be a browser at that viewport, and
+saying so plainly is part of the work when it cannot be done.
+
+**Also confirmed by looking, having only been reasoned about before.** The
+header holds one line at 390; no page overflows (`scrollWidth == 390` on
+overview, floor, tickets and queue); the 2×2 figure band renders; the phone
+sheet carries search, notifications, both nav groups with the nested child and
+the active accent, identity and sign-out; the notification panel opens *from*
+that sheet, which was the controlled-mount design's whole purpose; sign-out
+completes end to end, clearing the cookie and bouncing a re-entry attempt to
+`/auth/login?redirect=`; and 1024×768 is untouched — labels back, bell and
+search field back, five-slot bottom bar present.
+
+One thing that reads as a defect and is not: three of the four overview figures
+show a wide grey dash. That is `Figure`'s deliberate empty state — an em-dash at
+display size, never a zero, because "no orders yet" and "zero orders" are not
+the same claim. At band size it is easy to mistake for a loading skeleton.
+
+**References.** `client/app/business/floor/floor-client.tsx`,
+`orders/ticket-board-client.tsx`, `queue/queue-board-client.tsx`,
+`docs/DESIGN.md` § Responsive.
+
+## 2026-09-03 — A page has two halves, and only one of them should move
+
+**Context.** Three complaints that turned out to be one shape. The Menu page
+felt differently padded from every other screen. The docs nav pinned itself
+half-underneath the topbar. And scrolling into a long page left nothing on
+screen that said which page it was.
+
+**The padding was not padding.** Every workspace page already carried the same
+gutter, `px-[clamp(16px,2.5vw,32px)]`. What differed was a measure: Menu had
+invented `max-w-5xl mx-auto`, `region-tax` had `max-w-5xl` with no centring,
+and the other 24 pages ran edge to edge. Three behaviours, none of them
+declared. The resolution is a rule rather than a value — **width is decided by
+what a page is for.** A board (floor, tickets, tabs, the book) runs full-bleed,
+because width is the working surface and a floor map on a 1920px monitor should
+use the monitor. A document (settings, profile, menu, staff) caps at
+`--grid-workspace`, because a 1900px-wide text input is not a form anyone wants
+to fill in. 1024 is the number Menu had already chosen, so adopting the token
+moved nothing on the one page that had it right.
+
+**`top: 0` is not the top.** The workspace topbar is `sticky top-0` and 76 tall,
+so anything else that sticks at 0 pins itself *underneath* it and loses its
+first 76px. Four surfaces had shipped that way — the docs nav at `top-0`, the
+floor aside at `top-4`, both profile preview columns at `top-6` — and the
+failure is invisible until a page is long enough to scroll, which is why it
+survived every review. `--workspace-header` had existed as a declared scroll
+offset since the Schedule calendar needed it; the other four simply never read
+it.
+
+**The second offset had to be measured, not declared.** Pinning each page's
+title created a second sticky bar, and its height is genuinely not a constant:
+Reports is 236px with a range picker and four tabs, Tabs is 81 with neither.
+Any hard-coded number would have been wrong on the first page that gained a
+tab. So `PageHeader` observes itself and publishes `--page-header`, and every
+sticky sibling offsets by `calc(var(--workspace-header) + var(--page-header))`.
+Measured in the browser afterwards, the arithmetic lands exactly: floor 76+94 =
+170, schedule and both profile columns 76+81 = 157, docs — which has no page
+header — correctly still 76.
+
+**Sub-navigation belongs to the title, not to the body.** Stock / Counts /
+Suppliers is Inventory's own navigation, and scrolled away it left a table of
+rows that could have belonged to any screen in the product. Radix needs
+`TabsList` and `TabsContent` under one root, so on those pages the root wraps
+both halves and carries `display: contents` — the header and body stay the flow
+siblings that `sticky` requires. That immediately produced a real bug: a
+five-entry `TabsList` is `w-fit` and measures 593px, so at 390px it pushed the
+whole document to 609. The slot is now `overflow-x-auto`; the tabs scroll
+instead of the page.
+
+**Settings and Docs left the navigation.** The rail's "Business" group had
+grown to six entries, of which two were not places anyone goes during service —
+your own account, and the manual. They now live behind the identity block at
+the foot of the rail, with sign-out, which is the same category: actions on the
+person, not on the venue. That surfaced a gap nobody had noticed. **The tablet
+range had no sign-out at all** — the rail that carried it is `desktop:flex`, so
+between 640 and 1279px an operator could not leave a workspace on a shared
+device. The "More" sheet now carries the same foot.
+
+**Measured afterwards, at three widths.** All 25 pages are clean at 1440 and
+1024 with no console errors. At 390 four still overflow — inventory 573, hours
+525, menu 464, schedule 400 — and all four are page CONTENT, never the pinned
+header: every offending box was checked for a clipping ancestor and none sits
+inside a `.sticky`. All four predate this pass and are recorded in
+`docs/TODO.md` rather than fixed, because each needs a per-row layout decision
+rather than a token. The phone pass the day before had only measured overview,
+floor, tickets and queue, which is why they were missed.
+
+**One thing the browser found that reasoning would not have.** The header was
+first given the topbar's `--scrim-ink`, 94% opaque and frosted, so the two bars
+would match. That works over 76px. Over Reports' 236px the 6% that gets through
+is legible as ghost text behind the title. It is now `bg-background` — the same
+rgb(20,20,15) at full opacity, so the bars still match and nothing prints
+through.
+
+**The generalisable part.** A page's identity — its title, its description, its
+own sub-navigation — is not content. It is chrome that happens to be written
+inside the page, and the moment it scrolls away the screen stops answering
+"where am I". Twenty-five pages had hand-rolled that block, which is why they
+had drifted into four different shapes; one component ended the drift and made
+the offset arithmetic solvable at all.
+
+**References.** `client/components/page-header.tsx`,
+`client/components/account-menu.tsx`, `client/components/business-rail.tsx`,
+`business-bottom-bar.tsx`, `business-mobile-nav.tsx`,
+`business-docs-shell.tsx`, `client/lib/nav.ts`, `client/app/globals.css`
+(`--grid-workspace`, `--page-header`), 25 page clients under
+`client/app/business/`, `docs/DESIGN.md` § Space.

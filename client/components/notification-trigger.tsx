@@ -136,8 +136,36 @@ function NotificationSkeleton() {
 
 // ─── main component ───────────────────────────────────────────────────────────
 
-export function NotificationTrigger() {
-  const [open, setOpen] = useState(false);
+/**
+ * The bell, and the panel behind it.
+ *
+ * OPEN STATE IS OPTIONALLY CONTROLLED. Below --bp-phone the bell is not in the
+ * header — the header is one line there — and the panel is opened from a row in
+ * the phone navigation sheet instead. That sheet unmounts its own contents when
+ * it closes, so this component cannot live inside it; it stays mounted in the
+ * topbar and is driven from outside. Uncontrolled remains the default, which is
+ * what every other caller uses.
+ *
+ * `onUnreadChange` exists for the same reason. With the bell out of the phone
+ * header, the unread count would have been invisible until the operator opened
+ * the menu — so the topbar mirrors it onto the menu button. Reporting the count
+ * this component already polls for is much cheaper than a second poller, and it
+ * cannot disagree with the badge on the bell.
+ */
+export function NotificationTrigger({
+  open: openProp,
+  onOpenChange,
+  triggerClassName,
+  onUnreadChange,
+}: {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  triggerClassName?: string;
+  onUnreadChange?: (unread: number) => void;
+} = {}) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = openProp ?? uncontrolledOpen;
+  const setOpen = onOpenChange ?? setUncontrolledOpen;
   const [items, setItems] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -196,6 +224,10 @@ export function NotificationTrigger() {
     const interval = setInterval(refreshUnread, POLL_MS);
     return () => clearInterval(interval);
   }, [refreshUnread]);
+
+  useEffect(() => {
+    onUnreadChange?.(unread);
+  }, [unread, onUnreadChange]);
 
   useEffect(() => {
     const onFocus = () => void refreshUnread();
@@ -279,7 +311,7 @@ export function NotificationTrigger() {
             type="button"
             variant="ghost"
             size="icon"
-            className="relative shrink-0"
+            className={cn("relative shrink-0", triggerClassName)}
             aria-label={`Notifications${unread > 0 ? `, ${unread} unread` : ""}`}
             aria-haspopup="dialog"
             aria-expanded={open}

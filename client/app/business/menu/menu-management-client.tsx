@@ -90,6 +90,7 @@ import { EmptyState } from "@/components/empty-state";
 import { SkeletonList } from "@/components/ui/skeleton";
 import { formatMoney } from "@/lib/money";
 import { useRegionalSettings } from "@/contexts/regional-context";
+import { PageBody, PageHeader } from "@/components/page-header";
 
 interface Props {
   businessId: string;
@@ -740,517 +741,517 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
   }
 
   return (
-    <div className="px-[clamp(16px,2.5vw,32px)] py-6 max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="type-t1">Menu Management</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Create menus, categories, and items for your ordering board.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            onClick={() => {
-              void loadLibrary();
-              setLibraryTargetCategoryId(null);
-              setLibraryDialog(true);
-            }}
-          >
-            <BookMarked className="h-4 w-4 mr-2" />
-            Library
-          </Button>
-          <Button onClick={openCreateMenu}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Menu
-          </Button>
-        </div>
-      </div>
-
-      {/* Public QR-menu link — the URL customers scan/open to order */}
-      <div className="flex items-center justify-between gap-3 border bg-card p-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium">Public menu link</p>
-          <p className="text-xs text-muted-foreground truncate">
-            {publicMenuUrl}
-          </p>
-        </div>
-        <div className="flex gap-2 shrink-0">
-          <Button size="filter" variant="secondary" onClick={handleCopyMenuLink}>
-            {menuLinkCopied ? (
-              <>
-                <Check className="h-3.5 w-3.5 mr-1.5" /> Copied
-              </>
-            ) : (
-              <>
-                <Copy className="h-3.5 w-3.5 mr-1.5" /> Copy link
-              </>
-            )}
-          </Button>
-          <Link href={`/menu/${businessSlug}`} target="_blank">
-            <Button size="filter" variant="secondary">
-              <ExternalLink className="h-3.5 w-3.5 mr-1.5" /> Open
-            </Button>
-          </Link>
-        </div>
-      </div>
-
-      <section className="border bg-card p-4 space-y-3">
-        <div><p className="font-medium">Preparation stations</p><p className="text-xs text-muted-foreground">Items route to one station or the shared queue.</p></div>
-        <div className="flex flex-wrap gap-2">
-          {stations.filter((station) => station.isActive).map((station) => (
-            <div key={station.id} className="inline-flex items-center gap-[var(--space-8)] rounded-[var(--radius-3)] border border-border px-3 py-2 text-[length:var(--ui-size)]">
-              {renamingStationId === station.id ? (
-                <>
-                  <Input
-                    autoFocus
-                    value={renameStationDraft}
-                    onChange={(event) => setRenameStationDraft(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") void renameStation(station);
-                      if (event.key === "Escape") setRenamingStationId(null);
-                    }}
-                    className="h-[var(--control-desktop)] w-40"
-                    aria-label={`Rename ${station.name}`}
-                  />
-                  <Button size="filter" variant="secondary" onClick={() => void renameStation(station)}>
-                    Save
-                  </Button>
-                  <Button size="filter" variant="ghost" onClick={() => setRenamingStationId(null)}>
-                    Cancel
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <span>{station.name}</span>
-                  {canManageTax && (
-                    <>
-                      <button
-                        type="button"
-                        className="type-label text-muted-foreground hover:text-foreground"
-                        onClick={() => {
-                          setRenamingStationId(station.id);
-                          setRenameStationDraft(station.name);
-                        }}
-                      >
-                        Rename
-                      </button>
-                      <button
-                        type="button"
-                        className="type-label text-muted-foreground hover:text-critical-text"
-                        onClick={() => void archiveStation(station)}
-                      >
-                        Archive
-                      </button>
-                    </>
-                  )}
-                </>
-              )}
-            </div>
-          ))}
-          {stations.filter((station) => station.isActive).length === 0 && <p className="text-sm text-muted-foreground">No active station. Items can still use the shared queue.</p>}
-        </div>
-        {canManageTax && <div className="flex max-w-sm gap-2"><Input placeholder="New station name" value={newStationName} onChange={(event) => setNewStationName(event.target.value)} /><Button variant="secondary" onClick={() => void addStation()} disabled={!newStationName.trim()}>Add station</Button></div>}
-      </section>
-
-      {menus.length === 0 ? (
-        <EmptyState
-          icon={ChefHat}
-          title="No menus yet"
-          description="Create your first menu to get started."
-          action={{ label: "Create Menu", onClick: openCreateMenu }}
-        />
-      ) : (
-        <>
-          {/* Menu tabs */}
-          <div className="flex gap-2 flex-wrap">
-            {menus.map((menu) => (
-              <button
-                key={menu.id}
-                onClick={() => setSelectedMenuId(menu.id)}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${
-                  selectedMenuId === menu.id
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-background border-border hover:bg-muted"
-                }`}
-              >
-                {menu.name}
-                {!menu.isActive && (
-                  <span className="ml-1.5 text-xs opacity-60">(inactive)</span>
-                )}
-              </button>
-            ))}
-          </div>
-
-          {selectedMenu && (
-            <div className="space-y-4">
-              {/* Menu header */}
-              <div className="flex items-center justify-between border p-4">
-                <div>
-                  <p className="font-medium">{selectedMenu.name}</p>
-                  {selectedMenu.description && (
-                    <p className="text-sm text-muted-foreground">
-                      {selectedMenu.description}
-                    </p>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="secondary"
-                    size="filter"
-                    onClick={() => toggleMenuActive(selectedMenu)}
-                  >
-                    {selectedMenu.isActive ? "Deactivate" : "Activate"}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="filter"
-                    onClick={() => openEditMenu(selectedMenu)}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="filter"
-                    onClick={() => deleteMenu(selectedMenu.id)}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    size="filter"
-                    onClick={() => openCreateCategory(selectedMenu.id)}
-                  >
-                    <Plus className="h-3.5 w-3.5 mr-1" />
-                    Category
-                  </Button>
-                </div>
-              </div>
-
-              {/* Categories and items */}
-              {selectedMenu.categories.length === 0 ? (
-                <div className="border border-dashed p-8 text-center">
-                  <p className="text-sm text-muted-foreground">
-                    No categories yet.{" "}
-                    <button
-                      className="underline"
-                      onClick={() => openCreateCategory(selectedMenu.id)}
-                    >
-                      Add one
-                    </button>
-                  </p>
-                </div>
-              ) : (
-                selectedMenu.categories.map((cat) => (
-                  <CategorySection
-                    key={cat.id}
-                    menu={selectedMenu}
-                    category={cat}
-                    stockInfo={stockInfo}
-                    stations={stations}
-                    onAddItem={openCreateItem}
-                    onAddFromLibrary={openLibraryForCategory}
-                    onEditItem={openEditItem}
-                    onToggleAvail={toggleAvailability}
-                    onDeleteItem={(item, menuId, categoryId) =>
-                      setDeleteTarget({
-                        id: item.id,
-                        name: item.name,
-                        type: "item",
-                        menuId,
-                        categoryId,
-                      })
-                    }
-                    onDeleteCategory={deleteCategory}
-                    onRenameCategory={renameCategory}
-                    onSaveToLibrary={saveToLibrary}
-                    onEditRecipe={setRecipeItem}
-                    canCreateItems={canManageTax}
-                  />
-                ))
-              )}
-            </div>
-          )}
-        </>
-      )}
-
-      {/* ── Menu dialog ──────────────────────────────────────────────────────── */}
-      <Dialog open={menuDialog} onOpenChange={setMenuDialog}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>{editingMenu ? "Edit Menu" : "New Menu"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label>Name</Label>
-              <Input
-                value={menuName}
-                onChange={(e) => setMenuName(e.target.value)}
-                placeholder="Dinner Menu"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Description (optional)</Label>
-              <Textarea
-                value={menuDesc}
-                onChange={(e) => setMenuDesc(e.target.value)}
-                placeholder="Available from 6pm–11pm"
-                rows={2}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="secondary" onClick={() => setMenuDialog(false)}>
-              Cancel
-            </Button>
-            <Button onClick={saveMenu} disabled={!menuName.trim()}>
-              {editingMenu ? "Save" : "Create"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Category dialog ───────────────────────────────────────────────────── */}
-      <Dialog open={categoryDialog} onOpenChange={setCategoryDialog}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>New Category</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-1.5 py-2">
-            <Label>Name</Label>
-            <Input
-              value={categoryName}
-              onChange={(e) => setCategoryName(e.target.value)}
-              placeholder="Starters"
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="secondary" onClick={() => setCategoryDialog(false)}>
-              Cancel
-            </Button>
-            <Button onClick={saveCategory} disabled={!categoryName.trim()}>
-              Create
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Item dialog ───────────────────────────────────────────────────────── */}
-      <Dialog open={itemDialog} onOpenChange={setItemDialog}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>{editingItem ? "Edit Item" : "New Item"}</DialogTitle>
-          </DialogHeader>
-          <ItemFormFields form={itemForm} onChange={setItemForm} showHappyHour showAlcohol taxProfiles={taxProfiles} canManageTax={canManageTax} currencyCode={currencyCode} taxLabel={taxLabel} stations={stations} />
-          <DialogFooter>
-            <Button variant="secondary" onClick={() => setItemDialog(false)}>
-              Cancel
-            </Button>
+    <>
+      <PageHeader
+        title="Menu Management"
+        description="Create menus, categories, and items for your ordering board."
+        actions={
+          <>
             <Button
-              onClick={saveItem}
-              disabled={!itemForm.name.trim() || !itemForm.price || (!editingItem && !itemForm.taxProfileId)}
+              variant="secondary"
+              onClick={() => {
+                void loadLibrary();
+                setLibraryTargetCategoryId(null);
+                setLibraryDialog(true);
+              }}
             >
-              {editingItem ? "Save" : "Add Item"}
+              <BookMarked className="h-4 w-4 mr-2" />
+              Library
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <Button onClick={openCreateMenu}>
+              <Plus className="h-4 w-4 mr-2" />
+              New Menu
+            </Button>
+          </>
+        }
+      />
 
-      {/* ── Library sheet ─────────────────────────────────────────────────────── */}
-      <Sheet open={libraryDialog} onOpenChange={setLibraryDialog}>
-        <SheetContent className="w-[400px] sm:max-w-[400px] flex flex-col">
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
-              <BookMarked className="h-4 w-4" />
-              Item Library
-            </SheetTitle>
-          </SheetHeader>
-
-          <div className="flex items-center justify-between px-4 pt-1 pb-3 border-b">
-            <p className="text-xs text-muted-foreground">
-              {libraryTargetCategoryId
-                ? "Click + to add an item to the selected category."
-                : "Manage reusable item templates."}
+      <PageBody>
+        {/* Public QR-menu link — the URL customers scan/open to order */}
+        <div className="flex items-center justify-between gap-3 border bg-card p-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium">Public menu link</p>
+            <p className="text-xs text-muted-foreground truncate">
+              {publicMenuUrl}
             </p>
-            {canManageTax && <Button size="filter" variant="secondary" onClick={openCreateLibraryItem}>
-              <Plus className="h-3.5 w-3.5 mr-1" />
-              New
-            </Button>}
           </div>
+          <div className="flex gap-2 shrink-0">
+            <Button size="filter" variant="secondary" onClick={handleCopyMenuLink}>
+              {menuLinkCopied ? (
+                <>
+                  <Check className="h-3.5 w-3.5 mr-1.5" /> Copied
+                </>
+              ) : (
+                <>
+                  <Copy className="h-3.5 w-3.5 mr-1.5" /> Copy link
+                </>
+              )}
+            </Button>
+            <Link href={`/menu/${businessSlug}`} target="_blank">
+              <Button size="filter" variant="secondary">
+                <ExternalLink className="h-3.5 w-3.5 mr-1.5" /> Open
+              </Button>
+            </Link>
+          </div>
+        </div>
 
-          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
-            {libraryLoading ? (
-              <p className="text-sm text-muted-foreground py-6 text-center">
-                Loading…
-              </p>
-            ) : library.length === 0 ? (
-              <div className="border border-dashed p-8 text-center mt-2">
-                <BookMarked className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                <p className="text-sm text-muted-foreground">
-                  No library items yet.
-                </p>
-                {canManageTax && <Button
-                  size="filter"
-                  className="mt-3"
-                  onClick={openCreateLibraryItem}
-                >
-                  <Plus className="h-3.5 w-3.5 mr-1" />
-                  Add first item
-                </Button>}
+        <section className="border bg-card p-4 space-y-3">
+          <div><p className="font-medium">Preparation stations</p><p className="text-xs text-muted-foreground">Items route to one station or the shared queue.</p></div>
+          <div className="flex flex-wrap gap-2">
+            {stations.filter((station) => station.isActive).map((station) => (
+              <div key={station.id} className="inline-flex items-center gap-[var(--space-8)] rounded-[var(--radius-3)] border border-border px-3 py-2 text-[length:var(--ui-size)]">
+                {renamingStationId === station.id ? (
+                  <>
+                    <Input
+                      autoFocus
+                      value={renameStationDraft}
+                      onChange={(event) => setRenameStationDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") void renameStation(station);
+                        if (event.key === "Escape") setRenamingStationId(null);
+                      }}
+                      className="h-[var(--control-desktop)] w-40"
+                      aria-label={`Rename ${station.name}`}
+                    />
+                    <Button size="filter" variant="secondary" onClick={() => void renameStation(station)}>
+                      Save
+                    </Button>
+                    <Button size="filter" variant="ghost" onClick={() => setRenamingStationId(null)}>
+                      Cancel
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <span>{station.name}</span>
+                    {canManageTax && (
+                      <>
+                        <button
+                          type="button"
+                          className="type-label text-muted-foreground hover:text-foreground"
+                          onClick={() => {
+                            setRenamingStationId(station.id);
+                            setRenameStationDraft(station.name);
+                          }}
+                        >
+                          Rename
+                        </button>
+                        <button
+                          type="button"
+                          className="type-label text-muted-foreground hover:text-critical-text"
+                          onClick={() => void archiveStation(station)}
+                        >
+                          Archive
+                        </button>
+                      </>
+                    )}
+                  </>
+                )}
               </div>
-            ) : (
-              library.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center gap-3 border px-4 py-3"
+            ))}
+            {stations.filter((station) => station.isActive).length === 0 && <p className="text-sm text-muted-foreground">No active station. Items can still use the shared queue.</p>}
+          </div>
+          {canManageTax && <div className="flex max-w-sm gap-2"><Input placeholder="New station name" value={newStationName} onChange={(event) => setNewStationName(event.target.value)} /><Button variant="secondary" onClick={() => void addStation()} disabled={!newStationName.trim()}>Add station</Button></div>}
+        </section>
+
+        {menus.length === 0 ? (
+          <EmptyState
+            icon={ChefHat}
+            title="No menus yet"
+            description="Create your first menu to get started."
+            action={{ label: "Create Menu", onClick: openCreateMenu }}
+          />
+        ) : (
+          <>
+            {/* Menu tabs */}
+            <div className="flex gap-2 flex-wrap">
+              {menus.map((menu) => (
+                <button
+                  key={menu.id}
+                  onClick={() => setSelectedMenuId(menu.id)}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${
+                    selectedMenuId === menu.id
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background border-border hover:bg-muted"
+                  }`}
                 >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-sm font-medium truncate">
-                        {item.name}
-                      </span>
-                      <Badge
-                        tone="neutral"
-                        className="text-xs flex items-center gap-1 h-4 shrink-0"
-                      >
-                        {item.routesToAllStations ? "Shared" : (stations.find((station) => station.id === item.preparationStationId)?.name ?? "Archived station")}
-                      </Badge>
-                    </div>
-                    {item.description && (
-                      <p className="text-xs text-muted-foreground truncate mt-0.5">
-                        {item.description}
+                  {menu.name}
+                  {!menu.isActive && (
+                    <span className="ml-1.5 text-xs opacity-60">(inactive)</span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {selectedMenu && (
+              <div className="space-y-4">
+                {/* Menu header */}
+                <div className="flex items-center justify-between border p-4">
+                  <div>
+                    <p className="font-medium">{selectedMenu.name}</p>
+                    {selectedMenu.description && (
+                      <p className="text-sm text-muted-foreground">
+                        {selectedMenu.description}
                       </p>
                     )}
-                    <p className="text-sm font-semibold mt-1">
-                      {money(item.price)}
-                    </p>
                   </div>
-                  <div className="flex gap-1 shrink-0">
-                    {libraryTargetCategoryId && (
-                      <Button
-                        size="filter"
-                        variant="ghost"
-                        className="h-8 w-8 p-0 text-primary hover:text-primary"
-                        title="Add to category"
-                        onClick={() => addFromLibrary(item)}
-                      >
-                        <PlusCircle className="h-4 w-4" />
-                      </Button>
-                    )}
+                  <div className="flex gap-2">
                     <Button
+                      variant="secondary"
                       size="filter"
-                      variant="ghost"
-                      className="h-8 w-8 p-0"
-                      onClick={() => openEditLibraryItem(item)}
+                      onClick={() => toggleMenuActive(selectedMenu)}
+                    >
+                      {selectedMenu.isActive ? "Deactivate" : "Activate"}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="filter"
+                      onClick={() => openEditMenu(selectedMenu)}
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
                     <Button
+                      variant="secondary"
                       size="filter"
-                      variant="ghost"
-                      className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                      onClick={() =>
-                        setDeleteTarget({
-                          id: item.id,
-                          name: item.name,
-                          type: "library",
-                        })
-                      }
+                      onClick={() => deleteMenu(selectedMenu.id)}
+                      className="text-destructive hover:text-destructive"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
+                    <Button
+                      size="filter"
+                      onClick={() => openCreateCategory(selectedMenu.id)}
+                    >
+                      <Plus className="h-3.5 w-3.5 mr-1" />
+                      Category
+                    </Button>
                   </div>
                 </div>
-              ))
+
+                {/* Categories and items */}
+                {selectedMenu.categories.length === 0 ? (
+                  <div className="border border-dashed p-8 text-center">
+                    <p className="text-sm text-muted-foreground">
+                      No categories yet.{" "}
+                      <button
+                        className="underline"
+                        onClick={() => openCreateCategory(selectedMenu.id)}
+                      >
+                        Add one
+                      </button>
+                    </p>
+                  </div>
+                ) : (
+                  selectedMenu.categories.map((cat) => (
+                    <CategorySection
+                      key={cat.id}
+                      menu={selectedMenu}
+                      category={cat}
+                      stockInfo={stockInfo}
+                      stations={stations}
+                      onAddItem={openCreateItem}
+                      onAddFromLibrary={openLibraryForCategory}
+                      onEditItem={openEditItem}
+                      onToggleAvail={toggleAvailability}
+                      onDeleteItem={(item, menuId, categoryId) =>
+                        setDeleteTarget({
+                          id: item.id,
+                          name: item.name,
+                          type: "item",
+                          menuId,
+                          categoryId,
+                        })
+                      }
+                      onDeleteCategory={deleteCategory}
+                      onRenameCategory={renameCategory}
+                      onSaveToLibrary={saveToLibrary}
+                      onEditRecipe={setRecipeItem}
+                      canCreateItems={canManageTax}
+                    />
+                  ))
+                )}
+              </div>
             )}
-          </div>
-        </SheetContent>
-      </Sheet>
+          </>
+        )}
 
-      {/* ── Library item dialog ───────────────────────────────────────────────── */}
-      <Dialog open={libraryItemDialog} onOpenChange={setLibraryItemDialog}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>
-              {editingLibraryItem ? "Edit Library Item" : "New Library Item"}
-            </DialogTitle>
-          </DialogHeader>
-          <ItemFormFields
-            form={libraryItemForm}
-            onChange={setLibraryItemForm}
-            taxProfiles={taxProfiles}
-            canManageTax={canManageTax}
-            currencyCode={currencyCode}
-            taxLabel={taxLabel}
-            stations={stations}
-          />
-          <DialogFooter>
-            <Button
-              variant="secondary"
-              onClick={() => setLibraryItemDialog(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={saveLibraryItem}
-              disabled={!libraryItemForm.name.trim() || !libraryItemForm.price || (!editingLibraryItem && !libraryItemForm.taxProfileId)}
-            >
-              {editingLibraryItem ? "Save" : "Add to Library"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        {/* ── Menu dialog ──────────────────────────────────────────────────────── */}
+        <Dialog open={menuDialog} onOpenChange={setMenuDialog}>
+          <DialogContent className="max-w-xl">
+            <DialogHeader>
+              <DialogTitle>{editingMenu ? "Edit Menu" : "New Menu"}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-1.5">
+                <Label>Name</Label>
+                <Input
+                  value={menuName}
+                  onChange={(e) => setMenuName(e.target.value)}
+                  placeholder="Dinner Menu"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Description (optional)</Label>
+                <Textarea
+                  value={menuDesc}
+                  onChange={(e) => setMenuDesc(e.target.value)}
+                  placeholder="Available from 6pm–11pm"
+                  rows={2}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="secondary" onClick={() => setMenuDialog(false)}>
+                Cancel
+              </Button>
+              <Button onClick={saveMenu} disabled={!menuName.trim()}>
+                {editingMenu ? "Save" : "Create"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-      <RecipeEditorDialog
-        businessId={businessId}
-        item={recipeItem}
-        onClose={() => setRecipeItem(null)}
-        onSaved={() => {
-          void loadStockFlags();
-        }}
-      />
+        {/* ── Category dialog ───────────────────────────────────────────────────── */}
+        <Dialog open={categoryDialog} onOpenChange={setCategoryDialog}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>New Category</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-1.5 py-2">
+              <Label>Name</Label>
+              <Input
+                value={categoryName}
+                onChange={(e) => setCategoryName(e.target.value)}
+                placeholder="Starters"
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="secondary" onClick={() => setCategoryDialog(false)}>
+                Cancel
+              </Button>
+              <Button onClick={saveCategory} disabled={!categoryName.trim()}>
+                Create
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-      <ConfirmationDialog
-        open={deleteTarget !== null}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title={
-          deleteTarget?.type === "library"
-            ? "Remove library item"
-            : `Delete ${deleteTarget?.type ?? "item"}`
-        }
-        description={
-          deleteTarget?.type === "menu" || deleteTarget?.type === "category"
-            ? `"${deleteTarget?.name}" and all its items will be permanently deleted.`
-            : `"${deleteTarget?.name}" will be permanently removed.`
-        }
-        confirmLabel={deleteTarget?.type === "library" ? "Remove" : "Delete"}
-        variant="destructive"
-        onConfirm={() => {
-          if (!deleteTarget) return;
-          if (deleteTarget.type === "menu") {
-            void confirmDeleteMenu(deleteTarget.id);
-          } else if (deleteTarget.type === "category") {
-            void confirmDeleteCategory(deleteTarget.menuId!, deleteTarget.id);
-          } else if (deleteTarget.type === "item") {
-            const menu = menus.find((candidate) => candidate.id === deleteTarget.menuId);
-            const item = menu?.categories
-              .flatMap((category) => category.items)
-              .find((candidate) => candidate.id === deleteTarget.id);
-            if (item) {
-              void deleteItem(
-                item,
-                deleteTarget.menuId!,
-                deleteTarget.categoryId!,
-              );
-            }
-          } else {
-            const item = library.find((candidate) => candidate.id === deleteTarget.id);
-            if (item) void deleteLibraryItem(item);
+        {/* ── Item dialog ───────────────────────────────────────────────────────── */}
+        <Dialog open={itemDialog} onOpenChange={setItemDialog}>
+          <DialogContent className="max-w-xl">
+            <DialogHeader>
+              <DialogTitle>{editingItem ? "Edit Item" : "New Item"}</DialogTitle>
+            </DialogHeader>
+            <ItemFormFields form={itemForm} onChange={setItemForm} showHappyHour showAlcohol taxProfiles={taxProfiles} canManageTax={canManageTax} currencyCode={currencyCode} taxLabel={taxLabel} stations={stations} />
+            <DialogFooter>
+              <Button variant="secondary" onClick={() => setItemDialog(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={saveItem}
+                disabled={!itemForm.name.trim() || !itemForm.price || (!editingItem && !itemForm.taxProfileId)}
+              >
+                {editingItem ? "Save" : "Add Item"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Library sheet ─────────────────────────────────────────────────────── */}
+        <Sheet open={libraryDialog} onOpenChange={setLibraryDialog}>
+          <SheetContent className="w-[400px] sm:max-w-[400px] flex flex-col">
+            <SheetHeader>
+              <SheetTitle className="flex items-center gap-2">
+                <BookMarked className="h-4 w-4" />
+                Item Library
+              </SheetTitle>
+            </SheetHeader>
+
+            <div className="flex items-center justify-between px-4 pt-1 pb-3 border-b">
+              <p className="text-xs text-muted-foreground">
+                {libraryTargetCategoryId
+                  ? "Click + to add an item to the selected category."
+                  : "Manage reusable item templates."}
+              </p>
+              {canManageTax && <Button size="filter" variant="secondary" onClick={openCreateLibraryItem}>
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                New
+              </Button>}
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+              {libraryLoading ? (
+                <p className="text-sm text-muted-foreground py-6 text-center">
+                  Loading…
+                </p>
+              ) : library.length === 0 ? (
+                <div className="border border-dashed p-8 text-center mt-2">
+                  <BookMarked className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                  <p className="text-sm text-muted-foreground">
+                    No library items yet.
+                  </p>
+                  {canManageTax && <Button
+                    size="filter"
+                    className="mt-3"
+                    onClick={openCreateLibraryItem}
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1" />
+                    Add first item
+                  </Button>}
+                </div>
+              ) : (
+                library.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center gap-3 border px-4 py-3"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-sm font-medium truncate">
+                          {item.name}
+                        </span>
+                        <Badge
+                          tone="neutral"
+                          className="text-xs flex items-center gap-1 h-4 shrink-0"
+                        >
+                          {item.routesToAllStations ? "Shared" : (stations.find((station) => station.id === item.preparationStationId)?.name ?? "Archived station")}
+                        </Badge>
+                      </div>
+                      {item.description && (
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">
+                          {item.description}
+                        </p>
+                      )}
+                      <p className="text-sm font-semibold mt-1">
+                        {money(item.price)}
+                      </p>
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      {libraryTargetCategoryId && (
+                        <Button
+                          size="filter"
+                          variant="ghost"
+                          className="h-8 w-8 p-0 text-primary hover:text-primary"
+                          title="Add to category"
+                          onClick={() => addFromLibrary(item)}
+                        >
+                          <PlusCircle className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <Button
+                        size="filter"
+                        variant="ghost"
+                        className="h-8 w-8 p-0"
+                        onClick={() => openEditLibraryItem(item)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="filter"
+                        variant="ghost"
+                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                        onClick={() =>
+                          setDeleteTarget({
+                            id: item.id,
+                            name: item.name,
+                            type: "library",
+                          })
+                        }
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </SheetContent>
+        </Sheet>
+
+        {/* ── Library item dialog ───────────────────────────────────────────────── */}
+        <Dialog open={libraryItemDialog} onOpenChange={setLibraryItemDialog}>
+          <DialogContent className="max-w-xl">
+            <DialogHeader>
+              <DialogTitle>
+                {editingLibraryItem ? "Edit Library Item" : "New Library Item"}
+              </DialogTitle>
+            </DialogHeader>
+            <ItemFormFields
+              form={libraryItemForm}
+              onChange={setLibraryItemForm}
+              taxProfiles={taxProfiles}
+              canManageTax={canManageTax}
+              currencyCode={currencyCode}
+              taxLabel={taxLabel}
+              stations={stations}
+            />
+            <DialogFooter>
+              <Button
+                variant="secondary"
+                onClick={() => setLibraryItemDialog(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={saveLibraryItem}
+                disabled={!libraryItemForm.name.trim() || !libraryItemForm.price || (!editingLibraryItem && !libraryItemForm.taxProfileId)}
+              >
+                {editingLibraryItem ? "Save" : "Add to Library"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <RecipeEditorDialog
+          businessId={businessId}
+          item={recipeItem}
+          onClose={() => setRecipeItem(null)}
+          onSaved={() => {
+            void loadStockFlags();
+          }}
+        />
+
+        <ConfirmationDialog
+          open={deleteTarget !== null}
+          onOpenChange={(open) => !open && setDeleteTarget(null)}
+          title={
+            deleteTarget?.type === "library"
+              ? "Remove library item"
+              : `Delete ${deleteTarget?.type ?? "item"}`
           }
-          setDeleteTarget(null);
-        }}
-      />
-    </div>
+          description={
+            deleteTarget?.type === "menu" || deleteTarget?.type === "category"
+              ? `"${deleteTarget?.name}" and all its items will be permanently deleted.`
+              : `"${deleteTarget?.name}" will be permanently removed.`
+          }
+          confirmLabel={deleteTarget?.type === "library" ? "Remove" : "Delete"}
+          variant="destructive"
+          onConfirm={() => {
+            if (!deleteTarget) return;
+            if (deleteTarget.type === "menu") {
+              void confirmDeleteMenu(deleteTarget.id);
+            } else if (deleteTarget.type === "category") {
+              void confirmDeleteCategory(deleteTarget.menuId!, deleteTarget.id);
+            } else if (deleteTarget.type === "item") {
+              const menu = menus.find((candidate) => candidate.id === deleteTarget.menuId);
+              const item = menu?.categories
+                .flatMap((category) => category.items)
+                .find((candidate) => candidate.id === deleteTarget.id);
+              if (item) {
+                void deleteItem(
+                  item,
+                  deleteTarget.menuId!,
+                  deleteTarget.categoryId!,
+                );
+              }
+            } else {
+              const item = library.find((candidate) => candidate.id === deleteTarget.id);
+              if (item) void deleteLibraryItem(item);
+            }
+            setDeleteTarget(null);
+          }}
+        />
+      </PageBody>
+    </>
   );
 }
 

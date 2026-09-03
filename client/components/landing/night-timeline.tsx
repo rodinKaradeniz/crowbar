@@ -79,7 +79,13 @@ export function NightTimeline() {
               key={moment.time}
               className={[
                 "mkt-pad-step",
-                index === MOMENTS.length - 1 ? "" : "border-r border-border",
+                // The grid is one column below --bp-phone, where a right
+                // border is a stray vertical line down the page rather than a
+                // divider between neighbours. Divide with a hairline under
+                // each step instead, and hand the rule back at phone width.
+                index === MOMENTS.length - 1
+                  ? ""
+                  : "border-b border-border phone:border-b-0 phone:border-r",
                 // Left-to-right within the row: the six moments are one night in
                 // order, so they arrive in that order.
                 SETTLE_STEP[index % SETTLE_STEP.length],
