@@ -166,7 +166,6 @@ PROBES: list[tuple[str, str, str, dict | None]] = [
     ("menu.configure", "POST", "/api/ordering/{business_id}/menus", {"name": "Probe"}),
     ("menu.pricing", "POST", "/api/tax-profiles", {"code": "PROBE"}),
     ("stations.configure", "POST", "/api/ordering/stations", {"name": "Probe"}),
-    ("happyhour.manage", "POST", "/api/happy-hour/windows", {"name": "Probe"}),
     ("tabs.view", "GET", "/api/tabs", None),
     ("inventory.view", "GET", "/api/inventory/{business_id}/items", None),
     ("inventory.items.manage", "POST", "/api/inventory/{business_id}/items", {"name": "Probe"}),

@@ -82,7 +82,6 @@ CAPABILITIES: tuple[str, ...] = (
     "menu.configure",
     "menu.pricing",
     "stations.configure",
-    "happyhour.manage",
     # Tabs and external settlement
     "tabs.view",
     "tabs.operate",

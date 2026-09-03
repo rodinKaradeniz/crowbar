@@ -10,6 +10,8 @@ export interface User {
   phone?: string;
   avatar?: string;
   createdAt: string;
+  /** Set while a 30-day account deletion window is running. */
+  deletionRequestedAt?: string;
 }
 
 export interface Customer extends User {
@@ -463,7 +465,6 @@ export interface MenuItem {
   name: string;
   description?: string;
   price: number;
-  happyHourPrice?: number; // flat override; undefined = never discounts
   isAlcoholic?: boolean; // age-verification flag; drives the checkout attestation + staff badge
   isAvailable: boolean;
   routingTag: "kitchen" | "bar" | "any";
@@ -497,14 +498,14 @@ export interface Menu {
   name: string;
   description?: string;
   isActive: boolean;
-  happyHourActive?: boolean; // server-computed; only set on the public read path
+  activationWindows?: MenuActivationWindow[]; // absent/empty = always on
   categories: MenuCategory[];
 }
 
-export interface HappyHourWindow {
+export interface MenuActivationWindow {
   id: string;
+  menuId: string;
   businessId: string;
-  name: string;
   daysOfWeek: number[]; // 0=Monday..6=Sunday (see lib/days.ts)
   startTime: string; // "HH:MM" wall-clock in the business's timezone
   endTime: string;

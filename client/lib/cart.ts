@@ -2,10 +2,12 @@
 //
 // Both the public menu/checkout (menu/[business]/menu-client.tsx) and the
 // staff-facing "add order to tab" compose UI (business/tabs) build a cart the
-// same way — same modifier-selection rules, same happy-hour pricing, same
-// line/total math — so that logic lives here rather than being duplicated per
-// surface. Happy hour is always decided server-side (menu.happyHourActive);
-// these helpers only render/total from that server-decided state.
+// same way — same modifier-selection rules, same line/total math — so that
+// logic lives here rather than being duplicated per surface.
+//
+// An item carries exactly one price. A discount is an item sitting in a
+// windowed menu at a lower price, and WHICH menus a guest can order from is
+// decided server-side; these helpers never reason about that.
 
 import type { MenuItem, ModifierGroup, SelectedModifier } from "@/types";
 
@@ -41,28 +43,16 @@ export function toggleModifier(
   ];
 }
 
-// When happy hour is active, an item with happyHourPrice set is priced at the
-// lower value. Never decides happy hour locally — that's a server call.
-export function effectivePrice(item: MenuItem, happyHourActive: boolean): number {
-  return happyHourActive && item.happyHourPrice != null
-    ? item.happyHourPrice
-    : item.price;
-}
-
 export function modifierTotal(mods: SelectedModifier[]): number {
   return mods.reduce((s, m) => s + m.priceDelta, 0);
 }
 
-export function cartItemLineTotal(ci: CartItem, happyHourActive: boolean): number {
-  return (
-    (effectivePrice(ci.item, happyHourActive) +
-      modifierTotal(ci.selectedModifiers)) *
-    ci.quantity
-  );
+export function cartItemLineTotal(ci: CartItem): number {
+  return (ci.item.price + modifierTotal(ci.selectedModifiers)) * ci.quantity;
 }
 
-export function cartTotal(cart: CartItem[], happyHourActive: boolean): number {
-  return cart.reduce((sum, ci) => sum + cartItemLineTotal(ci, happyHourActive), 0);
+export function cartTotal(cart: CartItem[]): number {
+  return cart.reduce((sum, ci) => sum + cartItemLineTotal(ci), 0);
 }
 
 export function cartItemCount(cart: CartItem[]): number {

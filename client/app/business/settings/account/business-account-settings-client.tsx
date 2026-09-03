@@ -23,27 +23,37 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import {
   clientChangeEmail,
   clientChangePassword,
   clientDisableAccount,
+  clientRequestAccountDeletion,
   clientUpdateNotificationChannels,
 } from "@/lib/client-api";
 import { useAuth } from "@/hooks/use-auth";
+import { useRegionalSettings } from "@/contexts/regional-context";
+import { formatBusinessDate } from "@/lib/business-time";
 import { toast } from "sonner";
 import { PageBody, PageHeader } from "@/components/page-header";
+
+/** Mirrors auth_service.DELETION_GRACE_DAYS. */
+const GRACE_DAYS = 30;
 
 interface BusinessAccountSettingsClientProps {
   userEmail: string;
   businessId: string;
+  deletionRequestedAt: string | null;
 }
 
 export default function BusinessAccountSettingsClient({
   userEmail,
   businessId,
+  deletionRequestedAt,
 }: BusinessAccountSettingsClientProps) {
   const router = useRouter();
   const { logout, meContext } = useAuth();
+  const { locale, timezone } = useRegionalSettings();
 
   // SMS notification state
   const [smsEnabled, setSmsEnabled] = useState(false);
@@ -85,6 +95,13 @@ export default function BusinessAccountSettingsClient({
   // Account disable state
   const [showDisableDialog, setShowDisableDialog] = useState(false);
   const [isDisabling, setIsDisabling] = useState(false);
+
+  // Account deletion state. The request does not end the session -- signing in
+  // is what cancels it -- so this page stays usable afterwards and has to show
+  // the pending window rather than re-offering the button.
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [requestedAt, setRequestedAt] = useState<string | null>(deletionRequestedAt);
+  const [deleteError, setDeleteError] = useState("");
 
   const handleEmailChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -160,6 +177,20 @@ export default function BusinessAccountSettingsClient({
     } finally {
       setIsDisabling(false);
       setShowDisableDialog(false);
+    }
+  };
+
+  const handleRequestDeletion = async () => {
+    setDeleteError("");
+    try {
+      await clientRequestAccountDeletion();
+      setRequestedAt(new Date().toISOString());
+      toast.success("Account deletion requested");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to request account deletion";
+      setDeleteError(message);
+      toast.error(message);
     }
   };
 
@@ -362,12 +393,13 @@ export default function BusinessAccountSettingsClient({
               Actions that cannot be undone.
             </FieldDescription>
 
-            <div className="border-t-2 border-critical-fill pt-[var(--space-16)] space-y-4">
+            <div className="border-t-2 border-critical-fill pt-[var(--space-16)] space-y-[var(--space-24)]">
               <div>
                 <h3 className="type-t2 mb-2">Disable account</h3>
                 <p className="mb-4 text-[length:var(--ui-size)] text-muted-foreground">
-                  Temporarily disable your account. You can reactivate it by
-                  logging in again within 30 days.
+                  Blocks sign-in and ends your sessions straight away. Nothing in
+                  Crowbar switches it back on. Your name, email and record of what
+                  you did at work stay on file.
                 </p>
                 <Button
                   type="button"
@@ -377,6 +409,45 @@ export default function BusinessAccountSettingsClient({
                   Disable Account
                 </Button>
               </div>
+
+              <div>
+                <h3 className="type-t2 mb-2">Delete account</h3>
+                {requestedAt ? (
+                  <p className="text-[length:var(--ui-size)] text-muted-foreground">
+                    Deletion requested on{" "}
+                    {formatBusinessDate(requestedAt, timezone, locale)}. Your
+                    personal details come off this account on{" "}
+                    {formatBusinessDate(
+                      new Date(
+                        new Date(requestedAt).getTime() + GRACE_DAYS * 86400000
+                      ),
+                      timezone,
+                      locale
+                    )}
+                    . Signing in again before then cancels it.
+                  </p>
+                ) : (
+                  <>
+                    <p className="mb-4 text-[length:var(--ui-size)] text-muted-foreground">
+                      Ask for your personal details to be removed from this
+                      account. After 30 days your name, email, phone number and
+                      picture come off it and you can no longer sign in. The
+                      record of what you did at work stays, without your name on
+                      it. Signing in before then cancels the request.
+                    </p>
+                    {deleteError && (
+                      <p className="mb-4 text-sm text-destructive">{deleteError}</p>
+                    )}
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => setShowDeleteDialog(true)}
+                    >
+                      Delete Account
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           </FieldSet>
         </FieldGroup>
@@ -385,17 +456,17 @@ export default function BusinessAccountSettingsClient({
         <Dialog open={showDisableDialog} onOpenChange={setShowDisableDialog}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Disable Account</DialogTitle>
+              <DialogTitle>Disable this account for good?</DialogTitle>
               <DialogDescription>
-                Are you sure you want to disable your account?
+                Sign-in is blocked from the moment you confirm.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <p className="text-sm text-muted-foreground">
-                Your account will be disabled immediately. We will keep your data
-                for 30 days. If you log in again during this period, your account
-                will be automatically re-enabled. After 30 days, your account and
-                all associated data will be permanently deleted.
+                You will not be able to sign in again, and nothing in Crowbar
+                reverses this. Your name, email and record of what you did at work
+                stay on file. To have your personal details removed instead, use
+                Delete account.
               </p>
               <p className="text-sm font-medium">Account: {userEmail}</p>
             </div>
@@ -418,6 +489,18 @@ export default function BusinessAccountSettingsClient({
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Delete Account Dialog */}
+        <ConfirmationDialog
+          open={showDeleteDialog}
+          onOpenChange={setShowDeleteDialog}
+          title="Remove your personal details from this account?"
+          description={`In 30 days your name, email, phone number and picture are removed and you can no longer sign in. The record of what you did at work is not deleted — it stays, showing a former staff member instead of your name. Signing in again before then cancels this. Account: ${userEmail}`}
+          confirmLabel="Request deletion"
+          cancelLabel="Cancel"
+          variant="destructive"
+          onConfirm={() => void handleRequestDeletion()}
+        />
       </PageBody>
     </>
   );

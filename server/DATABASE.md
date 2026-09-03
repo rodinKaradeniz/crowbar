@@ -89,7 +89,11 @@ unmistakably synthetic Volt & Vine tenant with relative dates and data across
 all current modules: one primary location, three areas, twenty tables, two active
 combinations, the Bar and Kitchen preparation stations, table assignments for the
 days ahead, a live queue and waitlist, an open seating carrying an open tab, and a
-closed seating whose tab was settled externally with its settlement event.
+closed seating whose tab was settled externally with its settlement event. Its two
+menus exercise both halves of activation: Classic Menu is always on, and Happy Hour
+carries a 17:00-20:00 `menu_activation_windows` row read against the venue's own
+timezone, so a guest sees it only inside that window and an order from it outside
+one is refused.
 Migration 037 and the seed make its DE/EUR/`de-DE`/`Europe/Berlin` region plus
 19% beverage/standard, 7% food/reduced, exempt, and custom operational profiles
 explicit. Those profiles are editable demo suggestions, not fiscal rules. The

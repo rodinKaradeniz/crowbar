@@ -477,9 +477,22 @@ INSERT INTO reservations (id, business_id, customer_id, service_type_id, time, p
   '+12025550114', 'sam.lee@example.com', NULL, 'confirmed', 2, NOW() - INTERVAL '1 day');
 
 -- ─── Menus ─────────────────────────────────────────────────────────────────────
+-- Two menus, and they exercise both halves of activation: Classic Menu is
+-- always on, Happy Hour is served only inside its window below. The schedule
+-- used to live as prose in the description ("Every day 5-8 PM") where nothing
+-- could read it; it is data now.
 INSERT INTO menus (id, business_id, name, description, is_active) VALUES
-('00000000-0000-0000-0006-000000000001', '00000000-0000-0000-0000-000000000002', 'Happy Hour',   'Every day 5–8 PM. Reduced prices, good vibes.', TRUE),
-('00000000-0000-0000-0006-000000000002', '00000000-0000-0000-0000-000000000002', 'Classic Menu', 'Our full offering, available all evening.',     TRUE);
+('00000000-0000-0000-0006-000000000001', '00000000-0000-0000-0000-000000000002', 'Happy Hour',   'Reduced prices, good vibes.',               TRUE),
+('00000000-0000-0000-0006-000000000002', '00000000-0000-0000-0000-000000000002', 'Classic Menu', 'Our full offering, available all evening.', TRUE);
+
+-- ─── Menu activation windows ──────────────────────────────────────────────────
+-- Happy Hour runs every day 17:00-20:00 in the venue's own timezone
+-- (Europe/Berlin), never UTC. days_of_week is 0=Monday..6=Sunday. Classic Menu
+-- deliberately gets no row: a menu with no windows is always on.
+INSERT INTO menu_activation_windows
+    (id, menu_id, business_id, days_of_week, start_time, end_time, is_active) VALUES
+('00000000-0000-0000-0016-000000000001', '00000000-0000-0000-0006-000000000001',
+ '00000000-0000-0000-0000-000000000002', ARRAY[0,1,2,3,4,5,6], '17:00', '20:00', TRUE);
 
 -- ─── Menu Categories ──────────────────────────────────────────────────────────
 INSERT INTO menu_categories (id, menu_id, business_id, name, display_order) VALUES

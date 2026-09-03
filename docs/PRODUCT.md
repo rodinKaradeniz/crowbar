@@ -170,10 +170,23 @@ on a deletion request. The default policy anonymises guest contact and CRM
 data after 24 months of inactivity while preserving anonymous operational
 history; a venue remains responsible for any lawful retention obligation.
 
+Staff accounts have their own erasure, separate from disabling one. Disabling
+blocks sign-in and nothing in the product reverses it, but the person's name
+and email stay on file. Deletion is a request the account holder raises for
+themselves: the account keeps working for 30 days and signing in cancels the
+request, after which name, email, phone and picture are removed and the account
+can no longer sign in. The row itself is kept and no longer names anyone, so
+every operational record the person created still resolves — to a former staff
+member rather than to them. Someone who is the only owner of a business cannot
+delete their account until ownership has moved. Deleting a person is not
+deleting a venue; closing a venue's account is not self-serve.
+
 ### Ordering and inventory
 
-Pricing is server-authoritative. The browser cannot determine final
-happy-hour eligibility, submitted prices, alcohol rules, or inventory effects.
+Pricing is server-authoritative. The browser cannot determine which menus are
+currently served, submitted prices, alcohol rules, or inventory effects. A menu
+outside its activation window is absent from the guest response entirely, and
+ordering from one is refused at placement.
 Entering `served` records the actual sale movements; reversing service uses
 those recorded movements, not the current recipe. Auto-disabled menu items
 remain disabled after stock recovery until staff re-enable them.
@@ -208,8 +221,8 @@ Tax profiles belong to menu items rather than one business-wide percentage
 because food, beverages, and other classes can differ. Owners/managers must
 explicitly classify newly priced items and may append effective-dated profile
 versions with inclusive/exclusive pricing; ordinary staff may change other
-item details but not tax assignments or policy. Modifier and happy-hour prices
-inherit the parent item's effective profile. Order placement rounds each line
+item details but not tax assignments or policy. Modifier prices inherit the
+parent item's effective profile. Order placement rounds each line
 half-up to the configured currency minor unit and snapshots currency,
 profile/version, label, rate, inclusion policy, net, tax, and gross amounts so
 later configuration cannot rewrite history.

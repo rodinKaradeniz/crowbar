@@ -13,6 +13,7 @@ export default async function BusinessAccountSettings() {
     <BusinessAccountSettingsClient
       userEmail={user.email}
       businessId={user.businessId}
+      deletionRequestedAt={user.deletionRequestedAt ?? null}
     />
   );
 }

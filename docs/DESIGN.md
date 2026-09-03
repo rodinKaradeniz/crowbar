@@ -357,7 +357,7 @@ a tab.
 | | Width | Pages |
 | --- | --- | --- |
 | **Board** | full bleed | overview, floor, tickets, tabs, reservations, requests, queue, schedule, customers, inventory, insights, reports |
-| **Document** | `--grid-workspace` (1024px), centred | menu, staff, happy hour, all of `profile/*`, all of `settings/*`, guest profile |
+| **Document** | `--grid-workspace` (1024px), centred | menu, staff, all of `profile/*`, all of `settings/*`, guest profile |
 
 Width is the working surface on a board: a floor map or a ticket wall on a
 1920px monitor should use the monitor. A document is read and filled in, and a
@@ -545,6 +545,26 @@ makes the button wider than 48 on its own, so the rule costs nothing there.
 build all passed on the 42px version — nothing in the toolchain measures a
 rendered box. This is the class of defect that only a browser at the real
 viewport will produce, which is the argument for checking one.
+
+**A row that does not fit wraps; it does not become a scroller.** Four
+workspace pages overflowed at 390 through the same shape — a row of fixed-width
+content with an action cluster beside it — and all four were answered the same
+way, so it is a rule rather than four fixes. Scroll only where the columns
+carry cross-row alignment a reader is comparing down the page; a stock line, a
+settings row and a menu item do not, and hiding their actions behind a
+horizontal gesture costs discoverability for nothing. Prefer `flex-wrap` with
+`min-w-[var(--row-content-min)]` on the content block over a `phone:`-gated
+variant: wrapping engages only when the line is actually full, which is what
+keeps the tablet range provably unmoved — verify that by measuring each row at
+1024 and confirming its height still equals its tallest child.
+
+The width is a **token, not a call-site choice**. `--row-content-min` (14rem)
+is the width a row's content block keeps before its action cluster wraps, and
+it is the only value any of these rows may use — the same form as
+`min-w-[var(--control-desktop-min)]` on an icon-only header action above.
+Neither grep gate reads `min-w`, so an arbitrary `min-w-[12rem]` passes every
+check and still breaks rule zero; a row that needs a different width is a
+design question, not a second literal.
 
 The tablet half of this is one media query in `globals.css` that redefines five
 tokens below the breakpoint. Because the product reads its sizes through those

@@ -29,7 +29,6 @@ from app.routers import (  # noqa: E402
     businesses,
     customers,
     floor_plan,
-    happy_hour,
     insights,
     inventory,
     notifications,
@@ -54,7 +53,6 @@ MODULES = [
     ("businesses", businesses),
     ("customers", customers),
     ("floor_plan", floor_plan),
-    ("happy_hour", happy_hour),
     ("insights", insights),
     ("inventory", inventory),
     ("notifications", notifications),
@@ -83,6 +81,7 @@ CAPABILITY_EXEMPT = {
     ("auth", "POST", "/api/auth/change-email"),
     ("auth", "POST", "/api/auth/change-password"),
     ("auth", "POST", "/api/auth/disable-account"),
+    ("auth", "POST", "/api/auth/delete-account"),
     ("auth", "POST", "/api/auth/ws-token"),
     # The caller's own notification inbox, scoped by user_id in the service.
     ("notifications", "GET", "/api/notifications"),

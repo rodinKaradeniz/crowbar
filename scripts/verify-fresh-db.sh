@@ -114,9 +114,107 @@ BEGIN
      OR to_regclass('public.order_line_status_timeline') IS NULL
      OR to_regclass('public.order_revisions') IS NULL
      OR to_regclass('public.menu_item_availability_events') IS NULL
-     OR to_regclass('public.tab_settlement_events') IS NULL THEN
+     OR to_regclass('public.tab_settlement_events') IS NULL
+     OR to_regclass('public.menu_activation_windows') IS NULL THEN
     RAISE EXCEPTION 'current integrity tables are missing';
   END IF;
+
+  -- Migration 051. Happy hour collapsed into per-menu activation: the
+  -- business-wide table and the second price column are gone, and a menu now
+  -- carries its own windows. pytest builds its schema from Base.metadata, so
+  -- only a migrated database can prove the drops actually happened.
+  IF to_regclass('public.happy_hour_windows') IS NOT NULL THEN
+    RAISE EXCEPTION 'happy_hour_windows survived migration 051';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'menu_items' AND column_name = 'happy_hour_price'
+  ) THEN
+    RAISE EXCEPTION 'menu_items.happy_hour_price survived migration 051';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint con
+    JOIN pg_class rel ON rel.oid = con.conrelid
+    WHERE rel.relname = 'menu_activation_windows'
+      AND con.conname = 'fk_menu_activation_window_menu_tenant'
+  ) THEN
+    RAISE EXCEPTION 'menu_activation_windows lacks its tenant-aligned menu FK';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint con
+    JOIN pg_class rel ON rel.oid = con.conrelid
+    WHERE rel.relname = 'menu_activation_windows'
+      AND con.conname = 'ck_menu_activation_window_days'
+  ) THEN
+    RAISE EXCEPTION 'menu_activation_windows lacks its days_of_week check';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint con
+    JOIN pg_class rel ON rel.oid = con.conrelid
+    WHERE rel.relname = 'menu_activation_windows'
+      AND con.conname = 'ck_menu_activation_window_times'
+  ) THEN
+    RAISE EXCEPTION 'menu_activation_windows lacks its start/end time check';
+  END IF;
+
+  -- Both halves of activation are exercised by the demo tenant, or the
+  -- mechanism ships untested by anything: one menu that is always on (no window
+  -- rows) and one that is served only inside a window.
+  IF NOT EXISTS (
+    SELECT 1 FROM menus m
+    JOIN businesses b ON b.id = m.business_id AND b.slug = 'volt-and-vine'
+    WHERE m.is_active
+      AND NOT EXISTS (
+        SELECT 1 FROM menu_activation_windows w WHERE w.menu_id = m.id
+      )
+  ) THEN
+    RAISE EXCEPTION 'the demo tenant has no always-on menu';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM menus m
+    JOIN businesses b ON b.id = m.business_id AND b.slug = 'volt-and-vine'
+    WHERE m.is_active
+      AND EXISTS (
+        SELECT 1 FROM menu_activation_windows w
+        WHERE w.menu_id = m.id AND w.is_active
+      )
+  ) THEN
+    RAISE EXCEPTION 'the demo tenant has no windowed menu with a window row';
+  END IF;
+  -- Migration 052. Account deletion is anonymization: the person is scrubbed
+  -- and the row is kept so the 48 foreign keys into users(id) still resolve.
+  -- pytest builds its schema from Base.metadata, so only a migrated database
+  -- proves the columns and the CHECK actually landed in SQL.
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'users' AND column_name = 'deletion_requested_at'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'users' AND column_name = 'anonymized_at'
+  ) THEN
+    RAISE EXCEPTION 'users is missing its account deletion columns';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint con
+    JOIN pg_class rel ON rel.oid = con.conrelid
+    WHERE rel.relname = 'users'
+      AND con.conname = 'ck_users_anonymized_requires_request'
+  ) THEN
+    RAISE EXCEPTION 'users lacks the check tying anonymized_at to a deletion request';
+  END IF;
+  -- tabs.opened_by is NOT NULL with no ON DELETE, which is what independently
+  -- rules out a real DELETE of a user. If that ever changes, the reasoning in
+  -- migration 052 is stale and this assertion should be the thing that says so.
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint con
+    JOIN information_schema.referential_constraints rc ON rc.constraint_name = con.conname
+    WHERE con.contype = 'f' AND con.conrelid = 'tabs'::regclass
+      AND con.conname = 'tabs_opened_by_fkey'
+      AND rc.delete_rule <> 'NO ACTION'
+  ) THEN
+    RAISE EXCEPTION 'tabs.opened_by no longer blocks a user delete; migration 052 reasoning is stale';
+  END IF;
+
   IF EXISTS (
     SELECT 1 FROM menu_items
     WHERE routes_to_all_stations = (preparation_station_id IS NOT NULL)

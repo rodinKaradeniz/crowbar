@@ -7,7 +7,7 @@
 //
 // IMPORTANT: JavaScript's Date.getDay() returns 0 = Sunday. When you have a
 // JS Date and need our index, convert with jsDayToIndex(). Values stored on the
-// backend (e.g. happy_hour_windows.days_of_week) always use the indices below.
+// backend (e.g. menu_activation_windows.days_of_week) always use the indices below.
 
 export interface DayOfWeek {
   index: number; // 0 = Monday … 6 = Sunday

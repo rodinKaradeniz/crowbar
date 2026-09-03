@@ -2108,3 +2108,217 @@ the offset arithmetic solvable at all.
 `business-docs-shell.tsx`, `client/lib/nav.ts`, `client/app/globals.css`
 (`--grid-workspace`, `--page-header`), 25 page clients under
 `client/app/business/`, `docs/DESIGN.md` § Space.
+
+## 2026-09-03 — A reserve that is a literal will be wrong; measure the thing it reserves for
+
+**Context.** Stage 8's phone floor was finished by walking every public guest
+route and all 25 workspace routes at a verified `innerWidth === 390`
+(`playwright-cli`; `chrome-devtools-axi` drives the real Chrome window and
+clamps at 500, so it cannot do this). The pass was defined as
+verification-and-repair: measure first, repair only what a measurement shows.
+
+**What measuring changed about the brief's own expectations.** Of the three
+named suspects, two were cleared and the third was worse than described. The
+menu cart button's `whitespace-nowrap` label fits at 356px inside a 356px
+button even at `View Cart · 24 items · 1.248,00 €`; the booking sheet's
+`grid-cols-3` slot grid holds 108x48 cells with 12-hour labels substituted in.
+Both had looked dangerous on the page and were fine on the screen. Meanwhile
+`/business/schedule`'s `text-6xl sm:text-8xl` numeral, flagged as a "strong
+overflow candidate", was not an offender at all — the actual 10px came from two
+`inline-flex` meta spans.
+
+**The decision.** `/order/[business]` reserved `pb-32` — 128px — for a fixed
+checkout footer that measures **220**. The age attestation wraps to two lines
+inside the 448px column at *every* width, so the reserve was 92px short at 390,
+640, 1024 and 1280 alike, and at maximum scroll 28px of the *Order notes* input
+could not be reached at all. The fix measures the footer with a
+`ResizeObserver` and uses that as the padding, which deletes the literal rather
+than replacing it with a larger one. A magic number chosen to cover today's
+content is a bug waiting for the content to change; the only durable reserve
+for a fixed element is its own measured height.
+
+**Consequences.** This is the one repair in the pass that also takes effect in
+640–1279, which the brief otherwise barred. It was taken because nothing
+visible moves — no control resizes and no layout shifts; a scroll extent grows
+so that content which was unreachable becomes reachable. A pass that may not
+touch the tablet canvas may still stop the tablet hiding a form field.
+
+**A second finding, deliberately left half-fixed.** `Button size="md"` is the
+only step in the height ladder written as a literal (`h-10`) instead of a
+token, so the `width < 1280px` takeover that lifts every other step to
+`--control-tablet-min` skips it. Its twelve call sites measured 40x40 at both
+390 and 1024 — under the 48px floor at both. Below `--bp-phone` it now takes
+the floor; the tablet half is recorded in `docs/TODO.md` rather than fixed,
+because resizing inside 640–1279 was explicitly out of scope. Half a fix and an
+honest note beats quietly widening the mandate.
+
+**And a rule, because it recurred.** All four overflowing workspace pages had
+the same shape — fixed-width row content with an action cluster beside it — and
+all four were answered by wrapping rather than by making the row a horizontal
+scroller. `flex-wrap` plus a `min-w-*` on the content block engages only when
+the line is genuinely full, which is what let the tablet range be *proved*
+unmoved: every touched row still has a height equal to its tallest child at
+1024 and 1279, and wraps only at 390. See `docs/DESIGN.md` § Responsive.
+
+**Three things the walk cleared up that were wrong in the notes.** The
+`[token]` path routes under `/reserve` do not exist and are not meant to —
+`fba6d71` deleted their `page.tsx` and moved the credential into the URL
+fragment, where it never reaches the server or a log. Both `docs/DESIGN.md`
+grep gates are clean, each at exactly the survivors its own tables already
+name — nothing new was learned about them here. And the guest ordering
+surfaces log
+two console errors from a 404 on the current-table-session probe — a server
+contract question, untouched here.
+
+**References.** `client/app/order/[business]/order-client.tsx`,
+`client/components/ui/button.tsx`,
+`client/app/business/inventory/inventory-management-client.tsx`,
+`client/app/business/profile/hours/business-hours-client.tsx`,
+`client/app/business/menu/menu-management-client.tsx`,
+`client/app/business/schedule/business-schedule-client.tsx`,
+`docs/DESIGN.md` § Responsive, `docs/TODO.md` stage 8.
+
+## 2026-09-04 — Hiding a menu is presentation; refusing the order is the guard
+
+**Context.** "Happy hour" was three mechanisms that did not know about each
+other: `happy_hour_windows` (business-wide days and times, migration 017),
+`menu_items.happy_hour_price` (a second price column), and a menu literally
+named "Happy Hour" whose schedule was prose in its `description` field. A venue
+wanting a breakfast or late-night menu had no way to say so, while the one
+time-boxed menu the product did understand needed its own settings screen to
+schedule.
+
+**Decision.** A menu carries its own activation: either always on, or one or
+more windows of days plus a time range. Happy hour stops being a feature and
+becomes what it always was — a menu with a window and lower prices on some
+items. This is a net deletion: migration 051 adds `menu_activation_windows` and
+drops both a table and a price column, and the router, service, schema, model,
+page, nav entry and `happyhour.manage` capability all go with them. No
+precedence rule was needed, because `menu_items.category_id` already ties an
+item to exactly one menu and one price; two active menus both listing a gin and
+tonic is two listings, not a conflict.
+
+**The part that is not a UI change.** A menu outside its window is hidden
+entirely from guests — not greyed, not teased with a "from 17:00". But hiding it
+client-side is presentation, not a guard: a guest holding a page loaded before
+the window closed can still POST an item id from it. So `place_order` rejects
+any line whose menu is not active at placement time, asking the same
+`menu_activation_service.active_menu_ids` question the public read asks — which
+is what keeps the price a guest is shown and the price actually charged a single
+server-side decision. Order *correction* deliberately does not enforce it: a
+correction re-resolves the whole cart, so gating it would make an order placed
+inside a window uneditable the moment the window shut, down to reducing a
+quantity.
+
+**A latent bug the pass surfaced.** `menu_service.get_active_menu` returned one
+menu — `ORDER BY created_at LIMIT 1` — and the canonical seed creates two active
+menus with identical timestamps. Which menu a guest saw was therefore a coin
+flip, and a browser walk found the seeded "Happy Hour" menu being served as the
+venue's only menu. Meanwhile `_resolve_cart` already accepted items from *every*
+active menu, so display and orderability had disagreed since migration 008. The
+public read is plural now and both halves ask one question.
+
+**A rule the test suite caught, not the design.** Deactivating a window must not
+make its menu *more* available. The first implementation counted only
+`is_active` windows when deciding whether a menu was scheduled at all, so
+switching off a menu's only window promoted it to always-on. Whether a menu is
+scheduled is decided by having any window; only an active one can open it. A
+menu that should always be on says so through `menus.is_active`.
+
+**Consequences.** Windows are wall-clock in `businesses.timezone`, never UTC,
+and the midnight-wrap rule was moved rather than rewritten — a Friday 22:00–02:00
+window runs Friday 22:00–23:59:59 and Saturday 00:00–02:00 with only Friday
+listed. Every constraint in migration 051 is mirrored in `__table_args__`,
+because `tests/conftest.py` builds its schema from `Base.metadata` and a
+SQL-only CHECK is invisible to the entire suite — the defect that gave `no_show`
+fifteen passing assertions certifying an impossible write. The seed now exercises
+both halves for the first time: Classic Menu always on, Happy Hour windowed
+17:00–20:00 Europe/Berlin, with `scripts/verify-fresh-db.sh` asserting one of
+each exists on a migrated database.
+
+**References.** `server/db/migrations/051_menu_activation_windows.sql`,
+`server/app/services/menu_activation_service.py`,
+`server/app/services/order_service.py` (`_resolve_cart`, `place_order`),
+`server/app/services/menu_service.py` (`get_active_menus`),
+`server/app/models/menu.py`, `server/app/routers/ordering.py`,
+`server/tests/integration/test_menu_activation.py`,
+`server/db/seeds/001_seed_volt_and_vine.sql`, `scripts/verify-fresh-db.sh`,
+`client/app/menu/[business]/menu-client.tsx`,
+`client/app/business/menu/menu-management-client.tsx`, `client/lib/cart.ts`,
+`docs/TODO.md` stage 8.
+
+## 2026-09-04 — A grace period cannot end the session it is cancelled by
+
+**Context.** `POST /api/auth/disable-account` set `is_active = False` and bumped
+`session_version`, and the account screen told the user they could "reactivate
+it by logging in again within 30 days" and that after 30 days "your account and
+all associated data will be permanently deleted". Both strings were false in
+every clause: `authenticate_user` rejects an inactive user, so logging in is
+precisely what a disabled account cannot do; nothing in the product implements
+30 days of anything; and nothing anywhere sets `User.is_active = True`, so
+disabling is not reversible in the product at all. Meanwhile there was no
+deletion, and GDPR Art. 17 is not answered by a flag.
+
+**Decision.** Deletion is anonymization, not `DELETE`. The person is scrubbed
+and the row is kept, so the forty-eight foreign keys into `users(id)` still
+resolve — to a former staff member rather than to nobody. Once the row cannot
+identify anyone it is no longer personal data, which is what dissolves the
+apparent conflict between erasure and an operational record the venue may be
+obliged to keep. Migration 052 is two nullable columns and one CHECK; there is
+no new table, because `customer_data_requests` is `customer_id NOT NULL` and a
+row carrying `anonymized_at` already is the record of its own erasure.
+
+**The constraint that decided the design.** The brief specified that the
+request endpoint bump `session_version`, that signing in cancel a pending
+request, and that the account keep working. Those three cannot all hold.
+Bumping `session_version` invalidates the caller's token, so they must sign in,
+and signing in cancels the request — a pending deletion could then only exist
+while signed out, and "the account still works" would be unobservable. The
+request therefore stamps one column and touches nothing else: `is_active` stays
+true, the session stays valid, and using the account is how you change your
+mind. `session_version` is bumped at erasure, where it belongs. The general
+form is worth keeping: a grace period whose entry condition revokes the
+credential cannot also use that credential's next successful use as its exit
+condition.
+
+**What the numbers actually were.** `docs/TODO.md` framed 48 foreign keys as
+the hard part and named five as blocking. Measured against a migrated database
+rather than grepped — a grep still counts migration 001's
+`reservations`→`users` key, which 015 dropped — the split is 43 `ON DELETE SET
+NULL`, 3 `CASCADE` and 2 blocking. `staff`, `notifications` and
+`password_reset_tokens` cascade; only `tabs.opened_by` and `tabs.closed_by`
+refuse, and `tabs.opened_by` being `NOT NULL` with no delete action rules out
+`DELETE` on its own. None of it bears on anonymization, which touches no
+referencing row.
+
+**Two guards, one of them at both ends.** A sole owner cannot delete their
+account: 409 `LAST_OWNER`, reusing `staff_service.owner_count_for_update` and
+its row lock. The same check runs again at erasure, because someone can become
+the last owner during the thirty days; the job logs and leaves the request
+pending rather than stranding a venue with an owner nobody can sign in as. The
+replacement `password_hash` is a real bcrypt hash of a discarded random secret,
+not a placeholder — `bcrypt.checkpw` raises on a malformed hash, so a
+placeholder would have turned every later sign-in attempt into a 500.
+
+**Consequences.** Deleting a person is not deleting a venue, and tenant
+deletion is recorded as deliberately deferred rather than half-built.
+Migration 052's CHECK is mirrored in `User.__table_args__`, because
+`tests/conftest.py` builds its schema from `Base.metadata` and a SQL-only
+constraint is invisible to the whole suite. `auth_service` imports
+`staff_service` at the foot of the module: `app.schemas.auth` imports
+`validate_password` back out of `auth_service`, so the import cannot sit at the
+top. And a new authenticated route is not exempt from the permission matrix by
+being self-service — it has to be recorded in `CAPABILITY_EXEMPT`, or the route
+inventory test fails, which is the gate working.
+
+**References.** `server/db/migrations/052_account_deletion_requests.sql`,
+`server/app/services/auth_service.py` (`anonymize_user`,
+`anonymize_due_users`, `authenticate_user`),
+`server/app/services/staff_service.py` (`sole_owner_business_ids`),
+`server/app/routers/auth.py`, `server/app/jobs/account_deletion.py`,
+`server/app/models/user.py`, `server/scripts/generate_permission_matrix.py`,
+`server/tests/integration/test_account_deletion.py`,
+`scripts/verify-fresh-db.sh`, `server/railway.account-deletion.json`,
+`client/app/business/settings/account/business-account-settings-client.tsx`,
+`client/lib/client-api.ts`, `docs/deployment.md`, `docs/PRODUCT.md`,
+`docs/ARCHITECTURE.md`, `docs/TODO.md`.

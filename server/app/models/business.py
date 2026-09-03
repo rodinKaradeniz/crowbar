@@ -13,7 +13,7 @@ class Business(Base, UUIDMixin, TimestampMixin):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     # IANA timezone name (e.g. 'Europe/Istanbul'). Interprets wall-clock times
-    # such as operating hours and happy-hour windows. Defaults to 'UTC'.
+    # such as operating hours and menu activation windows. Defaults to 'UTC'.
     timezone: Mapped[str] = mapped_column(String(64), default="UTC", nullable=False)
     country_code: Mapped[str] = mapped_column(String(2), default="DE", nullable=False)
     currency_code: Mapped[str] = mapped_column(String(3), default="EUR", nullable=False)

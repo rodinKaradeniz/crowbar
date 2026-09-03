@@ -7,11 +7,14 @@ import type { Capability } from "@/lib/permissions";
  * Three groups — Service, Setup, Business — matching §05 of the Dashboard
  * canvas.
  *
- * THE GROUPS COLLAPSE, AND ONE ITEM NESTS. Sixteen entries dumped at once is a
- * list nobody reads; the groups are now disclosures, and the group holding the
- * current route has no toggle at all so the active item can never be hidden.
- * `children` exists for exactly one relationship — see "Happy hour windows"
- * below — and is deliberately one level deep.
+ * THE GROUPS COLLAPSE. Sixteen entries dumped at once is a list nobody reads;
+ * the groups are now disclosures, and the group holding the current route has
+ * no toggle at all so the active item can never be hidden.
+ *
+ * `children` supports a page that is genuinely PART OF another rather than a
+ * peer of it, and is deliberately one level deep. Nothing uses it today: its
+ * one holder was a schedule page nested under Menu, and a menu now carries its
+ * own activation windows, so that schedule lives on the menu it governs.
  *
  * THE GATES ARE THE POINT. An item renders only when its module is on AND the
  * role holds its capability. **A disabled module's entry is removed, not
@@ -100,22 +103,6 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Menu",
         module: "ordering",
         capability: "menu.view",
-        /*
-         * "Happy hour" read as a duplicate of the menu's own happy-hour price
-         * field, and it is not one — the two are halves of one feature. This
-         * page owns the WINDOWS (which days, what times) and is the only UI
-         * for /happy-hour/windows; the item form owns the per-item discounted
-         * price. Nesting it under Menu says which half is which, and the label
-         * says it is a schedule rather than a second menu.
-         */
-        children: [
-          {
-            href: "/business/happy-hour",
-            label: "Happy hour windows",
-            module: "ordering",
-            capability: "menu.edit",
-          },
-        ],
       },
       {
         href: "/business/inventory",

@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.menu import ItemLibrary, Menu, MenuCategory, MenuItem, MenuItemAvailabilityEvent, Modifier, ModifierGroup
-from app.services import preparation_station_service
+from app.services import menu_activation_service, preparation_station_service
 from app.models.tax import TaxProfile
 from app.schemas.menu import (
     LibraryItemCreate,
@@ -43,6 +43,7 @@ async def _load_menu(db: AsyncSession, menu_id: UUID, business_id: UUID) -> Menu
         select(Menu)
         .where(Menu.id == menu_id, Menu.business_id == business_id)
         .options(
+            selectinload(Menu.activation_windows),
             selectinload(Menu.categories)
             .selectinload(MenuCategory.items)
             .selectinload(MenuItem.modifier_groups)
@@ -116,6 +117,7 @@ async def list_menus(db: AsyncSession, business_id: UUID) -> list[Menu]:
         select(Menu)
         .where(Menu.business_id == business_id)
         .options(
+            selectinload(Menu.activation_windows),
             selectinload(Menu.categories)
             .selectinload(MenuCategory.items)
             .selectinload(MenuItem.modifier_groups)
@@ -130,12 +132,29 @@ async def list_menus(db: AsyncSession, business_id: UUID) -> list[Menu]:
     return list(result.scalars().unique().all())
 
 
-async def get_active_menu(db: AsyncSession, business_id: UUID) -> Menu | None:
-    """Return the first active menu with full nested data (public endpoint)."""
+async def get_active_menus(
+    db: AsyncSession, business_id: UUID, at: datetime | None = None
+) -> list[Menu]:
+    """Every menu being served right now, with full nested data (public read).
+
+    Plural because activation is per menu: a business can serve an always-on
+    menu and a windowed one at the same time. A menu outside its window is not
+    in this list at all, which is what keeps an unorderable item away from a
+    guest — and order placement asks the same question, so the two cannot
+    disagree.
+    """
+    servable = await menu_activation_service.active_menu_ids(db, business_id, at)
+    if not servable:
+        return []
     result = await db.execute(
         select(Menu)
-        .where(Menu.business_id == business_id, Menu.is_active == True)  # noqa: E712
+        .where(
+            Menu.business_id == business_id,
+            Menu.is_active == True,  # noqa: E712
+            Menu.id.in_(servable),
+        )
         .options(
+            selectinload(Menu.activation_windows),
             selectinload(Menu.categories)
             .selectinload(MenuCategory.items)
             .selectinload(MenuItem.modifier_groups)
@@ -146,9 +165,8 @@ async def get_active_menu(db: AsyncSession, business_id: UUID) -> Menu | None:
             .selectinload(TaxProfile.versions),
         )
         .order_by(Menu.created_at)
-        .limit(1)
     )
-    return result.scalar_one_or_none()
+    return list(result.scalars().unique().all())
 
 
 async def get_menu(db: AsyncSession, menu_id: UUID, business_id: UUID) -> Menu | None:
@@ -266,7 +284,6 @@ async def _create_item_for_category(
         name=data.name,
         description=data.description,
         price=data.price,
-        happy_hour_price=data.happy_hour_price,
         is_alcoholic=data.is_alcoholic,
         is_available=data.is_available,
         routing_tag=("any" if data.routes_to_all_stations else (
@@ -313,9 +330,6 @@ async def update_item(
         item.description = data.description
     if data.price is not None:
         item.price = data.price
-    # happy_hour_price: present (even as null) = set/clear; absent = unchanged.
-    if "happy_hour_price" in data.model_fields_set:
-        item.happy_hour_price = data.happy_hour_price
     if data.is_alcoholic is not None:
         item.is_alcoholic = data.is_alcoholic
     if data.is_available is not None:

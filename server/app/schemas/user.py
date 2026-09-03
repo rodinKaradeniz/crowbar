@@ -43,3 +43,5 @@ class UserResponse(AppBaseModel):
     avatar: str | None = None
     user_type: str
     created_at: datetime
+    #: Set while a 30-day account deletion window is running (migration 052).
+    deletion_requested_at: datetime | None = None

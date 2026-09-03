@@ -8,8 +8,8 @@ Every authenticated route names exactly one capability, except the self-service 
 
 | Role | Operator label | Capabilities held |
 | --- | --- | ---: |
-| `owner` | Owner | 48 |
-| `manager` | Manager | 46 |
+| `owner` | Owner | 47 |
+| `manager` | Manager | 45 |
 | `host_server` | Host / server | 17 |
 | `bar_kitchen` | Bar / kitchen | 16 |
 | `inventory_operator` | Inventory operator | 11 |
@@ -37,7 +37,6 @@ Every authenticated route names exactly one capability, except the self-service 
 | `menu.configure` | ● | ● |  |  |  |
 | `menu.pricing` | ● | ● |  |  |  |
 | `stations.configure` | ● | ● |  |  |  |
-| `happyhour.manage` | ● | ● |  |  |  |
 | `tabs.view` | ● | ● | ● | ● |  |
 | `tabs.operate` | ● | ● | ● | ● |  |
 | `tabs.settle` | ● | ● | ● | ● |  |
@@ -83,6 +82,7 @@ Every authenticated route names exactly one capability, except the self-service 
 | --- | --- | --- | --- | --- |
 | POST | `/api/auth/change-email` | _self-service_ | — | the signed-in user |
 | POST | `/api/auth/change-password` | _self-service_ | — | the signed-in user |
+| POST | `/api/auth/delete-account` | _self-service_ | — | the signed-in user |
 | POST | `/api/auth/disable-account` | _self-service_ | — | the signed-in user |
 | POST | `/api/auth/forgot-password` | _public_ | — | anyone |
 | POST | `/api/auth/login` | _public_ | — | anyone |
@@ -175,15 +175,6 @@ Every authenticated route names exactly one capability, except the self-service 
 | PUT | `/api/floor-plan/tables/{table_id}/state` | `floor.operate` | ordering, queue, reservations | owner, manager, host_server |
 | WEBSOCKET | `/ws/floor-plan/{business_id}` | _token frame_ | — | any signed-in staff |
 
-### `happy_hour.py`
-
-| Method | Path | Capability | Module | Roles |
-| --- | --- | --- | --- | --- |
-| GET | `/api/happy-hour/windows` | `menu.view` | ordering | owner, manager, host_server, bar_kitchen, inventory_operator |
-| POST | `/api/happy-hour/windows` | `happyhour.manage` | ordering | owner, manager |
-| DELETE | `/api/happy-hour/windows/{window_id}` | `happyhour.manage` | ordering | owner, manager |
-| PATCH | `/api/happy-hour/windows/{window_id}` | `happyhour.manage` | ordering | owner, manager |
-
 ### `insights.py`
 
 | Method | Path | Capability | Module | Roles |
@@ -262,6 +253,9 @@ Every authenticated route names exactly one capability, except the self-service 
 | POST | `/api/ordering/{business_id}/menus` | `menu.configure` | ordering | owner, manager |
 | DELETE | `/api/ordering/{business_id}/menus/{menu_id}` | `menu.configure` | ordering | owner, manager |
 | PATCH | `/api/ordering/{business_id}/menus/{menu_id}` | `menu.configure` | ordering | owner, manager |
+| POST | `/api/ordering/{business_id}/menus/{menu_id}/activation-windows` | `menu.configure` | ordering | owner, manager |
+| DELETE | `/api/ordering/{business_id}/menus/{menu_id}/activation-windows/{window_id}` | `menu.configure` | ordering | owner, manager |
+| PATCH | `/api/ordering/{business_id}/menus/{menu_id}/activation-windows/{window_id}` | `menu.configure` | ordering | owner, manager |
 | POST | `/api/ordering/{business_id}/menus/{menu_id}/categories` | `menu.configure` | ordering | owner, manager |
 | DELETE | `/api/ordering/{business_id}/modifier-groups/{group_id}` | `menu.configure` | ordering | owner, manager |
 | POST | `/api/ordering/{business_id}/modifier-groups/{group_id}/modifiers` | `menu.configure` | ordering | owner, manager |

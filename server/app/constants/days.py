@@ -6,7 +6,7 @@ against ``dt.weekday()`` with no offset.
 
 This is the single source of truth for day ordering on the backend. The frontend
 mirror lives in ``client/lib/days.ts`` and uses the identical indices. Any column
-that stores a day-of-week value (e.g. ``happy_hour_windows.days_of_week``) uses
+that stores a day-of-week value (e.g. ``menu_activation_windows.days_of_week``) uses
 these indices.
 
 Note: JavaScript's ``Date.getDay()`` uses 0 = Sunday; the frontend converts it to

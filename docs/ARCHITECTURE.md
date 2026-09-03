@@ -251,8 +251,8 @@ copy remains English.
 `tax_profile_versions` is append-only policy history: name, rate,
 inclusive/exclusive flag, effective instant, note, and actor. Owners/managers
 manage profiles and explicitly assign every newly priced menu/library item;
-there is no runtime food/beverage classifier. Modifier and happy-hour pricing
-inherit the menu item's profile. A profile cannot be archived while active
+there is no runtime food/beverage classifier. Modifier pricing inherits the
+menu item's profile. A profile cannot be archived while active
 catalogue or library rows reference it. `business_regional_audits` stores the
 actor and complete before/after region values.
 
@@ -284,6 +284,19 @@ activity rather than profile edit time; scheduling it is a deployment concern
 and is not assumed by the API process. Concurrent identity resolution is
 serialized per tenant/contact key, consent merge is conservative, and tab
 orders inherit the canonical customer.
+
+Migration 052 gives staff accounts the same shape. `users.deletion_requested_at`
+opens a 30-day window during which `is_active` stays true and the account keeps
+working; `authenticate_user` clears the column, so signing in is the
+cancellation and there is no second endpoint for it.
+`POST /api/auth/delete-account` refuses with 409 for the sole owner of any
+business the caller belongs to. `users.anonymized_at` records the erasure
+itself: `auth_service.anonymize_user` replaces email, name and password hash,
+nulls phone and avatar, bumps `session_version`, deactivates the row and drops
+the user's `staff` rows, leaving all forty-eight foreign keys into `users(id)`
+pointing at a row that identifies nobody. The one-shot
+`app.jobs.account_deletion` applies the window and, like customer retention,
+declines to erase anyone who has since become a business's only owner.
 
 ### Reservation protection
 
@@ -523,8 +536,9 @@ separate post-MVP German POS/payment program.
 Public QR rounds and staff tab rounds call the same order service. It resolves
 the active business menu, category, item, modifier group and modifier rows,
 validates required/min/max selections and registered table/tab context, and
-computes item names, happy-hour price and modifier deltas from server-owned
-data. A missing, foreign, inactive, unavailable, unpublished or mixed-invalid
+computes item names, prices and modifier deltas from server-owned data.
+Placement also rejects any line whose menu is outside its activation window,
+asking the same question the public menu read asks. A missing, foreign, inactive, unavailable, unpublished or mixed-invalid
 cart rejects atomically before an order, event, stock movement or tab effect is
 created.
 
@@ -534,7 +548,7 @@ another event, different requests using the same key conflict, and concurrent
 public/staff retries converge on one persisted order.
 
 At the same server-owned resolution point, placement resolves the effective
-tax-profile version after happy-hour and modifier pricing. Each line is rounded
+tax-profile version after modifier pricing. Each line is rounded
 half-up to the configured currency minor unit and snapshots currency,
 profile/version IDs, profile name/code, rate, inclusion policy, net subtotal,
 tax, and gross total. The order stores summed subtotal/tax/total and currency.

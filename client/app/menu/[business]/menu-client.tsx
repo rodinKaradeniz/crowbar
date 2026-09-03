@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import {
   clientCreateTableSession,
   clientGetCurrentTableSession,
-  clientGetMenu,
+  clientGetPublicMenus,
   clientGetOrderingSettings,
 } from "@/lib/client-api";
 import type { Menu, MenuItem, ModifierGroup, SelectedModifier } from "@/types";
@@ -13,7 +13,6 @@ import {
   addCartEntry,
   cartItemCount,
   cartTotal,
-  effectivePrice,
   modifierTotal,
   toggleModifier,
 } from "@/lib/cart";
@@ -37,12 +36,13 @@ import { useRegionalSettings } from "@/contexts/regional-context";
 interface MenuClientProps {
   businessId: string;
   businessSlug: string;
+  businessName: string;
 }
 
-export default function MenuClient({ businessId, businessSlug }: MenuClientProps) {
+export default function MenuClient({ businessId, businessSlug, businessName }: MenuClientProps) {
   const { currencyCode, locale, taxLabel } = useRegionalSettings();
   const money = (value: number | string) => formatMoney(value, currencyCode, locale);
-  const [menu, setMenu] = useState<Menu | null>(null);
+  const [menus, setMenus] = useState<Menu[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAcceptingOrders, setIsAcceptingOrders] = useState(true);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -59,8 +59,8 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
       .then((s) => setIsAcceptingOrders(s.isAcceptingOrders))
       .catch(() => {});
 
-    clientGetMenu(businessId)
-      .then(setMenu)
+    clientGetPublicMenus(businessId)
+      .then(setMenus)
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [businessId]);
@@ -121,12 +121,15 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
     setSelectedItem(null);
   }
 
-  // Happy hour is decided server-side (menu.happyHourActive). When active, an
-  // item with happyHourPrice set is displayed and totalled at the lower price.
-  const hhActive = menu?.happyHourActive ?? false;
+  // Which menus are being served is decided server-side; a menu outside its
+  // window never arrives here at all. Categories are flattened only for the
+  // sticky nav — the list itself stays grouped, so a guest can see which menu a
+  // price belongs to when two are open at once.
+  const openMenus = menus.filter((m) => m.categories.some((c) => c.isActive));
+  const navCategories = openMenus.flatMap((m) => m.categories.filter((c) => c.isActive));
 
   const totalItems = cartItemCount(cart);
-  const totalPrice = cartTotal(cart, hhActive);
+  const totalPrice = cartTotal(cart);
 
   if (loading) {
     return (
@@ -136,13 +139,16 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
     );
   }
 
-  if (!menu) {
+  // Nothing open is a real answer, not a failure: every menu may simply be
+  // outside its window right now. Say that rather than implying the venue
+  // never set one up.
+  if (openMenus.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center px-6">
           <ChefHat className="h-10 w-10 mx-auto text-muted-foreground mb-4" />
-          <p className="type-t1">No menu available</p>
-          <p className="text-sm text-muted-foreground mt-2">This business hasn&apos;t set up their menu yet.</p>
+          <p className="type-t1">No menu available right now</p>
+          <p className="text-sm text-muted-foreground mt-2">Please check back later, or ask a member of staff.</p>
         </div>
       </div>
     );
@@ -154,7 +160,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
       {/* Masthead — set like the cover of a printed list */}
       <header className="px-6 pt-10 pb-6 text-center enter-rise">
         {tableSessionStatus && <p className="type-label text-muted-foreground mb-2">Table ordering</p>}
-        <h1 className="type-d3">{menu.name}</h1>
+        <h1 className="type-d3">{businessName}</h1>
         <div className="border-t border-border mt-5 mx-auto max-w-36" />
       </header>
 
@@ -168,7 +174,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
       {/* Category nav */}
       <nav className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border enter-rise" style={{ animationDelay: "80ms" }}>
         <div className="overflow-x-auto scrollbar-hide flex gap-6 px-6 py-3">
-          {menu.categories.filter((c) => c.isActive).map((cat) => (
+          {navCategories.map((cat) => (
             <a
               key={cat.id}
               href={`#cat-${cat.id}`}
@@ -180,9 +186,26 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
         </div>
       </nav>
 
-      {/* Menu items */}
+      {/* Menu items, grouped by menu.
+          Several menus can be open at once — an always-on one plus a windowed
+          one — and the same drink can legitimately appear in both at different
+          prices. The menu name above its categories is what tells a guest which
+          list a price belongs to. With a single menu open the heading is
+          dropped: naming one thing is noise. */}
       <div className="px-6 space-y-10 mt-8 max-w-xl mx-auto">
-        {menu.categories
+        {openMenus.map((m) => (
+          <section key={m.id} className="space-y-10">
+            {openMenus.length > 1 && (
+              <div>
+                <h2 className="type-t1 font-normal">{m.name}</h2>
+                {m.description && (
+                  <p className="text-[13px] leading-relaxed text-muted-foreground mt-1">
+                    {m.description}
+                  </p>
+                )}
+              </div>
+            )}
+            {m.categories
           .filter((c) => c.isActive)
           .map((cat, catIndex) => (
             <section key={cat.id} id={`cat-${cat.id}`} className="scroll-mt-16 enter-rise" style={{ animationDelay: `${Math.min(catIndex, 4) * 90 + 140}ms` }}>
@@ -205,18 +228,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                           {item.name}
                         </span>
                         <span className="flex-1" aria-hidden />
-                        {hhActive && item.happyHourPrice != null ? (
-                          <span className="shrink-0 text-right">
-                            <span className="font-mono tabular-nums text-sm text-primary">
-                              {money(item.happyHourPrice)}
-                            </span>{" "}
-                            <span className="font-mono tabular-nums text-xs text-muted-foreground line-through">
-                              {money(item.price)}
-                            </span>
-                          </span>
-                        ) : (
-                          <span className="font-mono tabular-nums text-sm shrink-0">{money(item.price)}</span>
-                        )}
+                        <span className="font-mono tabular-nums text-sm shrink-0">{money(item.price)}</span>
                       </div>
                       {item.description && (
                         <p className="text-[13px] leading-relaxed text-muted-foreground mt-1 pr-10 line-clamp-2">
@@ -224,9 +236,6 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                         </p>
                       )}
                       <div className="flex items-center gap-3 mt-1">
-                        {hhActive && item.happyHourPrice != null && (
-                          <span className="type-label text-muted-foreground text-primary">Happy Hour</span>
-                        )}
                         {item.prepTimeMinutes && (
                           <span className="font-mono tabular-nums text-xs text-muted-foreground">
                             ~{item.prepTimeMinutes} min
@@ -243,6 +252,8 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
               </div>
             </section>
           ))}
+          </section>
+        ))}
       </div>
 
       {/* Cart bar */}
@@ -256,9 +267,6 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                 onClick={() => {
                   if (typeof window !== "undefined") {
                     sessionStorage.setItem(`cart_${businessSlug}`, JSON.stringify(cart));
-                    // Carry the server-decided happy-hour state to the checkout
-                    // page so its running total matches the menu display.
-                    sessionStorage.setItem(`cart_hh_${businessSlug}`, JSON.stringify(hhActive));
                   }
                 }}
               >
@@ -292,19 +300,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                 {selectedItem.description && (
                   <p className="text-sm leading-relaxed text-muted-foreground">{selectedItem.description}</p>
                 )}
-                {hhActive && selectedItem.happyHourPrice != null ? (
-                  <div className="flex items-baseline gap-2">
-                    <p className="font-mono tabular-nums text-base text-primary">
-                      {money(selectedItem.happyHourPrice)}
-                    </p>
-                    <p className="font-mono tabular-nums text-sm text-muted-foreground line-through">
-                      {money(selectedItem.price)}
-                    </p>
-                    <span className="type-label text-muted-foreground text-primary">Happy Hour</span>
-                  </div>
-                ) : (
-                  <p className="font-mono tabular-nums text-base">{money(selectedItem.price)}</p>
-                )}
+                <p className="font-mono tabular-nums text-base">{money(selectedItem.price)}</p>
               </SheetHeader>
 
               <div className="space-y-5 mt-4 px-[var(--space-16)]">
@@ -372,9 +368,7 @@ export default function MenuClient({ businessId, businessSlug }: MenuClientProps
                   Add to Cart ·{" "}
                   <span className="font-mono tabular-nums">
                     {money(
-                      (effectivePrice(selectedItem, hhActive) +
-                        modifierTotal(sheetMods)) *
-                      sheetQty,
+                      (selectedItem.price + modifierTotal(sheetMods)) * sheetQty,
                     )}
                   </span>
                 </Button>

@@ -29,6 +29,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       phone: user.phone || undefined,
       avatar: user.avatar || undefined,
       createdAt: user.created_at,
+      deletionRequestedAt: user.deletion_requested_at || undefined,
     };
 
     if (user.user_type === "staff" && user.business_id) {

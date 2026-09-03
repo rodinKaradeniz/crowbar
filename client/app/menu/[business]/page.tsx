@@ -37,7 +37,7 @@ export default async function MenuPage({ params }: MenuPageProps) {
       timezone: business.timezone,
       taxLabel: business.taxLabel,
     }}>
-      <MenuClient businessId={business.id} businessSlug={business.slug} />
+      <MenuClient businessId={business.id} businessSlug={business.slug} businessName={business.name} />
     </RegionalSettingsProvider>
   );
 }

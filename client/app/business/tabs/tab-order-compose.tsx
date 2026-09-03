@@ -16,14 +16,13 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { clientGetMenu, clientAddOrderToTab } from "@/lib/client-api";
+import { clientGetPublicMenus, clientAddOrderToTab } from "@/lib/client-api";
 import {
   type CartItem,
   addCartEntry,
   cartItemCount,
   cartItemLineTotal,
   cartTotal,
-  effectivePrice,
   modifierTotal,
   toggleModifier,
 } from "@/lib/cart";
@@ -54,7 +53,7 @@ export function TabOrderCompose({
 }: TabOrderComposeProps) {
   const { currencyCode, locale } = useRegionalSettings();
   const money = (value: number | string) => formatMoney(value, currencyCode, locale);
-  const [menu, setMenu] = useState<Menu | null>(null);
+  const [menus, setMenus] = useState<Menu[]>([]);
   const [loading, setLoading] = useState(true);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -66,20 +65,22 @@ export function TabOrderCompose({
   const [detailNotes, setDetailNotes] = useState("");
   const [detailQty, setDetailQty] = useState(1);
 
-  // Load the menu each time the dialog opens (public read → carries the
-  // server-decided happy-hour state, same source as the customer menu).
+  // Load the menus each time the dialog opens. This is the public read on
+  // purpose: staff compose from exactly what a guest can order right now, so a
+  // menu outside its window is absent here too — and placement would reject it
+  // anyway, since both ask the same server-side question.
   useEffect(() => {
     if (!open) return;
     setLoading(true);
     setCart([]);
     setDetailItem(null);
-    clientGetMenu(businessId)
-      .then(setMenu)
-      .catch(() => setMenu(null))
+    clientGetPublicMenus(businessId)
+      .then(setMenus)
+      .catch(() => setMenus([]))
       .finally(() => setLoading(false));
   }, [open, businessId]);
 
-  const hhActive = menu?.happyHourActive ?? false;
+  const openMenus = menus.filter((m) => m.categories.some((c) => c.isActive));
 
   function openDetail(item: MenuItem) {
     setDetailItem(item);
@@ -136,7 +137,7 @@ export function TabOrderCompose({
   }
 
   const totalItems = cartItemCount(cart);
-  const totalPrice = cartTotal(cart, hhActive);
+  const totalPrice = cartTotal(cart);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -156,23 +157,9 @@ export function TabOrderCompose({
                   {detailItem.description}
                 </p>
               )}
-              {hhActive && detailItem.happyHourPrice != null ? (
-                <div className="flex items-center gap-2">
-                  <p className="text-base font-semibold text-primary">
-                    {money(Number(detailItem.happyHourPrice))}
-                  </p>
-                  <p className="text-sm text-muted-foreground line-through">
-                    {money(Number(detailItem.price))}
-                  </p>
-                  <Badge tone="neutral" className="text-[10px]">
-                    Happy Hour
-                  </Badge>
-                </div>
-              ) : (
-                <p className="text-base font-semibold">
-                  {money(Number(detailItem.price))}
-                </p>
-              )}
+              <p className="text-base font-semibold">
+                {money(Number(detailItem.price))}
+              </p>
 
               {detailItem.modifierGroups.map((group) => (
                 <div key={group.id}>
@@ -262,9 +249,7 @@ export function TabOrderCompose({
                 <Button className="flex-1" onClick={addDetailToCart}>
                   Add ·{" "}
                   {money(
-                    (effectivePrice(detailItem, hhActive) +
-                      modifierTotal(detailMods)) *
-                      detailQty,
+                    (detailItem.price + modifierTotal(detailMods)) * detailQty,
                   )}
                 </Button>
               </div>
@@ -278,17 +263,26 @@ export function TabOrderCompose({
                 <p className="text-sm text-muted-foreground py-8 text-center">
                   Loading menu…
                 </p>
-              ) : !menu ? (
+              ) : openMenus.length === 0 ? (
                 <div className="text-center py-8">
                   <ChefHat className="h-10 w-10 mx-auto text-muted-foreground mb-2" />
-                  <p className="text-sm font-medium">No menu available</p>
+                  <p className="text-sm font-medium">No menu available right now</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Every menu is outside its activation window.
+                  </p>
                 </div>
               ) : (
-                menu.categories
+                openMenus.flatMap((m) =>
+                  m.categories
                   .filter((c) => c.isActive)
                   .map((cat) => (
                     <section key={cat.id}>
-                      <h3 className="text-sm font-semibold mb-2">{cat.name}</h3>
+                      <h3 className="text-sm font-semibold mb-2">
+                        {openMenus.length > 1 && (
+                          <span className="text-muted-foreground font-normal">{m.name} · </span>
+                        )}
+                        {cat.name}
+                      </h3>
                       <div className="space-y-2">
                         {cat.items
                           .filter((i) => i.isAvailable)
@@ -310,20 +304,9 @@ export function TabOrderCompose({
                                   )}
                                 </div>
                                 <div className="shrink-0 text-right">
-                                  {hhActive && item.happyHourPrice != null ? (
-                                    <>
-                                      <p className="text-sm font-semibold text-primary">
-                                        {money(Number(item.happyHourPrice))}
-                                      </p>
-                                      <p className="text-xs text-muted-foreground line-through">
-                                        {money(Number(item.price))}
-                                      </p>
-                                    </>
-                                  ) : (
-                                    <p className="text-sm font-semibold">
-                                      {money(Number(item.price))}
-                                    </p>
-                                  )}
+                                  <p className="text-sm font-semibold">
+                                    {money(Number(item.price))}
+                                  </p>
                                   <Plus className="h-4 w-4 text-primary mt-1 ml-auto" />
                                 </div>
                               </div>
@@ -331,7 +314,8 @@ export function TabOrderCompose({
                           ))}
                       </div>
                     </section>
-                  ))
+                  )),
+                )
               )}
 
               {/* Cart */}
@@ -362,7 +346,7 @@ export function TabOrderCompose({
                           )}
                         </div>
                         <p className="text-sm font-semibold shrink-0">
-                          {money(cartItemLineTotal(ci, hhActive))}
+                          {money(cartItemLineTotal(ci))}
                         </p>
                         <button
                           onClick={() => removeFromCart(i)}

@@ -19,6 +19,7 @@ import {
   clientGetPublicQueueService,
   clientJoinQueue,
   clientSettleTabExternally,
+  clientRequestAccountDeletion,
 } from "@/lib/client-api";
 
 // Start MSW server for network-level mocking
@@ -583,5 +584,44 @@ describe("structured API errors", () => {
         ],
       },
     });
+  });
+});
+
+describe("clientRequestAccountDeletion", () => {
+  it("posts to the authenticated delete-account route", async () => {
+    let called = false;
+    server.use(
+      http.post("/api/proxy/auth/delete-account", () => {
+        called = true;
+        return HttpResponse.json({ message: "Account deletion requested" });
+      }),
+    );
+
+    const result = await clientRequestAccountDeletion();
+
+    expect(called).toBe(true);
+    expect(result.message).toBe("Account deletion requested");
+  });
+
+  it("surfaces the sole-owner refusal as a ClientApiError message", async () => {
+    server.use(
+      http.post("/api/proxy/auth/delete-account", () =>
+        HttpResponse.json(
+          {
+            detail: {
+              code: "LAST_OWNER",
+              message:
+                "Transfer ownership to someone else before deleting your account. The business must retain at least one owner.",
+              details: null,
+            },
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    await expect(clientRequestAccountDeletion()).rejects.toThrow(
+      /Transfer ownership to someone else/,
+    );
   });
 });

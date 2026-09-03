@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +15,7 @@ from app.core.rate_limit import (
     enforce_rate_limits,
     get_client_ip,
 )
+from app.core.errors import api_error
 from app.core.permissions import capabilities_for
 from app.core.regional import RegionalValidationError
 from app.database import get_db
@@ -152,6 +155,13 @@ async def get_me(
         "avatar": current_user.avatar,
         "user_type": current_user.user_type,
         "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
+        # The account settings page needs this to stop offering a deletion the
+        # user has already asked for.
+        "deletion_requested_at": (
+            current_user.deletion_requested_at.isoformat()
+            if current_user.deletion_requested_at
+            else None
+        ),
     }
 
     if current_user.user_type == "staff":
@@ -275,6 +285,34 @@ async def disable_account(
     current_user.session_version += 1
     await db.flush()
     return {"message": "Account disabled successfully"}
+
+
+@router.post("/delete-account")
+async def delete_account(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Start the 30-day window after which the current user's account is erased.
+
+    Deliberately does NOT set is_active or bump session_version. The account
+    keeps working for the whole window, because signing in is what cancels the
+    request (auth_service.authenticate_user) -- ending the session here would
+    make a pending request reachable only while signed out.
+    """
+    stranded = await staff_service.sole_owner_business_ids(db, current_user.id)
+    if stranded:
+        raise api_error(
+            status.HTTP_409_CONFLICT,
+            "LAST_OWNER",
+            "Transfer ownership to someone else before deleting your account. "
+            "The business must retain at least one owner.",
+        )
+    # Asking twice must not quietly restart the window. The window runs from
+    # when the person first asked; only signing in clears it.
+    if current_user.deletion_requested_at is None:
+        current_user.deletion_requested_at = datetime.now(timezone.utc)
+        await db.flush()
+    return {"message": "Account deletion requested"}
 
 
 @router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)

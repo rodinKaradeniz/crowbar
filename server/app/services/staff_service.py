@@ -148,6 +148,30 @@ async def owner_count_for_update(
     return len(owners)
 
 
+async def sole_owner_business_ids(db: AsyncSession, user_id: UUID) -> list[UUID]:
+    """Businesses where this user holds the only `owner` role.
+
+    Anonymizing the only owner of a business leaves a ghost owner nobody can
+    sign in as, so both the deletion request and the erasure refuse while this
+    returns anything. `owner_count_for_update` row-locks the owner rows, which
+    is what stops a concurrent demotion from making a second owner disappear
+    between the count and the decision.
+    """
+    business_ids = [
+        assignment.business_id
+        for assignment in (
+            await db.scalars(
+                select(Staff).where(Staff.user_id == user_id, Staff.role == "owner")
+            )
+        ).all()
+    ]
+    return [
+        business_id
+        for business_id in business_ids
+        if await owner_count_for_update(db, business_id) <= 1
+    ]
+
+
 async def list_invitations(
     db: AsyncSession, business_id: UUID
 ) -> list[StaffInvitation]:

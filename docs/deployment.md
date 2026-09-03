@@ -26,11 +26,13 @@ Internet
                                +--> ml (private FastAPI)
 
 reminders (hourly private cron) ---> PostgreSQL ---> Twilio
+account-deletion (daily private cron) ---> PostgreSQL
 ```
 
-Only `web` and `api` receive public domains. PostgreSQL, Redis, `ml`, and
-`reminders` remain private. Future domain microservices remain private behind
-the FastAPI gateway unless a new architecture decision says otherwise.
+Only `web` and `api` receive public domains. PostgreSQL, Redis, `ml`,
+`reminders`, and `account-deletion` remain private. Future domain microservices
+remain private behind the FastAPI gateway unless a new architecture decision
+says otherwise.
 
 ## Source and Process Contract
 
@@ -45,6 +47,7 @@ file.
 | `api` | `/server` | `/server/railway.api.json` | Railpack | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
 | `ml` | `/ml` | `/ml/railway.json` | Dockerfile | Docker `CMD`, listening on `$PORT` |
 | `reminders` | `/server` | `/server/railway.reminders.json` | Railpack | `python -m app.jobs.reservation_reminders` |
+| `account-deletion` | `/server` | `/server/railway.account-deletion.json` | Railpack | `python -m app.jobs.account_deletion` |
 
 Watch patterns prevent unrelated monorepo changes from rebuilding every
 service.
@@ -59,6 +62,9 @@ service.
   stops the new deployment before it becomes active.
 - `reminders` runs at `0 * * * *` UTC, completes one batch, closes its database
   engine, and exits. It has no public domain and no persistent worker.
+- `account-deletion` runs at `30 3 * * *` UTC, erases every staff account whose
+  30-day deletion window has closed, and exits. Same shape as `reminders`: no
+  public domain, no persistent worker.
 
 Do not seed production data or use `db.migrate reset`.
 

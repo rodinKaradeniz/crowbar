@@ -178,7 +178,7 @@ export default function BusinessInfoClient({
                   onChange={setBusinessTimezone}
                 />
                 <FieldDescription>
-                  Interprets your operating hours and happy-hour windows.
+                  Interprets your operating hours and menu windows.
                 </FieldDescription>
               </Field>
 

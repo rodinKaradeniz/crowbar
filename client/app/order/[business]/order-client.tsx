@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   clientGetCurrentTableSession,
   clientPlaceOrder,
@@ -41,7 +41,6 @@ interface CartItem {
     id: string;
     name: string;
     price: number;
-    happyHourPrice?: number | null;
     isAlcoholic?: boolean;
     routingTag: string;
     taxRate?: number;
@@ -66,13 +65,34 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
   const { currencyCode, locale, taxLabel } = useRegionalSettings();
   const money = (value: number | string) => formatMoney(value, currencyCode, locale);
   const [cart, setCart] = useState<CartItem[]>([]);
-  // Happy-hour state carried from the menu page (server-decided). Display only —
-  // the backend re-decides authoritatively at order placement.
-  const [hhActive, setHhActive] = useState(false);
   const [notes, setNotes] = useState("");
   const [placing, setPlacing] = useState(false);
   // Age self-attestation (only surfaced when the cart contains an alcoholic item).
   const [ageConfirmed, setAgeConfirmed] = useState(false);
+
+  // The checkout footer is fixed, so the page has to reserve its height or the
+  // last field sits under it unreachably. That reserve was a literal `pb-32`
+  // (128px) against a footer that measures 220 — the age attestation always
+  // wraps to two lines inside the 448px column, at every width — so 92px of the
+  // form was permanently covered. Measure the footer instead of guessing at it:
+  // the reserve then stays correct whether or not the cart contains alcohol.
+  const [footerHeight, setFooterHeight] = useState(0);
+  const observerRef = useRef<ResizeObserver | null>(null);
+  // A callback ref, because the footer only mounts once the cart has loaded —
+  // and unmounts again when the last item is removed. Zero the reserve on
+  // detach, or ~220px of dead space stays under "Your cart is empty".
+  const footerRef = useCallback((node: HTMLDivElement | null) => {
+    observerRef.current?.disconnect();
+    observerRef.current = null;
+    if (!node) {
+      setFooterHeight(0);
+      return;
+    }
+    observerRef.current = new ResizeObserver(([entry]) =>
+      setFooterHeight(entry.contentRect.height),
+    );
+    observerRef.current.observe(node);
+  }, []);
 
   // Post-order state
   const [placed, setPlaced] = useState(false);
@@ -86,12 +106,6 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
       if (stored) {
         try {
           setCart(JSON.parse(stored) as CartItem[]);
-        } catch {}
-      }
-      const hh = sessionStorage.getItem(`cart_hh_${businessSlug}`);
-      if (hh) {
-        try {
-          setHhActive(JSON.parse(hh) as boolean);
         } catch {}
       }
     }
@@ -126,15 +140,12 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
     }
   }
 
-  const effectivePrice = (item: CartItem["item"]) =>
-    hhActive && item.happyHourPrice != null ? item.happyHourPrice : item.price;
-
   const currencyDigits = new Intl.NumberFormat(locale, { style: "currency", currency: currencyCode })
     .resolvedOptions().maximumFractionDigits;
   const roundCurrency = (value: number) => Number(value.toFixed(currencyDigits));
   const cartTotals = cart.reduce((totals, ci) => {
     const modTotal = ci.selectedModifiers.reduce((sum, modifier) => sum + modifier.priceDelta, 0);
-    const entered = roundCurrency((effectivePrice(ci.item) + modTotal) * ci.quantity);
+    const entered = roundCurrency((ci.item.price + modTotal) * ci.quantity);
     const rate = (ci.item.taxRate ?? 0) / 100;
     const includes = ci.item.priceIncludesTax ?? true;
     const net = includes && rate > 0 ? roundCurrency(entered / (1 + rate)) : entered;
@@ -262,7 +273,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
   // ─── Cart view ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-background pb-32">
+    <div className="min-h-screen bg-background" style={{ paddingBottom: footerHeight }}>
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b px-6 py-3 flex items-center gap-2">
         <Link href={`/menu/${businessSlug}`}
           className="type-label text-muted-foreground hover:text-primary transition-colors"
@@ -289,7 +300,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
             <div className="divide-y divide-border/60 enter-rise" style={{ animationDelay: "90ms" }}>
               {cart.map((ci, i) => {
                 const modTotal = ci.selectedModifiers.reduce((s, m) => s + m.priceDelta, 0);
-                const lineTotal = (effectivePrice(ci.item) + modTotal) * ci.quantity;
+                const lineTotal = (ci.item.price + modTotal) * ci.quantity;
                 return (
                   <div key={i} className="flex items-start gap-3 py-3.5">
                     <div className="flex-1 min-w-0">
@@ -333,7 +344,7 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
               </div>
             </div>
 
-            <div className="fixed bottom-0 inset-x-0 z-20 bg-background/95 backdrop-blur">
+            <div ref={footerRef} className="fixed bottom-0 inset-x-0 z-20 bg-background/95 backdrop-blur">
               <div className="border-t border-border" />
               <div className="p-4 max-w-md mx-auto">
                 {cartHasAlcohol && (

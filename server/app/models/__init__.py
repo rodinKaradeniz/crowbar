@@ -7,12 +7,11 @@ from app.models.booking_schedule import (
 )
 from app.models.business import Business
 from app.models.customer import Customer, CustomerDataRequest, CustomerMarketingConsent, CustomerMergeAudit, CustomerNote, CustomerTag
-from app.models.happy_hour_window import HappyHourWindow
 from app.models.inventory import InventoryDiscrepancy, InventoryItem, InventoryPackConversion, StockMovement
 from app.models.inventory_operations import InventoryCountLine, InventoryCountSession, InventoryTransfer, InventoryTransferLine
 from app.models.purchasing import PurchaseOrder, PurchaseOrderAttachment, PurchaseOrderLine, PurchasePriceHistory, PurchaseReceipt, PurchaseReceiptLine, Supplier, SupplierProduct
 from app.models.location import Location
-from app.models.menu import ItemLibrary, Menu, MenuCategory, MenuItem, MenuItemAvailabilityEvent, Modifier, ModifierGroup
+from app.models.menu import ItemLibrary, Menu, MenuActivationWindow, MenuCategory, MenuItem, MenuItemAvailabilityEvent, Modifier, ModifierGroup
 from app.models.notification import Notification
 from app.models.password_reset_token import PasswordResetToken
 from app.models.queue_entry import QueueEntry, QueueEntryEvent, QueueServiceDay
@@ -61,6 +60,7 @@ __all__ = [
     "QueueServiceDay",
     "PasswordResetToken",
     "Menu",
+    "MenuActivationWindow",
     "MenuCategory",
     "MenuItem",
     "MenuItemAvailabilityEvent",
@@ -103,7 +103,6 @@ __all__ = [
     "BookingScheduleExceptionWindow",
     "Tab",
     "TabSettlementEvent",
-    "HappyHourWindow",
     "BusinessRegionalAudit",
     "TaxProfile",
     "TaxProfileVersion",

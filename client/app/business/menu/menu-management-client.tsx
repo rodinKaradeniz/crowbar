@@ -29,11 +29,15 @@ import {
   clientGetMenuItemStockFlags,
   clientGetInventoryItems,
   clientGetTaxProfiles,
+  clientCreateMenuActivationWindow,
+  clientUpdateMenuActivationWindow,
+  clientDeleteMenuActivationWindow,
 } from "@/lib/client-api";
 import type {
   InventoryItem,
   LibraryItem,
   Menu,
+  MenuActivationWindow,
   MenuCategory,
   MenuItem,
   MenuItemStockInfo,
@@ -43,6 +47,7 @@ import type {
 } from "@/types";
 import Link from "next/link";
 import { isLiquidUnitType, mlToOz, ozToMl } from "@/lib/units";
+import { DAYS_OF_WEEK } from "@/lib/days";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -84,6 +89,7 @@ import {
   Copy,
   Check,
   ExternalLink,
+  Clock,
 } from "lucide-react";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { EmptyState } from "@/components/empty-state";
@@ -98,8 +104,42 @@ interface Props {
   canManageTax: boolean;
 }
 
+type WindowForm = {
+  daysOfWeek: number[];
+  startTime: string;
+  endTime: string;
+  isActive: boolean;
+};
+
+const emptyWindowForm: WindowForm = {
+  daysOfWeek: [],
+  startTime: "17:00",
+  endTime: "20:00",
+  isActive: true,
+};
+
+function daysLabel(days: number[]): string {
+  if (days.length === 7) return "Every day";
+  return DAYS_OF_WEEK.filter((d) => days.includes(d.index))
+    .map((d) => d.short)
+    .join(", ");
+}
+
+// The one-line answer to "when is this menu served?" — the summary a manager
+// reads without opening anything.
+function activationSummary(menu: Menu): string {
+  const windows = menu.activationWindows ?? [];
+  if (windows.length === 0) return "Always on";
+  const live = windows.filter((w) => w.isActive);
+  if (live.length === 0) return "Scheduled · no active window";
+  if (live.length === 1) {
+    return `${daysLabel(live[0].daysOfWeek)} · ${live[0].startTime}–${live[0].endTime}`;
+  }
+  return `${live.length} windows`;
+}
+
 export function MenuManagementClient({ businessId, businessSlug, canManageTax }: Props) {
-  const { currencyCode, locale, taxLabel } = useRegionalSettings();
+  const { currencyCode, locale, taxLabel, timezone } = useRegionalSettings();
   const money = (value: number | string) => formatMoney(value, currencyCode, locale);
   const [menus, setMenus] = useState<Menu[]>([]);
   const [selectedMenuId, setSelectedMenuId] = useState<string | null>(null);
@@ -139,6 +179,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
 
   // ── Dialog state ────────────────────────────────────────────────────────────
   const [menuDialog, setMenuDialog] = useState(false);
+  const [activationDialog, setActivationDialog] = useState(false);
   const [categoryDialog, setCategoryDialog] = useState(false);
   const [itemDialog, setItemDialog] = useState(false);
   const [libraryDialog, setLibraryDialog] = useState(false);
@@ -152,6 +193,14 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
     menuId?: string;
     categoryId?: string;
   } | null>(null);
+
+  // ── Activation window form ──────────────────────────────────────────────────
+  // A menu is either always on (no windows) or served only inside them. The
+  // schedule used to live on a separate business-wide settings page; it
+  // belongs to the menu it governs.
+  const [editingWindow, setEditingWindow] = useState<MenuActivationWindow | null>(null);
+  const [windowForm, setWindowForm] = useState<WindowForm>(emptyWindowForm);
+  const [savingWindow, setSavingWindow] = useState(false);
 
   // ── Menu form ───────────────────────────────────────────────────────────────
   const [menuName, setMenuName] = useState("");
@@ -167,7 +216,6 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
     name: "",
     description: "",
     price: "",
-    happyHourPrice: "",
     isAlcoholic: false,
     routingDestination: "shared",
     prepTime: "",
@@ -188,7 +236,6 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
     name: "",
     description: "",
     price: "",
-    happyHourPrice: "",
     isAlcoholic: false,
     routingDestination: "shared",
     prepTime: "",
@@ -360,6 +407,100 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
     }
   }
 
+  // ── Activation windows ───────────────────────────────────────────────────────
+
+  function setMenuWindows(menuId: string, windows: MenuActivationWindow[]) {
+    setMenus((prev) =>
+      prev.map((m) => (m.id === menuId ? { ...m, activationWindows: windows } : m)),
+    );
+  }
+
+  function openActivation(menu: Menu) {
+    setSelectedMenuId(menu.id);
+    setEditingWindow(null);
+    setWindowForm(emptyWindowForm);
+    setActivationDialog(true);
+  }
+
+  function editWindow(w: MenuActivationWindow) {
+    setEditingWindow(w);
+    setWindowForm({
+      daysOfWeek: w.daysOfWeek,
+      startTime: w.startTime,
+      endTime: w.endTime,
+      isActive: w.isActive,
+    });
+  }
+
+  function toggleWindowDay(index: number) {
+    setWindowForm((f) => ({
+      ...f,
+      daysOfWeek: f.daysOfWeek.includes(index)
+        ? f.daysOfWeek.filter((d) => d !== index)
+        : [...f.daysOfWeek, index].sort((a, b) => a - b),
+    }));
+  }
+
+  async function saveWindow() {
+    if (!selectedMenu) return;
+    if (windowForm.daysOfWeek.length === 0) {
+      toast.error("Select at least one day");
+      return;
+    }
+    if (windowForm.startTime === windowForm.endTime) {
+      toast.error("Start and end time can't be the same");
+      return;
+    }
+    // start > end is a valid overnight window (it wraps past midnight), so it
+    // is deliberately allowed.
+    setSavingWindow(true);
+    try {
+      const existing = selectedMenu.activationWindows ?? [];
+      if (editingWindow) {
+        const updated = await clientUpdateMenuActivationWindow(
+          businessId,
+          selectedMenu.id,
+          editingWindow.id,
+          windowForm,
+        );
+        setMenuWindows(
+          selectedMenu.id,
+          existing.map((w) => (w.id === updated.id ? updated : w)),
+        );
+      } else {
+        const created = await clientCreateMenuActivationWindow(
+          businessId,
+          selectedMenu.id,
+          windowForm,
+        );
+        setMenuWindows(selectedMenu.id, [...existing, created]);
+      }
+      setEditingWindow(null);
+      setWindowForm(emptyWindowForm);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSavingWindow(false);
+    }
+  }
+
+  async function removeWindow(w: MenuActivationWindow) {
+    if (!selectedMenu) return;
+    try {
+      await clientDeleteMenuActivationWindow(businessId, selectedMenu.id, w.id);
+      setMenuWindows(
+        selectedMenu.id,
+        (selectedMenu.activationWindows ?? []).filter((x) => x.id !== w.id),
+      );
+      if (editingWindow?.id === w.id) {
+        setEditingWindow(null);
+        setWindowForm(emptyWindowForm);
+      }
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
   // ── Category CRUD ─────────────────────────────────────────────────────────────
 
   function openCreateCategory(menuId: string) {
@@ -453,7 +594,6 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
       name: "",
       description: "",
       price: "",
-      happyHourPrice: "",
       isAlcoholic: false,
       routingDestination: stations[0]?.id ?? "shared",
       prepTime: "",
@@ -469,10 +609,6 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
       name: item.name,
       description: item.description ?? "",
       price: String(item.price),
-      happyHourPrice:
-        item.happyHourPrice !== undefined && item.happyHourPrice !== null
-          ? String(item.happyHourPrice)
-          : "",
       isAlcoholic: item.isAlcoholic ?? false,
       routingDestination: item.routesToAllStations ? "shared" : (item.preparationStationId ?? "shared"),
       prepTime: item.prepTimeMinutes ? String(item.prepTimeMinutes) : "",
@@ -489,24 +625,13 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
       toast.error("Enter a valid price");
       return;
     }
-    // Blank happy-hour price = no discount (null clears it on update).
-    let happyHourPrice: number | null = null;
-    if (itemForm.happyHourPrice.trim()) {
-      const parsed = parseFloat(itemForm.happyHourPrice);
-      if (isNaN(parsed) || parsed < 0) {
-        toast.error("Enter a valid happy hour price");
-        return;
-      }
-      happyHourPrice = parsed;
-    }
     try {
       if (editingItem) {
         const updated = await clientUpdateMenuItem(businessId, editingItem.id, {
           name: itemForm.name.trim(),
           description: itemForm.description.trim() || undefined,
           price,
-          happyHourPrice,
-          isAlcoholic: itemForm.isAlcoholic,
+            isAlcoholic: itemForm.isAlcoholic,
           preparationStationId: itemForm.routingDestination === "shared" ? null : itemForm.routingDestination,
           routesToAllStations: itemForm.routingDestination === "shared",
           prepTimeMinutes: itemForm.prepTime
@@ -523,8 +648,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
             name: itemForm.name.trim(),
             description: itemForm.description.trim() || undefined,
             price,
-            happyHourPrice,
-            isAlcoholic: itemForm.isAlcoholic,
+                isAlcoholic: itemForm.isAlcoholic,
             preparationStationId: itemForm.routingDestination === "shared" ? undefined : itemForm.routingDestination,
             routesToAllStations: itemForm.routingDestination === "shared",
             prepTimeMinutes: itemForm.prepTime
@@ -652,7 +776,6 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
       name: "",
       description: "",
       price: "",
-      happyHourPrice: "",
       isAlcoholic: false,
       routingDestination: stations[0]?.id ?? "shared",
       prepTime: "",
@@ -667,7 +790,6 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
       name: item.name,
       description: item.description ?? "",
       price: String(item.price),
-      happyHourPrice: "",
       isAlcoholic: false,
       routingDestination: item.routesToAllStations ? "shared" : (item.preparationStationId ?? "shared"),
       prepTime: item.prepTimeMinutes ? String(item.prepTimeMinutes) : "",
@@ -885,16 +1007,31 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
             {selectedMenu && (
               <div className="space-y-4">
                 {/* Menu header */}
-                <div className="flex items-center justify-between border p-4">
-                  <div>
+                <div className="flex flex-wrap items-center justify-between gap-3 border p-4">
+                  <div className="min-w-0">
                     <p className="font-medium">{selectedMenu.name}</p>
                     {selectedMenu.description && (
                       <p className="text-sm text-muted-foreground">
                         {selectedMenu.description}
                       </p>
                     )}
+                    {/* When this menu is served. Guests never see a menu
+                        outside its window, and an order from one is refused. */}
+                    <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
+                      <Clock className="h-3 w-3 shrink-0" aria-hidden />
+                      {activationSummary(selectedMenu)}
+                    </p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
+                    {canManageTax && (
+                      <Button
+                        variant="secondary"
+                        size="filter"
+                        onClick={() => openActivation(selectedMenu)}
+                      >
+                        Activation
+                      </Button>
+                    )}
                     <Button
                       variant="secondary"
                       size="filter"
@@ -974,6 +1111,155 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
           </>
         )}
 
+        {/* ── Activation dialog ─────────────────────────────────────────────────
+             A menu with no windows is always on. Adding one narrows it to those
+             days and hours, in the venue's own timezone. Kept plain: this is a
+             settings control on an already crowded page. */}
+        <Dialog open={activationDialog} onOpenChange={setActivationDialog}>
+          <DialogContent className="max-w-xl">
+            <DialogHeader>
+              <DialogTitle>
+                {selectedMenu ? `${selectedMenu.name} · activation` : "Activation"}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-5 py-2">
+              {(selectedMenu?.activationWindows ?? []).length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  This menu is <span className="font-medium text-foreground">always on</span>.
+                  Add a window to serve it only on certain days and hours.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {(selectedMenu?.activationWindows ?? []).map((w) => (
+                    <div
+                      key={w.id}
+                      className="flex flex-wrap items-center gap-x-3 gap-y-2 border px-4 py-3"
+                    >
+                      <div className="flex-1 min-w-[var(--row-content-min)]">
+                        <p className="text-sm font-medium">
+                          {daysLabel(w.daysOfWeek)}
+                        </p>
+                        <p className="text-xs text-muted-foreground font-mono tabular-nums">
+                          {w.startTime}–{w.endTime}
+                          {w.startTime > w.endTime && " (overnight)"}
+                        </p>
+                      </div>
+                      {!w.isActive && <Badge tone="neutral">Inactive</Badge>}
+                      <div className="flex gap-2">
+                        <Button
+                          variant="secondary"
+                          size="filter"
+                          onClick={() => editWindow(w)}
+                          aria-label="Edit window"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="filter"
+                          onClick={() => removeWindow(w)}
+                          className="text-destructive hover:text-destructive"
+                          aria-label="Delete window"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="space-y-4 border-t pt-4">
+                <p className="type-label text-muted-foreground">
+                  {editingWindow ? "Edit window" : "Add a window"}
+                </p>
+                <div className="space-y-1.5">
+                  <Label>Days</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {DAYS_OF_WEEK.map((d) => {
+                      const on = windowForm.daysOfWeek.includes(d.index);
+                      return (
+                        <button
+                          key={d.index}
+                          type="button"
+                          aria-pressed={on}
+                          onClick={() => toggleWindowDay(d.index)}
+                          className={`h-[var(--control-desktop-min)] min-w-[var(--control-desktop-min)] rounded-[var(--radius-2)] border px-3 text-sm transition-colors ${
+                            on
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-border text-muted-foreground hover:border-muted-foreground/40"
+                          }`}
+                        >
+                          {d.short}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="window-start">Start</Label>
+                    <Input
+                      id="window-start"
+                      type="time"
+                      value={windowForm.startTime}
+                      onChange={(e) =>
+                        setWindowForm((f) => ({ ...f, startTime: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="window-end">End</Label>
+                    <Input
+                      id="window-end"
+                      type="time"
+                      value={windowForm.endTime}
+                      onChange={(e) =>
+                        setWindowForm((f) => ({ ...f, endTime: e.target.value }))
+                      }
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Times are in {timezone}. An end time earlier than the start
+                  runs past midnight into the next morning.
+                </p>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="window-active"
+                    checked={windowForm.isActive}
+                    onCheckedChange={(v) =>
+                      setWindowForm((f) => ({ ...f, isActive: v === true }))
+                    }
+                  />
+                  <Label htmlFor="window-active" className="font-normal">
+                    Window is in use
+                  </Label>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              {editingWindow && (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setEditingWindow(null);
+                    setWindowForm(emptyWindowForm);
+                  }}
+                >
+                  Cancel edit
+                </Button>
+              )}
+              <Button variant="secondary" onClick={() => setActivationDialog(false)}>
+                Done
+              </Button>
+              <Button onClick={saveWindow} disabled={savingWindow}>
+                {editingWindow ? "Save window" : "Add window"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* ── Menu dialog ──────────────────────────────────────────────────────── */}
         <Dialog open={menuDialog} onOpenChange={setMenuDialog}>
           <DialogContent className="max-w-xl">
@@ -1041,7 +1327,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
             <DialogHeader>
               <DialogTitle>{editingItem ? "Edit Item" : "New Item"}</DialogTitle>
             </DialogHeader>
-            <ItemFormFields form={itemForm} onChange={setItemForm} showHappyHour showAlcohol taxProfiles={taxProfiles} canManageTax={canManageTax} currencyCode={currencyCode} taxLabel={taxLabel} stations={stations} />
+            <ItemFormFields form={itemForm} onChange={setItemForm} showAlcohol taxProfiles={taxProfiles} canManageTax={canManageTax} currencyCode={currencyCode} taxLabel={taxLabel} stations={stations} />
             <DialogFooter>
               <Button variant="secondary" onClick={() => setItemDialog(false)}>
                 Cancel
@@ -1261,7 +1547,6 @@ type ItemFormState = {
   name: string;
   description: string;
   price: string;
-  happyHourPrice: string;
   isAlcoholic: boolean;
   routingDestination: string;
   prepTime: string;
@@ -1271,7 +1556,6 @@ type ItemFormState = {
 function ItemFormFields({
   form,
   onChange,
-  showHappyHour = false,
   showAlcohol = false,
   taxProfiles,
   canManageTax,
@@ -1281,8 +1565,6 @@ function ItemFormFields({
 }: {
   form: ItemFormState;
   onChange: React.Dispatch<React.SetStateAction<ItemFormState>>;
-  // Happy-hour price only applies to live menu items, not library templates.
-  showHappyHour?: boolean;
   // Alcohol flag only applies to live menu items, not library templates.
   showAlcohol?: boolean;
   taxProfiles: TaxProfile[];
@@ -1337,31 +1619,6 @@ function ItemFormFields({
           />
         </div>
       </div>
-      {showHappyHour && (
-        <div className="space-y-1.5">
-          <Label>Happy hour price ({currencyCode})</Label>
-          <Input
-            type="number"
-            min="0"
-            step="0.01"
-            value={form.happyHourPrice}
-            onChange={(e) =>
-              onChange((f) => ({ ...f, happyHourPrice: e.target.value }))
-            }
-            placeholder="Leave blank for no discount"
-          />
-          <p className="text-xs text-muted-foreground">
-            This is the discounted price (how much). It only applies during the
-            active windows (when) you define in{" "}
-            <Link
-              href="/business/happy-hour"
-              className="font-medium text-primary underline-offset-2 hover:underline"
-            >
-              Happy Hour settings →
-            </Link>
-          </p>
-        </div>
-      )}
       <div className="space-y-1.5">
         <Label>Preparation station</Label>
         <Select
@@ -1485,7 +1742,7 @@ function CategorySection({
         ) : (
           <h3 className="type-t2">{category.name}</h3>
         )}
-        <div className="flex gap-1.5">
+        <div className="flex flex-wrap gap-1.5">
           {!renaming && (
             <Button
               size="filter"
@@ -1532,9 +1789,13 @@ function CategorySection({
       ) : (
         <div className="divide-y">
           {category.items.map((item) => (
-            <div key={item.id} className="flex items-center gap-3 px-4 py-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
+            <div key={item.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+              {/* Wrap, not scroll: an item row's columns carry no cross-row
+                  alignment, so below --bp-phone the price and the action
+                  cluster drop under the name rather than running off the edge.
+                  Inert wherever the line has room, so the tablet is unmoved. */}
+              <div className="flex-1 min-w-[var(--row-content-min)]">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span
                     className={`text-sm font-medium ${!item.isAvailable ? "line-through text-muted-foreground" : ""}`}
                   >
@@ -1564,7 +1825,7 @@ function CategorySection({
                   {stockInfo.get(item.id)?.servingsRemaining != null && (
                     <Badge
                       tone="neutral"
-                      className="text-xs h-4 flex items-center gap-1 border-slate-200 bg-slate-50 text-slate-600 tabular-nums"
+                      className="text-xs h-4 flex items-center gap-1 tabular-nums"
                       title="Servings you can still make from current stock (recipe-exact). Shared ingredients mean this drops when a related item sells too."
                     >
                       <Utensils className="h-3 w-3" />

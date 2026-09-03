@@ -229,7 +229,11 @@ export default function BusinessScheduleClient({
                             <p className="text-sm truncate mt-0.5">
                               {customerInfo?.name || "Unknown"}
                             </p>
-                            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                            {/* Party size and status are two independent facts,
+                                not aligned columns, so below --bp-phone they
+                                wrap onto a second line rather than pushing the
+                                row past the viewport. Measured 400px at 390. */}
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-muted-foreground">
                               <span className="font-mono tabular-nums inline-flex items-center gap-1">
                                 <Users className="h-3 w-3" />
                                 {reservation.guests}

@@ -63,7 +63,17 @@ const buttonVariants = cva(
         auth: "h-[50px] px-6",      // auth + marketing
         tablet: "h-[var(--control-tablet-min)] px-5",
         default: "h-[var(--control-desktop)] px-4", // 44 — desktop primary
-        md: "h-10 px-4",
+        /**
+         * 40px, and the one step in this ladder that is a literal rather than a
+         * token — so the `width < 1280px` takeover that lifts every other step
+         * to --control-tablet-min never reaches it. Measured at 40x40 on the
+         * guest CTAs (`Book Now`, `View Cart`, `Place Order`, queue join) at
+         * both 390 and 1024, under the 48px floor at both. Below --bp-phone it
+         * now takes the floor; at 640+ it is left exactly as it was, because
+         * the tablet range is not this pass's to move. The 640-1279 half of
+         * the same defect is recorded in docs/TODO.md.
+         */
+        md: "h-[var(--control-tablet-min)] phone:h-10 px-4",
         filter: "h-[var(--control-desktop-min)] px-3 gap-1.5", // 34
         icon: "size-[var(--control-desktop)]",
         "icon-md": "size-10",

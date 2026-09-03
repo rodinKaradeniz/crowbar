@@ -1,4 +1,6 @@
-from sqlalchemy import Boolean, CheckConstraint, Integer, String
+from datetime import datetime
+
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDMixin
@@ -6,8 +8,15 @@ from app.models.base import Base, TimestampMixin, UUIDMixin
 
 class User(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "users"
+    # The second constraint mirrors migration 052. The test database is built
+    # from ORM metadata rather than from the migration chain, so a constraint
+    # that lives only in SQL is a constraint no test can observe.
     __table_args__ = (
         CheckConstraint("session_version > 0", name="ck_users_session_version_positive"),
+        CheckConstraint(
+            "anonymized_at IS NULL OR deletion_requested_at IS NOT NULL",
+            name="ck_users_anonymized_requires_request",
+        ),
     )
 
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
@@ -21,6 +30,14 @@ class User(Base, UUIDMixin, TimestampMixin):
     )
     session_version: Mapped[int] = mapped_column(
         Integer, default=1, server_default="1", nullable=False
+    )
+    # Migration 052. The 30-day grace window runs from deletion_requested_at
+    # while is_active stays true; anonymized_at is the erasure itself.
+    deletion_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    anonymized_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
     staff_assignments: Mapped[list["Staff"]] = relationship(

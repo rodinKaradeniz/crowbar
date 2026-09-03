@@ -43,8 +43,8 @@ authorization even after the local release gate passes.
 
 - **Complete — confirmed boundary:** MVP covers venue/staff setup;
   reservations, protection, and the future-reservation waitlist; current-service
-  queue; areas, tables, assignments, and seatings; menus, modifiers, happy hour,
-  availability, staff/QR ordering, fulfillment, tabs, and external settlement;
+  queue; areas, tables, assignments, and seatings; menus, modifiers, menu
+  activation windows, availability, staff/QR ordering, fulfillment, tabs, and external settlement;
   inventory, recipes, receiving, waste, stock counts, suppliers, purchasing,
   cost control, guest CRM/privacy, and operational reporting.
 - **Complete — fiscal and payment boundary:** The existing compliant register
@@ -146,7 +146,7 @@ regression tests are closed. Work in the following dependency order.
 - Scope order idempotency by business and make same-key/same-request retries
   stable while rejecting same-key/different-request reuse. Cover concurrent
   public QR and staff-tab submission.
-- Preserve authoritative happy-hour, alcohol, line-price, and inventory
+- Preserve authoritative menu-window, alcohol, line-price, and inventory
   effects; leave one server-owned extension point for stage 2's tax snapshot
   rather than inventing tax logic in staff composition.
 - Stop describing uncollected order totals as revenue. Until external
@@ -229,7 +229,7 @@ runtime legal rules engine.
   already-classified library items but cannot create profiles, change versions,
   archive assigned profiles, or change assignments.
 - **Complete — immutable calculations:** Server-authoritative order placement
-  resolves the effective item profile after happy-hour/modifier pricing and
+  resolves the effective item profile after modifier pricing and
   snapshots currency, profile/version identity and label, rate, inclusion
   policy, net subtotal, tax, and gross total on every line plus order totals.
   Later profile changes do not rewrite old orders. Public checkout and menu
@@ -746,21 +746,70 @@ is a data mutation that needs explicit authorization.
   Fixed: `break-all` on the venue email/website and the privacy contact,
   `break-words` on the not-found slug in four pages, the queue party stepper's
   `h-9 w-9` override, an undeclared `text-6xl`, a dead `border-t-brass/40`, a
-  missing `min-w-0`, and the item sheet's missing horizontal padding. **Not yet verified in a browser**, though it now can be: the
-  driver was repaired on 2026-09-03 and `playwright-cli` reaches a true 390px
-  viewport. Nobody has walked the guest pages at that width yet. Still needing
-  a real 390px look: whether the `/order/[business]` fixed footer exceeds
-  its `pb-32` reserve once the age-confirmation block wraps (the most likely
-  remaining bug), the menu cart button's `whitespace-nowrap` label, and the booking
-  sheet's `grid-cols-3` slot grid in a 12-hour locale.
+  missing `min-w-0`, and the item sheet's missing horizontal padding.
+
+  **Walked in a browser on 2026-09-03 at a verified `innerWidth === 390`**
+  (`playwright-cli`; `chrome-devtools-axi` clamps at 500 and cannot do this).
+  All 14 public routes measure `scrollWidth` 390 with zero horizontal overflow,
+  and the three named suspects are now resolved by measurement rather than by
+  reading:
+
+  - **`/order/[business]` footer vs its `pb-32` reserve — CONFIRMED, and worse
+    than described.** The footer measures **220px against a 128px reserve**, so
+    92px of the form sat under it; at maximum scroll 28px of the *Order notes*
+    input was unreachable. It was never phone-specific — the age attestation
+    wraps to two lines inside the 448px column at **every** width, so 390, 640,
+    1024 and 1280 were all short. Fixed by measuring the footer with a
+    `ResizeObserver` and using that as the reserve, which removes the literal
+    instead of replacing it with a bigger one. This is the one repair in this
+    pass that also takes effect in 640–1279.
+  - **Menu cart button's `whitespace-nowrap` label — CLEARED.** Substituting
+    labels up to `View Cart · 24 items · 1.248,00 €`, the content measures
+    356px inside a 356px button and the document stays at 390.
+  - **Booking sheet's `grid-cols-3` slot grid in a 12-hour locale — CLEARED.**
+    The seeded tenant is de-DE/24h, so 12-hour labels (`10:30 PM`) were
+    substituted into the rendered cells: each cell stays 108x48 with 106px of
+    content, grid `scrollWidth == clientWidth == 341`, document 390.
+
+  Also found by the same walk, and not previously known: `Button size="md"` is
+  the only step in the height ladder written as a literal (`h-10`) rather than
+  a token, so the `width < 1280px` takeover that lifts every other step to
+  `--control-tablet-min` never reached it. Its twelve call sites — the guest
+  CTAs `Book Now`, `View Cart`, `Place Order` and the queue join among them —
+  measured **40x40 at both 390 and 1024**, under the 48px floor at both. Below
+  `--bp-phone` it now takes the floor; the 640–1279 half is a separate entry
+  below.
+
+  The three `[token]` path routes named in earlier notes (`/reserve/manage/…`,
+  `/reserve/waitlist/…`, `/reserve/waitlist/manage/…`) **do not exist and are
+  not meant to**: `fba6d71` deleted their `page.tsx` and moved the credential
+  into the URL fragment, which never reaches the server or a log. The three
+  fragment routes were measured with real minted tokens and are clean.
+
+  **One gap.** `/reserve/waitlist` renders `Offer unavailable` because no
+  waitlist entry is in an *offered* state and creating one is a write. The
+  offer-acceptance surface itself has still not been seen at 390px.
 - **Guest controls below the 48px floor that are shared primitives.** `Input`
   (`h-10`), `SelectTrigger` (`h-9`), the calendar's 32px day cells, and the
   unpadded ~16px remove-item control in `order/[business]/order-client.tsx` all sit
   under the tablet floor on the guest surface. Left alone deliberately: they are
   shared primitives, so changing them changes the whole product, and three of the
   four need a control step the token block does not declare — see `docs/DESIGN.md`
-  §7b. *Trigger:* the phone-width design question being answered, or a pilot guest
-  failing to hit one of them.
+  §7b. **Re-measured at 390px on 2026-09-03 and the list is still exactly right,
+  no more and no fewer:** `Input` 342x40 on `/order` and 167x40 / 96x40 on
+  `/reserve/manage`, `SelectTrigger` 341x36 in the booking sheet, calendar day
+  cells 32x32, and the remove-item control 16x16. *Trigger:* the phone-width
+  design question being answered, or a pilot guest failing to hit one of them.
+- **`Button size="md"` is 40px in the tablet range, under the documented 48px
+  floor.** It is the only step in the ladder written as a literal (`h-10`)
+  instead of a token, so the `width < 1280px` takeover that lifts every other
+  step to `--control-tablet-min` skips it. Measured 40x40 at 1024 on the guest
+  CTAs and on `/business/queue` and the count-session screen. The phone half is
+  fixed (`h-[var(--control-tablet-min)] phone:h-10`); the 640–1279 half is left
+  alone because this pass was explicitly barred from resizing anything in the
+  tablet range. *Trigger:* the next pass that is allowed to touch the tablet
+  canvas — at which point `md` should either resolve through a token or be
+  retired in favour of the `tablet` step it duplicates.
 - **The workspace now has a phone floor, and sign-out finally has a door.**
   `/business/*` was only ever opened on a laptop or a tablet, and at 390px the
   header wrapped to two lines, the tablet's five-slot bottom bar became five
@@ -812,9 +861,35 @@ is a data mutation that needs explicit authorization.
   action icons run off the edge. Not a token change — each row needs to decide
   whether its action cluster wraps under the content below `--bp-phone` or the
   row becomes its own horizontal scroller. They were never caught because the
-  phone pass only measured overview, floor, tickets and queue. *Trigger:*
-  whenever the workspace phone floor is next worked on, and before any pilot
-  venue is told the workspace is usable on a phone.
+  phone pass only measured overview, floor, tickets and queue.
+
+  **Resolved 2026-09-03. All four chose WRAP over scroll**, on the same test:
+  none of these rows carries cross-row column alignment worth preserving, so
+  turning one into a horizontal scroller would hide content behind a gesture
+  for no gain. Per page, measured at a verified 390:
+
+  - `/business/inventory` **573 → 390.** The row stacks: name and meta, then
+    badges and quantity, then the four 48x48 action icons. `min-w-[14rem]` on
+    the name block is what forces the break, which also ends the defect where
+    item names truncated to two characters.
+  - `/business/profile/hours` **525 → 390.** The day name takes its own line
+    (`w-full phone:w-28`), leaving the full width for the open/close pair with
+    "Closed" wrapping under.
+  - `/business/menu` **464 → 390.** Three offenders, not one: the menu-header
+    cluster, the category cluster, and a `~N servings left` badge that was the
+    worst of them at 464. That badge also carried `border-slate-200
+    bg-slate-50 text-slate-600` — an undeclared palette overriding the
+    `tone="neutral"` it already had — now removed.
+  - `/business/schedule` **400 → 390.** The party-size and status spans wrap;
+    they are two independent facts, not aligned columns. The `text-6xl
+    sm:text-8xl` numeral suspected in the handoff **was not an offender** —
+    measurement cleared it.
+
+  **The tablet range is provably unmoved.** Every touched row was measured at
+  1024 and 1279: all are single-line (container height ≤ tallest child), so
+  `flex-wrap` is inert there and engages only at 390. All 25 workspace routes
+  re-measured at 390 afterwards: `scrollWidth` 390, zero overflow, zero console
+  errors.
 
 - **Menus should own their own active windows, and happy hour should stop
   being a page. Design before the MVP release.** Right now "happy hour" is
@@ -834,47 +909,115 @@ is a data mutation that needs explicit authorization.
   also sheds two things that are not menu content: preparation-station
   management (a venue setting, configured once) and the happy-hour block.
 
-  **What has to be decided first, because none of it is mechanical.**
-  - *Overlap.* Two active windows can both claim an item. Which price wins —
-    most recently activated, lowest, or an explicit menu priority? The guest
-    ordering page needs one answer and so does the ticket that prints.
-  - *The price model.* Today the discount is a second price column on the item.
-    If any menu can have a window, is the price per (item x menu), or does a
-    menu carry a modifier? Per-pair is more flexible and more rows; a modifier
-    is simpler and cannot express "this one cocktail is half price but the rest
-    are 20% off".
-  - *Migration.* The existing happy-hour windows and per-item discounted prices
-    are live in the seed and in any pilot data. Whatever shape wins needs a
-    migration that preserves them, not a fresh start.
-  - *Order history.* `order_items` snapshot their price at placement, so past
-    orders are safe either way — worth confirming rather than assuming.
-  - *Timezone.* Windows are interpreted in the venue timezone (the
-    profile/info copy already says so). Overnight windows that cross midnight
-    are the case that breaks naive comparisons.
+  **Approved by the user on 2026-09-03, and it is a net deletion.** An earlier
+  draft of this entry called the change an over-build risk and listed five open
+  questions. Checking the code retired four of them, and the entry is corrected
+  here rather than argued again:
 
-  Not started. No code was written for this in the 2026-09-03 pass — the menu
-  page's own crowding was noted and left, because the fix is this redesign and
-  not a rearrangement. *Trigger:* before the MVP release, and before any pilot
-  venue configures a second menu.
+  - *Overlap is not a question.* `menu_items.category_id` points at
+    `menu_categories.menu_id`, so an item already belongs to exactly one menu
+    and carries exactly one price. Two active menus both listing a gin and
+    tonic is two listings, not a price conflict, so no precedence rule is
+    needed.
+  - *The price model needs no new table.* Because items are already
+    menu-scoped, `menu_items.happy_hour_price` is DROPPED rather than reshaped.
+    A discounted item is an item in a windowed menu at a lower price. There is
+    no per-(item x menu) join table and no menu-level modifier.
+  - *There is almost nothing to migrate.* The canonical seed has zero
+    `happy_hour_windows` rows and sets `happy_hour_price` on zero items — the
+    whole discount mechanism is unexercised. The claim that it was "live in the
+    seed" was false. Pilot data is the only real migration surface, and there
+    is none yet.
+  - *Overnight windows are already solved.* `happy_hour_service`'s
+    `is_happy_hour_active` handles the midnight wrap and documents it: a
+    Friday 22:00-02:00 window is active Friday 22:00-23:59:59 and Saturday
+    00:00-02:00 with only Friday listed. That logic changes scope from business
+    to menu; it does not need rewriting.
 
-- **Account DELETION does not exist, and it is not the same thing as the
-  disable that does. Decide before the pilot.** `POST /auth/disable-account`
-  sets `is_active = False` and bumps `session_version`; the row, the name, the
-  email and the phone all stay exactly where they were. That is deactivation.
-  Nothing in the product erases a person, and the account screen does not
-  promise otherwise — but a pilot venue in Germany will ask, and GDPR Art. 17
-  is not answered by a flag.
+  **So the shape is:** a menu-scoped `menu_activation_windows` replaces the
+  business-wide `happy_hour_windows`; `menus.is_active` already provides the
+  general on/off; `menu_items.happy_hour_price` drops; and the happy-hour
+  router, service and `/business/happy-hour` page are deleted. The change
+  removes a table's worth of business-wide special-casing, a price column, a
+  page, a router and a service, and adds one menu-scoped table.
 
-  **Why it needs designing rather than implementing.** 48 foreign keys point at
+  **The one question genuinely still open:** what a guest sees for a menu that
+  is outside its window — hidden entirely, or listed with its next window
+  ("from 17:00"). The guest ordering page and the public menu read need the
+  same answer.
+
+  Also worth checking during the pass, not assumed: `order_items` snapshot
+  their price at placement, so past orders should be unaffected either way.
+
+  ~~Not started; no code was written for this in the 2026-09-03 UI pass — the
+  menu page's own crowding was noted and left, because the fix is this redesign
+  and not a rearrangement.~~ **DONE 2026-09-04**, migration 051.
+
+  **What shipped, against what this entry predicted.** All of it, plus one
+  thing the entry did not ask for. `menu_activation_windows` replaced
+  `happy_hour_windows`; `menu_items.happy_hour_price` was dropped; the
+  happy-hour router, service, schema, model, page, four API calls, nav entry and
+  the `happyhour.manage` capability are gone, the last folded into the existing
+  `menu.configure`. Both zero-counts the entry asserted were confirmed on a
+  seeded database before anything was dropped: zero `happy_hour_windows` rows,
+  zero items with a `happy_hour_price`. The midnight-wrap logic moved rather
+  than being rewritten.
+
+  **The open question was answered: hidden entirely.** A menu outside its window
+  is not in the public response at all — not greyed, not teased with a "from
+  17:00". That is the smallest build and it keeps anything unorderable away from
+  a guest.
+
+  **And the consequence that is easy to miss, which is the real work here:**
+  hiding a menu client-side is not a guard. A guest holding a page loaded before
+  the window closed can still POST an item id from it, so `place_order` now
+  rejects any line whose menu is not active at placement time, asking the same
+  `menu_activation_service.active_menu_ids` question the public read asks.
+  Order CORRECTION deliberately does not enforce it: a correction re-resolves
+  every line, so gating it would make an order placed inside a window
+  uneditable the moment the window shut, down to reducing a quantity.
+
+  Two smaller things the entry did not predict. `menu_service.get_active_menu`
+  returned ONE menu (`ORDER BY created_at LIMIT 1`) over two menus the seed
+  creates with identical timestamps — so which menu a guest saw was a coin flip,
+  and the seeded "Happy Hour" menu was frequently the only one reachable. The
+  public read is plural now, and the guest page groups categories under their
+  menu name when more than one is open. And a window's `is_active=False` must
+  NOT promote its menu to always-on; that is what `menus.is_active` is for. A
+  test caught the inverted reading.
+
+  *Residual, still deferred:* moving preparation-station management off the menu
+  page (this entry's other half, lines above) was **not** done — one new control
+  on that page was enough for this pass. *Trigger:* the next pass that reworks
+  the menu page's information architecture, or the first pilot venue that finds
+  station setup confusing next to menu content.
+
+- **Account DELETION did not exist, and it is not the same thing as the
+  disable that does.** ~~Decide before the pilot.~~ **DONE 2026-09-04**,
+  migration 052. `POST /api/auth/disable-account` sets `is_active = False` and
+  bumps `session_version`; the row, the name, the email and the phone all stay
+  exactly where they were. That is deactivation, it still exists, and it is
+  untouched. ~~Nothing in the product erases a person, and the account screen
+  does not promise otherwise~~ — the account screen *did* promise otherwise, in
+  two places, and both strings were false in every clause; see the shipped note
+  below. A pilot venue in Germany will ask, and GDPR Art. 17 is not answered by
+  a flag.
+
+  **Why it needed designing rather than implementing.** 48 foreign keys point at
   `users`. Forty-three are `ON DELETE SET NULL`, and every one of them is an
   audit trail — who changed a ticket's status, who reconciled a stock count, who
   merged two guest records, who received a transfer. A plain `DELETE` succeeds
   and quietly empties all forty-three, turning "Theo settled Tisch 2 at 19:52"
-  into "somebody did". Five more block the delete outright: `staff.user_id`,
+  into "somebody did". ~~Five more block the delete outright: `staff.user_id`,
   `tabs.opened_by`, `tabs.closed_by`, `notifications.user_id` and
-  `password_reset_tokens.user_id`. So the schema already refuses the naive
-  answer, which is the right refusal — the operational record is the thing the
-  product exists to keep.
+  `password_reset_tokens.user_id`.~~ **Corrected 2026-09-04, measured against a
+  migrated database rather than grepped:** the remaining five are 3 `CASCADE`
+  and 2 blocking, not five blocking. `staff.user_id`, `notifications.user_id`
+  and `password_reset_tokens.user_id` are all `ON DELETE CASCADE`; only
+  `tabs.opened_by` and `tabs.closed_by` carry no delete action and refuse
+  outright. The 48 and the 43 were right. So the schema already refuses the
+  naive answer, which is the right refusal — the operational record is the thing
+  the product exists to keep.
 
   **The shape the answer probably takes** is the one the product already uses
   for guests: `customer_service.anonymize_customer` erases the personal fields,
@@ -892,8 +1035,74 @@ is a data mutation that needs explicit authorization.
   with its tenant. And an operator who deletes their own account while holding
   the only `owner` role would strand the venue. Neither is answered here.
 
-  *Trigger:* before the pilot (stage 10) — a real venue with real staff makes
-  this a live obligation rather than a design question.
+  **Decided by the user on 2026-09-03: deletion ships, with guards.** The
+  direction is real deletion of the person, not a second flag, implemented as
+  the anonymization shape above — scrub name, email, phone and avatar, keep the
+  row so the forty-three audit trails still resolve to a stable "former staff
+  member", and record the erasure as an audit of its own. The erasure-versus-
+  record tension mostly dissolves at that point: once the row cannot identify
+  anyone it is no longer personal data, so Art. 17 is satisfied while the
+  operational record stays intact. A soft-delete window ("all data removed
+  after 30 days") sits on top of that as the user-facing policy; it needs a
+  scheduled job, and whether this repo already has a place to put one must be
+  confirmed rather than assumed. ~~The two harder cases — owner deletion as
+  tenant deletion, and a sole owner stranding the venue — are the guards to
+  design, and remain unanswered.~~ Both were answered: `server/app/jobs/` was
+  the place, a sole owner is refused with 409 until ownership moves, and tenant
+  deletion is out of scope rather than implied by an owner deleting themselves.
+
+  **What shipped, against what this entry predicted.** The shape above was
+  right and was followed: migration 052 adds `users.deletion_requested_at` and
+  `users.anonymized_at` and nothing else, with
+  `ck_users_anonymized_requires_request` mirrored in `User.__table_args__`.
+  `POST /api/auth/delete-account` stamps the request and refuses the sole owner
+  of any business with 409 `LAST_OWNER`, reusing
+  `staff_service.owner_count_for_update`. `app.jobs.account_deletion` erases
+  past 30 days and declines anyone who has since become a last owner.
+
+  Three things this entry did not predict. **The record is the user row, not a
+  `CustomerDataRequest`-style audit of its own** — `customer_data_requests`
+  is `customer_id NOT NULL ... ON DELETE RESTRICT`, so it cannot hold a staff
+  record, and a row carrying `anonymized_at` already *is* the record.
+  **The grace window must not end the session.** Bumping `session_version` on
+  the request would force a sign-in, and signing in is what cancels the request,
+  so a pending deletion would only ever exist while signed out; the window is
+  one column and the account keeps working. **Disabling is irreversible in the
+  product, not merely un-loginable** — nothing anywhere sets
+  `User.is_active = True`, so the account screen's promise of reactivation
+  "by logging in again within 30 days" was false twice over. Both false strings
+  are rewritten.
+
+  *Deliberately deferred, with triggers:*
+
+  - **Tenant/business deletion.** An owner deleting their account deletes the
+    person, not the venue. The five `ON DELETE RESTRICT` business tables exist
+    so a settlement cannot vanish with its tenant, and a venue closing its
+    account in a supervised pilot is a conversation, not a self-serve button.
+    Do not build toward it. *Trigger:* a venue actually leaves, or the pilot
+    becomes self-serve.
+  - **An owner deleting someone else's account.** Self-serve only this pass;
+    removing a staff member already disables their user through
+    `staff_service.delete_staff`. *Trigger:* a venue asks to erase a leaver
+    rather than only revoke them.
+  - **Notification of a pending or completed deletion.** No email or SMS is
+    sent. *Trigger:* the first venue where the person asking and the person
+    administering are different people.
+  - **Three cron jobs exist in code with no registration.**
+    `app.jobs.customer_retention`, `app.jobs.inventory_reconciliation` and
+    `app.jobs.reservation_waitlist_expiry` have no `railway.*.json` and no row
+    in `docs/deployment.md`; `reminders` and now `account-deletion` are the only
+    registered ones. Found while registering this pass's job and left alone.
+    *Trigger:* the deployment resume the runbook is waiting on.
+  - **The disable dialog inverts the severity contract.**
+    `client/app/business/settings/account/business-account-settings-client.tsx`
+    hand-rolls its dialog with a filled `destructive` confirm and a `secondary`
+    cancel, which `confirmation-dialog.tsx` and `button.tsx` both forbid — the
+    safe choice is the filled one. The new deletion dialog uses
+    `ConfirmationDialog` correctly. The fix is to convert the disable dialog to
+    the same primitive, deleting about thirty-five lines; it was left because
+    this pass was bound to change disable's copy only. *Trigger:* the next pass
+    that may touch disable's behaviour.
 
 - Automate the critical browser journey: book → assign/seat → QR/staff order →
   fulfill → deduct/reconcile stock → record waste → settle externally → close

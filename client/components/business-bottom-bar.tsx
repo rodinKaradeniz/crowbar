@@ -70,9 +70,8 @@ export function BusinessBottomBar({
 
   // "Everything else" is flat on purpose. The sheet is already a disclosure —
   // nesting a second one inside it would be two taps to reach one page on the
-  // device where taps are most expensive. The child keeps its own full label
-  // ("Happy hour windows"), which is what makes it readable without the parent
-  // above it.
+  // device where taps are most expensive. A nested child keeps its own full
+  // label, which is what makes it readable without the parent above it.
   const rest = groups
     .map((group) => ({
       ...group,

@@ -250,17 +250,20 @@ grep -rEn "#[0-9a-fA-F]{3,8}\b" --include="*.tsx" --include="*.ts" --include="*.
   app components lib contexts hooks | grep -v "app/globals.css"
 ```
 
-Every surviving hit must be one of the two named categories in
+Every surviving hit must be one of the three named categories in
 `docs/DESIGN.md` under *Rule zero*:
 
 - `components/ui/chart.tsx` — attribute selectors matching hexes Recharts
   itself emits (`stroke='#ccc'`). Matched, never declared.
+- an HTML numeric entity, e.g. `&#8599;` in
+  `components/landing/closing-cta.tsx`. The regex cannot tell `#8599` from a
+  hex colour; it is a character reference, not a value.
 - `lib/series-palette.ts` — the five declared `--series-*` values and the
   legacy-colour map. A service-type colour is persisted as a string and a CSS
   variable cannot be written to a database, so the values exist here too;
   `globals.css` stays the source of truth for rendering.
 
-**Anything else has drifted.** Do not add a third category; raise it as a
+**Anything else has drifted.** Do not add a fourth category; raise it as a
 design question instead.
 
 The hex grep does not catch a size. Tailwind's own scale is bridged to the

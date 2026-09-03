@@ -129,9 +129,15 @@ export default function BusinessHoursClient({
                 const closeValue = isClosed ? "22:00" : dayHours.close;
 
                 return (
-                  <div key={day.key} className="flex items-center gap-4">
-                    <div className="w-28 text-sm font-medium">{day.label}</div>
-                    <div className="flex-1 flex items-center gap-2">
+                  // Wrap, not scroll: this is a settings form, not a data
+                  // table, so nothing here needs cross-row column alignment
+                  // once the row stops fitting. Below --bp-phone the day name
+                  // takes its own line, which leaves the full width for the
+                  // open/close pair and lets "Closed" wrap under it. At 640+
+                  // the label is `w-28` and the row is exactly as it was.
+                  <div key={day.key} className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <div className="w-full phone:w-28 text-sm font-medium">{day.label}</div>
+                    <div className="flex-1 flex flex-wrap items-center gap-2">
                       <Input
                         type="time"
                         value={openValue}

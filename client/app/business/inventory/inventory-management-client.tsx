@@ -535,12 +535,19 @@ export function InventoryManagementClient({ businessId, businessTimezone, embedd
       ) : (
         <div className="flex flex-col gap-2">
           {items.map((item) => (
+            // Wrap, not scroll: a stock line's columns carry no cross-row
+            // alignment worth preserving, and the defect this fixes was the
+            // name truncating to two characters while the four action icons
+            // ran off the edge. Below --bp-phone the row becomes a stack —
+            // name and meta, then the badges and quantity, then the actions.
+            // --row-content-min is what forces that break; wherever the line
+            // has room the row stays on one line, so the tablet is unmoved.
             <div
               key={item.id}
-              className="flex items-center gap-3 border px-4 py-3"
+              className="flex flex-wrap items-center gap-x-3 gap-y-2 border px-4 py-3"
             >
               {/* Name + meta */}
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-[var(--row-content-min)]">
                 <p className="font-medium truncate">{item.name}</p>
                 <p className="text-xs text-muted-foreground">
                   {item.parQuantity != null

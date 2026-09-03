@@ -229,6 +229,8 @@
   --control-tablet-min: 48px;   /* floor for every tablet control */
   --row-desktop: 44px;
   --row-tablet: 56px;
+  --row-content-min: 14rem;   /* the width a row's content block keeps
+                                 before its action cluster wraps */
   --tile-floor: 118px;
   --ticket-clear: 60px;
   --bottom-nav: 76px;
@@ -539,14 +541,17 @@
   /* Same constraint again, and it MUST match --bp-phone above. Generates the
      `phone:` variant.
 
-     This is NOT a third product target. Desktop 1280+ and tablet 1024x768
-     remain the only two designed surfaces, and nothing in `app/business/*`
-     may use this variant — the staff phone answer is a React Native client
-     (stage 11), not a narrower web layout. `phone:` exists for the two
-     surfaces a stranger reaches on their own phone and cannot be told to open
-     on a laptop: the marketing page and the auth screens. Those already
-     leaned on Tailwind's undeclared `sm:`, which is the same 640px; declaring
-     it is what stops that from being an invented value. */
+     This is a FLOOR, not a third product target. Desktop 1280+ and tablet
+     1024x768 remain the only two designed surfaces; below them `phone:` keeps
+     a surface usable, it does not claim a phone was designed for. The floor
+     covers `app/business/*` too — see docs/DESIGN.md § Responsive, which
+     reversed the earlier rule barring it there. What that permits is narrow:
+     `phone:` may make a workspace surface usable at 390, but it may not invent
+     a phone layout and it may not move anything inside the tablet range. The
+     staff phone answer is still a React Native client (stage 11), not a
+     narrower web layout. Marketing and auth already leaned on Tailwind's
+     undeclared `sm:`, which is the same 640px; declaring it is what stops that
+     from being an invented value. */
   --breakpoint-phone: 640px;
 }
 

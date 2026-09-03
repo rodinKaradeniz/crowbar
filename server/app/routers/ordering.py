@@ -33,6 +33,9 @@ from app.schemas.menu import (
     MenuCategoryCreate,
     MenuCategoryResponse,
     MenuCategoryUpdate,
+    MenuActivationWindowCreate,
+    MenuActivationWindowResponse,
+    MenuActivationWindowUpdate,
     MenuCreate,
     MenuItemCreate,
     MenuItemAvailabilityUpdate,
@@ -70,7 +73,7 @@ from app.schemas.recipe import (
     RecipeSetRequest,
 )
 from app.services import (
-    happy_hour_service,
+    menu_activation_service,
     menu_service,
     order_service,
     preparation_station_service,
@@ -114,25 +117,28 @@ async def _load_business_or_404(db: AsyncSession, business_id: UUID) -> Business
 
 @router.get(
     "/api/ordering/{business_id}/menu",
-    response_model=PublicMenuResponse | None,
+    response_model=list[PublicMenuResponse],
     dependencies=[Depends(enforce_public_read_limit)],
 )
 async def get_public_menu(
     business_id: UUID,
     db: AsyncSession = Depends(get_db),
 ):
-    """Return the active menu using the guest-facing allowlisted projection."""
+    """Every menu being served right now, as the guest-facing projection.
+
+    Plural because activation is per menu: an always-on menu and a windowed one
+    can be served at the same time. A menu outside its window is absent from
+    this response entirely — not greyed, not teased — and placement rejects it
+    too, so nothing unorderable can reach a guest.
+
+    An empty list is a legitimate answer (every menu is outside its window), not
+    an error, so this stays a 200. Which menus are active is decided
+    server-side; a client clock cannot be trusted with it.
+    """
     business = await _load_business_or_404(db, business_id)
     if "ordering" not in (business.enabled_modules or []):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Menu not found")
-    menu = await menu_service.get_active_menu(db, business_id)
-    if menu is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active menu found")
-    # Compute happy-hour state server-side (client clocks can't be trusted) and
-    # stamp it as a transient attribute the response schema reads. Items carry
-    # their own happy_hour_price so the client can render the discount.
-    menu.happy_hour_active = await happy_hour_service.is_happy_hour_active(db, business_id)
-    return menu
+    return await menu_service.get_active_menus(db, business_id)
 
 
 # ─── Public: Orders ────────────────────────────────────────────────────────────
@@ -684,6 +690,87 @@ async def delete_menu(
     deleted = await menu_service.delete_menu(db, menu_id, business_id)
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Menu not found")
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ─── Staff: Menu activation windows ────────────────────────────────────────────
+# A menu with no windows is always on. Windows are read back embedded in
+# MenuResponse, so there is no separate GET. Managing them is managing a menu,
+# so they ride on menu.configure rather than a capability of their own.
+
+@router.post(
+    "/api/ordering/{business_id}/menus/{menu_id}/activation-windows",
+    response_model=MenuActivationWindowResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.configure"))],
+)
+async def create_menu_activation_window(
+    business_id: UUID,
+    menu_id: UUID,
+    body: MenuActivationWindowCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    business: Business = Depends(get_current_business),
+):
+    if business.id != business_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    window = await menu_activation_service.create_window(db, menu_id, business_id, body)
+    if window is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Menu not found")
+    await db.commit()
+    return window
+
+
+@router.patch(
+    "/api/ordering/{business_id}/menus/{menu_id}/activation-windows/{window_id}",
+    response_model=MenuActivationWindowResponse,
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.configure"))],
+)
+async def update_menu_activation_window(
+    business_id: UUID,
+    menu_id: UUID,
+    window_id: UUID,
+    body: MenuActivationWindowUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    business: Business = Depends(get_current_business),
+):
+    if business.id != business_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    window = await menu_activation_service.update_window(
+        db, window_id, menu_id, business_id, body
+    )
+    if window is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Activation window not found"
+        )
+    await db.commit()
+    return window
+
+
+@router.delete(
+    "/api/ordering/{business_id}/menus/{menu_id}/activation-windows/{window_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_module("ordering")), Depends(require_capability("menu.configure"))],
+)
+async def delete_menu_activation_window(
+    business_id: UUID,
+    menu_id: UUID,
+    window_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    business: Business = Depends(get_current_business),
+):
+    if business.id != business_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    deleted = await menu_activation_service.delete_window(
+        db, window_id, menu_id, business_id
+    )
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Activation window not found"
+        )
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

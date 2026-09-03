@@ -301,7 +301,7 @@ export default function OnboardingWizard({
                 <Label htmlFor="biz-tz">Timezone *</Label>
                 <TimezoneCombobox id="biz-tz" value={timezone} onChange={setTimezone} />
                 <p className="text-[length:var(--ui-size)] text-muted-foreground">
-                  Used to interpret your operating hours and happy-hour windows.
+                  Used to interpret your operating hours and menu windows.
                 </p>
               </div>
               <div className="space-y-1.5">

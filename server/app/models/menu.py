@@ -1,9 +1,22 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 from decimal import Decimal
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, Numeric, String, Text, func
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    Time,
+    UniqueConstraint,
+    func,
+)
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -12,6 +25,13 @@ from app.models.base import Base, TimestampMixin, UUIDMixin
 
 class Menu(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "menus"
+
+    # Tenant-aligned unique so menu_activation_windows can carry a composite FK
+    # on (menu_id, business_id). Mirrors migration 051; menu_items has had the
+    # equivalent since 042.
+    __table_args__ = (
+        UniqueConstraint("id", "business_id", name="uq_menus_id_business"),
+    )
 
     business_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -32,6 +52,62 @@ class Menu(Base, UUIDMixin, TimestampMixin):
         cascade="all, delete-orphan",
         order_by="MenuCategory.display_order",
     )
+    activation_windows: Mapped[list["MenuActivationWindow"]] = relationship(
+        back_populates="menu",
+        cascade="all, delete-orphan",
+        order_by="MenuActivationWindow.created_at",
+    )
+
+
+class MenuActivationWindow(Base, UUIDMixin, TimestampMixin):
+    """A recurring window during which a menu is served to guests.
+
+    A menu with no active windows is always on; a menu with one or more is
+    served only inside them. ``days_of_week`` uses the canonical
+    0=Monday..6=Sunday convention (see ``app.constants.days``), and
+    ``start_time``/``end_time`` are wall-clock local times interpreted against
+    ``businesses.timezone`` — never UTC.
+
+    Every constraint below is mirrored from migration 051 on purpose:
+    tests/conftest.py builds its schema from this metadata rather than from the
+    migration chain, so a constraint declared only in SQL is invisible to the
+    entire suite.
+    """
+
+    __tablename__ = "menu_activation_windows"
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["menu_id", "business_id"],
+            ["menus.id", "menus.business_id"],
+            ondelete="CASCADE",
+            name="fk_menu_activation_window_menu_tenant",
+        ),
+        CheckConstraint(
+            "days_of_week <@ ARRAY[0, 1, 2, 3, 4, 5, 6] "
+            "AND array_length(days_of_week, 1) BETWEEN 1 AND 7",
+            name="ck_menu_activation_window_days",
+        ),
+        # start_time > end_time is a valid overnight window; only equality is
+        # meaningless, because it names a zero-length window.
+        CheckConstraint(
+            "start_time <> end_time",
+            name="ck_menu_activation_window_times",
+        ),
+    )
+
+    menu_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    business_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("businesses.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    days_of_week: Mapped[list[int]] = mapped_column(ARRAY(Integer), nullable=False)
+    start_time: Mapped[time] = mapped_column(Time, nullable=False)
+    end_time: Mapped[time] = mapped_column(Time, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    menu: Mapped["Menu"] = relationship(back_populates="activation_windows")
 
 
 class MenuCategory(Base, UUIDMixin, TimestampMixin):
@@ -87,9 +163,6 @@ class MenuItem(Base, UUIDMixin, TimestampMixin):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     price: Mapped[Decimal] = mapped_column(Numeric(18, 4), default=0, nullable=False)
-    # Flat happy-hour override price. NULL = item never discounts. Applied only
-    # while a happy-hour window is active (see happy_hour_service).
-    happy_hour_price: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     # Age-verification flag. True = item is alcoholic; gates the checkout
     # attestation on customer channels and drives the staff alcohol badge.
     is_alcoholic: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

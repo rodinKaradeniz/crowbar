@@ -78,6 +78,7 @@ export interface UserResponse {
   avatar: string | null;
   user_type: string;
   created_at: string;
+  deletion_requested_at?: string | null;
   business_id?: string;
   role?: string;
 }

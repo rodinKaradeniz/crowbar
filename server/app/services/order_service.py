@@ -31,7 +31,7 @@ from app.schemas.order import (
     OrderPlaceRequest,
     OrderStatusUpdateRequest,
 )
-from app.services import happy_hour_service, recipe_service, tax_service
+from app.services import menu_activation_service, recipe_service, tax_service
 from app.services.floor_plan_service import resolve_service_window
 from app.services.public_session_service import hash_token
 
@@ -62,7 +62,7 @@ def order_contains_alcohol(items) -> bool:
     resolved ``MenuItem`` rows on the placement path, or stored ``OrderLineItem``
     rows on the read path (line items snapshot the flag at placement, like
     ``routing_tag``). The order-level fact is derived from the items on demand and
-    never persisted as a redundant column (same pattern as the happy-hour check).
+    never persisted as a redundant column (same pattern as the menu-window check).
     """
     return any(getattr(i, "is_alcoholic", False) for i in items)
 
@@ -141,15 +141,25 @@ async def _resolve_cart(
     business_id: UUID,
     request: OrderPlaceRequest,
     location_id: UUID | None,
+    enforce_menu_window: bool,
 ) -> list[tuple[object, MenuItem, list[Modifier]]]:
+    """Resolve a requested cart into (request, item, modifiers) triples.
+
+    ``enforce_menu_window`` gates the activation-window check. Placement passes
+    True: a menu hidden from a guest must also be unorderable, because a page
+    loaded before the window closed can still POST an item id from it. Order
+    CORRECTION passes False — a correction re-resolves every line, so enforcing
+    there would make an order placed inside a window uneditable the moment the
+    window shut, down to reducing a quantity.
+    """
     requested_ids = {item.item_id for item in request.items}
     menu_location_filter = (
         Menu.location_id.is_(None)
         if location_id is None
         else or_(Menu.location_id.is_(None), Menu.location_id == location_id)
     )
-    rows = await db.scalars(
-        select(MenuItem)
+    rows = await db.execute(
+        select(MenuItem, MenuCategory.menu_id)
         .join(MenuCategory, MenuCategory.id == MenuItem.category_id)
         .join(Menu, Menu.id == MenuCategory.menu_id)
         .where(
@@ -168,11 +178,22 @@ async def _resolve_cart(
             )
         )
     )
-    items_by_id = {item.id: item for item in rows.unique().all()}
+    resolved_rows = rows.unique().all()
+    items_by_id = {item.id: item for item, _ in resolved_rows}
+    menu_id_by_item = {item.id: menu_id for item, menu_id in resolved_rows}
     if set(items_by_id) != requested_ids:
         raise OrderValidationError(
             "One or more menu items are unavailable for this table"
         )
+    if enforce_menu_window:
+        # Hiding a closed menu client-side is presentation, not a guard. Ask
+        # the same question the public read asks, at placement time.
+        servable = await menu_activation_service.active_menu_ids(db, business_id)
+        for item in items_by_id.values():
+            if menu_id_by_item[item.id] not in servable:
+                raise OrderValidationError(
+                    f"{item.name} is not being served right now"
+                )
     for item in items_by_id.values():
         if item.routes_to_all_stations:
             continue
@@ -369,6 +390,7 @@ async def place_order(
         business_id=business_id,
         request=request,
         location_id=location_id,
+        enforce_menu_window=True,
     )
 
     # Age attestation gate (customer self-service channels only). Derived from the
@@ -393,11 +415,6 @@ async def place_order(
     subtotal = Decimal("0")
     tax_total = Decimal("0")
     total = Decimal("0")
-
-    # Determine happy-hour state once, server-side, at the moment the order is
-    # placed. This uses the SAME is_happy_hour_active as the public menu read
-    # path, so the price charged can never disagree with what was displayed.
-    hh_active = await happy_hour_service.is_happy_hour_active(db, business_id)
 
     order = Order(
         business_id=business_id,
@@ -434,12 +451,10 @@ async def place_order(
         return existing_order, False
 
     for item_req, item, modifiers in resolved:
-        # Apply the flat happy-hour override when a window is active and the item
-        # opts in (happy_hour_price set). Modifiers are added on top as usual.
-        if hh_active and item.happy_hour_price is not None:
-            unit_price = item.happy_hour_price
-        else:
-            unit_price = item.price
+        # An item carries exactly one price. A discount is an item in a
+        # windowed menu at a lower price, decided by which menu the guest could
+        # order from — resolved above, not by a second price column.
+        unit_price = item.price
         selected_mods = []
         for modifier in modifiers:
             unit_price += modifier.price_delta
@@ -527,7 +542,7 @@ async def _business_day_start_utc(db: AsyncSession, business_id: UUID) -> dateti
     """Start of 'today' in the business's timezone, expressed in UTC.
 
     Uses businesses.timezone (IANA); falls back to UTC on a missing/invalid zone
-    (same defensive posture as happy_hour_service)."""
+    (same defensive posture as menu_activation_service)."""
     business = await db.scalar(select(Business).where(Business.id == business_id))
     if business is None:
         return datetime.combine(datetime.now(timezone.utc).date(), time.min, tzinfo=timezone.utc)
@@ -785,24 +800,18 @@ async def _build_corrected_lines(
         business_id=order.business_id,
         request=placement_shape,
         location_id=order.location_id,
+        enforce_menu_window=False,
     )
     business = await db.get(Business, order.business_id)
     if business is None:
         raise OrderValidationError("Business not found")
     now = datetime.now(timezone.utc)
-    happy_hour_active = await happy_hour_service.is_happy_hour_active(
-        db, order.business_id
-    )
     lines: list[OrderLineItem] = []
     subtotal = Decimal("0")
     tax_total = Decimal("0")
     total = Decimal("0")
     for item_request, item, modifiers in resolved:
-        unit_price = (
-            item.happy_hour_price
-            if happy_hour_active and item.happy_hour_price is not None
-            else item.price
-        )
+        unit_price = item.price
         selected_modifiers = []
         for modifier in modifiers:
             unit_price += modifier.price_delta

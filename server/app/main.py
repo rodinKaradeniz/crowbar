@@ -31,7 +31,6 @@ from app.routers import (
     businesses,
     customers,
     floor_plan,
-    happy_hour,
     insights,
     inventory,
     purchasing,
@@ -243,7 +242,6 @@ app.include_router(reports.router)
 app.include_router(tabs.router)
 app.include_router(tabs.ws_router)
 app.include_router(tax.router)
-app.include_router(happy_hour.router)
 app.include_router(insights.router)
 
 # ─── Static files (dev only) ──────────────────────────────────────────────────

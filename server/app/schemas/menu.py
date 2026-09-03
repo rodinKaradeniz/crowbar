@@ -1,9 +1,55 @@
+from datetime import time
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from app.schemas.base import AppBaseModel
+
+
+def _validate_days(days: list[int]) -> list[int]:
+    for d in days:
+        if d < 0 or d > 6:
+            raise ValueError("days_of_week entries must be 0..6 (0=Monday..6=Sunday)")
+    return days
+
+
+# ─── Menu activation windows ──────────────────────────────────────────────────
+# A menu with no windows is always on; a menu with one or more is served only
+# inside them. Times are wall-clock in the business's timezone, never UTC.
+
+class MenuActivationWindowCreate(AppBaseModel):
+    days_of_week: list[int] = Field(..., min_length=1)
+    start_time: time
+    end_time: time
+    is_active: bool = True
+
+    @field_validator("days_of_week")
+    @classmethod
+    def check_days(cls, v: list[int]) -> list[int]:
+        return _validate_days(v)
+
+
+class MenuActivationWindowUpdate(AppBaseModel):
+    days_of_week: list[int] | None = Field(None, min_length=1)
+    start_time: time | None = None
+    end_time: time | None = None
+    is_active: bool | None = None
+
+    @field_validator("days_of_week")
+    @classmethod
+    def check_days(cls, v: list[int] | None) -> list[int] | None:
+        return _validate_days(v) if v is not None else v
+
+
+class MenuActivationWindowResponse(AppBaseModel):
+    id: UUID
+    menu_id: UUID
+    business_id: UUID
+    days_of_week: list[int]
+    start_time: time
+    end_time: time
+    is_active: bool
 
 
 # ─── Item Library ─────────────────────────────────────────────────────────────
@@ -100,7 +146,6 @@ class MenuItemCreate(AppBaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
     price: Decimal = Field(default=Decimal("0.00"), ge=0)
-    happy_hour_price: Decimal | None = Field(default=None, ge=0)
     is_alcoholic: bool = False
     is_available: bool = True
     preparation_station_id: UUID | None = None
@@ -116,9 +161,7 @@ class MenuItemUpdate(AppBaseModel):
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = None
     price: Decimal | None = Field(None, ge=0)
-    # happy_hour_price uses a sentinel-free convention: absent = unchanged, null
     # = clear the discount. See update_item in menu_service for the handling.
-    happy_hour_price: Decimal | None = Field(default=None, ge=0)
     is_alcoholic: bool | None = None
     is_available: bool | None = None
     preparation_station_id: UUID | None = None
@@ -136,9 +179,6 @@ class MenuItemResponse(AppBaseModel):
     name: str
     description: str | None = None
     price: Decimal
-    # Flat happy-hour override price (None = item never discounts). Whether it
-    # currently applies is signalled by MenuResponse.happy_hour_active.
-    happy_hour_price: Decimal | None = None
     is_alcoholic: bool = False
     is_available: bool
     routing_tag: str
@@ -203,10 +243,7 @@ class MenuResponse(AppBaseModel):
     name: str
     description: str | None = None
     is_active: bool
-    # Server-computed: whether a happy-hour window is active for this business
-    # right now. Set on the public menu read path (defaults False elsewhere).
-    # The client must trust this flag rather than computing from local time.
-    happy_hour_active: bool = False
+    activation_windows: list[MenuActivationWindowResponse] = []
     categories: list[MenuCategoryResponse] = []
 
 
@@ -233,7 +270,6 @@ class PublicMenuItemResponse(AppBaseModel):
     name: str
     description: str | None = None
     price: Decimal
-    happy_hour_price: Decimal | None = None
     is_alcoholic: bool = False
     is_available: bool
     display_order: int
@@ -254,7 +290,6 @@ class PublicMenuCategoryResponse(AppBaseModel):
 class PublicMenuResponse(AppBaseModel):
     name: str
     description: str | None = None
-    happy_hour_active: bool = False
     categories: list[PublicMenuCategoryResponse] = []
 
 

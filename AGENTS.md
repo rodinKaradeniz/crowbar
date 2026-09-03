@@ -154,7 +154,7 @@ Four things that will bite if you do not know them:
 
 - **Rule zero.** No colour, size, spacing value, radius or duration enters that
   the `:root` block in `client/app/globals.css` does not declare. The raw-hex
-  grep in DESIGN.md is the check, and it names the only four categories of hit
+  grep in DESIGN.md is the check, and it names the only three categories of hit
   that are allowed to survive.
 - **Severity is a procedure, not a judgement.** `client/lib/severity.ts` owns
   it. Do not classify a severity inside a component, and do not reach for red

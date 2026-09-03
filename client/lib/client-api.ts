@@ -5,7 +5,7 @@ import {
   BookingScheduleCollection,
   BookingScheduleDraft,
   Business,
-  HappyHourWindow,
+  MenuActivationWindow,
   FloorPlanArea,
   FloorPlanAssignment,
   FloorPlanBoard,
@@ -601,6 +601,13 @@ export async function clientChangePassword(data: {
 
 export async function clientDisableAccount(): Promise<{ message: string }> {
   return authFetch("/auth/disable-account", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export async function clientRequestAccountDeletion(): Promise<{ message: string }> {
+  return authFetch("/auth/delete-account", {
     method: "POST",
     body: JSON.stringify({}),
   });
@@ -1856,7 +1863,6 @@ function toMenuItem(i: Record<string, unknown>): MenuItem {
     name: i.name as string,
     description: (i.description as string) || undefined,
     price: toMoney(i.price),
-    happyHourPrice: toOptionalMoney(i.happy_hour_price),
     isAlcoholic: (i.is_alcoholic as boolean) ?? false,
     isAvailable: i.is_available as boolean,
     routingTag: i.routing_tag as MenuItem["routingTag"],
@@ -1894,7 +1900,7 @@ function toMenu(m: Record<string, unknown>): Menu {
     name: m.name as string,
     description: (m.description as string) || undefined,
     isActive: m.is_active as boolean,
-    happyHourActive: (m.happy_hour_active as boolean) ?? false,
+    activationWindows: ((m.activation_windows as Record<string, unknown>[]) ?? []).map(toMenuActivationWindow),
     categories: ((m.categories as Record<string, unknown>[]) ?? []).map(toMenuCategory),
   };
 }
@@ -2013,14 +2019,19 @@ export async function clientExchangePublicCapability(
   });
 }
 
-export async function clientGetMenu(businessId: string): Promise<Menu | null> {
+// Every menu being served right now. Plural because activation is per menu: an
+// always-on menu and a windowed one can be open at the same time. A menu
+// outside its window is absent entirely, and placement rejects it too, so the
+// guest is never shown something they cannot order. An empty array is a
+// legitimate answer, not an error.
+export async function clientGetPublicMenus(businessId: string): Promise<Menu[]> {
   try {
-    const data = await clientFetch<Record<string, unknown>>(
+    const data = await clientFetch<Record<string, unknown>[]>(
       `/ordering/${businessId}/menu`,
     );
-    return toMenu(data);
+    return (data ?? []).map(toMenu);
   } catch {
-    return null;
+    return [];
   }
 }
 
@@ -2244,8 +2255,8 @@ export async function clientGetTab(tabId: string): Promise<Tab> {
 }
 
 // Add a staff-placed order to an open tab. Goes through the same
-// order_service.place_order path as public ordering (so happy-hour pricing
-// applies), but the tabs route calls it with require_age_confirmation=False —
+// order_service.place_order path as public ordering (so the same menu-window
+// check applies), but the tabs route calls it with require_age_confirmation=False —
 // staff entering an order in person skip the self-service age attestation.
 // Tenant is resolved from the JWT server-side, so no businessId in the path.
 export async function clientAddOrderToTab(
@@ -2411,8 +2422,7 @@ export async function clientCreateMenuItem(
     name: string;
     description?: string;
     price: number;
-    happyHourPrice?: number | null;
-    isAlcoholic?: boolean;
+      isAlcoholic?: boolean;
     isAvailable?: boolean;
     preparationStationId?: string;
     routesToAllStations?: boolean;
@@ -2430,8 +2440,7 @@ export async function clientCreateMenuItem(
         name: data.name,
         description: data.description,
         price: data.price,
-        happy_hour_price: data.happyHourPrice ?? null,
-        is_alcoholic: data.isAlcoholic ?? false,
+          is_alcoholic: data.isAlcoholic ?? false,
         is_available: data.isAvailable ?? true,
         preparation_station_id: data.preparationStationId,
         routes_to_all_stations: data.routesToAllStations ?? !data.preparationStationId,
@@ -2452,8 +2461,7 @@ export async function clientUpdateMenuItem(
     name?: string;
     description?: string;
     price?: number;
-    happyHourPrice?: number | null;
-    isAlcoholic?: boolean;
+      isAlcoholic?: boolean;
     isAvailable?: boolean;
     preparationStationId?: string | null;
     routesToAllStations?: boolean;
@@ -2467,9 +2475,6 @@ export async function clientUpdateMenuItem(
   if (data.name !== undefined) body.name = data.name;
   if (data.description !== undefined) body.description = data.description;
   if (data.price !== undefined) body.price = data.price;
-  // Send happy_hour_price when explicitly provided (a number sets it, null
-  // clears the discount). Backend treats "field present" as set/clear.
-  if (data.happyHourPrice !== undefined) body.happy_hour_price = data.happyHourPrice;
   if (data.isAlcoholic !== undefined) body.is_alcoholic = data.isAlcoholic;
   if (data.isAvailable !== undefined) body.is_available = data.isAvailable;
   if (data.preparationStationId !== undefined) body.preparation_station_id = data.preparationStationId;
@@ -2956,13 +2961,15 @@ export async function clientGetInvite(): Promise<{
   }
 }
 
-// ─── Happy Hour windows (staff; behind the ordering module) ───────────────────
+// ─── Menu activation windows (staff; behind the ordering module) ─────────────
+// A menu with no windows is always on. Windows are read back embedded in the
+// menu itself, so there is no separate GET here.
 
-function toHappyHourWindow(w: Record<string, unknown>): HappyHourWindow {
+function toMenuActivationWindow(w: Record<string, unknown>): MenuActivationWindow {
   return {
     id: w.id as string,
+    menuId: w.menu_id as string,
     businessId: w.business_id as string,
-    name: w.name as string,
     daysOfWeek: (w.days_of_week as number[]) ?? [],
     // Backend serializes TIME as "HH:MM:SS"; keep the "HH:MM" prefix for inputs.
     startTime: (w.start_time as string)?.slice(0, 5) ?? "",
@@ -2971,56 +2978,63 @@ function toHappyHourWindow(w: Record<string, unknown>): HappyHourWindow {
   };
 }
 
-export async function clientGetHappyHourWindows(): Promise<HappyHourWindow[]> {
-  const result = await authFetch<Record<string, unknown>[]>("/happy-hour/windows");
-  return (result ?? []).map(toHappyHourWindow);
+export async function clientCreateMenuActivationWindow(
+  businessId: string,
+  menuId: string,
+  data: {
+    daysOfWeek: number[];
+    startTime: string;
+    endTime: string;
+    isActive?: boolean;
+  },
+): Promise<MenuActivationWindow> {
+  const result = await authFetch<Record<string, unknown>>(
+    `/ordering/${businessId}/menus/${menuId}/activation-windows`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        days_of_week: data.daysOfWeek,
+        start_time: data.startTime,
+        end_time: data.endTime,
+        is_active: data.isActive ?? true,
+      }),
+    },
+  );
+  return toMenuActivationWindow(result);
 }
 
-export async function clientCreateHappyHourWindow(data: {
-  name: string;
-  daysOfWeek: number[];
-  startTime: string;
-  endTime: string;
-  isActive?: boolean;
-}): Promise<HappyHourWindow> {
-  const result = await authFetch<Record<string, unknown>>("/happy-hour/windows", {
-    method: "POST",
-    body: JSON.stringify({
-      name: data.name,
-      days_of_week: data.daysOfWeek,
-      start_time: data.startTime,
-      end_time: data.endTime,
-      is_active: data.isActive ?? true,
-    }),
-  });
-  return toHappyHourWindow(result);
-}
-
-export async function clientUpdateHappyHourWindow(
+export async function clientUpdateMenuActivationWindow(
+  businessId: string,
+  menuId: string,
   windowId: string,
   data: Partial<{
-    name: string;
     daysOfWeek: number[];
     startTime: string;
     endTime: string;
     isActive: boolean;
   }>,
-): Promise<HappyHourWindow> {
+): Promise<MenuActivationWindow> {
   const body: Record<string, unknown> = {};
-  if (data.name !== undefined) body.name = data.name;
   if (data.daysOfWeek !== undefined) body.days_of_week = data.daysOfWeek;
   if (data.startTime !== undefined) body.start_time = data.startTime;
   if (data.endTime !== undefined) body.end_time = data.endTime;
   if (data.isActive !== undefined) body.is_active = data.isActive;
   const result = await authFetch<Record<string, unknown>>(
-    `/happy-hour/windows/${windowId}`,
+    `/ordering/${businessId}/menus/${menuId}/activation-windows/${windowId}`,
     { method: "PATCH", body: JSON.stringify(body) },
   );
-  return toHappyHourWindow(result);
+  return toMenuActivationWindow(result);
 }
 
-export async function clientDeleteHappyHourWindow(windowId: string): Promise<void> {
-  await authFetch(`/happy-hour/windows/${windowId}`, { method: "DELETE" });
+export async function clientDeleteMenuActivationWindow(
+  businessId: string,
+  menuId: string,
+  windowId: string,
+): Promise<void> {
+  await authFetch(
+    `/ordering/${businessId}/menus/${menuId}/activation-windows/${windowId}`,
+    { method: "DELETE" },
+  );
 }
 
 // ─── Purchasing ───────────────────────────────────────────────────────────────
