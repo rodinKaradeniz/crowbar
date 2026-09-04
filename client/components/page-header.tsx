@@ -89,6 +89,11 @@ export function PageHeader({
   return (
     <div
       ref={ref}
+      // Chrome, for printing purposes. The only print stylesheet in the product
+      // is the table QR sheet's, and a page's own pinned title bar — with its
+      // actions, including the Print button itself — is exactly the furniture a
+      // printed sheet must not carry. See the @media print block in globals.css.
+      data-print-hide
       className={cn(
         "sticky top-[var(--workspace-header)] z-10 border-b border-border",
         // OPAQUE, unlike the topbar above it. The topbar's `--scrim-ink` is

@@ -91,6 +91,7 @@ confirmed fixed MVP permission matrix.
 | `/business/requests` | Core | RES, SCHED, CRM | Reservations | Retain as pending-request triage; stages 1–3 align onboarding/module gates, timing, and decision feedback. |
 | `/business/schedule` | Core | RES, SCHED, FLOOR | Reservations | Retain the three-day ledger; stages 1–3 prove service-day/DST behavior, role-limited overrides, assignments, and capacity conflicts. |
 | `/business/floor` | Core | FLOOR, RES, QUEUE, TAB | Any of reservations, queue, ordering | Retain the area board; stages 1–4 prove permissions, assignment-versus-occupancy, seating/tab closure, real-time recovery, and empty configuration. |
+| `/business/floor/qr-sheet` | Supporting | FLOOR | Any of reservations, queue, ordering; `floor.configure` | Retain as the printable table QR sheet. A read that never rotates, one card per active table, and the printed origin is the browser's own — a sheet printed off the venue's address is dead paper. |
 | `/business/queue` | Core | QUEUE, FLOOR, CRM | Queue | Stages 1–3 add staff walk-ins, open/closed service, reasoned transitions, delivery status, assignment, and seating. |
 | `/business/orders` | Core | ORDER, INV | Ordering | Page entitlement is enforced; stage 4 completes station routing, correction/cancellation audit, timing, 86 state, and real-time recovery. |
 | `/business/tabs` | Core | TAB, ORDER, FLOOR, CRM | Ordering | Stages 1 and 4 prove tenant-safe shared rounds, external settlement, immutable total snapshot, controlled reopen, and seating closure. |

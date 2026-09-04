@@ -280,8 +280,8 @@ Public reservation capture records independent email/SMS marketing choices
 only after the reservation has resolved to its canonical customer. The
 one-shot `app.jobs.customer_retention` applies the documented 24-month
 inactivity policy from authoritative reservation, queue, tab, and order
-activity rather than profile edit time; scheduling it is a deployment concern
-and is not assumed by the API process. Concurrent identity resolution is
+activity rather than profile edit time; it runs as its own daily cron service
+and is never assumed by the API process. Concurrent identity resolution is
 serialized per tenant/contact key, consent merge is conservative, and tab
 orders inherit the canonical customer.
 
@@ -351,7 +351,16 @@ In-memory WebSocket managers imply that horizontal API scaling requires a
 shared fan-out design before multiple FastAPI replicas can reliably serve the
 same business board.
 
-### Reservation reminders
+### Scheduled one-shot jobs
+
+Every module under `server/app/jobs/` is a one-shot process: it opens an
+engine, does one batch, commits, disposes the engine, and exits. There is no
+Celery worker and no in-process scheduler. All five — `reservation_reminders`,
+`reservation_waitlist_expiry`, `account_deletion`, `customer_retention` and
+`inventory_reconciliation` — have a checked-in Railway Cron service in
+`docs/deployment.md`. None is deployed yet; the deployment gate governs that.
+
+#### Reservation reminders
 
 The checked-in Railway Cron configuration is designed to start
 `python -m app.jobs.reservation_reminders` at the beginning of each UTC hour
@@ -525,6 +534,15 @@ legacy `table_identifier` stays nullable read-only compatibility data. Closing
 a seating locks and rejects an open seating tab, so settlement precedes the
 source visit's completion. QR rotation increments the table revision and
 invalidates earlier credentials without storing a reusable public secret.
+
+`GET /api/floor-plan/tables/qr` returns every active table's credential at once
+for the printable staff sheet, under the same `floor.configure` capability as
+the single-table read. It mints tokens per request from the revisions already
+stored, commits nothing and publishes nothing, so printing a sheet twice leaves
+every `qr_token_revision` where it was; inactive and soft-deleted tables are
+skipped rather than refused, because a token for one could never redeem. The
+client resolves the returned relative URL against its own origin, which is why
+no absolute base URL is stored or configured for it.
 
 Migration 040 replaced simulated closure with an audited
 `settled_externally` assertion and immutable total snapshot. It must not grow

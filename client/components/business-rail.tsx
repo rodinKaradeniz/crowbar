@@ -143,7 +143,10 @@ export function BusinessRail({
   };
 
   return (
-    <aside className="sticky top-0 hidden h-svh w-[var(--rail)] shrink-0 flex-col border-r border-border bg-sidebar desktop:flex">
+    <aside
+      data-print-hide
+      className="sticky top-0 hidden h-svh w-[var(--rail)] shrink-0 flex-col border-r border-border bg-sidebar desktop:flex"
+    >
       <div className="flex shrink-0 items-center gap-[9px] border-b border-border px-[18px] pt-[18px] pb-4">
         <span className="mkt-logo-mark block bg-primary" aria-hidden />
         <span className="font-display text-[17px] font-extrabold tracking-[-0.035em]">

@@ -319,6 +319,46 @@ async def issue_table_qr(
     return table, issue_table_token(table)
 
 
+async def list_printable_table_qrs(
+    db: AsyncSession, business_id: UUID
+) -> list[tuple[TableArea, list[tuple[Table, str]]]]:
+    """Every table in the business that can carry a printed QR code, by area.
+
+    NOT `issue_table_qr` in a loop. That function raises 409 on an inactive
+    table, so a venue that has ever archived one would get an error instead of
+    a sheet. Here an unprintable table is skipped, and skipping is the correct
+    answer rather than merely the convenient one: `resolve_active_table_seating`
+    refuses a token whose table is inactive or deleted, so a card printed for
+    one could never be scanned into an order anyway.
+
+    It writes nothing. `qr_token_revision` is read, never incremented, which is
+    what makes printing a sheet twice safe.
+
+    GROUPED FROM THE TABLES, NOT FROM THE AREAS. `get_board` lists active areas
+    and then their tables; doing that here would silently drop a live table
+    whose area was deactivated, and a missing card is a table nobody can order
+    from. `tables.area_id` is NOT NULL with an ON DELETE RESTRICT foreign key,
+    so every surviving table has an area to be grouped under.
+    """
+    result = await db.execute(
+        select(Table, TableArea)
+        .join(TableArea, Table.area_id == TableArea.id)
+        .where(
+            Table.business_id == business_id,
+            Table.deleted_at.is_(None),
+            Table.is_active.is_(True),
+        )
+        .order_by(TableArea.sort_order, TableArea.name, Table.sort_order, Table.label)
+    )
+
+    grouped: list[tuple[TableArea, list[tuple[Table, str]]]] = []
+    for table, area in result.all():
+        if not grouped or grouped[-1][0].id != area.id:
+            grouped.append((area, []))
+        grouped[-1][1].append((table, issue_table_token(table)))
+    return grouped
+
+
 async def _locked_tables(db, business_id: UUID, table_ids: list[UUID]) -> list[Table]:
     result = await db.execute(
         select(Table)

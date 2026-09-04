@@ -1,7 +1,8 @@
 """Apply Crowbar's documented 24-month guest-data inactivity policy.
 
-This is intentionally a one-shot job like reservation reminders. Scheduling it
-in a deployment environment remains an explicit deployment task.
+This is intentionally a one-shot job like reservation reminders, and it now has
+its own daily Railway cron service. Deploying that service is still an explicit
+deployment task (docs/deployment.md).
 """
 
 import asyncio

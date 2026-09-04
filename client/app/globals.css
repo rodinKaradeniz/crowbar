@@ -225,6 +225,7 @@
 
   /* ── Targets ───────────────────────────────────────────────────────────── */
   --control-desktop-min: 34px;
+  --control-md: 40px;           /* the guest/secondary CTA step */
   --control-desktop: 44px;
   --control-tablet-min: 48px;   /* floor for every tablet control */
   --row-desktop: 44px;
@@ -261,6 +262,25 @@
      the real number here. This 0 is the pre-mount default, so a sibling that
      offsets by it is merely flush before hydration, never overlapped. */
   --page-header: 0px;
+
+  /* ── Print · the only physical units in the system ─────────────────────── */
+  /* Declared rather than written as literals in the print block, because rule
+     zero is not suspended by a different output medium. The one thing that
+     made these look undeclarable is that they are consumed inside `@page`,
+     which is not an element and was assumed unable to resolve a custom
+     property. Measured instead of assumed: Chrome 152 substitutes var() in
+     `@page` — 40mm as a token and 40mm as a literal produce byte-identical
+     PDFs, and 5mm produces a shorter one both ways. An engine that does not
+     substitute falls back to its own default margin, which is a differently
+     spaced sheet rather than a broken one.
+
+     A card's WIDTH is not here: the sheet is a grid that divides the printable
+     width, so the column count is the decision and the card size follows from
+     the paper. --print-qr-size is, because a QR's scannability is a physical
+     property and does not follow from anything. */
+  --print-page-margin: 12mm;  /* every edge of the sheet          */
+  --print-qr-size: 34mm;      /* the drawn code, edge to edge     */
+  --print-card-gap: 6mm;      /* the scissor line between cards   */
 }
 
 /*
@@ -270,8 +290,17 @@
  * `text-muted-foreground`, `border-border`, …) keep working while surfaces are
  * ported one at a time, and so a surface never has to know which ground it is
  * on. Redefined wholesale under `.ground-ink` below.
+ *
+ * `.ground-paper` IS THE SAME BLOCK, NOT A COPY OF IT. Paper is the unclassed
+ * default, which is all a surface needs until one lives INSIDE the ink product
+ * and has to be paper anyway — the printable table QR sheet, which would put a
+ * black page through the venue's printer otherwise. Naming the class here
+ * rather than duplicating thirty-odd role mappings means the two grounds can
+ * never drift apart, and it is the exact mirror of what the landing page
+ * already does in the other direction with `.ground-ink` on a subtree.
  */
-:root {
+:root,
+.ground-paper {
   --background: var(--paper);
   --foreground: var(--text);
   --card: var(--paper-raised);
@@ -579,6 +608,7 @@
     --ui-size: 15px;                              /* was 14 */
     --data-size: 15px;                            /* was 13.5 */
     --row-desktop: var(--row-tablet);             /* 44 → 56 */
+    --control-md: var(--control-tablet-min);      /* 40 → 48 */
     --control-desktop: var(--control-tablet-min); /* 44 → 48 */
     --control-desktop-min: var(--control-tablet-min); /* 34 → 48 */
   }
@@ -1266,5 +1296,94 @@
      here too. */
   html {
     scroll-behavior: auto !important;
+  }
+}
+
+/*
+ * ── Print · the table QR sheet ──────────────────────────────────────────────
+ *
+ * The first and only print stylesheet in the product, and it exists for one
+ * surface: `/business/floor/qr-sheet`, the sheet a venue prints once and cuts
+ * up so every table carries its own guest-ordering code.
+ *
+ * WHY A STAFF ROUTE RENDERS ON PAPER. Grounds are fixed by surface and the
+ * staff product is ink — but ink is a decision about a room lit by candles at
+ * 1am, not about a sheet of A4. Printing the product ground would push a black
+ * page through the venue's printer. The sheet therefore carries `.ground-paper`
+ * on its own subtree, which is a re-grounding, not an exception: it resolves
+ * every role token against paper exactly as `.ground-ink` panels inside the
+ * landing page resolve against ink. On screen it reads as a paper document
+ * sitting inside the ink workspace, which is also what it is.
+ *
+ * `[data-print-hide]` IS THE WHOLE MECHANISM. The rail, the topbar, the tablet
+ * bottom bar and the sheet's own header carry it, so this block names one
+ * selector instead of reaching into four components by class. The Print button
+ * hides with the header that holds it — a sheet with a button printed on it is
+ * a sheet someone has to reprint.
+ */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: var(--print-page-margin);
+  }
+
+  [data-print-hide] {
+    display: none !important;
+  }
+
+  /* THE DOCUMENT ITSELF IS RE-GROUNDED, not only the sheet inside it. Without
+     this the body keeps `--ink` and prints as a black frame around the cards —
+     measured, not guessed: it is visible in the first PDF this block produced.
+     `.ground-paper` on the sheet was never going to cover it, because the body
+     is its ancestor, not its descendant. */
+  html,
+  body {
+    min-height: 0;
+    background: var(--paper);
+    color: var(--text);
+  }
+
+  /* The shell's gutter and its reserve for a bottom bar are screen
+     affordances. On paper `@page` owns the margin, and anything else here is
+     margin inside a margin. */
+  main,
+  main > div {
+    padding: 0 !important;
+  }
+
+  /* On screen the sheet is a paper document lying on the ink workspace, and the
+     hairline and padding are what say so. On paper it is just the page. */
+  .print-sheet-page {
+    border: 0;
+    padding: 0;
+  }
+
+  /* `PageBody` caps a document page at the workspace reading measure, which is
+     1024px — WIDER THAN A4. Left in place it lays three columns out at screen
+     width and the printer clips the third one off the edge of the paper. The
+     page box is the measure here; nothing else is. */
+  .print-sheet {
+    max-width: none;
+    width: auto;
+  }
+
+  /* Three columns of cards, fixed. Card size is not an option the venue picks
+     (out of scope, deliberately) — it follows from A4 minus the margins. */
+  .print-sheet-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--print-card-gap);
+  }
+
+  /* A card split across a page break is a card nobody can cut out. The AREA is
+     deliberately allowed to break: Main Room is ten tables and will not fit on
+     one page beside the others, and forcing it to would overflow the sheet
+     rather than paginate it. */
+  .print-sheet-card {
+    break-inside: avoid;
+  }
+
+  .print-sheet-area-name {
+    break-after: avoid;
   }
 }

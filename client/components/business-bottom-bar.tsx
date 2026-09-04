@@ -84,6 +84,7 @@ export function BusinessBottomBar({
   return (
     <>
       <nav
+        data-print-hide
         className="fixed inset-x-0 bottom-0 z-30 hidden h-[var(--bottom-nav)] border-t border-border-strong bg-sidebar phone:flex desktop:hidden"
         aria-label="Workspace"
       >
@@ -219,7 +220,10 @@ export function TabletPrimaryAction({
   if (!show) return null;
 
   return (
-    <div className="fixed right-5 bottom-[calc(var(--bottom-nav)+20px)] z-30 hidden phone:block desktop:hidden">
+    <div
+      data-print-hide
+      className="fixed right-5 bottom-[calc(var(--bottom-nav)+20px)] z-30 hidden phone:block desktop:hidden"
+    >
       <Button asChild size="tablet" className="h-[60px] px-[26px] text-[16.5px] shadow-e1">
         <Link href={href}>{children}</Link>
       </Button>

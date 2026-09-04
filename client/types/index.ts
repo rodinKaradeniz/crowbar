@@ -346,6 +346,18 @@ export interface FloorPlanTableQr {
   url: string;
 }
 
+export interface FloorPlanTableQrSheetArea {
+  id: string;
+  name: string;
+  tables: FloorPlanTableQr[];
+}
+
+export interface FloorPlanTableQrSheet {
+  businessId: string;
+  businessName: string;
+  areas: FloorPlanTableQrSheetArea[];
+}
+
 export interface FloorPlanCombination {
   id: string;
   businessId: string;

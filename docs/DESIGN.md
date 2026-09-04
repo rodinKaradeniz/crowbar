@@ -478,6 +478,71 @@ into view programmatically, and smoothing that would be a regression.
 All motion is off under `prefers-reduced-motion`, including `scroll-behavior`,
 which is neither an animation nor a transition and needs its own rule.
 
+## Print — one surface, and the two rules it needed
+
+There is exactly one print stylesheet in the product, at the foot of
+`globals.css`, and it exists for `/business/floor/qr-sheet` — the sheet a venue
+prints once and cuts up so every table carries its own guest-ordering code.
+Nothing else in the product is designed to be printed, and adding a second print
+surface is a design question, not a call-site decision.
+
+**A staff route that runs on paper.** Grounds are fixed by surface and the staff
+product is ink — but ink is a decision about a room lit by candles at 1am, not
+about a sheet of A4. Printing the product ground would push a black page through
+the venue's printer. The sheet therefore carries `.ground-paper`, which is
+**declared as the same block as `:root`** rather than as a copy of it:
+
+```css
+:root,
+.ground-paper {
+  --background: var(--paper);
+  …
+}
+```
+
+That is one selector, no duplicated role mappings, and no way for the two
+grounds to drift apart. It is also the exact mirror of what the landing page
+already does in the other direction — `.ground-ink` on a subtree inside paper,
+in `ordering-section.tsx` and `auth-shell.tsx`. On screen the sheet reads as a
+paper document lying on the ink workspace, which is what it is.
+
+`<Ground ground="paper" />` does **not** work here and should not be reached
+for: child effects run before parent effects, so the ink `Ground` in
+`app/business/layout.tsx` re-adds the class on every hard load.
+
+**Physical units, and why rule zero did not need an exception.** The sheet is
+the first surface in the system that needs millimetres — a page margin and a QR
+size are physical facts about paper, not screen values. Three tokens are
+declared with every other value, in their own group at the end of the `:root`
+block:
+
+| Token | Value | What it is |
+| --- | --- | --- |
+| `--print-page-margin` | `12mm` | every edge of the sheet |
+| `--print-qr-size` | `34mm` | the drawn code, edge to edge |
+| `--print-card-gap` | `6mm` | the scissor line between cards |
+
+The reason this looked like it needed an exception is that the margin is
+consumed inside `@page`, which is not an element and was assumed unable to
+resolve a custom property. **That was measured rather than assumed, and it is
+false in a current engine.** In Chrome 152, `@page { margin: var(--pm) }` with
+`--pm: 40mm` and a literal `40mm` produce byte-identical five-page PDFs, and
+`5mm` produces a four-page one both ways. So the value is declared like every
+other value and read with `var()`. An engine that does not substitute falls back
+to its own default margin — a differently spaced sheet, not a broken one.
+
+A card's **width** is deliberately not a token: the sheet is a three-column grid
+dividing the printable width, so the column count is the decision and the card
+size follows from the paper. `--print-qr-size` is a token because a code's
+scannability is a physical property that follows from nothing else.
+
+**Chrome is hidden by one attribute.** The rail, the topbar, the tablet bottom
+bar and its floating action, and `PageHeader` all carry `data-print-hide`, and
+the print block names that one selector rather than reaching into five
+components by class. `PageHeader` carries it unconditionally, which is also how
+the Print button hides — a sheet with a button printed on it is a sheet someone
+has to print again.
+
 ## Responsive
 
 Two **designed** targets, and a floor under everything narrower.

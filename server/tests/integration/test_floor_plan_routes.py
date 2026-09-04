@@ -1,4 +1,5 @@
 from datetime import date, datetime, time, timedelta, timezone
+from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
@@ -14,6 +15,7 @@ from app.models.queue_entry import QueueEntry
 from app.models.reservation import Reservation
 from app.models.service_type import ServiceType
 from app.models.staff import Staff
+from app.models.table import Table
 from app.models.tab import Tab
 from app.models.user import User
 from app.services.auth_service import create_access_token
@@ -55,6 +57,21 @@ async def _tenant(
     await db.commit()
     token = create_access_token(str(user.id), "staff")
     return business, user, location, {"Authorization": f"Bearer {token}"}
+
+
+async def _table_in_area(client, headers, area_id, *, label, capacity=2):
+    response = await client.post(
+        "/api/floor-plan/tables",
+        headers=headers,
+        json={
+            "area_id": area_id,
+            "label": label,
+            "capacity": capacity,
+            "shape": "round",
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
 
 
 async def _area_and_table(client, headers, *, label="T1", capacity=2):
@@ -677,3 +694,129 @@ async def test_secondary_location_board_does_not_claim_legacy_unscoped_parties(
         "Legacy Party"
     ]
     assert secondary_board.json()["queue_entries"] == []
+
+
+@pytest.mark.asyncio
+async def test_table_qr_sheet_lists_every_printable_table_and_excludes_the_rest(
+    client: AsyncClient, db_session: AsyncSession
+):
+    business, _, _, headers = await _tenant(db_session, slug="qr-sheet")
+    area, printable = await _area_and_table(client, headers, label="P1")
+    archived = await _table_in_area(client, headers, area["id"], label="A1")
+    deactivated = await _table_in_area(client, headers, area["id"], label="D1")
+
+    archive = await client.delete(
+        f"/api/floor-plan/tables/{archived['id']}", headers=headers
+    )
+    assert archive.status_code == 204
+
+    # No HTTP route produces an inactive-but-not-deleted table: DELETE archives
+    # by setting both `is_active` and `deleted_at`. The sheet still has to skip
+    # this state, so the row is put there directly.
+    row = await db_session.get(Table, UUID(deactivated["id"]))
+    row.is_active = False
+    await db_session.commit()
+
+    other_business, _, _, other_headers = await _tenant(
+        db_session, slug="qr-sheet-neighbour"
+    )
+    await _area_and_table(client, other_headers, label="N1")
+
+    response = await client.get("/api/floor-plan/tables/qr", headers=headers)
+    assert response.status_code == 200, response.text
+    body = response.json()
+
+    assert body["business_id"] == str(business.id)
+    labels = [
+        table["label"] for sheet_area in body["areas"] for table in sheet_area["tables"]
+    ]
+    assert labels == ["P1"]
+
+    entry = body["areas"][0]["tables"][0]
+    assert body["areas"][0]["id"] == area["id"]
+    assert entry["table_id"] == printable["id"]
+    assert entry["revision"] == 1
+    assert entry["url"].startswith(f"/menu/{business.slug}#table_token=")
+
+    # The neighbour's sheet carries only the neighbour's table.
+    other = await client.get("/api/floor-plan/tables/qr", headers=other_headers)
+    assert other.status_code == 200
+    assert [
+        table["label"] for sheet_area in other.json()["areas"] for table in sheet_area["tables"]
+    ] == ["N1"]
+
+    # The sheet URL is the same URL the single-table dialog hands out.
+    single = await client.get(
+        f"/api/floor-plan/tables/{printable['id']}/qr", headers=headers
+    )
+    assert single.status_code == 200
+    assert single.json() == entry
+
+
+@pytest.mark.asyncio
+async def test_table_qr_sheet_is_a_read_and_never_rotates_a_revision(
+    client: AsyncClient, db_session: AsyncSession
+):
+    business, _, _, headers = await _tenant(db_session, slug="qr-sheet-idempotent")
+    area, _ = await _area_and_table(client, headers, label="R1")
+    second = await _table_in_area(client, headers, area["id"], label="R2")
+
+    # Rotate one table first, so the assertion covers a revision that is not 1
+    # and cannot pass by every row happening to sit at its default.
+    rotated = await client.post(
+        f"/api/floor-plan/tables/{second['id']}/qr/rotate", headers=headers
+    )
+    assert rotated.status_code == 200
+
+    # Read as columns, never through the identity map, so the assertion is
+    # about what is in the database rather than what this session remembers.
+    business_id = business.id
+
+    async def revisions() -> list[tuple[str, int]]:
+        result = await db_session.execute(
+            select(Table.label, Table.qr_token_revision)
+            .where(Table.business_id == business_id)
+            .order_by(Table.label)
+        )
+        return [(label, revision) for label, revision in result.all()]
+
+    before = await revisions()
+    assert before == [("R1", 1), ("R2", 2)]
+
+    first_call = await client.get("/api/floor-plan/tables/qr", headers=headers)
+    second_call = await client.get("/api/floor-plan/tables/qr", headers=headers)
+
+    assert first_call.status_code == 200
+    assert second_call.status_code == 200
+    assert await revisions() == before
+    assert first_call.json() == second_call.json()
+
+
+@pytest.mark.asyncio
+async def test_table_qr_sheet_requires_floor_configure(
+    client: AsyncClient, db_session: AsyncSession
+):
+    business, _, _, owner_headers = await _tenant(db_session, slug="qr-sheet-role")
+    await _area_and_table(client, owner_headers, label="C1")
+    staff_user = User(
+        email="qr-sheet-staff@example.com",
+        name="Staff",
+        password_hash="unused",
+        user_type="staff",
+    )
+    db_session.add(staff_user)
+    await db_session.flush()
+    db_session.add(
+        Staff(user_id=staff_user.id, business_id=business.id, role="host_server")
+    )
+    await db_session.commit()
+    staff_headers = {
+        "Authorization": f"Bearer {create_access_token(str(staff_user.id), 'staff')}"
+    }
+
+    forbidden = await client.get("/api/floor-plan/tables/qr", headers=staff_headers)
+    allowed = await client.get("/api/floor-plan/tables/qr", headers=owner_headers)
+
+    assert forbidden.status_code == 403
+    assert forbidden.json()["code"] == "FORBIDDEN"
+    assert allowed.status_code == 200

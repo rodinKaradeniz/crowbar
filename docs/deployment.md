@@ -26,13 +26,22 @@ Internet
                                +--> ml (private FastAPI)
 
 reminders (hourly private cron) ---> PostgreSQL ---> Twilio
+waitlist-expiry (5-minute private cron) ---> PostgreSQL
 account-deletion (daily private cron) ---> PostgreSQL
+customer-retention (daily private cron) ---> PostgreSQL
+inventory-reconciliation (daily private cron) ---> PostgreSQL
 ```
 
-Only `web` and `api` receive public domains. PostgreSQL, Redis, `ml`,
-`reminders`, and `account-deletion` remain private. Future domain microservices
-remain private behind the FastAPI gateway unless a new architecture decision
-says otherwise.
+Only `web` and `api` receive public domains. PostgreSQL, Redis, `ml` and all
+five cron services remain private. Future domain microservices remain private
+behind the FastAPI gateway unless a new architecture decision says otherwise.
+
+Every one-shot job under `server/app/jobs/` has a service here. That was not
+true until 2026-09-04: `customer_retention`, `inventory_reconciliation` and
+`reservation_waitlist_expiry` had shipped as code with no config file and no
+row below, so the retention policy, the ledger reconciliation and the waitlist
+expiry would simply never have run in a deployed environment. A job that exists
+only as a module is a policy the product claims and does not keep.
 
 ## Source and Process Contract
 
@@ -47,7 +56,10 @@ file.
 | `api` | `/server` | `/server/railway.api.json` | Railpack | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
 | `ml` | `/ml` | `/ml/railway.json` | Dockerfile | Docker `CMD`, listening on `$PORT` |
 | `reminders` | `/server` | `/server/railway.reminders.json` | Railpack | `python -m app.jobs.reservation_reminders` |
+| `waitlist-expiry` | `/server` | `/server/railway.waitlist-expiry.json` | Railpack | `python -m app.jobs.reservation_waitlist_expiry` |
 | `account-deletion` | `/server` | `/server/railway.account-deletion.json` | Railpack | `python -m app.jobs.account_deletion` |
+| `customer-retention` | `/server` | `/server/railway.customer-retention.json` | Railpack | `python -m app.jobs.customer_retention` |
+| `inventory-reconciliation` | `/server` | `/server/railway.inventory-reconciliation.json` | Railpack | `python -m app.jobs.inventory_reconciliation` |
 
 Watch patterns prevent unrelated monorepo changes from rebuilding every
 service.
@@ -65,6 +77,21 @@ service.
 - `account-deletion` runs at `30 3 * * *` UTC, erases every staff account whose
   30-day deletion window has closed, and exits. Same shape as `reminders`: no
   public domain, no persistent worker.
+- `customer-retention` runs at `0 4 * * *` UTC and applies the documented
+  24-month guest-data inactivity policy. Daily is enough for a policy measured
+  in months; the hour is after close so an anonymisation never lands mid-service.
+- `inventory-reconciliation` runs at `30 4 * * *` UTC, compares every business's
+  balances against the movement ledger, and records one open discrepancy per
+  mismatched item. It never changes stock. Deliberately after
+  `customer-retention` rather than beside it, so two jobs are not writing while
+  a third could still be running.
+- `waitlist-expiry` runs at `*/5 * * * *` UTC — the only sub-hourly job, because
+  `OFFER_MINUTES` is 15 and an hourly sweep would leave an offer looking live on
+  the board for most of its life. It is not the correctness guard:
+  `expire_entry_if_due` also runs on the read and accept paths, so an expired
+  offer can never be accepted even if the job is late. What the cadence buys is
+  the staff notification and the board releasing the entry, so lateness costs
+  visibility, not integrity.
 
 Do not seed production data or use `db.migrate reset`.
 

@@ -117,6 +117,25 @@ class TableQrResponse(AppBaseModel):
     url: str
 
 
+class TableQrSheetAreaResponse(AppBaseModel):
+    id: UUID
+    name: str
+    tables: list[TableQrResponse]
+
+
+class TableQrSheetResponse(AppBaseModel):
+    """Every printable table QR for the business, grouped for one sheet.
+
+    The leaf is `TableQrResponse` unchanged, so a printed card and a link copied
+    from the table panel carry the same URL. If the two ever diverge, paper on
+    the tables stops matching what staff hand out.
+    """
+
+    business_id: UUID
+    business_name: str
+    areas: list[TableQrSheetAreaResponse]
+
+
 class TableGuestSessionCreate(AppBaseModel):
     table_token: str = Field(min_length=16, max_length=500)
     browser_nonce: str = Field(min_length=32, max_length=128)

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Armchair, ChevronRight, Copy, Plus, RefreshCw, Wrench } from "lucide-react";
+import { Armchair, ChevronRight, Copy, Plus, QrCode, RefreshCw, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -510,7 +510,7 @@ export default function FloorClient({ businessId, canManage, hasReservations, ha
     try {
       const qr = await clientRotateFloorPlanTableQr(qrRotateTarget.id);
       setQrUrl(new URL(qr.url, window.location.origin).toString());
-      toast.success("The previous QR code no longer works.");
+      toast.success("The code on this table's card no longer works. Print a new card.");
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Could not rotate the table QR code.");
     } finally {
@@ -563,6 +563,22 @@ export default function FloorClient({ businessId, canManage, hasReservations, ha
               <RefreshCw aria-hidden />
               <span className="hidden phone:inline">Refresh</span>
             </Button>
+            {/* An errand, not a destination: it lives here rather than in the
+                rail, because printing the codes happens when the room is set
+                up and then almost never again. */}
+            {canManage ? (
+              <Button
+                asChild
+                size="filter"
+                variant="secondary"
+                className="min-w-[var(--control-desktop-min)]"
+              >
+                <Link href="/business/floor/qr-sheet" aria-label="Table QR codes">
+                  <QrCode aria-hidden />
+                  <span className="hidden phone:inline">QR codes</span>
+                </Link>
+              </Button>
+            ) : null}
           </>
         }
       />

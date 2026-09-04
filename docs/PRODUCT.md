@@ -203,6 +203,15 @@ venue completes payment in its compliant register, then close the seating. A
 seating with an open tab cannot be ended. Legacy free-text table labels remain
 historical display data only and are never accepted for new public orders.
 
+Staff put those codes on the tables from one printable sheet, which draws a card
+per active table grouped by area, each showing the table's label and the QR
+revision the card was printed at. The revision is how someone holding two cards
+for the same table can tell which one still works: rotating a table's code makes
+every card already printed for it dead paper. **The sheet encodes whatever
+address the browser printing it is on**, so a sheet printed from a development
+machine encodes `localhost` and is unscannable in the venue — print it from the
+address the venue actually uses.
+
 Crowbar may record an informational external method, note, register reference,
 actor, timestamp, and immutable tab-total snapshot. It does not record partial
 tenders, cash received/change, card details, tips, refunds, processor status,

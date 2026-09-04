@@ -15,14 +15,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import {
   clientChangeEmail,
@@ -92,9 +84,9 @@ export default function BusinessAccountSettingsClient({
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState("");
 
-  // Account disable state
+  // Account disable state. No pending flag: ConfirmationDialog closes on
+  // confirm and the handler signs out, so there is no dialog left to label.
   const [showDisableDialog, setShowDisableDialog] = useState(false);
-  const [isDisabling, setIsDisabling] = useState(false);
 
   // Account deletion state. The request does not end the session -- signing in
   // is what cancels it -- so this page stays usable afterwards and has to show
@@ -165,7 +157,6 @@ export default function BusinessAccountSettingsClient({
   };
 
   const handleDisableAccount = async () => {
-    setIsDisabling(true);
     try {
       await clientDisableAccount();
       toast.success("Account disabled");
@@ -174,9 +165,6 @@ export default function BusinessAccountSettingsClient({
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to disable account";
       toast.error(message);
-    } finally {
-      setIsDisabling(false);
-      setShowDisableDialog(false);
     }
   };
 
@@ -452,43 +440,20 @@ export default function BusinessAccountSettingsClient({
           </FieldSet>
         </FieldGroup>
 
-        {/* Disable Account Dialog */}
-        <Dialog open={showDisableDialog} onOpenChange={setShowDisableDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Disable this account for good?</DialogTitle>
-              <DialogDescription>
-                Sign-in is blocked from the moment you confirm.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <p className="text-sm text-muted-foreground">
-                You will not be able to sign in again, and nothing in Crowbar
-                reverses this. Your name, email and record of what you did at work
-                stay on file. To have your personal details removed instead, use
-                Delete account.
-              </p>
-              <p className="text-sm font-medium">Account: {userEmail}</p>
-            </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => setShowDisableDialog(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                variant="destructive"
-                onClick={handleDisableAccount}
-                disabled={isDisabling}
-              >
-                {isDisabling ? "Disabling..." : "Disable Account"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {/* Disable Account Dialog. This was hand-rolled with a filled
+            `destructive` confirm and a `secondary` cancel, which inverts the
+            contract confirmation-dialog.tsx states: the safe choice is the
+            filled one. Using the primitive is the whole fix. */}
+        <ConfirmationDialog
+          open={showDisableDialog}
+          onOpenChange={setShowDisableDialog}
+          title="Disable this account for good?"
+          description={`Sign-in is blocked from the moment you confirm, and nothing in Crowbar reverses it. Your name, email and record of what you did at work stay on file. To have your personal details removed instead, use Delete account. Account: ${userEmail}`}
+          confirmLabel="Disable account"
+          cancelLabel="Cancel"
+          variant="destructive"
+          onConfirm={() => void handleDisableAccount()}
+        />
 
         {/* Delete Account Dialog */}
         <ConfirmationDialog

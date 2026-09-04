@@ -106,7 +106,10 @@ export function BusinessTopbar({
           floor. The value is declared because it is also a SCROLL OFFSET — a
           sticky sibling that does not know how tall this bar is ends up
           underneath it. See --workspace-header and the Schedule calendar. */}
-      <header className="sticky top-0 z-20 flex min-h-[var(--workspace-header)] flex-nowrap items-center gap-4 border-b border-border bg-[var(--scrim-ink)] px-[clamp(16px,2.5vw,32px)] py-3.5 backdrop-blur-[8px] phone:flex-wrap">
+      <header
+        data-print-hide
+        className="sticky top-0 z-20 flex min-h-[var(--workspace-header)] flex-nowrap items-center gap-4 border-b border-border bg-[var(--scrim-ink)] px-[clamp(16px,2.5vw,32px)] py-3.5 backdrop-blur-[8px] phone:flex-wrap"
+      >
         <div className="min-w-0">
           <h1 className="type-t1 mb-[3px] truncate">{businessName}</h1>
           <ServiceClock />

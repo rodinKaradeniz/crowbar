@@ -64,19 +64,19 @@ const buttonVariants = cva(
         tablet: "h-[var(--control-tablet-min)] px-5",
         default: "h-[var(--control-desktop)] px-4", // 44 — desktop primary
         /**
-         * 40px, and the one step in this ladder that is a literal rather than a
-         * token — so the `width < 1280px` takeover that lifts every other step
-         * to --control-tablet-min never reaches it. Measured at 40x40 on the
-         * guest CTAs (`Book Now`, `View Cart`, `Place Order`, queue join) at
-         * both 390 and 1024, under the 48px floor at both. Below --bp-phone it
-         * now takes the floor; at 640+ it is left exactly as it was, because
-         * the tablet range is not this pass's to move. The 640-1279 half of
-         * the same defect is recorded in docs/TODO.md.
+         * 40 — guest CTAs (`Book Now`, `View Cart`, `Place Order`, queue join)
+         * and the landing header. This step used to be the one literal in the
+         * ladder (`h-10`), so the `width < 1280px` takeover that lifts every
+         * other step to --control-tablet-min skipped it and it measured 40x40
+         * at 1024, under the floor. Reading --control-md instead is the whole
+         * fix: the same rule that moves `default` now moves this, 40 stays 40
+         * at 1280+, and the phone-only override it needed is gone.
          */
-        md: "h-[var(--control-tablet-min)] phone:h-10 px-4",
+        md: "h-[var(--control-md)] px-4",
         filter: "h-[var(--control-desktop-min)] px-3 gap-1.5", // 34
         icon: "size-[var(--control-desktop)]",
-        "icon-md": "size-10",
+        /** Same 40 as `md`, and it was the same literal (`size-10`). */
+        "icon-md": "size-[var(--control-md)]",
         "icon-sm": "size-[var(--control-desktop-min)]",
       },
     },

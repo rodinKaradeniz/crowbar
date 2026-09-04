@@ -46,6 +46,8 @@ from app.schemas.floor_plan import (
     TableCreate,
     TableResponse,
     TableQrResponse,
+    TableQrSheetAreaResponse,
+    TableQrSheetResponse,
     TableStateUpdate,
     TableUpdate,
 )
@@ -274,6 +276,40 @@ async def list_tables(
     return await floor_plan_service.list_tables(db, business.id)
 
 
+# DECLARED BEFORE EVERY `/tables/{table_id}` ROUTE. Nothing shadows it today —
+# there is no `GET /tables/{table_id}` — but FastAPI matches in declaration
+# order, so the first person to add one would turn `qr` into a UUID parse error
+# on a route nobody thought they had touched.
+@router.get("/tables/qr", response_model=TableQrSheetResponse,
+    dependencies=[Depends(require_capability("floor.configure"))],
+)
+async def list_table_qrs(
+    db: AsyncSession = Depends(get_db),
+    business: Business = Depends(get_current_business),
+):
+    """Every printable table QR at once, for the staff QR sheet.
+
+    Same capability as the per-table read, and the same URL shape. It is a read:
+    unlike `/qr/rotate` it neither commits nor publishes, and calling it twice
+    leaves every `qr_token_revision` where it was.
+    """
+    grouped = await floor_plan_service.list_printable_table_qrs(db, business.id)
+    return TableQrSheetResponse(
+        business_id=business.id,
+        business_name=business.name,
+        areas=[
+            TableQrSheetAreaResponse(
+                id=area.id,
+                name=area.name,
+                tables=[
+                    _table_qr_item(business, table, token) for table, token in tables
+                ],
+            )
+            for area, tables in grouped
+        ],
+    )
+
+
 @router.post("/tables", response_model=TableResponse, status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_capability("floor.configure"))],
 )
@@ -360,18 +396,28 @@ async def set_table_state(
     return table
 
 
-async def _table_qr_response(
-    db: AsyncSession, business: Business, table_id: UUID, *, rotate: bool = False
-) -> TableQrResponse:
-    table, token = await floor_plan_service.issue_table_qr(
-        db, business.id, table_id, rotate=rotate
-    )
+def _table_qr_item(business: Business, table, token: str) -> TableQrResponse:
+    """The one place a table QR turns into a URL.
+
+    Both the single-table dialog and the printed sheet come through here, so a
+    card stuck to a table and a link copied from the table panel can never
+    describe different addresses.
+    """
     return TableQrResponse(
         table_id=table.id,
         label=table.label,
         revision=table.qr_token_revision,
         url=f"/menu/{business.slug}#table_token={token}",
     )
+
+
+async def _table_qr_response(
+    db: AsyncSession, business: Business, table_id: UUID, *, rotate: bool = False
+) -> TableQrResponse:
+    table, token = await floor_plan_service.issue_table_qr(
+        db, business.id, table_id, rotate=rotate
+    )
+    return _table_qr_item(business, table, token)
 
 
 @router.get("/tables/{table_id}/qr", response_model=TableQrResponse,

@@ -637,12 +637,16 @@ missing is a design question, not an implementation choice.
   each of these is a value that is needed and missing, so none of them was
   invented. The two shipped targets are unaffected — checking a guest surface at
   phone width is not a third target, and this entry does not ask for one.
-  - **No 40px or 36px control step.** `ui/button.tsx` `size: md` is a raw
-    `h-10` and `ui/select.tsx`'s trigger is a raw `h-9`; the declared ladder is
-    34 / 44 / 48 / 50 / 56. Every guest primary CTA uses `size="md"`, so the
-    guest surface's main action sits under the 48px floor the tablet rule
-    already sets. Either those literals get a declared step or those call sites
-    move to `size="default"`, and that is a design call, not a call-site one.
+  - **No 36px control step — the 40px half is answered.** `ui/select.tsx`'s
+    trigger is still a raw `h-9`, and the declared ladder is now
+    34 / **40** / 44 / 48 / 50 / 56. `ui/button.tsx`'s `size: md` was the other
+    raw literal (`h-10`); it is now `--control-md: 40px`, declared in the
+    targets block and lifted to `--control-tablet-min` by the same
+    `width < 1280px` rule that moves every other step — which is what this
+    entry's "either those literals get a declared step or those call sites move
+    to `size="default"`" was asking for. Declaring it beat moving the call
+    sites because the landing header is one of them and 40px is right there.
+    The `h-9` trigger is unchanged and still a design call.
   - **No token for the guest bottom-bar height.** `menu-client.tsx` and
     `order-client.tsx` reserve `pb-32` for their fixed cart bar and
     `reserve-client.tsx` reserves `h-24` — three separate guesses at one
@@ -736,7 +740,8 @@ is a data mutation that needs explicit authorization.
   tab across a QR and a staff round, and a closed seating whose tab was settled
   externally with its settlement event. Steps 3–11 of `run-crowbar-service-loop`
   are walkable on seeded data; `scripts/verify-fresh-db.sh` asserts the floor
-  exists. Still open here: printable table QR sheets.
+  exists. Printable table QR sheets closed this: `/business/floor/qr-sheet`
+  draws every active table's code from one read and prints them on paper.
 - **Guest surfaces were checked at 390px — statically, not in a browser.** QR
   ordering is only reachable from a phone, so the public guest pages were read for
   phone-hostile layout. A 390px viewport already receives the tablet token values
@@ -771,14 +776,15 @@ is a data mutation that needs explicit authorization.
     substituted into the rendered cells: each cell stays 108x48 with 106px of
     content, grid `scrollWidth == clientWidth == 341`, document 390.
 
-  Also found by the same walk, and not previously known: `Button size="md"` is
+  Also found by the same walk, and not previously known: `Button size="md"` was
   the only step in the height ladder written as a literal (`h-10`) rather than
   a token, so the `width < 1280px` takeover that lifts every other step to
   `--control-tablet-min` never reached it. Its twelve call sites — the guest
   CTAs `Book Now`, `View Cart`, `Place Order` and the queue join among them —
-  measured **40x40 at both 390 and 1024**, under the 48px floor at both. Below
-  `--bp-phone` it now takes the floor; the 640–1279 half is a separate entry
-  below.
+  measured **40x40 at both 390 and 1024**, under the 48px floor at both. That
+  walk fixed only the sub-640 half; the 640–1279 half was carried as its own
+  entry below and **is now closed too** — `--control-md` is declared and the
+  takeover reaches it.
 
   The three `[token]` path routes named in earlier notes (`/reserve/manage/…`,
   `/reserve/waitlist/…`, `/reserve/waitlist/manage/…`) **do not exist and are
@@ -793,23 +799,35 @@ is a data mutation that needs explicit authorization.
   (`h-10`), `SelectTrigger` (`h-9`), the calendar's 32px day cells, and the
   unpadded ~16px remove-item control in `order/[business]/order-client.tsx` all sit
   under the tablet floor on the guest surface. Left alone deliberately: they are
-  shared primitives, so changing them changes the whole product, and three of the
-  four need a control step the token block does not declare — see `docs/DESIGN.md`
-  §7b. **Re-measured at 390px on 2026-09-03 and the list is still exactly right,
+  shared primitives, so changing them changes the whole product. This entry used
+  to add "and three of the four need a control step the token block does not
+  declare"; that is now **two** of the four — `Input`'s 40px is
+  `--control-md` since 2026-09-04, so `Input` is a call-site decision away from
+  the floor rather than a design question. See `docs/DESIGN.md` §7b. **Re-measured at 390px on 2026-09-03 and the list is still exactly right,
   no more and no fewer:** `Input` 342x40 on `/order` and 167x40 / 96x40 on
   `/reserve/manage`, `SelectTrigger` 341x36 in the booking sheet, calendar day
   cells 32x32, and the remove-item control 16x16. *Trigger:* the phone-width
   design question being answered, or a pilot guest failing to hit one of them.
-- **`Button size="md"` is 40px in the tablet range, under the documented 48px
-  floor.** It is the only step in the ladder written as a literal (`h-10`)
-  instead of a token, so the `width < 1280px` takeover that lifts every other
-  step to `--control-tablet-min` skips it. Measured 40x40 at 1024 on the guest
-  CTAs and on `/business/queue` and the count-session screen. The phone half is
-  fixed (`h-[var(--control-tablet-min)] phone:h-10`); the 640–1279 half is left
-  alone because this pass was explicitly barred from resizing anything in the
-  tablet range. *Trigger:* the next pass that is allowed to touch the tablet
-  canvas — at which point `md` should either resolve through a token or be
-  retired in favour of the `tablet` step it duplicates.
+- ~~**`Button size="md"` is 40px in the tablet range, under the documented 48px
+  floor.**~~ **DONE 2026-09-04, and it resolved through a token rather than a
+  retirement.** The 40px step is now declared — `--control-md: 40px` in the
+  `:root` targets block — and the `@media (width < 1280px)` rule lifts it to
+  `--control-tablet-min` alongside `--control-desktop` and
+  `--control-desktop-min`. `md` reads `h-[var(--control-md)]`, so the rule that
+  already moved every other step now moves this one: **48px everywhere below
+  1280**, 40px unchanged at 1280+. The `phone:h-10` override is gone, and so is
+  the last literal in the height ladder.
+
+  Retiring `md` in favour of `tablet` or `default` was the other option this
+  entry named, and it was the wrong one: the twelve call sites span guest CTAs,
+  two staff screens **and the landing header**, so retiring the step would have
+  changed the locked landing canvas at desktop width in order to fix a defect
+  that only ever existed below it. Declaring the value the code was already
+  using changes nothing at 1280+.
+
+  `size="icon-md"` was the same literal (`size-10`) with the same defect and one
+  call site (`app/business/floor/floor-client.tsx`, a staff surface) — fixed in
+  the same line of reasoning rather than recorded as its own entry.
 - **The workspace now has a phone floor, and sign-out finally has a door.**
   `/business/*` was only ever opened on a laptop or a tablet, and at 390px the
   header wrapped to two lines, the tablet's five-slot bottom bar became five
@@ -1088,29 +1106,42 @@ is a data mutation that needs explicit authorization.
   - **Notification of a pending or completed deletion.** No email or SMS is
     sent. *Trigger:* the first venue where the person asking and the person
     administering are different people.
-  - **Three cron jobs exist in code with no registration.**
-    `app.jobs.customer_retention`, `app.jobs.inventory_reconciliation` and
-    `app.jobs.reservation_waitlist_expiry` have no `railway.*.json` and no row
-    in `docs/deployment.md`; `reminders` and now `account-deletion` are the only
-    registered ones. Found while registering this pass's job and left alone.
-    *Trigger:* the deployment resume the runbook is waiting on.
-  - **The disable dialog inverts the severity contract.**
-    `client/app/business/settings/account/business-account-settings-client.tsx`
-    hand-rolls its dialog with a filled `destructive` confirm and a `secondary`
-    cancel, which `confirmation-dialog.tsx` and `button.tsx` both forbid — the
-    safe choice is the filled one. The new deletion dialog uses
-    `ConfirmationDialog` correctly. The fix is to convert the disable dialog to
-    the same primitive, deleting about thirty-five lines; it was left because
-    this pass was bound to change disable's copy only. *Trigger:* the next pass
-    that may touch disable's behaviour.
+  - ~~**Three cron jobs exist in code with no registration.**~~ **DONE
+    2026-09-04.** `app.jobs.customer_retention` (`0 4 * * *`),
+    `app.jobs.inventory_reconciliation` (`30 4 * * *`) and
+    `app.jobs.reservation_waitlist_expiry` (`*/5 * * * *`) now each have a
+    `server/railway.*.json`, a row in the Source and Process Contract table and
+    a lifecycle bullet naming the schedule and why it is that schedule.
+    `server/app/jobs/` and the deployment table are now the same list, and
+    `docs/deployment.md` says so, so the next module added without a service is
+    visible. Waitlist expiry is the only sub-hourly one: `OFFER_MINUTES` is 15,
+    and the job is what notifies staff and releases the entry —
+    `expire_entry_if_due` already guards the read and accept paths, so a late
+    run costs visibility, not integrity. Nothing in Railway was touched; these
+    are config-as-code files behind the same deployment gate as everything
+    since migration 023.
+  - ~~**The disable dialog inverts the severity contract.**~~ **DONE
+    2026-09-04.** It is now a `ConfirmationDialog` like the deletion dialog
+    beside it, so the safe choice is the filled one on both. The conversion
+    removed the hand-rolled `Dialog`/`DialogContent`/`DialogFooter` block, its
+    six now-unused imports and the `isDisabling` flag — `ConfirmationDialog`
+    closes on confirm and the handler signs out, so there was never a dialog
+    left to label "Disabling...". Behaviour is unchanged: same endpoint, same
+    toast, same sign-out. The account email moved from a body paragraph into
+    the description, which is where the deletion dialog already carried it.
 
 - Automate the critical browser journey: book → assign/seat → QR/staff order →
   fulfill → deduct/reconcile stock → record waste → settle externally → close
   seating → inspect guest and cost history.
-- Add repository CI for frontend lint/test/build, PostgreSQL tests, fresh
-  migrations/seed, ML import/tests, documentation links, dependency/secret
-  scanning, and deterministic browser smoke tests. Add accessibility,
-  responsive, failure-mode, and relevant load/concurrency checks.
+- **Most of this shipped; what is left is named here.** `ci.yml` already runs
+  client lint, `test:run`, `build` and `npm audit`, plus PostgreSQL and Redis
+  services, `python -m db.migrate`, `pytest` and the ML tests;
+  `supply-chain.yml` runs dependency review, an SBOM and Trivy; `codeql.yml`
+  scans both languages weekly and per pull request. Still missing: seeding and
+  `scripts/verify-fresh-db.sh` are not run in CI, so nothing proves a fresh
+  database is usable; there is no documentation-link check; there is no secret
+  scanning; and there are no browser, accessibility, responsive, failure-mode
+  or load/concurrency checks.
 - Exercise loss of email, SMS, Redis, WebSocket, ML, and reconnect paths; prove
   optional-service failures do not corrupt the core operational record.
 - **Exit gate:** no visible placeholder/dead interaction or known P0/P1 defect;
@@ -1507,11 +1538,16 @@ the confirmed sequence unless a stage explicitly pulls the item forward.
 
 ## CI/CD
 
-- **Ready:** Add a simple pull-request CI pipeline: frontend lint/test/build;
-  backend tests with PostgreSQL; fresh-database migrations; ML import/tests;
-  and documentation/link checks.
-- **Ready:** Add dependency, secret, and vulnerability scanning with actionable
-  failure policies rather than noisy report-only tooling.
+- **Complete:** the pull-request pipeline runs frontend lint/test/build,
+  backend tests against PostgreSQL, fresh-database migrations, and ML
+  import/tests (`.github/workflows/ci.yml`).
+- **Ready:** Add a documentation/link check. Nothing verifies that the links
+  between these documents still resolve.
+- **Complete for dependencies and vulnerabilities:** `npm audit --audit-level=high`,
+  `dependency-review-action`, an SBOM and a Trivy image scan that fails on
+  HIGH/CRITICAL (`.github/workflows/supply-chain.yml`), plus CodeQL.
+- **Ready:** Add secret scanning. It is the one scanning class with no coverage
+  at all.
 - **Needs decision:** Choose branch protection and required checks, including
   whether expensive end-to-end or performance suites run per pull request,
   nightly, or before release.

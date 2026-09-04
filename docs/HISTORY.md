@@ -2322,3 +2322,141 @@ inventory test fails, which is the gate working.
 `client/app/business/settings/account/business-account-settings-client.tsx`,
 `client/lib/client-api.ts`, `docs/deployment.md`, `docs/PRODUCT.md`,
 `docs/ARCHITECTURE.md`, `docs/TODO.md`.
+
+## 2026-09-04 — A step written as a literal is a step the system's own rules cannot reach
+
+**Context.** `docs/DESIGN.md` has said since the rev-3 port that nothing on a
+tablet surface is smaller than 48px, and the token block enforces it with one
+rule: below `--bp-desktop`, `--control-desktop` and `--control-desktop-min` are
+both redefined to `--control-tablet-min`. Every control height in the product
+reads one of those tokens and moves together — except `Button size="md"`, which
+was written `h-10`. A literal is invisible to a rule that operates on tokens, so
+the twelve `md` call sites — the guest CTAs `Book Now`, `View Cart`,
+`Place Order`, the queue join, two staff screens and the landing header —
+measured 40x40 at 1024, under a floor the documentation had claimed for months.
+The same was true of `size="icon-md"` (`size-10`). An earlier pass fixed only
+the sub-640 half, with a `phone:h-10` override, because it was barred from
+moving anything in the tablet range.
+
+**Decision.** Declare the value rather than retire the step: `--control-md: 40px`
+joins the targets block and is lifted to `--control-tablet-min` by the existing
+`width < 1280px` rule, and `md` / `icon-md` read it. Retiring `md` in favour of
+`tablet` or `default` was the alternative the TODO entry proposed, and it was
+wrong for a reason only the call-site list shows: the landing header is one of
+the twelve, so retiring the step would have altered the locked landing canvas at
+desktop width in order to fix a defect that existed only below it. Declaring the
+number the code was already using changes nothing at 1280+ and everything below.
+
+**Consequences.** Measured on the running dev server: `Book Now` on
+`/reserve/volt-and-vine` is 40px at innerWidth 1440 and 48px at 1200 and at
+1024; `Open queue` and `Add` on `/business/queue` are 48px at 1024; the
+`icon-md` utility probes 48x48 at 1024. The height ladder now contains no
+literals, so the next time the tablet rule changes it will reach every step
+without anyone having to remember which one was special. The general lesson is
+narrower than "use tokens": a design system whose rules are expressed as token
+redefinition can only govern what is expressed as a token, and one literal does
+not degrade gracefully — it silently opts a control out of every rule the system
+will ever add.
+
+**Also settled in the same pass, and recorded because each closed a known gap
+rather than because either was a new decision.** The account screen's disable
+dialog was hand-rolled with a filled `destructive` confirm and a `secondary`
+cancel, inverting the contract `confirmation-dialog.tsx` states in its own
+header — the safe choice is the filled one. It is now that primitive, verified
+in the browser: Cancel renders `primary` and holds focus, "Disable account"
+renders `destructive-quiet`. And `customer_retention`,
+`inventory_reconciliation` and `reservation_waitlist_expiry` had shipped as job
+modules with no Railway service and no row in the runbook, so three documented
+policies would never have run once deployment resumed. All three are now
+registered, and `docs/deployment.md` states that `server/app/jobs/` and the
+service table are the same list, which is what makes the next omission visible.
+
+**References.** `client/app/globals.css` (`--control-md`, and the
+`width < 1280px` block), `client/components/ui/button.tsx`,
+`client/app/business/settings/account/business-account-settings-client.tsx`,
+`client/components/confirmation-dialog.tsx`,
+`server/railway.customer-retention.json`,
+`server/railway.inventory-reconciliation.json`,
+`server/railway.waitlist-expiry.json`, `docs/deployment.md`,
+`docs/ARCHITECTURE.md` (Scheduled one-shot jobs), `docs/TODO.md`.
+
+## 2026-09-04 — "The system cannot declare this value" is a measurement, not an intuition
+
+**Context.** A bar cannot put a clipboard on a table. The only way to get a
+table's guest-ordering QR was the Floor table panel: select one table, press
+"Show link", copy an absolute URL out of a read-only input. No QR code was drawn
+anywhere in the product, and the demo venue has twenty tables. Printing them
+needed a sheet, and a sheet needed the first `@media print` in the codebase.
+
+**The rule-zero collision, and why it dissolved.** `@page` margins need physical
+units, and the token block declares none — every length in it is px, %, em or
+rem. The obvious reading was that this had to become a named exception to rule
+zero, because `@page` is not an element and custom properties therefore could
+not resolve inside it. That reading is widely repeated and it is **wrong in a
+current engine.** Measured before deciding: Chrome 152 renders
+`@page { margin: var(--pm) }` with `--pm: 40mm` and a literal `40mm` to
+byte-identical five-page PDFs, and `5mm` to a four-page one both ways. So
+`--print-page-margin`, `--print-qr-size` and `--print-card-gap` are declared
+like every other value and read with `var()`, and the contract keeps exactly
+three permitted categories of surviving literal instead of gaining a fourth.
+The general lesson is the one worth keeping: rule zero says a value the token
+block cannot express is a **design question to raise**, and the cost of raising
+it as an exception rather than as a question is permanent. "Cannot" is a claim
+about an engine, and an engine can be run.
+
+**A staff route that renders on paper.** Grounds are fixed by surface and the
+staff product is ink, but ink is a decision about a room lit by candles at 1am,
+not about a sheet of A4 — printing it would push a black page through the
+venue's printer. `.ground-paper` is declared as the *same block* as `:root`
+(`:root, .ground-paper { … }`), not as a copy of it, so thirty-odd role mappings
+cannot drift apart; it is the exact mirror of the `.ground-ink` subtrees the
+landing page already uses inside paper. The obvious alternative,
+`<Ground ground="paper" />` on the page, silently does not work: child effects
+run before parent effects, so the ink `Ground` in `app/business/layout.tsx`
+re-adds the class on every hard load.
+
+**One dependency, and it paid for the proof.** `@paulmillr/qr`, pinned exact at
+`0.3.0` rather than caret-ranged like its neighbours, because an encoder change
+silently changes printed artifacts. It has no runtime dependencies, returns a
+raw boolean matrix that the component draws as a single SVG `<path>` of
+horizontal runs — one DOM node per code instead of ~500 rects across twenty
+cards — and it ships a decoder, so proving the printed geometry is real cost no
+second package. The test reads the `<path>` back out of the rendered DOM,
+rebuilds the matrix, and asserts `decodeQR` returns the exact absolute URL. That
+proves the geometry decodes; it does **not** prove optical scannability off
+paper, which is a pilot step.
+
+**The bulk read is a read.** `GET /api/floor-plan/tables/qr` deliberately does
+not call `issue_table_qr` in a loop: that function raises 409 on an inactive
+table, so one archived table would have returned an error instead of a sheet.
+It queries directly and mints tokens from the revisions already stored — no
+commit, no publish, no revision moves — and skips inactive and deleted tables,
+which is correct rather than convenient, since `resolve_active_table_seating`
+would refuse such a token anyway. It groups **from the tables, not from the
+areas**: listing active areas and then their tables, as the board does, would
+silently drop a live table whose area was deactivated, and a missing card is a
+table nobody can order from.
+
+**Consequences.** The printed URL comes from `window.location.origin`, so a
+sheet printed from a development machine encodes `localhost` and is dead paper
+in the venue; the page states the address it is about to print, and
+`docs/PRODUCT.md` records the constraint. `data-print-hide` on the rail, topbar,
+bottom bar, floating action and `PageHeader` is the whole chrome-hiding
+mechanism, so a second print surface inherits it for free. `PageHeader`'s
+`ResizeObserver` had no jsdom stub, which no test had needed until a test
+rendered a whole workspace page — it is now in `tests/setup.ts`. Two claims in
+the handoff brief were wrong and are recorded here so they are not re-derived:
+the rotate confirmation **already** warned that the printed code stops working
+(the success toast did not, and that is what changed), and the "439 test"
+baseline it cited is written down nowhere.
+
+**References.** `server/app/routers/floor_plan.py`
+(`list_table_qrs`, `_table_qr_item`), `server/app/services/floor_plan_service.py`
+(`list_printable_table_qrs`), `server/app/schemas/floor_plan.py`,
+`server/tests/integration/test_floor_plan_routes.py`,
+`client/app/business/floor/qr-sheet/`, `client/components/table-qr-code.tsx`,
+`client/app/globals.css` (the print tokens, `.ground-paper`, `@media print`),
+`client/components/page-header.tsx`, `client/tests/setup.ts`,
+`client/tests/integration/table-qr-sheet.test.tsx`, `docs/DESIGN.md` (Print),
+`docs/PRODUCT.md`, `docs/ARCHITECTURE.md`, `docs/MVP_ACCEPTANCE.md`,
+`docs/TODO.md`.

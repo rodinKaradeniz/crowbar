@@ -13,6 +13,9 @@ import {
   FloorPlanSettings,
   FloorPlanSeating,
   FloorPlanTable,
+  FloorPlanTableQr,
+  FloorPlanTableQrSheet,
+  FloorPlanTableQrSheetArea,
   GuestProfile,
   GuestListItem,
   InventoryItem,
@@ -1698,7 +1701,7 @@ export async function clientUpdateFloorPlanTableState(
   return toFloorPlanTable(result);
 }
 
-function toFloorPlanTableQr(value: Record<string, unknown>) {
+function toFloorPlanTableQr(value: Record<string, unknown>): FloorPlanTableQr {
   return {
     tableId: value.table_id as string,
     label: value.label as string,
@@ -1707,12 +1710,42 @@ function toFloorPlanTableQr(value: Record<string, unknown>) {
   };
 }
 
-export async function clientGetFloorPlanTableQr(tableId: string) {
+export async function clientGetFloorPlanTableQr(tableId: string): Promise<FloorPlanTableQr> {
   const result = await authFetch<Record<string, unknown>>(`/floor-plan/tables/${tableId}/qr`);
   return toFloorPlanTableQr(result);
 }
 
-export async function clientRotateFloorPlanTableQr(tableId: string) {
+function toFloorPlanTableQrSheetArea(
+  value: Record<string, unknown>,
+): FloorPlanTableQrSheetArea {
+  return {
+    id: value.id as string,
+    name: value.name as string,
+    tables: ((value.tables as Record<string, unknown>[]) ?? []).map(toFloorPlanTableQr),
+  };
+}
+
+/**
+ * Every printable table QR in one read.
+ *
+ * Twenty sequential round trips to build one sheet is the wrong shape, and the
+ * per-table route would be exactly that. This one is a pure read — it does not
+ * rotate, so opening the sheet twice does not invalidate a wall of cards.
+ */
+export async function clientListFloorPlanTableQrs(): Promise<FloorPlanTableQrSheet> {
+  const result = await authFetch<Record<string, unknown>>("/floor-plan/tables/qr");
+  return {
+    businessId: result.business_id as string,
+    businessName: result.business_name as string,
+    areas: ((result.areas as Record<string, unknown>[]) ?? []).map(
+      toFloorPlanTableQrSheetArea,
+    ),
+  };
+}
+
+export async function clientRotateFloorPlanTableQr(
+  tableId: string,
+): Promise<FloorPlanTableQr> {
   const result = await authFetch<Record<string, unknown>>(
     `/floor-plan/tables/${tableId}/qr/rotate`,
     { method: "POST" },

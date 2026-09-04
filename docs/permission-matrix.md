@@ -168,6 +168,7 @@ Every authenticated route names exactly one capability, except the self-service 
 | POST | `/api/floor-plan/table-guest-sessions/{session_id}/deny` | `floor.operate` | ordering, queue, reservations | owner, manager, host_server |
 | GET | `/api/floor-plan/tables` | `floor.view` | ordering, queue, reservations | owner, manager, host_server, bar_kitchen |
 | POST | `/api/floor-plan/tables` | `floor.configure` | ordering, queue, reservations | owner, manager |
+| GET | `/api/floor-plan/tables/qr` | `floor.configure` | ordering, queue, reservations | owner, manager |
 | DELETE | `/api/floor-plan/tables/{table_id}` | `floor.configure` | ordering, queue, reservations | owner, manager |
 | PATCH | `/api/floor-plan/tables/{table_id}` | `floor.configure` | ordering, queue, reservations | owner, manager |
 | GET | `/api/floor-plan/tables/{table_id}/qr` | `floor.configure` | ordering, queue, reservations | owner, manager |
