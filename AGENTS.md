@@ -195,6 +195,12 @@ npm run lint
 npm run test:run
 npm run build
 
+# The eleven-step service-loop journey in a real browser (client/e2e/).
+# Needs a stack that is ALREADY running and ALREADY seeded — it starts nothing,
+# seeds nothing and migrates nothing — plus the password that tenant was seeded
+# with. One-time: npx playwright install chromium
+DEMO_ADMIN_PASSWORD='<the seeded value>' npm run test:journey
+
 # Backend (runtime dependencies)
 cd server
 source venv/bin/activate

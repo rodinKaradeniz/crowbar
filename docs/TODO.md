@@ -1130,9 +1130,25 @@ is a data mutation that needs explicit authorization.
     toast, same sign-out. The account email moved from a body paragraph into
     the description, which is where the deletion dialog already carried it.
 
-- Automate the critical browser journey: book → assign/seat → QR/staff order →
+- ~~Automate the critical browser journey: book → assign/seat → QR/staff order →
   fulfill → deduct/reconcile stock → record waste → settle externally → close
-  seating → inspect guest and cost history.
+  seating → inspect guest and cost history.~~ **DONE 2026-09-04.**
+  `client/e2e/service-loop.spec.ts`, run with `npm run test:journey`, is one
+  Playwright test whose eleven `test.step()` calls are the eleven steps of
+  `.claude/skills/run-crowbar-service-loop/SKILL.md` in order, so a failure
+  names the step it failed at. Chromium only; the guest half runs in a 390px
+  context and the staff half in a 1280px one, as separate contexts. It runs
+  against an already-running, already-seeded stack and starts, seeds and
+  migrates nothing; `DEMO_ADMIN_PASSWORD` comes from the environment and its
+  absence is a hard, explained failure. It is replayable without reseeding: it
+  books under a name unique to the run, asks the board for a free and unplanned
+  table instead of naming one, tags its own order lines so it never advances
+  somebody else's ticket, and settles and closes what it opens. **Not covered:**
+  waste recording and cost-control reconciliation (the TODO line above named
+  waste; the skill's eleven steps do not), any second journey, the permission
+  matrix (walked as the owner only — the matrix is generated and already
+  tested), and CI. Two steps are driven through the API rather than the UI, for
+  reasons that are product findings and are filed below.
 - **Most of this shipped; what is left is named here.** `ci.yml` already runs
   client lint, `test:run`, `build` and `npm audit`, plus PostgreSQL and Redis
   services, `python -m db.migrate`, `pytest` and the ML tests;
@@ -1142,6 +1158,49 @@ is a data mutation that needs explicit authorization.
   database is usable; there is no documentation-link check; there is no secret
   scanning; and there are no browser, accessibility, responsive, failure-mode
   or load/concurrency checks.
+- **Found by the browser journey, 2026-09-04; none of these are fixed.**
+  - **No staff surface approves a guest table session.** A QR scan opens a
+    `pending` session that staff must approve. `GET /api/floor-plan/table-guest-sessions`
+    and its `approve`/`deny` siblings ship behind `floor.operate`, but nothing
+    in `client/` references them — no API wrapper, no screen. Until one exists,
+    a guest who scans a table cannot be let through by any member of staff, and
+    the journey has to approve through the endpoint the missing screen would
+    have called.
+  - **A booking assigned before its start time cannot be seated from the floor
+    UI.** Assigning removes the party from `unassigned_reservations`, which is
+    what feeds both the sidebar and the table sheet's pick list, and the sheet
+    only offers "Seat party" once the booking's own time has arrived
+    (`time <= now < ends_at`). Coherent for a real evening — plan ahead, seat on
+    arrival — but there is no path for "the party is here early", and the
+    journey opens the seating through `POST /api/floor-plan/seatings` instead.
+  - **The ticket board can never show a table.** `orders.table_identifier` is a
+    legacy column: `order_service.place_order` only writes it when
+    `allow_legacy_table_identifier` is true and no caller passes that, so every
+    order placed through the running product has it null. The board's
+    `Table {n}` header renders only for rows the seed wrote directly, which
+    makes the demo look like it works. The bar cannot tell which table a ticket
+    belongs to.
+  - **The guest menu stops polling for its approval after one failed read.** In
+    `menu-client.tsx` the poll's `.catch` sets the session state to `null`,
+    which makes its own effect bail out and clear the interval. One transient
+    failure strands the guest on "Scan your table QR to order" with no recovery
+    but a manual reload.
+  - **The QR bootstrap loses its session under React StrictMode in dev.** The
+    effect runs twice; the second pass, after the fragment has been stripped,
+    asks for the "current" session, 404s because the created cookie has not
+    landed, and clears what the first pass established. Dev-only, but it is the
+    surface a pilot demo is given from.
+  - **Only one seeded menu item has a recipe, and it is behind a time window.**
+    Happy Hour Mojito is the sole item with `menu_item_ingredients`, and the
+    Happy Hour menu is windowed 17:00–20:00 Europe/Berlin. Outside those three
+    hours nothing orderable moves stock, so the journey's stock step asserts a
+    true but empty reconciliation. Giving one always-on item a recipe would make
+    the step real at any hour.
+  - **`GET /api/floor-plan/board` is a slow read** — 1.5s warm and 5.2s cold
+    against a seed-sized database, measured through a dev stack with SQLAlchemy
+    echo on, so treat it as an upper bound rather than a production figure. It
+    is on the critical path of every floor interaction and worth a look before
+    the pilot.
 - Exercise loss of email, SMS, Redis, WebSocket, ML, and reconnect paths; prove
   optional-service failures do not corrupt the core operational record.
 - **Exit gate:** no visible placeholder/dead interaction or known P0/P1 defect;

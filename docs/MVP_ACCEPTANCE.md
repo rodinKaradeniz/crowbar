@@ -636,11 +636,13 @@ every address in it passes `LoginRequest`, so a future reserved-TLD address
 fails the suite instead of the demo. All five role accounts were afterwards
 signed in through the real login route against a freshly seeded database.
 
-**Final combined verification.** 411 PostgreSQL backend tests, 75 frontend tests
-and 16 ML tests passed; frontend lint, TypeScript and the Next.js production
-build passed; the disposable verifier applied migrations 001–049, seeded twice
-and passed its invariant assertions, now including that no legacy `staff` role
-survives the backfill. The two pre-existing `window.location.assign` lint
+**Final combined verification — the counts this stage's run produced on
+2026-08-26, kept as a record and deliberately not refreshed as the suites
+grow.** 411 PostgreSQL backend tests, 75 frontend tests and 16 ML tests passed;
+frontend lint, TypeScript and the Next.js production build passed; the
+disposable verifier applied migrations 001–049, seeded twice and passed its
+invariant assertions, now including that no legacy `staff` role survives the
+backfill. The two pre-existing `window.location.assign` lint
 warnings in the guest-profile and floor clients remain and are unrelated
 maintenance debt.
 

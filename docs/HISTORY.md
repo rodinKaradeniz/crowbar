@@ -2460,3 +2460,67 @@ baseline it cited is written down nowhere.
 `client/tests/integration/table-qr-sheet.test.tsx`, `docs/DESIGN.md` (Print),
 `docs/PRODUCT.md`, `docs/ARCHITECTURE.md`, `docs/MVP_ACCEPTANCE.md`,
 `docs/TODO.md`.
+
+## 2026-09-04 — Walking the journey is the only thing that reads the gaps between the modules
+
+**Context.** Every module in the service loop had tests and every one of them
+passed. The loop itself had never been walked by anything but a person, and the
+skill that describes it — `.claude/skills/run-crowbar-service-loop/SKILL.md` —
+was prose, not a check. Stage 8 part two asked for the automation.
+
+**What the walk found that the suites could not.** Six defects, and not one of
+them is inside a module. They are all in the seams:
+
+- The QR ordering flow has a decision — approve this table's guest session —
+  with server endpoints, a capability, and **no screen**. `client/` contains not
+  one reference to it. Every unit test of ordering passes; a guest who scans a
+  table still cannot be let through.
+- `orders.table_identifier` is only written behind a flag no caller sets, so the
+  ticket board's `Table {n}` header renders for seeded rows and never for a real
+  order. The seed made the dead field look alive.
+- A booking assigned before its start time leaves `unassigned_reservations` and
+  so leaves both the sidebar and the table sheet's pick list, while the sheet
+  withholds "Seat party" until the booking's own time arrives. Each half is
+  right; together they have no path for a party that turns up early.
+- The guest menu's approval poll clears its own session state on any failed
+  read, which makes its effect bail out and drop the interval — one blip and the
+  guest is stranded with no recovery but a manual reload.
+- The same bootstrap loses its session outright under React StrictMode in dev,
+  which is the configuration a demo is given from.
+- One seeded item has a recipe and it sits on a menu windowed to three hours a
+  day, so for twenty-one hours out of every twenty-four the ordering path
+  touches no stock at all.
+
+**The lesson, which is the reason this entry exists.** A module test asks
+whether a unit honours its contract. It cannot ask whether the contracts join
+up, and every one of the six above lives exactly there — in a handoff between
+two modules that each behave correctly. The journey is not a slower, flakier
+integration test; it is the only instrument pointed at the seams. Write it
+before believing the pilot is close, not after.
+
+**A second lesson, about seeds.** Twice the seed hid something: it wrote
+`table_identifier` values no code path produces, and it supplies the loop's only
+recipe behind a time window. A seed exists to make the product demonstrable, and
+that is exactly what makes it able to demonstrate behaviour the product does not
+have. When a journey step passes, ask which rows made it pass.
+
+**Consequences.** `npm run test:journey` is the check, and it is deliberately
+outside `npm run test:run`: it needs a live seeded stack, and a test that cannot
+run from a clean checkout must not sit in the suite that can. Keep it one test
+of eleven ordered steps — they share a reservation, a table, a seating and a
+tab, and splitting them would be a lie about their independence. Keep it
+replayable without reseeding: unique booking name, a table chosen by asking the
+board, its own order lines tagged so it never advances someone else's ticket,
+and stock asserted as a delta the ledger has to explain. Two steps are driven
+through the API rather than the UI, and both are flagged in the spec at the
+point of departure — when the missing screens exist, those are the lines to
+delete. CI is the next pass and needs a seeded stack inside the runner.
+
+**References.** `client/e2e/service-loop.spec.ts`,
+`client/playwright.config.ts`, `client/package.json`,
+`.claude/skills/run-crowbar-service-loop/SKILL.md`,
+`server/app/routers/floor_plan.py`, `server/app/services/order_service.py`,
+`client/app/menu/[business]/menu-client.tsx`,
+`client/app/business/floor/floor-client.tsx`,
+`client/app/business/orders/ticket-board-client.tsx`,
+`server/db/seeds/001_seed_volt_and_vine.sql`, `docs/TODO.md`, `AGENTS.md`.

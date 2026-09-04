@@ -15,6 +15,10 @@ node_modules/
 # testing
 coverage/
 
+# Playwright only writes these on failure; the journey spec keeps artifacts off.
+test-results/
+playwright-report/
+
 # next.js
 .next/
 out/
