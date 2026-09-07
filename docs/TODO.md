@@ -494,6 +494,19 @@ ships **honest** rather than simulated, and lands here with its trigger.
   the menu as a spreadsheet". No import endpoint exists; the menu is entered in
   the menu editor. Both copies were corrected. *Trigger:* onboarding evidence
   says typing a full menu is the thing that stalls a new venue.
+- **Prep time and the per-item tax line on the public menu.**
+  `app/menu/[business]/menu-client.tsx` rendered "~12 min" and
+  "incl. MwSt. · 19% Standard" under each item, but `PublicMenuResponse` in
+  `server/app/schemas/menu.py` carries neither `prep_time_minutes` nor
+  `tax_profile_name` — the guest projection is deliberately narrow, so both
+  branches were dead from the day they were written and no guest ever saw
+  either. The prep-time branch was removed; the tax statement was rebuilt from
+  the two fields the projection **does** send (`tax_rate`,
+  `price_includes_tax`) as one line at the foot of the menu, and it is omitted
+  entirely when the open menus mix inclusive and exclusive pricing.
+  *Trigger:* a venue wants guests to see a prep estimate, or a mixed-basis menu
+  needs the statement per item — either is a change to the public projection,
+  not to the page.
 - **Ticket printers.** The canvas's hardware FAQ said "ticket printers still
   work if you want them". There is no printer integration anywhere. The claim
   was removed. *Trigger:* a pilot venue will not drop its printer.
@@ -648,12 +661,14 @@ missing is a design question, not an implementation choice.
     sites because the landing header is one of them and 40px is right there.
     The `h-9` trigger is unchanged and still a design call.
   - **No token for the guest bottom-bar height.** `menu-client.tsx` and
-    `order-client.tsx` reserve `pb-32` for their fixed cart bar and
-    `reserve-client.tsx` reserves `h-24` — three separate guesses at one
-    measurement, and the order page's is very likely too small once the
-    age-confirmation block wraps. `--bottom-nav` describes the *staff* bar, not
-    this one. A declared height that both the bar and its spacer read would
-    make the class of bug impossible.
+    `order-client.tsx` reserve `pb-32` for their fixed cart bar — two separate
+    guesses at one measurement, and the order page's is very likely too small
+    once the age-confirmation block wraps. `--bottom-nav` describes the *staff*
+    bar, not this one. A declared height that both the bar and its spacer read
+    would make the class of bug impossible.
+    **Was three guesses; `reserve-client.tsx`'s `h-24` is gone** — the 2026-09-07
+    redesign removed the fixed mobile CTA it padded for, so that literal was
+    deleted rather than tokenised. The two that remain still need the token.
   - ~~**No declared phone breakpoint.**~~ **Answered — `--bp-phone: 640px`.**
     Declared in the token block beside `--bp-panel`, bridged as
     `--breakpoint-phone`, generating a `phone:` variant. It is deliberately
@@ -668,6 +683,24 @@ missing is a design question, not an implementation choice.
     *product* guest surfaces, where the phone question is not answered.
   - **Minor, same cause:** `p-7` (28px) on the two waitlist cards, and
     `text-[11px]` / `text-[13px]` on the menu, sit between declared steps.
+  - **Slot times and dates still format in the browser's locale on staff
+    surfaces.** `formatSlotDate` / `formatSlotTime` in `client/lib/availability.ts`
+    passed `undefined` as the `Intl` locale while correctly using the venue's
+    timezone, so a de-DE venue's booking read "Mon, Sep 7, 2026" to a guest whose
+    phone was set to English. Both now take an OPTIONAL locale and the public
+    booking form passes the venue's from `regional-context`; the default is
+    unchanged, so `business-schedule-client.tsx`, `staff-reservation-dialog.tsx`,
+    `reservation-waitlist-panel.tsx` and `formatSlotTimeWithZone` still render in
+    whatever locale the operator's browser carries. Widening it is a visible
+    change across staff surfaces and belongs to whoever next reviews operator
+    formatting, not to a guest-page redesign.
+  - **The demo tenant's service-type colours are pre-palette hexes.** The seed
+    stores `#f97316` and `#8b5cf6`, which `lib/series-palette.ts` maps to
+    declared slots 3 and 2 at render time, so nothing paints an undeclared hue.
+    Re-picking them to `SERIES_HEX` values in
+    `server/db/seeds/001_seed_volt_and_vine.sql` would remove the reliance on the
+    legacy compatibility table for the venue every demo is given from. It is a
+    seed data change, so it waits for an authorized reseed.
 
 - **Exit gate:** every retained surface follows one documented design contract,
   each pilot role can complete its core task on the **shipped desktop (1280+)
@@ -792,22 +825,71 @@ is a data mutation that needs explicit authorization.
   into the URL fragment, which never reaches the server or a log. The three
   fragment routes were measured with real minted tokens and are clean.
 
-  **One gap.** `/reserve/waitlist` renders `Offer unavailable` because no
+  ~~**One gap.** `/reserve/waitlist` renders `Offer unavailable` because no
   waitlist entry is in an *offered* state and creating one is a write. The
-  offer-acceptance surface itself has still not been seen at 390px.
-- **Guest controls below the 48px floor that are shared primitives.** `Input`
+  offer-acceptance surface itself has still not been seen at 390px.~~ **DONE
+  2026-09-05 — seen, measured, and it passes.** An offer was minted through the
+  staff API rather than by reseeding, and the surface was opened at a verified
+  390 with a real fragment token: `document.scrollWidth` 390, `scrollHeight`
+  844 against an `innerHeight` of 844 so nothing sits below the fold, and both
+  actions clear the floor — *Decline* 86x48, *Accept reservation* 166x48. They
+  were already correct: all three buttons are default-size, which the takeover
+  lifts to 48 below 1280. Layout was never the problem here.
+
+  The walk found a copy defect instead. On a FIRST successful accept the
+  heading read **"Already accepted"** — the surface could only read an
+  `accepted` entry as a repeat — while the body correctly said "Your
+  reservation is confirmed for …". A guest who had just succeeded was told they
+  had done it before. Fixed with a `justAccepted` flag so the heading reads
+  "Reservation confirmed" for the visit that did it, and the outcome paragraph
+  now carries `role="status"` so the change is announced rather than only seen.
+
+  **The fixture was the real defect, and it is fixed at the source.** The seed
+  granted a thirty-minute offer window (`offered_at = NOW() - 10 minutes`,
+  `offer_expires_at = NOW() + 20 minutes`) while `OFFER_MINUTES` is 15 and the
+  guest email says 15 — the demo contradicted the rule it exists to
+  demonstrate. `OFFER_MINUTES` was NOT touched; it is the product rule and it is
+  right. The seed now mints exactly the real window, and no fixed window is long
+  enough to keep a demo offer alive anyway, so `CHEATSHEET.txt` §6 carries the
+  recipe for minting a fresh one — including deriving the capability token,
+  since the offer link is emailed and email is not configured locally. The
+  neighbouring `table_guest_sessions` fixture has the same shape (25 minutes)
+  and was left alone; it is now visibly self-expiring because the staff read
+  filters expired pending rows.
+- ~~**Guest controls below the 48px floor that are shared primitives.** `Input`
   (`h-10`), `SelectTrigger` (`h-9`), the calendar's 32px day cells, and the
   unpadded ~16px remove-item control in `order/[business]/order-client.tsx` all sit
   under the tablet floor on the guest surface. Left alone deliberately: they are
-  shared primitives, so changing them changes the whole product. This entry used
-  to add "and three of the four need a control step the token block does not
-  declare"; that is now **two** of the four — `Input`'s 40px is
-  `--control-md` since 2026-09-04, so `Input` is a call-site decision away from
-  the floor rather than a design question. See `docs/DESIGN.md` §7b. **Re-measured at 390px on 2026-09-03 and the list is still exactly right,
-  no more and no fewer:** `Input` 342x40 on `/order` and 167x40 / 96x40 on
-  `/reserve/manage`, `SelectTrigger` 341x36 in the booking sheet, calendar day
-  cells 32x32, and the remove-item control 16x16. *Trigger:* the phone-width
-  design question being answered, or a pilot guest failing to hit one of them.
+  shared primitives, so changing them changes the whole product.~~ **DONE
+  2026-09-05, all four, and no new token was needed.** Every one now reads a
+  step the `:root` block already declares, so the existing
+  `@media (width < 1280px)` takeover does the lifting:
+
+  - `Input` default `h-10` → `h-[var(--control-md)]`. Byte-for-byte the fix
+    `Button size="md"` had. **342x40 → 342x48 at 390; unchanged at 1280+**,
+    because `--control-md` is 40px there and the literal was 40px too.
+  - `SelectTrigger` `h-9` → `h-[var(--control-md)]`. 36px was not on the ladder
+    at all, and the choice was reuse, not a new `--control-sm`: a select sitting
+    beside a 40px `Input` must not be shorter than it, and they were a 4px
+    mismatch. **341x36 → 341x48 at 390; 36 → 40 at 1280+, a +4px shift across
+    roughly forty call sites** on inventory, menu, onboarding and the
+    reservation dialogs. The unused `data-[size=sm]:h-8` branch (zero call
+    sites) was left alone.
+  - Calendar `[--cell-size:--spacing(8)]` → `[--cell-size:var(--control-desktop-min)]`.
+    **Day cells and both nav arrows 32x32 → 48x48 at 390; 32 → 34 at 1280+.**
+    The arithmetic said this would not fit — 7 × 48 + `p-3` = 360px — but the
+    calendar is in a `w-fit` POPOVER, not in the 341px sheet column, so the
+    measurement disagreed with the prediction: the popover lands at x=25..387
+    inside a 390 viewport and `document.scrollWidth` stays 390. It is 3px of
+    margin, so a wider day label or an extra column would overflow.
+  - The remove-item control became `<Button variant="ghost" size="icon-sm">`.
+    **16x16 → 48x48 at 390, and 16 → 34 at 1280+** — it was outside the token
+    system entirely, and its `hover:text-destructive` was a stale colour name
+    that went with it.
+
+  Measured with `playwright-cli` at a verified `innerWidth === 390` and again at
+  1280, before and after, on 2026-09-05. Both grep gates still show only their
+  three permitted survivors.
 - ~~**`Button size="md"` is 40px in the tablet range, under the documented 48px
   floor.**~~ **DONE 2026-09-04, and it resolved through a token rather than a
   retirement.** The 40px step is now declared — `--control-md: 40px` in the
@@ -1158,51 +1240,227 @@ is a data mutation that needs explicit authorization.
   database is usable; there is no documentation-link check; there is no secret
   scanning; and there are no browser, accessibility, responsive, failure-mode
   or load/concurrency checks.
-- **Found by the browser journey, 2026-09-04; none of these are fixed.**
-  - **No staff surface approves a guest table session.** A QR scan opens a
-    `pending` session that staff must approve. `GET /api/floor-plan/table-guest-sessions`
-    and its `approve`/`deny` siblings ship behind `floor.operate`, but nothing
-    in `client/` references them — no API wrapper, no screen. Until one exists,
-    a guest who scans a table cannot be let through by any member of staff, and
-    the journey has to approve through the endpoint the missing screen would
-    have called.
-  - **A booking assigned before its start time cannot be seated from the floor
-    UI.** Assigning removes the party from `unassigned_reservations`, which is
-    what feeds both the sidebar and the table sheet's pick list, and the sheet
-    only offers "Seat party" once the booking's own time has arrived
-    (`time <= now < ends_at`). Coherent for a real evening — plan ahead, seat on
-    arrival — but there is no path for "the party is here early", and the
-    journey opens the seating through `POST /api/floor-plan/seatings` instead.
-  - **The ticket board can never show a table.** `orders.table_identifier` is a
-    legacy column: `order_service.place_order` only writes it when
-    `allow_legacy_table_identifier` is true and no caller passes that, so every
-    order placed through the running product has it null. The board's
-    `Table {n}` header renders only for rows the seed wrote directly, which
-    makes the demo look like it works. The bar cannot tell which table a ticket
-    belongs to.
-  - **The guest menu stops polling for its approval after one failed read.** In
-    `menu-client.tsx` the poll's `.catch` sets the session state to `null`,
-    which makes its own effect bail out and clear the interval. One transient
-    failure strands the guest on "Scan your table QR to order" with no recovery
-    but a manual reload.
-  - **The QR bootstrap loses its session under React StrictMode in dev.** The
-    effect runs twice; the second pass, after the fragment has been stripped,
-    asks for the "current" session, 404s because the created cookie has not
-    landed, and clears what the first pass established. Dev-only, but it is the
-    surface a pilot demo is given from.
-  - **Only one seeded menu item has a recipe, and it is behind a time window.**
-    Happy Hour Mojito is the sole item with `menu_item_ingredients`, and the
-    Happy Hour menu is windowed 17:00–20:00 Europe/Berlin. Outside those three
-    hours nothing orderable moves stock, so the journey's stock step asserts a
-    true but empty reconciliation. Giving one always-on item a recipe would make
-    the step real at any hour.
-  - **`GET /api/floor-plan/board` is a slow read** — 1.5s warm and 5.2s cold
+- **Found by the browser journey, 2026-09-04. Six of the seven were closed on
+  2026-09-05, and the slow board read was measured and closed on the same
+  day.** Every one of the six
+  lived in a seam between two modules that each behaved correctly, and none
+  needed a migration or a schema change.
+  - ~~No staff surface approves a guest table session.~~ **DONE 2026-09-05.**
+    The floor board now carries the decision in the two places a host looks: a
+    neutral count badge on the table card, so a waiting guest is visible without
+    opening anything, and Approve / Deny inside the table sheet, where every
+    other decision about one table is already made. Deny is a real button — a
+    scan from the wrong table is the case it exists for. The screen is a client
+    of the endpoints that already shipped; the one server change is that
+    `POST /api/ordering/{business_id}/table-sessions` now publishes
+    `floor_plan.table_guest_session.created`. Approve and deny already
+    published, so the board could confirm a decision it had no way to learn it
+    had to make. ~~The staff list returns expired `pending` rows, so the board
+    filters them out client-side rather than showing a badge that outlives the
+    guest; filtering that on the read is a small follow-up.~~ **The follow-up
+    is DONE 2026-09-05.** `list_for_staff` now excludes a `pending` row whose
+    `expires_at` has passed, and the client-side filter is gone. Scoped to
+    pending deliberately: approved, denied and revoked rows are history and must
+    keep coming back at any age, so a blanket expiry filter would have deleted
+    the record of who was let onto which table. `decide` already refuses an
+    expired row, so the read and the write now agree on what "pending" means.
+  - ~~A booking assigned before its start time cannot be seated from the floor
+    UI.~~ **DONE 2026-09-05.** The table sheet now offers the table's
+    `next_reservation` — already on the board response and already on the
+    client type — as an explicit early seating, naming the time the party is
+    booked for so the host can see they are acting ahead of the plan. No server
+    change: `open_seating` never had a time-window check.
+  - ~~The ticket board can never show a table.~~ **DONE 2026-09-05.** Fixed on
+    the READ. `orders.table_identifier` is still never written and was not
+    dropped; the label is derived per board read from the tab's seating
+    (`tabs.seating_id → table_seating_tables → tables.label`), joined for a
+    combination so a party at T5+T6 reads as both, and returned in the existing
+    response field — so the client needed no change at all. `tabs.table_id`
+    turned out **not** to be the authoritative link the fix was scoped around:
+    `tab_service` sets it to `table_ids[0]` of an unordered select, so on a
+    combination it is a non-deterministic half. One extra query per
+    serialization batch; audit snapshots deliberately keep reporting the
+    persisted row.
+  - **`GET /api/tabs` was N+1 by construction — closed 2026-09-05.** The list
+    serialized every tab through the single-tab helper, so each one paid for its
+    own orders, line items, timelines, derived table label, total and settlement
+    events. **Measured with a `before_cursor_execute` counter: 16 statements for
+    one tab and 34 for four — six per additional tab.** Three batched helpers on
+    `tab_service` (orders, totals, settlement events), plus one label resolve
+    across every order in the list, make it **16 for one tab and 16 for four**;
+    warm wall time on the seeded five-tab list went from p50 49ms (min 36) to
+    p50 25ms (min 20), echo off. `GET /{tab_id}` deliberately goes through the
+    same helper with a list of one, so the two routes cannot drift on the
+    derived label. No caching, no pagination, no response-shape change — the
+    shape is a contract the client reads. A test asserts the count does not move
+    with the list length, which is the only honest guard against it returning.
+  - ~~The guest menu stops polling for its approval after one failed read.~~
+    **DONE 2026-09-05.** The poll now clears the session only on the server's
+    authoritative 404; any other read failure leaves the state alone, so the
+    interval survives and the guest recovers without a reload.
+  - ~~The QR bootstrap loses its session under React StrictMode in dev.~~
+    **DONE 2026-09-05.** The bootstrap creates a session — a real mutation — so
+    it is guarded by a ref that survives StrictMode's simulated remount, instead
+    of a `cancelled` flag that discarded the successful first pass.
+  - ~~Only one seeded menu item has a recipe, and it is behind a time window.~~
+    **DONE 2026-09-05.** The Old Fashioned — first item of the always-on Classic
+    Menu, and what the journey orders outside 17:00–20:00 — now takes 0.08 of a
+    bottle of Whisky Blended. Verified at 10:52 local: the run moved 18.000 →
+    17.840 with the ledger agreeing, where before the stock step asserted a true
+    but empty reconciliation.
+  - ~~**`GET /api/floor-plan/board` is a slow read** — 1.5s warm and 5.2s cold
     against a seed-sized database, measured through a dev stack with SQLAlchemy
-    echo on, so treat it as an upper bound rather than a production figure. It
-    is on the critical path of every floor interaction and worth a look before
-    the pilot.
-- Exercise loss of email, SMS, Redis, WebSocket, ML, and reconnect paths; prove
-  optional-service failures do not corrupt the core operational record.
+    echo on, so treat it as an upper bound rather than a production figure.~~
+    **Measured with echo OFF on 2026-09-05, and it is not slow. Nothing was
+    changed.** Warm over 20 runs against the seeded database: min 26ms, p50
+    32ms, p90 41ms, max 119ms. Cold — the first request after a fresh backend
+    start, three separate starts — 115ms, 124ms and 128ms, with one 183ms
+    outlier on a fourth. Echo was the measurement, not the endpoint: it inflated
+    the figure roughly fiftyfold, which is also why it wrote a 756MB log. There
+    is no echo flag to turn off — `database.py` derives it from
+    `settings.environment == "development"` — so the runs used
+    `ENVIRONMENT=staging`, which turns echo off without tripping the production
+    validator and only costs the dev-only `/uploads` static mount.
+
+    **The one real inefficiency, left in place deliberately.** `get_board`
+    issues 9–11 queries regardless of board size, and then loops
+    `get_guest_context` per DISTINCT customer in `parties` — two more queries
+    each (`get_customer_by_id` + `get_customer_tags`). At seed size that is
+    about ten extra statements and invisible inside 32ms, so fixing it now would
+    be a change with no measured need behind it. It scales with named guests on
+    the board, not with tables, so the trigger is a venue whose board regularly
+    carries dozens of identified parties. The fix when it comes is a batched
+    `get_guest_contexts(db, *, business_id, customer_ids)` in two `IN (...)`
+    queries, in the shape of `order_service.resolve_order_table_labels` — not a
+    cache, not a denormalised column.
+- ~~Exercise loss of email, SMS, Redis, WebSocket, ML, and reconnect paths; prove
+  optional-service failures do not corrupt the core operational record.~~
+  **First injection pass run 2026-09-05.** The record survived everything: no
+  dependency failure produced a wrong or missing row. What the injection found
+  is that the SCREEN is the weak half — three of the four dependencies fail
+  without telling the operator the truth. Two things were fixed in place; the
+  rest are findings, listed here because they set the next pass.
+
+  - ~~**`PATCH /floor-plan/areas/{id}`, `PATCH /floor-plan/tables/{id}` and
+    `PUT /floor-plan/tables/{id}/state` answered 500 while the write
+    committed.**~~ **DONE 2026-09-05.** Found while injecting Redis and at
+    first blamed on it; it reproduced with Redis UP, so it was never a
+    dependency failure at all — it was unconditional. `TimestampMixin.updated_at`
+    carries a SERVER-side `onupdate`, so the UPDATE flush expires the attribute
+    (`expire_on_commit=False` does not help — the flush expired it, not the
+    commit), and serializing the response then attempts lazy IO outside the
+    async greenlet: `MissingGreenlet` → `ResponseValidationError` → 500, after
+    the row was already written. INSERT paths were never affected; they get the
+    value back via `RETURNING`. Fixed with an explicit `await db.refresh(...)`
+    after the commit, as the waitlist offer route already did. This is the worst
+    shape a failure can take — the operator is told the action failed and the
+    record says it succeeded — and marking a table ready is on the service
+    loop's critical path. Nothing covered these three routes; a regression test
+    now does.
+  - ~~**The floor board never re-read on reconnect.**~~ **DONE 2026-09-05.**
+    `use-floor-plan-socket` carries INVALIDATIONS, not state, so an event that
+    fired while the board was away is simply gone — and its `onopen` did not
+    call back, so the host kept looking at a floor that had stopped being true.
+    It was the only one of the four live hooks that did not resync:
+    `use-tab-socket` does it in the hook, the ticket board and the queue board
+    do it in the page. Now it matches `use-tab-socket`.
+  - ~~**"Run pipeline" against a down ML service did nothing at all.**~~ **DONE
+    2026-09-05.** The handler caught into an empty block, so the button just
+    stopped spinning; the server's honest 503 never reached anyone. It now
+    raises a toast. Deliberately only that — see the ML finding below.
+
+  **Findings, not fixed. These are the next pass.**
+
+  - **A dropped WebSocket never reconnects, and Retry does not reconnect it
+    either.** Measured: with the backend killed, the offline bar appears and its
+    copy is good — "NOT UPDATING · OFFLINE 01:51 · The floor map is not
+    receiving new activity. Keep serving from what is on screen." But after the
+    backend came back, **50+ seconds later the page had made exactly 1 socket
+    attempt and 1 `/api/ws-token` fetch, and never tried again.** All four hooks
+    `return` silently when the token fetch yields null and schedule NO retry, so
+    the first failed attempt kills the backoff chain permanently. Pressing
+    *Retry* does not help: `onRetry` calls `refresh()`, which refetches board
+    DATA and never touches the socket — the alarm stayed up and the counter kept
+    climbing to 02:14. **Only a full page reload recovers.** For a pilot this
+    means one backend blip silently ends live updating on every open board until
+    someone notices the bar and reloads. *Fix:* schedule the same backoff retry
+    when the token fetch fails, and make `onRetry` reconnect as well as refetch.
+    Four hooks, one shape — deliberately not attempted in a report-biased pass.
+  - **Redis loss is SILENT staleness — the one failure with no signal at all.**
+    Verified: with Redis stopped, a mutation returns 200 and the record is
+    correct (`B1 out_of_service` on the server), the rate limiter fails open so
+    login and reads keep working, and `publish()` logs and swallows exactly as
+    designed. But the event never enters the stream, so no consumer runs and no
+    frame is sent — while **the sockets stay OPEN, so `connected` stays true and
+    the offline bar never appears.** A second operator's board sat unchanged
+    with nothing on screen saying so. There is no outbox, so no reconnect can
+    replay it. This is the inverse of the WebSocket case: there the screen is
+    honest and the recovery is broken; here recovery is irrelevant because
+    nothing ever knew. *Trigger:* it needs a health signal the client can see,
+    which is a design question, not a patch.
+  - **A backend restart signs staff out.** Reloading `/business/floor` during
+    the outage landed on `/auth/login?redirect=…`, and a normal reload
+    afterwards did not — so the session is dropped by the outage, not expired.
+    Mid-shift that is a password prompt on top of a dead board.
+  - **The ML service's honesty stops at the wire.** The API is exactly right:
+    with `crowbar-ml` stopped, `/api/insights/status` returned 200 with
+    `stale: true`, a real `captured_at` and "The insights service is
+    unreachable…", `/demand` returned a clean `unavailable`, and `/run` a 503.
+    **None of it reaches the page.** `client/lib/ml-api.ts` turns every
+    non-`ok` response into `null`, and `stale`, `captured_at` and
+    `unavailable_reason` are read nowhere in the client — none of the `ML*`
+    interfaces even declare them. The page showed "No insights yet", the same
+    thing it shows when nothing has ever run. `AGENTS.md` said "Insights
+    survives an ML restart by serving its last result marked stale"; that was
+    true of the API and false of the page, and the sentence has been corrected.
+    *Fix:* carry the three fields through `ml-api.ts` and render a remembered-at
+    banner. Bigger than the one honest line this pass allowed.
+  - **The local `crowbar-ml` image is a stale build, and nothing says so.**
+    `POST /api/insights/run` fails with `column r.payment_amount does not
+    exist` — a column migration 013 dropped. The repo's `ml/src/db.py` does not
+    reference it; the running container's `/app/src/db.py` does. `scripts/dev.sh`
+    runs `docker compose up -d`, which never rebuilds, so `ml/` changes silently
+    do not take effect and the local Insights surface has never produced a first
+    result. *Fix:* rebuild in `dev.sh` or document it; either way the stale-image
+    failure should not look like a product bug.
+  - **A failed reservation confirmation leaves no trace whatsoever.** Verified
+    end to end: a guest booking returned 201 `confirmed`, the row is in the
+    record, no email went out (Resend unconfigured), and there is no
+    `DeliveryAttempt` row, no response field and — until this pass — no log
+    line, because `email_service.py` had no logger at all. Every other channel
+    already does this properly: queue "table ready", waitlist offers, staff
+    invitations and the reminder job each persist a `DeliveryAttempt` with a
+    `last_error` the operator can see, and the waitlist offer this pass minted
+    came back with `"delivery_state": "failed"`. Reservation confirmation is the
+    only guest-facing message with none of it. A `logger.debug` now marks the
+    skip, matching `sms_service`, but that is an operator-of-the-server signal,
+    not a staff-facing one. *Fix:* a `ReservationDeliveryAttempt` on the
+    confirmation path — the reminder job is already its only writer, so the
+    table exists. Deliberately not built here; the brief's instruction was not
+    to invent a notification subsystem.
+  - **SMS sends block the event loop.** `sms_service` calls Twilio
+    synchronously from async request paths, so a hung provider connection stalls
+    a worker. Not reachable locally (no credentials), so this is read, not
+    measured.
+- **Deferred — a venue-wide notification page, and a way to complete a request
+  rather than only read it.** The inbox is a bell and a sheet
+  (`client/components/notification-trigger.tsx`): one signed-in user's rows, a
+  60s poll, no route, and no nav entry. Guest data requests now land there
+  (`server/app/routers/public_privacy.py`), which is what makes the gap
+  visible — a deletion request is an obligation with a clock on it, and
+  marking it *read* is not marking it *done*. Nothing anywhere writes
+  `customer_data_requests.status`, so the row a guest raises stays `pending`
+  forever. What this wants is `/business/notifications`: the venue's
+  notifications rather than one user's, filterable by kind, and for a privacy
+  request a control that sets `status`/`completed_by` on the request row. The
+  sheet then caps at the ten most recent with a "See all" link at its head, and
+  the rail, bottom bar and phone sheet gain an entry through
+  `client/lib/nav.ts` so all three navigations still agree. The tempting
+  partial solution is to raise the sheet's `limit` and call it done: that hands
+  an operator a longer list of things they still cannot action, and leaves the
+  request table unread by any route, which is the actual defect. *Trigger:* the
+  pilot venue receives its first guest deletion request, or a second
+  notification kind needs completing rather than dismissing.
 - **Exit gate:** no visible placeholder/dead interaction or known P0/P1 defect;
   every core journey passes locally from a fresh database on the supported
   device/browser matrix; the demo can be reset reproducibly without destructive

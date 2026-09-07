@@ -263,6 +263,19 @@ async def update_reservation(
     return reservation
 
 
+#: What counts as a late cancellation when a venue has no booking schedule at
+#: all. Read by both the enforcement in `cancel_reservation` and the value the
+#: guest is shown before they cancel — one constant, because a guest told a
+#: different number than the one enforced is worse than showing none.
+DEFAULT_CANCELLATION_WINDOW_MINUTES = 120
+
+#: Same, for whether the venue asks a guest to reconfirm. `BookingSchedule`
+#: declares the column `NOT NULL DEFAULT TRUE`, so a venue with no schedule row
+#: behaves as though it asks — matching `reconfirm_reservation`, which only
+#: refuses when a policy exists and has it switched off.
+DEFAULT_RECONFIRMATION_ENABLED = True
+
+
 async def get_reservation_policy(
     db: AsyncSession, *, reservation: Reservation
 ) -> BookingSchedule | None:
@@ -298,7 +311,11 @@ async def cancel_reservation(
         )
     current_time = now or datetime.now(timezone.utc)
     policy = await get_reservation_policy(db, reservation=reservation)
-    window = policy.cancellation_window_minutes if policy else 120
+    window = (
+        policy.cancellation_window_minutes
+        if policy
+        else DEFAULT_CANCELLATION_WINDOW_MINUTES
+    )
     reservation.status = "cancelled"
     reservation.cancelled_at = current_time
     reservation.cancelled_by = actor_kind

@@ -1,4 +1,5 @@
 from datetime import date, datetime, time, timedelta, timezone
+from decimal import Decimal
 from uuid import UUID
 
 import pytest
@@ -16,6 +17,8 @@ from app.models.reservation import Reservation
 from app.models.service_type import ServiceType
 from app.models.staff import Staff
 from app.models.table import Table
+from app.models.table_guest_session import TableGuestSession
+from app.models.table_seating import TableSeating, TableSeatingTable
 from app.models.tab import Tab
 from app.models.user import User
 from app.services.auth_service import create_access_token
@@ -59,7 +62,7 @@ async def _tenant(
     return business, user, location, {"Authorization": f"Bearer {token}"}
 
 
-async def _table_in_area(client, headers, area_id, *, label, capacity=2):
+async def _table_in_area(client, headers, area_id, *, label, capacity=2, sort_order=0):
     response = await client.post(
         "/api/floor-plan/tables",
         headers=headers,
@@ -68,6 +71,7 @@ async def _table_in_area(client, headers, area_id, *, label, capacity=2):
             "label": label,
             "capacity": capacity,
             "shape": "round",
+            "sort_order": sort_order,
         },
     )
     assert response.status_code == 201, response.text
@@ -482,7 +486,14 @@ async def test_qr_orders_use_one_active_seating_tab_and_require_settlement_befor
     assert tab is not None and str(tab.seating_id) == seating_id and tab.opened_by is None
     orders = list((await db_session.execute(select(Order).where(Order.tab_id == tab_id))).scalars())
     assert len(orders) == 2
+    # The legacy column is still never written...
     assert all(order.table_identifier is None for order in orders)
+    # ...and the ticket board still names the table, because the label is
+    # derived from the seating at read time. Read the STAFF board: the guest
+    # placement response is a PublicOrderResponse and carries no table.
+    board = await client.get(f"/api/ordering/{business_id}/orders", headers=headers)
+    assert board.status_code == 200, board.text
+    assert {row["table_identifier"] for row in board.json()} == {"T1"}
 
     blocked_close = await client.post(
         f"/api/floor-plan/seatings/{seating_id}/close", headers=headers
@@ -511,6 +522,142 @@ async def test_qr_orders_use_one_active_seating_tab_and_require_settlement_befor
         json={**payload, "idempotency_key": "stale-token"},
     )
     assert stale.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_ticket_board_names_every_table_of_a_combined_seating(
+    client: AsyncClient, db_session: AsyncSession
+):
+    """A party across two tables reads as both, in floor order.
+
+    The single-table case cannot tell the candidate implementations apart — the
+    scanned table, the tab's arbitrary primary table and the seating all answer
+    "T1". A combination can: the row knows only the table the guest scanned,
+    while the board has to name the whole footprint or the bar carries a round
+    to half a party. T1 is deliberately given the LATER sort_order, so an
+    implementation ordering by insertion or by label fails too.
+    """
+    business, _, location, headers = await _tenant(db_session, slug="combo-board")
+    area_response = await client.post(
+        "/api/floor-plan/areas", headers=headers, json={"name": "Main Room"}
+    )
+    assert area_response.status_code == 201, area_response.text
+    area_id = area_response.json()["id"]
+    first = await _table_in_area(
+        client, headers, area_id, label="T1", capacity=2, sort_order=2
+    )
+    second = await _table_in_area(
+        client, headers, area_id, label="T2", capacity=2, sort_order=1
+    )
+
+    combination = await client.post(
+        "/api/floor-plan/combinations",
+        headers=headers,
+        json={
+            "name": "T1 + T2",
+            "table_ids": [first["id"], second["id"]],
+            "capacity_override": 4,
+        },
+    )
+    assert combination.status_code == 201, combination.text
+
+    service = ServiceType(business_id=business.id, name="Dinner", capacity=4)
+    customer = Customer(
+        business_id=business.id,
+        name="Combo Guest",
+        phone="+14155550144",
+        email="combo@example.com",
+    )
+    menu = Menu(business_id=business.id, name="Drinks", is_active=True)
+    db_session.add_all([service, customer, menu])
+    await db_session.flush()
+    category = MenuCategory(menu_id=menu.id, business_id=business.id, name="Beer")
+    db_session.add(category)
+    await db_session.flush()
+    tax_profiles = await tax_service.list_profiles(db_session, business.id)
+    item = MenuItem(
+        category_id=category.id,
+        business_id=business.id,
+        name="Lager",
+        # Decimal, not int: this row is never read back from PostgreSQL before
+        # the order is priced, so it has to arrive as the numeric type the
+        # column yields.
+        price=Decimal("7.00"),
+        tax_profile_id=tax_profiles[0].id,
+        routing_tag="bar",
+    )
+    reservation = Reservation(
+        business_id=business.id,
+        location_id=location.id,
+        customer_id=customer.id,
+        service_type_id=service.id,
+        time=datetime.now(timezone.utc) - timedelta(minutes=5),
+        ends_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        phone=customer.phone,
+        email=customer.email,
+        status="confirmed",
+        guests=4,
+    )
+    db_session.add_all([item, reservation])
+    await db_session.commit()
+    business_id = str(business.id)
+
+    opened = await client.post(
+        "/api/floor-plan/seatings",
+        headers=headers,
+        json={
+            "source_type": "reservation",
+            "source_id": str(reservation.id),
+            "table_ids": [first["id"], second["id"]],
+        },
+    )
+    assert opened.status_code == 201, opened.text
+
+    # The guest scans T2 — one half of the combination.
+    qr = await client.get(f"/api/floor-plan/tables/{second['id']}/qr", headers=headers)
+    assert qr.status_code == 200, qr.text
+    token = qr.json()["url"].split("table_token=", 1)[1]
+    session = await client.post(
+        f"/api/ordering/{business_id}/table-sessions",
+        json={"table_token": token, "browser_nonce": "browser-nonce-00000000000000000002"},
+    )
+    assert session.status_code == 201, session.text
+    pending_sessions = await client.get(
+        "/api/floor-plan/table-guest-sessions",
+        headers=headers,
+        params={"status": "pending"},
+    )
+    assert pending_sessions.status_code == 200, pending_sessions.text
+    approved = await client.post(
+        f"/api/floor-plan/table-guest-sessions/{pending_sessions.json()[0]['id']}/approve",
+        headers=headers,
+    )
+    assert approved.status_code == 200, approved.text
+
+    placed = await client.post(
+        f"/api/ordering/{business_id}/orders",
+        json={
+            "items": [{"item_id": str(item.id), "quantity": 1}],
+            "idempotency_key": "combo-order",
+        },
+    )
+    assert placed.status_code == 201, placed.text
+
+    order = await db_session.scalar(
+        select(Order).where(
+            Order.business_id == business.id,
+            Order.idempotency_key == "combo-order",
+        )
+    )
+    assert order is not None
+    assert order.table_identifier is None
+    # The row knows only the table that was scanned...
+    assert str(order.table_id) == second["id"]
+
+    board = await client.get(f"/api/ordering/{business_id}/orders", headers=headers)
+    assert board.status_code == 200, board.text
+    # ...and the board names the whole seating, in floor order (T2 sorts first).
+    assert board.json()[0]["table_identifier"] == "T2 + T1"
 
 
 @pytest.mark.asyncio
@@ -820,3 +967,122 @@ async def test_table_qr_sheet_requires_floor_configure(
     assert forbidden.status_code == 403
     assert forbidden.json()["code"] == "FORBIDDEN"
     assert allowed.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_staff_session_list_drops_expired_pending_but_keeps_decided_history(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    """Expiry is filtered on the read, and only for rows that are still pending.
+
+    A pending request that has run out its time is no longer staff work — the
+    floor board must not badge a table for a guest who has gone. Approved and
+    denied rows are the opposite case: they are history, and they have to keep
+    coming back however old they are.
+    """
+    business, user, location, headers = await _tenant(db_session, slug="session-expiry")
+    _, table = await _area_and_table(client, headers, label="T9")
+    table_id = UUID(table["id"])
+    past = datetime.now(timezone.utc) - timedelta(minutes=5)
+
+    entry = QueueEntry(
+        business_id=business.id,
+        location_id=location.id,
+        session_token_hash=hash_token("session-expiry-entry"),
+        name="Walk In",
+        party_size=2,
+        status="seated",
+    )
+    db_session.add(entry)
+    await db_session.flush()
+    seating = TableSeating(
+        business_id=business.id,
+        location_id=location.id,
+        queue_entry_id=entry.id,
+        party_size=2,
+        status="open",
+    )
+    db_session.add(seating)
+    await db_session.flush()
+    db_session.add(TableSeatingTable(seating_id=seating.id, table_id=table_id))
+    await db_session.flush()
+
+    def _session(nonce: str, status: str, expires_at: datetime) -> TableGuestSession:
+        return TableGuestSession(
+            business_id=business.id,
+            location_id=location.id,
+            table_id=table_id,
+            seating_id=seating.id,
+            table_qr_revision=1,
+            browser_nonce_hash=hash_token(nonce),
+            token_hash=hash_token(f"token-{nonce}"),
+            status=status,
+            expires_at=expires_at,
+            decided_by=None if status == "pending" else user.id,
+            decided_at=None if status == "pending" else past,
+        )
+
+    db_session.add_all([
+        _session("expired-pending", "pending", past),
+        _session("live-pending", "pending", datetime.now(timezone.utc) + timedelta(minutes=10)),
+        _session("expired-approved", "approved", past),
+        _session("expired-denied", "denied", past),
+    ])
+    await db_session.commit()
+
+    pending = await client.get(
+        "/api/floor-plan/table-guest-sessions",
+        headers=headers,
+        params={"status": "pending"},
+    )
+    assert pending.status_code == 200, pending.text
+    assert len(pending.json()) == 1
+
+    everything = await client.get(
+        "/api/floor-plan/table-guest-sessions", headers=headers
+    )
+    assert everything.status_code == 200, everything.text
+    statuses = sorted(row["status"] for row in everything.json())
+    assert statuses == ["approved", "denied", "pending"]
+
+
+@pytest.mark.asyncio
+async def test_update_routes_return_the_updated_row_rather_than_500(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    """An UPDATE route must serialize the row it just wrote.
+
+    `TimestampMixin.updated_at` has a server-side `onupdate`, so the flush
+    expires it and serializing the response triggers lazy IO outside the async
+    greenlet. Every one of these three answered 500 while the write itself
+    committed — the worst shape a failure can take, because the operator is
+    told the action failed and the record says it succeeded.
+    """
+    _, _, _, headers = await _tenant(db_session, slug="update-serialization")
+    area, table = await _area_and_table(client, headers, label="T3", capacity=2)
+
+    renamed = await client.patch(
+        f"/api/floor-plan/areas/{area['id']}",
+        headers=headers,
+        json={"name": "Renamed Room"},
+    )
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json()["name"] == "Renamed Room"
+
+    resized = await client.patch(
+        f"/api/floor-plan/tables/{table['id']}",
+        headers=headers,
+        json={"capacity": 4},
+    )
+    assert resized.status_code == 200, resized.text
+    assert resized.json()["capacity"] == 4
+
+    state = await client.put(
+        f"/api/floor-plan/tables/{table['id']}/state",
+        headers=headers,
+        json={"state": "out_of_service", "reason": "Wobbly leg"},
+    )
+    assert state.status_code == 200, state.text
+    assert state.json()["operational_state"] == "out_of_service"

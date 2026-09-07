@@ -1091,6 +1091,16 @@ INSERT INTO menu_item_ingredients (id, menu_item_id, inventory_item_id, quantity
 (gen_random_uuid(), '00000000-0000-0000-0008-000000000001', '00000000-0000-0000-0010-000000000022',  25),
 (gen_random_uuid(), '00000000-0000-0000-0008-000000000001', '00000000-0000-0000-0010-000000000023', 100);
 
+-- Recipe for the Old Fashioned: one pour of blended whisky.
+-- The Mojito above is on the Happy Hour menu, which is windowed 17:00-20:00, so
+-- outside those three hours nothing orderable moved stock and a stock check had
+-- nothing to check. The Old Fashioned is on the always-on Classic Menu, so this
+-- makes fulfilment deduct real quantities at any hour. Whisky Blended is
+-- counted in whole bottles, so the quantity is the fraction of a bottle a
+-- 60 ml pour takes out of one — 18 bottles on hand against a par of 8.
+INSERT INTO menu_item_ingredients (id, menu_item_id, inventory_item_id, quantity) VALUES
+(gen_random_uuid(), '00000000-0000-0000-0008-000000000008', '00000000-0000-0000-0010-000000000001', 0.08);
+
 -- ─── Stage 5: purchasing, pack conversions and a reconciled count ─────────────
 -- Only enough to exercise stage-5 invariants; the full pilot scenario is stage 8.
 -- Every row hangs off the demo business, so the DELETE FROM businesses cleanup
@@ -1302,6 +1312,17 @@ WHERE i.id = m.item_id;
 -- One guest waiting to be offered a slot, and one holding a live offer. An
 -- offered row must carry all three offer columns, and its expiry has to be in the
 -- future or the expiry sweep turns it terminal the moment anything reads it.
+--
+-- THE LIVE OFFER SELF-DESTRUCTS, AND THAT IS CORRECT. OFFER_MINUTES is 15
+-- (reservation_waitlist_service.py), the offer email tells the guest 15, and
+-- app.jobs.reservation_waitlist_expiry sweeps every five — so this row is a
+-- live offer for fifteen minutes after seeding and terminal afterwards. It used
+-- to be seeded at offered_at = NOW() - 10 minutes with a 20-minute expiry, a
+-- thirty-minute window that quietly contradicted the rule the fixture exists to
+-- demonstrate. No fixed window is long enough to keep a demo offer alive, so
+-- the fix is not a longer one: mint a fresh offer through the staff API when
+-- you need to see the acceptance surface. CHEATSHEET.txt section 6 has the
+-- recipe.
 INSERT INTO reservation_waitlist_entries (id, business_id, service_type_id, customer_id, requested_starts_at, flexible_until, guests, status, offered_at, offered_reservation_time, offer_expires_at, created_by, created_at, updated_at) VALUES
 ('00000000-0000-0030-0000-000000000001', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0004-000000000010', '00000000-0000-0000-0001-000000000020',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') + INTERVAL '2 days' + INTERVAL '20 hours') AT TIME ZONE 'Europe/Berlin',
@@ -1310,9 +1331,9 @@ INSERT INTO reservation_waitlist_entries (id, business_id, service_type_id, cust
 ('00000000-0000-0030-0000-000000000002', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0004-000000000010', '00000000-0000-0000-0001-000000000017',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') + INTERVAL '1 day' + INTERVAL '20 hours') AT TIME ZONE 'Europe/Berlin',
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') + INTERVAL '1 day' + INTERVAL '23 hours') AT TIME ZONE 'Europe/Berlin',
-  2, 'offered', NOW() - INTERVAL '10 minutes',
+  2, 'offered', NOW(),
   (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Berlin') + INTERVAL '1 day' + INTERVAL '20 hours') AT TIME ZONE 'Europe/Berlin',
-  NOW() + INTERVAL '20 minutes', '00000000-0000-0000-0002-000000000012', NOW() - INTERVAL '1 day', NOW() - INTERVAL '10 minutes');
+  NOW() + INTERVAL '15 minutes', '00000000-0000-0000-0002-000000000012', NOW() - INTERVAL '1 day', NOW());
 
 -- ─── A guest waiting to be let onto the table's tab ───────────────────────────
 -- Scanning a table QR creates a session a staff member approves. This one is left

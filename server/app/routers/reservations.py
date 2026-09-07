@@ -165,6 +165,38 @@ async def _get_guest_reservation(db: AsyncSession, token: str, *, for_update: bo
     return reservation
 
 
+async def _public_reservation_response(
+    db: AsyncSession, reservation
+) -> PublicReservationResponse:
+    """Attach the two policy values the guest surface needs to act.
+
+    Neither lives on the `Reservation` row — both come from the booking
+    schedule — so `response_model` alone would serialize them as `null`. That is
+    exactly the bug the staff `ReservationResponse` carries today: it declares
+    five policy fields the ORM has no columns for and emits null for all five.
+
+    Same shape as `_waitlist_response` below: the service decides which policy
+    applies, the router only assembles the payload.
+    """
+    policy = await reservation_service.get_reservation_policy(
+        db, reservation=reservation
+    )
+    return PublicReservationResponse.model_validate(reservation).model_copy(
+        update={
+            "reconfirmation_enabled": (
+                policy.reconfirmation_enabled
+                if policy
+                else reservation_service.DEFAULT_RECONFIRMATION_ENABLED
+            ),
+            "cancellation_window_minutes": (
+                policy.cancellation_window_minutes
+                if policy
+                else reservation_service.DEFAULT_CANCELLATION_WINDOW_MINUTES
+            ),
+        }
+    )
+
+
 def _reservation_duration_minutes(reservation) -> int:
     return max(
         int((reservation.ends_at - reservation.time).total_seconds() // 60),
@@ -359,7 +391,7 @@ async def create_public_reservation(
                 "source": "public",
             },
         ))
-    return reservation
+    return await _public_reservation_response(db, reservation)
 
 
 @router.get("/public/manage", response_model=PublicReservationResponse)
@@ -368,7 +400,10 @@ async def get_public_reservation_management(
     db: AsyncSession = Depends(get_db),
 ):
     """A bearer link deliberately exposes only its own reservation."""
-    return await _get_guest_reservation(db, _capability_cookie(request, "reservation"))
+    reservation = await _get_guest_reservation(
+        db, _capability_cookie(request, "reservation")
+    )
+    return await _public_reservation_response(db, reservation)
 
 
 @router.post("/public/manage/cancel", response_model=PublicReservationResponse)
@@ -400,7 +435,7 @@ async def cancel_public_reservation(
         payload={"reservation_id": str(reservation.id), "source": "guest", "late": reservation.cancelled_late},
     ))
     clear_public_cookie(response, kind="reservation")
-    return reservation
+    return await _public_reservation_response(db, reservation)
 
 
 @router.post("/public/manage/reconfirm", response_model=PublicReservationResponse)
@@ -421,7 +456,7 @@ async def reconfirm_public_reservation(
         business_id=str(reservation.business_id),
         payload={"reservation_id": str(reservation.id), "source": "guest"},
     ))
-    return reservation
+    return await _public_reservation_response(db, reservation)
 
 
 @router.post("/public/manage/reschedule", response_model=PublicReservationResponse)
@@ -484,7 +519,7 @@ async def reschedule_public_reservation(
             revision=reservation.guest_token_revision,
         ),
     )
-    return reservation
+    return await _public_reservation_response(db, reservation)
 
 
 async def _waitlist_response(
@@ -814,7 +849,7 @@ async def accept_public_waitlist_offer(
             revision=reservation.guest_token_revision,
         ),
     )
-    return reservation
+    return await _public_reservation_response(db, reservation)
 
 
 @router.post(

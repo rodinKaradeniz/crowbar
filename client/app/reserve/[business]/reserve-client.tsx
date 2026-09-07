@@ -1,22 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import Image from "next/image";
-import Link from "next/link";
-import {
-  Mail,
-  Phone,
-  MapPin,
-  Globe,
-  Clock,
-  Users,
-  CalendarDays,
-  GalleryVerticalEnd,
-} from "lucide-react";
+import { Phone } from "lucide-react";
+
 import { Business, ServiceType } from "@/types";
 import { ReservationForm } from "@/components/reservation-form";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { VenuePanel } from "@/components/reservation/venue-panel";
+import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 
 interface ReserveClientProps {
@@ -24,256 +14,111 @@ interface ReserveClientProps {
   serviceTypes: ServiceType[];
 }
 
-const DAY_LABELS: Record<string, string> = {
-  monday: "Monday",
-  tuesday: "Tuesday",
-  wednesday: "Wednesday",
-  thursday: "Thursday",
-  friday: "Friday",
-  saturday: "Saturday",
-  sunday: "Sunday",
-};
-
-const ORDERED_DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
-
-function SectionHeading({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-4 mb-5">
-      <h2 className="type-label text-muted-foreground">{children}</h2>
-      <span className="h-px flex-1 bg-border" aria-hidden />
-    </div>
-  );
-}
-
+/**
+ * The public reservation page: one hairline box, an ink venue panel beside a
+ * paper booking column.
+ *
+ * WHAT THIS REPLACED. A 320–416px ink hero whose entire payload was one "Book
+ * Now" button, a paper document below it repeating the venue's details, and a
+ * 400px side panel that the button opened and that carried the actual booking
+ * four screens at a time. The first screen a guest saw asked them to open a
+ * second surface before they could do anything.
+ *
+ * The split is the shape the auth screens already are — `AuthSplit`, "an ink
+ * panel beside a paper form" — applied to the third surface that wants it. The
+ * ink is a `.ground-ink` subtree inside a paper page, exactly as landing §03
+ * carries the bar board and the tab; grounds stay fixed by surface, and a
+ * public guest page is still paper.
+ *
+ * BELOW THE BREAKPOINT THE PANEL STACKS UNDER THE FORM, and that is a
+ * deliberate divergence from `AuthSplit`, which drops its panel entirely. The
+ * auth panel is pure marketing and someone opening /auth/login on a phone is
+ * staff starting a shift. This panel carries the address, the phone number and
+ * the hours — the things a guest deciding whether to book actually needs — so
+ * it follows the booking rather than disappearing.
+ */
 export default function ReserveClient({ business, serviceTypes }: ReserveClientProps) {
   const searchParams = useSearchParams();
   const isWidget = searchParams.get("widget") === "1";
 
-  const [bookingOpen, setBookingOpen] = useState(false);
-  const [selectedServiceId, setSelectedServiceId] = useState<string | undefined>(undefined);
-
-  function openBooking(serviceId?: string) {
-    setSelectedServiceId(serviceId);
-    setBookingOpen(true);
-  }
-
-  if (!business.publicReservationsEnabled) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-6 text-center">
-        <div className="max-w-md">
-          <CalendarDays className="mx-auto size-10 text-muted-foreground" />
-          <p className="type-label text-muted-foreground mt-5 text-muted-foreground">Reservations</p>
-          <h1 className="mt-2 type-d3">Online bookings are unavailable</h1>
-          <p className="mt-3 text-sm text-muted-foreground">
-            {business.name} is currently taking reservations directly through the venue.
-          </p>
-          {business.phone && (
-            <Button asChild className="mt-6">
-              <a href={`tel:${business.phone}`}><Phone /> Contact {business.name}</a>
-            </Button>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // Widget mode: render booking form only
+  // Widget mode is the form embedded in the venue's own site. No panel, no
+  // shell, no Crowbar lockup — the surrounding page is the venue's.
   if (isWidget) {
     return (
-      <div className="p-4">
+      <div className="p-[var(--space-16)]">
         <ReservationForm
           businessId={business.id}
           businessTimezone={business.timezone ?? "UTC"}
           businessMaxGuests={business.maxGuests}
           serviceTypes={serviceTypes}
-          preselectedServiceTypeId={selectedServiceId}
         />
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-background">
-      {/* Hero */}
-      <div className="relative h-80 md:h-104 w-full overflow-hidden">
-        {business.image ? (
-          <Image
-            src={business.image}
-            alt={business.name}
-            fill
-            className="object-cover"
-            priority
-          />
-        ) : (
-          <div className="absolute inset-0 bg-ink" />
-        )}
-        {/* Candlelit dim: settle the photo into the walnut ground */}
-        <div className="absolute inset-0 bg-linear-to-t from-ink via-ink/60 to-transparent" />
-
-        {/* Crowbar branding */}
-        <div className="absolute top-4 left-4">
-          <Link href="/" className="flex items-center gap-2 text-white/80 hover:text-white transition-colors text-sm font-medium">
-            <div className="bg-white/15 backdrop-blur-sm flex size-6 items-center justify-center rounded-md">
-              <GalleryVerticalEnd className="size-4" />
-            </div>
-            Crowbar
-          </Link>
-        </div>
-
-        {/* Hero content */}
-        <div className="absolute bottom-0 left-0 right-0 p-6 md:p-10">
-          <div className="max-w-3xl mx-auto text-center enter-rise">
-            {business.tags && business.tags.length > 0 && (
-              <p className="type-label text-muted-foreground mb-3">
-                {business.tags.join("  ·  ")}
-              </p>
-            )}
-            <h1 className="font-display type-d3 md:type-d2 text-foreground mb-2 tracking-tight">
-              {business.name}
-            </h1>
-            <div className="border-t border-border mt-5 mx-auto max-w-36" />
-            <Button
-              size="md"
-              className="mt-6"
-              onClick={() => openBooking()}
-            >
-              <CalendarDays className="w-4 h-4 mr-2" />
-              Book Now
+  if (!business.publicReservationsEnabled) {
+    return (
+      <main className="flex min-h-svh flex-col bg-paper-tint p-[var(--space-24)]">
+        <BrandMark size="sm" />
+        <div className="m-auto w-full max-w-md text-center">
+          <p className="type-label text-muted-foreground">Reservations</p>
+          <h1 className="type-t1 mt-[var(--space-8)]">
+            Online bookings are unavailable
+          </h1>
+          <div className="mx-auto mt-[var(--space-16)] max-w-36 border-t border-border" />
+          <p className="mt-[var(--space-16)] text-sm leading-relaxed text-muted-foreground">
+            {business.name} is currently taking reservations directly through
+            the venue.
+          </p>
+          {business.phone && (
+            <Button asChild className="mt-[var(--space-24)]">
+              <a href={`tel:${business.phone}`}>
+                <Phone /> Contact {business.name}
+              </a>
             </Button>
-          </div>
+          )}
         </div>
-      </div>
+      </main>
+    );
+  }
 
-      {/* Content */}
-      <div className="max-w-3xl mx-auto px-6 py-12 space-y-12">
-        {/* About */}
-        <section className="enter-rise" style={{ animationDelay: "100ms" }}>
-          <SectionHeading>About</SectionHeading>
-          <div className="grid md:grid-cols-2 gap-6">
-            {business.description && (
-              <p className="text-muted-foreground leading-relaxed">{business.description}</p>
-            )}
-            <div className="space-y-3">
-              {business.phone && (
-                <div className="flex items-center gap-3 text-sm">
-                  <Phone className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <a href={`tel:${business.phone}`} className="font-mono tabular-nums hover:text-primary transition-colors">{business.phone}</a>
-                </div>
-              )}
-              {business.email && (
-                <div className="flex items-center gap-3 text-sm">
-                  <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <a href={`mailto:${business.email}`} className="break-all hover:text-primary transition-colors">{business.email}</a>
-                </div>
-              )}
-              {business.website && (
-                <div className="flex items-center gap-3 text-sm">
-                  <Globe className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <a href={business.website} target="_blank" rel="noopener noreferrer" className="break-all hover:text-primary transition-colors">{business.website}</a>
-                </div>
-              )}
-              {business.address && (
-                <div className="flex items-center gap-3 text-sm">
-                  <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <span>{business.address}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
+  return (
+    // `--grid-workspace` is the declared Document width — the measure for a
+    // surface that is read and filled in, which is what a booking form is.
+    // 1100px would have matched `AuthPage`, but that is a literal the token
+    // block never declared, and copying it would spread the drift rather than
+    // stop it.
+    <main className="flex min-h-svh bg-paper-tint p-[var(--space-24)]">
+      {/* `m-auto` rather than `justify-center`: a box taller than the viewport
+          still scrolls to its own top, which centring would cut off. */}
+      <div className="m-auto w-full max-w-[var(--grid-workspace)]">
+        {/*
+          ROW-REVERSE, AND IT IS DOING REAL WORK. The booking is what the guest
+          came for, so it is first in the DOM — first for a screen reader, first
+          in tab order, and first when the columns stack. Reversing the row puts
+          it back on the RIGHT while both columns fit on one line, and a wrapped
+          reversed row still lays its lines out top to bottom, so the panel
+          lands underneath. That is the whole stacking rule with no breakpoint
+          to keep in sync with the flex bases that decide when it happens.
 
-        {/* Operating Hours — set like the back page of the menu */}
-        {business.operatingHours && Object.keys(business.operatingHours).length > 0 && (
-          <section className="enter-rise" style={{ animationDelay: "160ms" }}>
-            <SectionHeading>Hours</SectionHeading>
-            <div className="max-w-md space-y-2.5">
-              {ORDERED_DAYS.filter((d) => d in business.operatingHours).map((day) => {
-                const hours = business.operatingHours[day];
-                const isClosed = "closed" in hours && hours.closed;
-                return (
-                  <div key={day} className="flex items-baseline gap-2.5 text-sm">
-                    <span className="font-medium">{DAY_LABELS[day] || day}</span>
-                    <span className="flex-1" aria-hidden />
-                    {isClosed ? (
-                      <span className="text-muted-foreground">Closed</span>
-                    ) : (
-                      <span className="font-mono tabular-nums text-muted-foreground">
-                        {"open" in hours ? `${hours.open} – ${hours.close}` : ""}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
-
-        {/* Services */}
-        {serviceTypes.length > 0 && (
-          <section className="enter-rise" style={{ animationDelay: "220ms" }}>
-            <SectionHeading>Bookings</SectionHeading>
-            <div className="grid sm:grid-cols-2 gap-4">
-              {serviceTypes.map((st) => (
-                <button
-                  key={st.id}
-                  onClick={() => openBooking(st.id)}
-                  className="text-left border bg-card p-5 hover:border-primary/50 transition-colors group focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: st.color }} />
-                    <h3 className="font-display text-base group-hover:text-primary transition-colors">{st.name}</h3>
-                  </div>
-                  {st.description && (
-                    <p className="text-sm text-muted-foreground mb-3 line-clamp-2 leading-relaxed">{st.description}</p>
-                  )}
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground font-mono tabular-nums">
-                    {st.duration && (
-                      <span className="flex items-center gap-1.5">
-                        <Clock className="w-3 h-3 text-muted-foreground" /> {st.duration} min
-                      </span>
-                    )}
-                    <span className="flex items-center gap-1.5">
-                      <Users className="w-3 h-3 text-muted-foreground" /> Up to {st.capacity}
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </section>
-        )}
-
-      </div>
-
-      {/* Sticky mobile CTA */}
-      <div className="fixed bottom-0 left-0 right-0 md:hidden bg-background/95 backdrop-blur z-40">
-        <div className="border-t border-border" />
-        <div className="p-4">
-          <Button className="w-full" size="md" onClick={() => openBooking()}>
-            <CalendarDays className="w-4 h-4 mr-2" />
-            Book Now
-          </Button>
-        </div>
-      </div>
-      <div className="h-24 md:h-0" /> {/* Spacer for sticky bar */}
-
-      {/* Booking Sheet */}
-      <Sheet open={bookingOpen} onOpenChange={setBookingOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle className="type-t1 font-normal">Book at {business.name}</SheetTitle>
-          </SheetHeader>
-          <div className="mt-4">
+          `items-stretch` is what makes the ink column run the full height of
+          the booking beside it rather than stopping under its own last line.
+        */}
+        <div className="flex flex-row-reverse flex-wrap items-stretch border border-ink bg-paper">
+          <div className="flex min-w-[min(100%,320px)] flex-[1_1_460px] flex-col justify-center p-[var(--space-32)]">
             <ReservationForm
               businessId={business.id}
               businessTimezone={business.timezone ?? "UTC"}
               businessMaxGuests={business.maxGuests}
               serviceTypes={serviceTypes}
-              preselectedServiceTypeId={selectedServiceId}
-              onSuccess={() => setBookingOpen(false)}
             />
           </div>
-        </SheetContent>
-      </Sheet>
-    </div>
+
+          <div className="flex min-w-[min(100%,300px)] flex-[1_1_380px] flex-col">
+            <VenuePanel business={business} />
+          </div>
+        </div>
+      </div>
+    </main>
   );
 }

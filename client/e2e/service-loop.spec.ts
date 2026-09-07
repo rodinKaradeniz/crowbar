@@ -37,13 +37,6 @@ type BoardTable = {
 type Board = {
   areas: { tables: BoardTable[] }[];
 };
-type GuestSession = {
-  id: string;
-  table_id: string;
-  seating_id: string;
-  status: string;
-  created_at: string;
-};
 type InventoryItem = { id: string; name: string; current_quantity: number };
 type StockMovement = {
   id: string;
@@ -91,11 +84,10 @@ test("the pilot service loop, from booking to guest and cost history", async ({
   const runId = Date.now().toString(36);
   const guestName = `Journey ${runId}`;
   const guestEmail = `journey-${runId}@example.com`;
-  // Every line this run orders carries the run id as its special request.
-  // The ticket board cannot be found by table: order.table_identifier is a
-  // legacy column nothing in the running product sets, so a ticket's
-  // "Table N" header renders only for rows the seed wrote directly. The note
-  // is a real product field and it is what makes this run's tickets findable.
+  // Every line this run orders carries the run id as its special request. The
+  // ticket board now names the table too, but a table can carry several tickets
+  // across a night and this run must never advance somebody else's — the note
+  // is a real product field and it is what makes THIS run's tickets findable.
   const journeyTag = `journey ${runId}`;
   // A German mobile: the server parses the number against the venue's own
   // country, so a US-shaped number is rejected even though the seed holds some.
@@ -158,7 +150,6 @@ test("the pilot service loop, from booking to guest and cost history", async ({
 
   let tableId = "";
   let tableLabel = "";
-  let reservationId = "";
   let seatingId = "";
   let tabId = "";
   let qrUrl = "";
@@ -242,7 +233,10 @@ test("the pilot service loop, from booking to guest and cost history", async ({
       // The booking response set the reservation capability cookie on this
       // context, so the guest reaches the manage page without the emailed link.
       await guest.goto("/reserve/manage");
-      await expect(guest.getByRole("heading", { name: "Manage your booking" })).toBeVisible();
+      // The h1 is the venue's name now, not a product label, so assert the
+      // eyebrow and the heading's existence rather than the seeded venue name.
+      await expect(guest.getByText("Manage your booking")).toBeVisible();
+      await expect(guest.getByRole("heading", { level: 1 })).toBeVisible();
       await expect(guest.getByText(new RegExp(`${PARTY_SIZE} guests`))).toBeVisible();
 
       await guest.getByRole("button", { name: /still coming/ }).click();
@@ -294,33 +288,32 @@ test("the pilot service loop, from booking to guest and cost history", async ({
       ).toBe("available");
       expect(planned.active_seating, "an assignment must not open a seating").toBeNull();
       expect(planned.next_reservation?.name).toBe(guestName);
-      reservationId = planned.next_reservation!.source_id;
       await expect(tableCard(tableLabel)).toContainText(guestName);
     });
 
     // ── 4 ────────────────────────────────────────────────────────────────────
     await test.step("4. Seat the party onto the planned table", async () => {
-      // The floor UI cannot seat THIS party right now, and that is the product
-      // being coherent rather than broken: a host assigns in advance and seats
-      // on arrival. Once assigned, the booking leaves "Unassigned arrivals" (so
-      // it is no longer in the table sheet's pick list), and the sheet only
-      // offers "Seat party" once the booking's own time has arrived. This
-      // journey compresses an evening into a minute, so it opens the seating
-      // through the endpoint the sheet itself calls. Reported, not worked
-      // around silently.
-      const opened = await api("POST", "floor-plan/seatings", {
-        source_type: "reservation",
-        source_id: reservationId,
-        table_ids: [tableId],
-      });
-      expect(opened.ok(), `opening the seating returned ${opened.status()}`).toBe(true);
-      seatingId = (await opened.json()).id as string;
+      // The party is here before the time it booked. The table sheet offers
+      // that as a deliberate act, naming the booked time, so a host is never
+      // stuck with an early arrival they cannot seat.
+      await tableCard(tableLabel).click();
+      const detail = staff.getByRole("dialog").filter({ hasText: `Table ${tableLabel}` });
+      await expect(detail).toContainText(guestName);
+      await detail.getByRole("button", { name: "Seat them early" }).click();
+
+      await expect(seatingSheet()).toBeVisible();
+      await seatingSheet().getByRole("button", { name: "Seat party" }).click();
+      await expect(
+        seatingSheet(),
+        `the seating sheet stayed open, so ${tableLabel} refused the party`,
+      ).toBeHidden({ timeout: 20_000 });
 
       // The board's HTTP snapshot is the proof; the socket only invalidates.
       await expect
         .poll(async () => (await boardTable(tableId)).display_state, { timeout: 20_000 })
         .toBe("occupied");
-      expect((await boardTable(tableId)).active_seating?.seating_id).toBe(seatingId);
+      seatingId = (await boardTable(tableId)).active_seating!.seating_id;
+      expect(seatingId, "seating the party did not open a seating").toBeTruthy();
 
       await gotoFloor();
       await expect(tableCard(tableLabel)).toContainText("occupied");
@@ -337,22 +330,11 @@ test("the pilot service loop, from booking to guest and cost history", async ({
         "table_token=",
       );
 
-      // The scan is bootstrapped in an effect that React StrictMode invokes
-      // twice in dev. The first pass strips the fragment and creates the
-      // session; the second pass, now fragment-less, asks for the "current"
-      // session, 404s because the created cookie has not landed yet, and its
-      // handler clears the state the first pass was about to set. So: wait for
-      // the session to actually be created, then reload, which resolves it from
-      // the cookie. Dev-only — a production build does not double-invoke — but
-      // reported rather than hidden.
-      const sessionCreated = guest.waitForResponse(
-        (response) =>
-          response.request().method() === "POST" &&
-          response.url().includes("/table-sessions"),
-      );
+      // The host is left standing at the board, so the arriving scan has to
+      // reach them there without a reload — the pending badge below is the
+      // proof that the scan itself publishes, not just the decision.
+      await gotoFloor();
       await guest.goto(qrUrl);
-      await sessionCreated;
-      await guest.reload();
       await expect(guest.getByText("Table ordering")).toBeVisible({ timeout: 20_000 });
 
       const addFirstItemToCart = async () => {
@@ -361,37 +343,29 @@ test("the pilot service loop, from booking to guest and cost history", async ({
         await guest.getByRole("button", { name: /Add to Cart/ }).click();
       };
       await addFirstItemToCart();
-
-      // A scan opens a PENDING session that staff must approve. No staff surface
-      // exists for that decision — the endpoints ship, the UI does not — so the
-      // approval is driven through the API the missing screen would have called.
       await expect(guest.getByRole("button", { name: /Waiting for staff approval/ })).toBeVisible();
-      const pending = await apiJson<GuestSession[]>(
-        "floor-plan/table-guest-sessions?status=pending",
-      );
-      // Matched on the seating, not the table: a table outlives its seatings,
-      // and an abandoned pending session from an earlier party on the same
-      // table would otherwise be the one approved.
-      const mine = pending
-        .filter((entry) => entry.seating_id === seatingId)
-        .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
-      expect(
-        mine,
-        "the QR scan did not create a pending table session on this seating",
-      ).toBeTruthy();
-      const approved = await api("POST", `floor-plan/table-guest-sessions/${mine!.id}/approve`);
-      expect(approved.ok(), `approving the table session returned ${approved.status()}`).toBe(true);
 
-      // Reload rather than waiting on the page's own poll for the decision.
-      // That poll is one-shot-fatal: its failure handler sets the session state
-      // to null, which makes its own effect bail out and clears the interval,
-      // so a single transient read failure strands the guest on "Scan your
-      // table QR to order" forever. Reloading reads the decision from the
-      // cookie. The cart lives in React state only — it is written to
-      // sessionStorage on the View Cart click — so the reload empties it and
-      // the round has to be built again.
-      await guest.reload();
-      await addFirstItemToCart();
+      // A scan opens a PENDING session that staff must approve. The host sees
+      // it arrive on the table card and answers it in the sheet where every
+      // other decision about one table is already made.
+      await expect(
+        tableCard(tableLabel),
+        "the scan did not reach the host board",
+      ).toContainText("waiting", { timeout: 20_000 });
+      await tableCard(tableLabel).click();
+      const tableSheet = staff
+        .getByRole("dialog")
+        .filter({ hasText: `Table ${tableLabel}` });
+      await expect(tableSheet).toContainText("Waiting to order");
+      await tableSheet.getByRole("button", { name: "Approve" }).click();
+      await expect(
+        tableSheet.getByRole("button", { name: "Approve" }),
+        "the approved request is still waiting on the board",
+      ).toBeHidden({ timeout: 20_000 });
+      await staff.keyboard.press("Escape");
+
+      // No reload: the guest's own poll carries the decision through, so the
+      // cart built before the approval is still there.
       const viewCart = guest.getByRole("link").filter({ hasText: /View Cart/ });
       await expect(
         viewCart,
@@ -473,6 +447,13 @@ test("the pilot service loop, from booking to guest and cost history", async ({
     await test.step("7. Fulfill both rounds to served", async () => {
       await staff.goto("/business/orders");
       const ticket = staff.locator("article").filter({ hasText: journeyTag });
+      // Which table a ticket belongs to is derived from the seating at read
+      // time; the legacy free-text column stays empty. Without it the bar knows
+      // what to make and not where it goes.
+      await expect(
+        ticket.first(),
+        "the ticket does not name the table it belongs to",
+      ).toContainText(`Table ${tableLabel}`, { timeout: 20_000 });
       await expect(
         ticket.first(),
         "this run's tickets are not on the board",

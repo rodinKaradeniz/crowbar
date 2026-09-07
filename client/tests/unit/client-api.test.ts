@@ -20,6 +20,7 @@ import {
   clientJoinQueue,
   clientSettleTabExternally,
   clientRequestAccountDeletion,
+  clientGetPublicManagedReservation,
 } from "@/lib/client-api";
 
 // Start MSW server for network-level mocking
@@ -623,5 +624,64 @@ describe("clientRequestAccountDeletion", () => {
     await expect(clientRequestAccountDeletion()).rejects.toThrow(
       /Transfer ownership to someone else/,
     );
+  });
+});
+
+describe("clientGetPublicManagedReservation", () => {
+  const manage = "http://localhost:3000/api/backend/reservations/public/manage";
+
+  const body = (extra: Record<string, unknown>) => ({
+    business_id: "b1",
+    service_type_id: "s1",
+    time: "2026-09-07T17:00:00Z",
+    ends_at: "2026-09-07T18:00:00Z",
+    phone: "+4915100000009",
+    email: "guest@example.com",
+    status: "confirmed",
+    guests: 2,
+    ...extra,
+  });
+
+  it("keeps reconfirmationEnabled false rather than dropping it", async () => {
+    // The `|| undefined` idiom used by every string field on this mapper would
+    // turn `false` into `undefined`, and the page treats `undefined` as "show
+    // the button". A venue that switched reconfirmation off would get the
+    // button anyway, and the guest would get a 409.
+    server.use(
+      http.get(manage, () =>
+        HttpResponse.json(
+          body({ reconfirmation_enabled: false, cancellation_window_minutes: 45 }),
+        ),
+      ),
+    );
+
+    const reservation = await clientGetPublicManagedReservation();
+
+    expect(reservation.reconfirmationEnabled).toBe(false);
+    expect(reservation.cancellationWindowMinutes).toBe(45);
+  });
+
+  it("maps absent policy fields to undefined, not null", async () => {
+    server.use(http.get(manage, () => HttpResponse.json(body({}))));
+
+    const reservation = await clientGetPublicManagedReservation();
+
+    expect(reservation.reconfirmationEnabled).toBeUndefined();
+    expect(reservation.cancellationWindowMinutes).toBeUndefined();
+  });
+
+  it("does not leak snake_case keys into the result", async () => {
+    server.use(
+      http.get(manage, () =>
+        HttpResponse.json(
+          body({ reconfirmation_enabled: true, cancellation_window_minutes: 120 }),
+        ),
+      ),
+    );
+
+    const reservation = await clientGetPublicManagedReservation();
+
+    expect(reservation).not.toHaveProperty("reconfirmation_enabled");
+    expect(reservation).not.toHaveProperty("cancellation_window_minutes");
   });
 });

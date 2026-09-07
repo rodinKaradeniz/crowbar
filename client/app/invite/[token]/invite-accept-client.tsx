@@ -3,13 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { BrandMark } from "@/components/brand-mark";
 import {
   AuthField,
   AuthNotice,
   RevealToggle,
 } from "@/components/auth/auth-field";
 import {
-  AuthMark,
   AuthPage,
   AuthPanel,
   AuthSplit,
@@ -94,7 +94,7 @@ export default function InviteAcceptClient({ invite }: Props) {
       <AuthSplit
         panel={
           <AuthPanel>
-            <AuthMark />
+            <BrandMark />
 
             <div>
               <p className="mkt-kicker mb-4 tracking-[0.14em] text-primary">

@@ -12,6 +12,7 @@ from app.models.booking_schedule import BookingSchedule, BookingScheduleWindow
 from app.models.business import Business
 from app.models.reservation import Reservation
 from app.models.reservation_waitlist import ReservationWaitlistEntry
+from app.services import reservation_service
 from app.services.reservation_guest_token_service import issue_guest_token
 from app.services.reservation_waitlist_token_service import (
     issue_management_token,
@@ -192,13 +193,23 @@ class TestPublicReservation:
         data = resp.json()
         assert data["email"] == "guest@example.com"
         assert data["status"] == "pending"
+        # Still withheld. `reconfirmation_enabled` and
+        # `cancellation_window_minutes` were deliberately removed from this set:
+        # the guest surface needs both to act honestly — one gates "I'm still
+        # coming" so it cannot 409 at a venue that does not ask, the other tells
+        # the guest whether cancelling now counts as late. Everything else here
+        # is still none of a guest's business.
         assert {
             "id", "customer_id", "availability_override_by", "cancelled_by",
             "no_show_note", "reminder_enabled", "reminder_lead_minutes",
-            "cancelled_at", "no_show_at", "cancellation_window_minutes",
-            "arrival_grace_period_minutes", "reconfirmation_enabled",
+            "cancelled_at", "no_show_at",
+            "arrival_grace_period_minutes",
             "created_at", "updated_at",
         }.isdisjoint(data)
+        # Present AND populated. Declaring them without attaching them is the
+        # bug the staff schema already has, so assert the values, not the keys.
+        assert data["reconfirmation_enabled"] is True
+        assert data["cancellation_window_minutes"] == 120
 
         public_types = await client.get(
             f"/api/service-types/business/{business_id}"
@@ -308,6 +319,133 @@ class TestPublicReservation:
         await db_session.refresh(reservation)
         assert reservation.cancelled_by == "guest"
         assert reservation.cancelled_late is False
+
+    @pytest.mark.asyncio
+    async def test_guest_sees_the_service_type_override_policy_not_the_default(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        """A service override replaces the business default outright.
+
+        `get_reservation_policy` is a full replacement, not a merge, so a guest
+        booking an overridden service must be told the override's numbers. Being
+        shown the business default here would be worse than showing nothing: it
+        is a specific, confident, wrong answer about their own booking.
+        """
+        owner_token, business_id = await _create_business_owner(client)
+        await _open_default_schedule(db_session, business_id)
+        service_type_id = await _create_service_type(client, owner_token, business_id)
+
+        default = await db_session.scalar(
+            select(BookingSchedule).where(
+                BookingSchedule.business_id == business_id,
+                BookingSchedule.service_type_id.is_(None),
+            )
+        )
+        db_session.add(
+            BookingSchedule(
+                business_id=business_id,
+                service_type_id=service_type_id,
+                cancellation_window_minutes=45,
+                reconfirmation_enabled=False,
+                windows=[
+                    BookingScheduleWindow(
+                        weekday=weekday,
+                        start_time=time(0, 0),
+                        end_time=time(23, 59),
+                    )
+                    for weekday in range(7)
+                ],
+            )
+        )
+        await db_session.commit()
+        assert default.cancellation_window_minutes != 45
+
+        resp = await client.post(
+            "/api/reservations/public",
+            json={
+                "business_id": business_id,
+                "service_type_id": service_type_id,
+                "time": _future_time(3),
+                "phone": "+31600000000",
+                "email": "override@example.com",
+                "name": "Guest",
+                "guests": 2,
+                "idempotency_key": "policy-override",
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["cancellation_window_minutes"] == 45
+        assert resp.json()["reconfirmation_enabled"] is False
+
+    @pytest.mark.asyncio
+    async def test_the_window_shown_to_a_guest_is_the_window_enforced(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        """With no schedule row at all, both sides fall back to one constant.
+
+        `cancel_reservation` decides `cancelled_late` from the same value the
+        response reports. If the two ever drift, the guest is warned about one
+        deadline and judged against another, and nothing would fail loudly.
+        """
+        owner_token, business_id = await _create_business_owner(client)
+        await _open_default_schedule(db_session, business_id)
+        service_type_id = await _create_service_type(client, owner_token, business_id)
+        created = await client.post(
+            "/api/reservations/public",
+            json={
+                "business_id": business_id,
+                "service_type_id": service_type_id,
+                "time": _future_time(1),
+                "phone": "+31600000000",
+                "email": "nopolicy@example.com",
+                "name": "Guest",
+                "guests": 2,
+                "idempotency_key": "policy-fallback",
+            },
+        )
+        assert created.status_code == 201, created.text
+
+        # Drop every schedule for this business, so the policy lookup misses.
+        for schedule in (
+            await db_session.scalars(
+                select(BookingSchedule).where(
+                    BookingSchedule.business_id == business_id
+                )
+            )
+        ).all():
+            await db_session.delete(schedule)
+        await db_session.commit()
+
+        reservation = await db_session.scalar(
+            select(Reservation).where(
+                Reservation.business_id == business_id,
+                Reservation.email == "nopolicy@example.com",
+            )
+        )
+        assert reservation is not None
+        exchange = await client.post(
+            "/api/public/capabilities/exchange",
+            json={
+                "kind": "reservation",
+                "token": issue_guest_token(
+                    business_id=reservation.business_id,
+                    reservation_id=reservation.id,
+                    revision=reservation.guest_token_revision,
+                ),
+            },
+        )
+        assert exchange.status_code == 204, exchange.text
+
+        managed = await client.get("/api/reservations/public/manage")
+        assert managed.status_code == 200, managed.text
+        assert (
+            managed.json()["cancellation_window_minutes"]
+            == reservation_service.DEFAULT_CANCELLATION_WINDOW_MINUTES
+        )
+        assert (
+            managed.json()["reconfirmation_enabled"]
+            is reservation_service.DEFAULT_RECONFIRMATION_ENABLED
+        )
 
     @pytest.mark.asyncio
     async def test_staff_marks_no_show_after_grace_period(

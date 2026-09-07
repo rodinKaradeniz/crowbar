@@ -140,3 +140,15 @@ class PublicReservationResponse(AppBaseModel):
     guests: int
     cancelled_late: bool | None = None
     reconfirmed_at: datetime | None = None
+    #: The two policy values the guest needs to act, and nothing else about the
+    #: venue's schedule. Without `reconfirmation_enabled` the manage page offers
+    #: "I'm still coming" at a venue that does not ask for it and the guest gets
+    #: a 409; without the window they cancel with no warning that it will be
+    #: recorded as a late cancellation.
+    #:
+    #: Neither is carried by the `Reservation` row — both are resolved from the
+    #: booking schedule and attached by `_public_reservation_response`. Declaring
+    #: them here alone would serialize `null`, which is the bug the staff
+    #: `ReservationResponse` above already has.
+    reconfirmation_enabled: bool | None = None
+    cancellation_window_minutes: int | None = None

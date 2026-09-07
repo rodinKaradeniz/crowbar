@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { useRegionalSettings } from "@/contexts/regional-context";
 import {
   BrainCircuit,
@@ -115,7 +116,11 @@ export default function InsightsClient({
       }
       router.refresh();
     } catch {
-      // ML service unavailable
+      // The server distinguishes an unreachable insights service (503) from a
+      // real error response, and says so — but this button used to swallow both
+      // and simply stop spinning, so an operator pressing it against a service
+      // that was away saw nothing happen and had no reason not to press again.
+      toast.error("Insights is unavailable right now. Nothing was started — try again in a moment.");
     } finally {
       setIsRunning(false);
     }

@@ -18,7 +18,10 @@ from app.models.business import Business
 from app.models.customer import CustomerDataRequest, CustomerMarketingConsent
 from app.models.customer import Customer
 from app.models.reservation import Reservation
+from app.models.notification import Notification
 from app.models.service_type import ServiceType
+from app.models.staff import Staff
+from app.models.user import User
 from app.services import marketing_consent_service
 from app.services.reservation_guest_token_service import issue_guest_token
 
@@ -101,6 +104,26 @@ async def _hold_capability(client: AsyncClient, token: str) -> None:
         json={"kind": "reservation", "token": token},
     )
     assert response.status_code == 204, response.text
+
+
+async def _staff(
+    db: AsyncSession, business: Business, *, roles: tuple[str, ...]
+) -> dict[str, User]:
+    """Give the venue people, so a fan-out has somewhere to land."""
+    users: dict[str, User] = {}
+    for role in roles:
+        user = User(
+            email=f"{role}-{business.slug}@example.com",
+            name=f"Staff {role}",
+            password_hash="x",
+            user_type="staff",
+        )
+        db.add(user)
+        await db.flush()
+        db.add(Staff(user_id=user.id, business_id=business.id, role=role))
+        users[role] = user
+    await db.commit()
+    return users
 
 
 @pytest.mark.asyncio
@@ -409,3 +432,117 @@ def test_the_low_level_sender_refuses_to_send_marketing():
 
     with pytest.raises(ValueError, match="send_marketing_sms"):
         sms_service.send_sms("+4915100000011", "Half price cocktails!", message_class="marketing")
+
+
+@pytest.mark.asyncio
+async def test_a_data_request_reaches_the_venue(
+    client: AsyncClient, db_session: AsyncSession
+):
+    """The row is not the deliverable — someone seeing it is.
+
+    Before this, an access or deletion request was written `pending` and read by
+    nothing: no route, no report, no notification. The guest was told "the venue
+    has been asked to action your request" and the venue was told nothing, which
+    made the copy a promise the product could not keep.
+    """
+    business, customer, _reservation, token = await _booked_guest(
+        db_session, slug="privacy-notify"
+    )
+    staff = await _staff(
+        db_session,
+        business,
+        roles=("owner", "manager", "host_server", "bar_kitchen"),
+    )
+    await _hold_capability(client, token)
+
+    response = await client.post(
+        "/api/public/privacy/requests",
+        json={"request_type": "deletion"},
+    )
+    assert response.status_code == 201, response.text
+
+    notifications = list(
+        (
+            await db_session.scalars(
+                select(Notification).where(
+                    Notification.business_id == business.id,
+                    Notification.kind == "customer_data_request",
+                )
+            )
+        ).all()
+    )
+    # Only the people who hold `customers.privacy`. A bartender cannot action a
+    # deletion request, and an unread notification also raises a toast — so
+    # sending it to the bar screen puts a guest's data request in front of the
+    # room for no reason.
+    assert {n.user_id for n in notifications} == {
+        staff["owner"].id,
+        staff["manager"].id,
+    }
+    assert notifications[0].payload["customer_id"] == str(customer.id)
+    assert notifications[0].payload["request_type"] == "deletion"
+    assert notifications[0].payload["data_request_id"]
+
+
+@pytest.mark.asyncio
+async def test_the_notification_does_not_restate_the_guests_data(
+    client: AsyncClient, db_session: AsyncSession
+):
+    """It says a right was exercised, not what the venue holds about them.
+
+    Every staff member gets one of these. Putting the guest's name, email or
+    phone in the body would spread contact details across the venue to tell
+    people something they can already look up if they have cause to.
+    """
+    business, customer, _reservation, token = await _booked_guest(
+        db_session, slug="privacy-notify-quiet"
+    )
+    await _staff(db_session, business, roles=("owner",))
+    await _hold_capability(client, token)
+
+    response = await client.post(
+        "/api/public/privacy/requests",
+        json={"request_type": "export", "note": "my address is wrong"},
+    )
+    assert response.status_code == 201, response.text
+
+    notification = await db_session.scalar(
+        select(Notification).where(
+            Notification.business_id == business.id,
+            Notification.kind == "customer_data_request",
+        )
+    )
+    assert notification is not None
+    text = f"{notification.title} {notification.body}"
+    for secret in (customer.name, customer.email, customer.phone, "my address is wrong"):
+        assert secret not in text
+
+
+@pytest.mark.asyncio
+async def test_withdrawing_consent_notifies_nobody(
+    client: AsyncClient, db_session: AsyncSession
+):
+    """Withdrawal is already done, so there is nothing to action.
+
+    Notifying about it would be noise on a kind that otherwise always means
+    "somebody has to do something", and a kind that is usually noise gets
+    ignored when it is not.
+    """
+    business, _customer, _reservation, token = await _booked_guest(
+        db_session, slug="privacy-notify-none"
+    )
+    await _staff(db_session, business, roles=("owner", "manager"))
+    await _hold_capability(client, token)
+
+    response = await client.post(
+        "/api/public/privacy/requests",
+        json={"request_type": "withdraw_consent"},
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["status"] == "completed"
+
+    assert (
+        await db_session.scalar(
+            select(Notification).where(Notification.business_id == business.id)
+        )
+    ) is None

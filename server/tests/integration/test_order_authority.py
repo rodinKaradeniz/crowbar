@@ -3,7 +3,8 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import func, select
+from httpx import AsyncClient
+from sqlalchemy import event, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models.business import Business
@@ -12,6 +13,7 @@ from app.models.menu import Menu, MenuCategory, MenuItem, Modifier, ModifierGrou
 from app.models.order import Order, OrderRevision
 from app.models.preparation_station import PreparationStation
 from app.models.recipe import MenuItemIngredient
+from app.models.staff import Staff
 from app.models.tab import TabSettlementEvent
 from app.models.user import User
 from app.schemas.order import (
@@ -23,6 +25,7 @@ from app.schemas.order import (
 from app.schemas.tab import TabReopenRequest, TabSettleExternallyRequest
 from app.schemas.tax import TaxProfileVersionCreate
 from app.services import order_service, tab_service, tax_service
+from app.services.auth_service import create_access_token
 
 
 async def _menu_context(
@@ -651,3 +654,66 @@ async def test_concurrent_order_retry_creates_one_order(
 
     assert results[0][0] == results[1][0]
     assert sorted(created for _, created in results) == [False, True]
+
+
+@pytest.mark.asyncio
+async def test_tab_list_read_is_bounded_by_the_list_not_the_tab_count(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    """`GET /api/tabs` must cost the same number of statements for 1 tab or 4.
+
+    The list used to serialize each tab through its own helper, so orders,
+    their line items and timelines, the derived table label, the total and the
+    settlement events were all read PER TAB. That is N+1 by construction and
+    the only honest guard against it coming back is a count that does not move
+    when the list grows.
+    """
+    business, item, modifier = await _menu_context(db_session, "tab-list-count")
+    actor = User(
+        email="tab-list-count@example.com",
+        name="Tab List Manager",
+        password_hash="test-only",
+        user_type="staff",
+    )
+    db_session.add(actor)
+    await db_session.flush()
+    db_session.add(Staff(user_id=actor.id, business_id=business.id, role="manager"))
+    await db_session.flush()
+    headers = {
+        "Authorization": "Bearer "
+        + create_access_token(str(actor.id), "staff", actor.session_version)
+    }
+
+    statements: list[str] = []
+
+    def record(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    async def count_for(tab_count: int) -> int:
+        while len(await tab_service.list_tabs(db_session, business.id, None)) < tab_count:
+            tab = await tab_service.open_tab(db_session, business.id, actor.id)
+            await tab_service.add_order_to_tab(
+                db_session,
+                business.id,
+                tab.id,
+                _request(item, modifier, key=f"tab-list-{tab.id}", quantity=1),
+            )
+        await db_session.commit()
+        statements.clear()
+        engine = db_session.bind
+        event.listen(engine.sync_engine, "before_cursor_execute", record)
+        try:
+            response = await client.get("/api/tabs", headers=headers)
+        finally:
+            event.remove(engine.sync_engine, "before_cursor_execute", record)
+        assert response.status_code == 200
+        assert len(response.json()) == tab_count
+        return len(statements)
+
+    one = await count_for(1)
+    four = await count_for(4)
+
+    assert one == four, (
+        f"the tab list is N+1: {one} statements for one tab, {four} for four"
+    )

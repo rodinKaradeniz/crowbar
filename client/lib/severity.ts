@@ -222,3 +222,11 @@ export function tableStateSeverity(): Severity {
 export function orderStatusSeverity(): Severity {
   return "neutral"
 }
+
+/** Reservation workflow position — pending, confirmed, cancelled, completed,
+ *  no-show. Also not severity: it records what happened to a booking, and
+ *  nothing on the guest's own copy of it is something a bartender acts on. A
+ *  cancelled booking in red would rank the guest's own decision as a failure. */
+export function reservationStatusSeverity(): Severity {
+  return "neutral"
+}

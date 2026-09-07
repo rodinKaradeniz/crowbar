@@ -7,7 +7,8 @@ import {
   AuthNotice,
   RevealToggle,
 } from "@/components/auth/auth-field";
-import { AuthCard, AuthMark, BackToSignIn } from "@/components/auth/auth-shell";
+import { BrandMark } from "@/components/brand-mark";
+import { AuthCard, BackToSignIn } from "@/components/auth/auth-shell";
 import {
   gradePassword,
   PASSWORD_MIN_LENGTH,
@@ -90,7 +91,7 @@ export function ResetPasswordForm() {
   if (linkDead) {
     return (
       <AuthCard ground="ink">
-        <AuthMark tone="critical" size="sm" />
+        <BrandMark tone="critical" size="sm" />
         <p className="type-label mt-9 mb-3.5 text-critical-text">
           Link expired
         </p>
@@ -114,7 +115,7 @@ export function ResetPasswordForm() {
   if (complete) {
     return (
       <AuthCard ground="brand">
-        <AuthMark tone="paper" size="sm" />
+        <BrandMark tone="paper" size="sm" />
         <p className="type-label mt-9 mb-3.5 text-[var(--brand-lit-soft)]">
           Password saved
         </p>
@@ -141,7 +142,7 @@ export function ResetPasswordForm() {
   return (
     <AuthCard>
       <form onSubmit={handleSubmit} noValidate>
-        <AuthMark tone="brand" size="sm" />
+        <BrandMark tone="brand" size="sm" />
         <h1 className="auth-title-sm mt-8 mb-5">Set a new password</h1>
 
         {error ? (

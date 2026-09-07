@@ -158,3 +158,55 @@ arguments — harmless, but you can add `-r` to skip it entirely:
 Do not blanket-kill by name. `pkill -f "next dev"` will also kill other
 projects' dev servers, which is easy to do by accident when several are
 running. Target the port instead.
+
+
+────────────────────────────────────────────────────────────────────────
+6. SEE THE WAITLIST OFFER SURFACE
+────────────────────────────────────────────────────────────────────────
+
+/reserve/waitlist renders "Offer unavailable" unless a waitlist entry is
+actually in the `offered` state, and an offer only lives OFFER_MINUTES (15).
+The seed creates one, so it is live for fifteen minutes after seeding and
+terminal after that. Reseeding to see this screen is the wrong trade — mint a
+fresh offer instead. Nothing here is destructive; it moves one waitlist row.
+
+Log in and offer the seeded waiting entry:
+
+  TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+    -H 'Content-Type: application/json' \
+    -d '{"email":"owner@example.com","password":"password123"}' \
+    | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])')
+
+  curl -s -X POST -H "Authorization: Bearer $TOKEN" \
+    -H 'Content-Type: application/json' \
+    -d '{"reservation_time":"<an available slot, ISO 8601 UTC>"}' \
+    http://localhost:8000/api/reservations/waitlist/00000000-0000-0030-0000-000000000001/offer
+
+`GET /api/reservations/waitlist` lists the entries and their ids if the seeded
+one has already been used. `requested_starts_at` on the entry is a slot that
+works.
+
+The offer link is emailed, and email is not configured locally, so the response
+comes back with `"delivery_state": "failed"` and no link. Mint the capability
+token by hand — it is derived, not stored:
+
+  cd server
+  REV=$(docker exec crowbar-db psql -U postgres -d crowbar -tAc \
+    "SELECT offer_token_revision FROM reservation_waitlist_entries \
+     WHERE id='00000000-0000-0030-0000-000000000001'")
+  venv/bin/python -c "
+  from uuid import UUID
+  from app.services.reservation_waitlist_token_service import issue_offer_token
+  print(issue_offer_token(
+      business_id=UUID('00000000-0000-0000-0000-000000000002'),
+      entry_id=UUID('00000000-0000-0030-0000-000000000001'),
+      revision=$REV))"
+
+Then open, with the token in the FRAGMENT — it is a credential and never
+reaches the server or a log:
+
+  http://localhost:3000/reserve/waitlist#token=<the token>
+
+The three token-bearing guest routes all work this way: /reserve/manage,
+/reserve/waitlist and /reserve/waitlist/manage. There is no path-segment
+form of any of them; /reserve/waitlist/<anything> is a 404.

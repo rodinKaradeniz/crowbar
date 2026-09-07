@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 
-import { AuthCard, AuthMark, AuthPage, BackToSignIn } from "@/components/auth/auth-shell";
+import { BrandMark } from "@/components/brand-mark";
+import { AuthCard, AuthPage, BackToSignIn } from "@/components/auth/auth-shell";
 import { Skeleton } from "@/components/ui/skeleton";
 import { consumeCapabilityFragment } from "@/lib/capability-fragment";
 import { clientExchangePublicCapability, clientGetInvite } from "@/lib/client-api";
@@ -33,7 +34,7 @@ export default function InvitePage() {
       <AuthPage>
         <div className="mx-auto w-full max-w-[440px]">
           <AuthCard>
-            <AuthMark tone="brand" size="sm" />
+            <BrandMark tone="brand" size="sm" />
             <Skeleton className="mt-9 h-[1em] w-24" />
             <Skeleton className="mt-4 h-[1.6em] w-3/4" index={1} />
             <Skeleton className="mt-3 h-[1em] w-full" index={2} />
@@ -54,7 +55,7 @@ export default function InvitePage() {
       <AuthPage>
         <div className="mx-auto w-full max-w-[440px]">
           <AuthCard ground="ink">
-            <AuthMark tone="critical" size="sm" />
+            <BrandMark tone="critical" size="sm" />
             <p className="type-label mt-9 mb-3.5 text-critical-text">
               Link expired · 72 h
             </p>

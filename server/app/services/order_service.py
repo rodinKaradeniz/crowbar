@@ -24,11 +24,14 @@ from app.models.order import (
 from app.models.preparation_station import PreparationStation
 from app.models.tab import Tab
 from app.models.table import Table
+from app.models.table_area import TableArea
+from app.models.table_seating import TableSeatingTable
 from app.schemas.order import (
     OrderCancellationRequest,
     OrderCorrectionRequest,
     OrderLineStatusUpdateRequest,
     OrderPlaceRequest,
+    OrderResponse,
     OrderStatusUpdateRequest,
 )
 from app.services import menu_activation_service, recipe_service, tax_service
@@ -275,14 +278,22 @@ async def _load_order(
     return result.scalar_one_or_none()
 
 
-def order_to_dict(order: Order) -> dict:
+def order_to_dict(order: Order, *, table_label: str | None = None) -> dict:
+    """The board projection of one order.
+
+    `table_label` is the DERIVED table name when the caller resolved one (see
+    resolve_order_table_labels); the legacy column otherwise. Callers that
+    record the persisted row rather than project it — the OrderRevision audit
+    snapshots — deliberately pass nothing, so a snapshot never claims a label
+    the row does not carry.
+    """
     return {
         "id": str(order.id),
         "business_id": str(order.business_id),
         "location_id": str(order.location_id) if order.location_id else None,
         "table_id": str(order.table_id) if order.table_id else None,
         "tab_id": str(order.tab_id) if order.tab_id else None,
-        "table_identifier": order.table_identifier,
+        "table_identifier": table_label or order.table_identifier,
         "status": order.status,
         "idempotency_key": order.idempotency_key,
         "currency_code": order.currency_code,
@@ -338,6 +349,104 @@ def order_to_dict(order: Order) -> dict:
             )
         ],
     }
+
+
+async def resolve_order_table_labels(
+    db: AsyncSession, business_id: UUID, orders: list[Order]
+) -> dict[UUID, str]:
+    """The human table label for each order, DERIVED at read time — never stored.
+
+    `orders.table_identifier` is a legacy free-text column no caller writes, so
+    every order placed through the running product has it null. This resolves
+    the label for a whole board in one query and hands it to the serializers.
+    Nothing is written and no mapped attribute is touched, so no autoflush can
+    UPDATE that column back into existence.
+
+    Precedence, encoded by the COALESCE in the join condition:
+
+      1. tab -> seating -> EVERY table in the seating. The only correct source
+         for a combination: `tab_service.open_seating_tab` sets `tab.table_id`
+         to `table_ids[0]` of an UNORDERED select, and the QR path records
+         whichever table the guest happened to scan, so either would print half
+         a combination on the ticket — non-deterministically, for the staff
+         path. A party at T5+T6 has to read as both.
+      2. `tab.table_id` — a tab with a table but no seating. Not reachable
+         today; kept so the resolver stays correct if that path is wired up.
+      3. `orders.table_id` — an order with no tab, and the seeded demo rows.
+
+    The join to `tables` is inner and deliberately UNFILTERED — no `is_active`
+    or `deleted_at` predicate. A table archived after service still has to name
+    the ticket it fed, and filtering is the one way this could silently drop
+    some of a seating's tables. `table_seating_tables.table_id` is ON DELETE
+    RESTRICT, so either every row joins or the foreign key is broken.
+
+    Ordered by the same four keys the floor orders tables by, so the label
+    reads the way the room does.
+    """
+    order_ids = [
+        order.id
+        for order in orders
+        if order.tab_id is not None or order.table_id is not None
+    ]
+    if not order_ids:
+        return {}
+
+    result = await db.execute(
+        select(Order.id, Table.label)
+        .select_from(Order)
+        .outerjoin(Tab, Tab.id == Order.tab_id)
+        .outerjoin(TableSeatingTable, TableSeatingTable.seating_id == Tab.seating_id)
+        .join(
+            Table,
+            Table.id
+            == func.coalesce(TableSeatingTable.table_id, Tab.table_id, Order.table_id),
+        )
+        .join(TableArea, TableArea.id == Table.area_id)
+        .where(
+            Order.id.in_(order_ids),
+            Order.business_id == business_id,
+            Table.business_id == business_id,
+        )
+        .order_by(TableArea.sort_order, TableArea.name, Table.sort_order, Table.label)
+    )
+
+    grouped: dict[UUID, list[str]] = {}
+    for order_id, label in result.all():
+        grouped.setdefault(order_id, []).append(label)
+    return {order_id: " + ".join(labels) for order_id, labels in grouped.items()}
+
+
+async def orders_to_board_payload(
+    db: AsyncSession, business_id: UUID, orders: list[Order]
+) -> list[dict]:
+    """The WebSocket board projection, with each order's table label attached."""
+    labels = await resolve_order_table_labels(db, business_id, orders)
+    return [order_to_dict(order, table_label=labels.get(order.id)) for order in orders]
+
+
+async def orders_to_responses(
+    db: AsyncSession, business_id: UUID, orders: list[Order]
+) -> list[OrderResponse]:
+    """OrderResponse rows carrying the derived table label.
+
+    `model_copy` overrides the field on the RESPONSE, not on the ORM row.
+    Assigning `order.table_identifier` instead would mark the instance dirty and
+    the `db.commit()` these routes already run would write derived data into the
+    legacy column this whole function exists to avoid writing.
+    """
+    labels = await resolve_order_table_labels(db, business_id, orders)
+    return [
+        OrderResponse.model_validate(order).model_copy(
+            update={"table_identifier": labels.get(order.id) or order.table_identifier}
+        )
+        for order in orders
+    ]
+
+
+async def order_to_response(
+    db: AsyncSession, business_id: UUID, order: Order
+) -> OrderResponse:
+    return (await orders_to_responses(db, business_id, [order]))[0]
 
 
 async def place_order(

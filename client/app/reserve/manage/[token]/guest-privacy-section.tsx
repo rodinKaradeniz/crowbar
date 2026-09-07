@@ -22,7 +22,15 @@ import {
  * so by the page around this; repeating it here would be noise, and there is
  * nothing they could do about it from here anyway.
  */
-export function GuestPrivacySection() {
+export function GuestPrivacySection({
+  credentialRevoked = false,
+}: {
+  /** The link this section acts through has been revoked — cancelling does
+   *  both, clearing the cookie and bumping the token revision. The buttons
+   *  would 404, so they go; the venue's contact stays, because that is now the
+   *  guest's only route. */
+  credentialRevoked?: boolean;
+}) {
   const [state, setState] = useState<GuestPrivacyState | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
@@ -61,9 +69,12 @@ export function GuestPrivacySection() {
   }
 
   return (
-    <section className="mt-8 border-t pt-6">
-      <h2 className="font-semibold">Your data</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
+    <section className="mt-[var(--space-24)] border-t pt-[var(--space-24)]">
+      <div className="mb-4 flex items-center gap-4">
+        <h2 className="type-label text-muted-foreground">Your data</h2>
+        <span className="h-px flex-1 bg-border" aria-hidden />
+      </div>
+      <p className="text-[length:var(--ui-size)] text-muted-foreground">
         This venue is responsible for the information it holds about you.
       </p>
 
@@ -71,7 +82,10 @@ export function GuestPrivacySection() {
         {consented.length > 0 ? (
           <>
             You currently receive marketing from this venue by{" "}
-            <strong>{consented.map(([channel]) => channel).join(" and ")}</strong>.
+            <strong>
+              {consented.map(([channel]) => channel).join(" and ")}
+            </strong>
+            .
           </>
         ) : (
           "You do not receive marketing from this venue."
@@ -85,51 +99,69 @@ export function GuestPrivacySection() {
         </p>
       )}
       {error && (
-        <p role="alert" className="mt-3 border-l-2 border-critical-fill bg-critical-tint p-3 text-[length:var(--ui-size)] text-critical-text">
+        <p
+          role="alert"
+          className="mt-3 border-l-2 border-critical-fill bg-critical-tint p-3 text-[length:var(--ui-size)] text-critical-text"
+        >
           {error}
         </p>
       )}
 
-      <div className="mt-4 flex flex-wrap gap-3">
-        {consented.length > 0 && (
+      {credentialRevoked && (
+        <p className="mt-[var(--space-12)] text-[length:var(--ui-size)] text-muted-foreground">
+          This booking is cancelled, so this link no longer works. Contact the
+          venue directly about your data.
+        </p>
+      )}
+
+      {!credentialRevoked && (
+        <div className="mt-4 flex flex-wrap gap-3">
+          {consented.length > 0 && (
+            <Button
+              variant="secondary"
+              size="filter"
+              disabled={busy !== null}
+              onClick={() => void run("withdraw_consent")}
+            >
+              {busy === "withdraw_consent"
+                ? "Saving…"
+                : "Stop marketing messages"}
+            </Button>
+          )}
           <Button
             variant="secondary"
             size="filter"
             disabled={busy !== null}
-            onClick={() => void run("withdraw_consent")}
+            onClick={() => void run("export")}
           >
-            {busy === "withdraw_consent" ? "Saving…" : "Stop marketing messages"}
+            {busy === "export" ? "Sending…" : "Request a copy of my data"}
           </Button>
-        )}
-        <Button
-          variant="secondary"
-          size="filter"
-          disabled={busy !== null}
-          onClick={() => void run("export")}
-        >
-          {busy === "export" ? "Sending…" : "Request a copy of my data"}
-        </Button>
-        <Button
-          variant="secondary"
-          size="filter"
-          disabled={busy !== null}
-          onClick={() => void run("deletion")}
-        >
-          {busy === "deletion" ? "Sending…" : "Request deletion"}
-        </Button>
-      </div>
+          <Button
+            variant="secondary"
+            size="filter"
+            disabled={busy !== null}
+            onClick={() => void run("deletion")}
+          >
+            {busy === "deletion" ? "Sending…" : "Request deletion"}
+          </Button>
+        </div>
+      )}
 
-      <p className="mt-3 text-xs text-muted-foreground">
-        Stopping marketing takes effect straight away. Copies and deletions are
-        actioned by the venue, so they are not instant — you will hear back from
-        them directly. Messages about a booking you made are not marketing and
-        will still be sent.
-      </p>
+      {!credentialRevoked && (
+        <p className="mt-3 text-[length:var(--ui-size)] text-muted-foreground">
+          Stopping marketing takes effect straight away. Copies and deletions
+          are actioned by the venue, so they are not instant — you will hear
+          back from them directly. Messages about a booking you made are not
+          marketing and will still be sent.
+        </p>
+      )}
 
       {(state.privacyContact || state.privacyPolicyUrl) && (
-        <p className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <p className="mt-3 flex flex-wrap items-center gap-2 text-[length:var(--ui-size)] text-muted-foreground">
           <Mail className="size-3.5 shrink-0" aria-hidden />
-          {state.privacyContact && <span className="break-all">{state.privacyContact}</span>}
+          {state.privacyContact && (
+            <span className="break-all">{state.privacyContact}</span>
+          )}
           {state.privacyPolicyUrl && (
             <a
               href={state.privacyPolicyUrl}

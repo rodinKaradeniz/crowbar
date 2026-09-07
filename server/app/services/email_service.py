@@ -1,6 +1,7 @@
 """Email service using Resend for reservation confirmations and notifications."""
 
 import base64
+import logging
 from html import escape
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -9,10 +10,24 @@ import resend
 
 from app.config import settings
 
+logger = logging.getLogger(__name__)
+
 
 def _ensure_resend_configured() -> bool:
-    """Return True if Resend is configured and ready to send."""
-    return bool(settings.resend_api_key)
+    """Return True if Resend is configured and ready to send.
+
+    A venue with no provider configured is the normal local and pre-pilot
+    state, not an incident — so this is debug, matching how sms_service reports
+    the same condition. It exists because this module used to have no logger at
+    all: every unsent email, including a guest's reservation confirmation, left
+    no trace anywhere. Callers that persist a DeliveryAttempt still surface the
+    failure properly; reservation confirmations do not, and that gap is
+    recorded in docs/TODO.md rather than papered over here.
+    """
+    if not settings.resend_api_key:
+        logger.debug("Resend is not configured — email skipped")
+        return False
+    return True
 
 
 def _format_datetime(dt: datetime, timezone_name: str) -> str:

@@ -448,6 +448,19 @@ export interface FloorPlanBoard {
   queueEntries: FloorPlanParty[];
 }
 
+/** A guest who scanned a table QR and is waiting for staff to let them order.
+    Staff-side view of the session the guest holds; the board joins it to a
+    table by `tableId`. */
+export interface StaffTableGuestSession {
+  id: string;
+  tableId: string;
+  seatingId: string;
+  tableLabel: string;
+  status: "pending" | "approved" | "denied" | "revoked";
+  expiresAt: string;
+  createdAt: string;
+}
+
 // ─── Ordering ─────────────────────────────────────────────────────────────────
 
 export interface Modifier {
@@ -1051,6 +1064,11 @@ export interface Reservation {
   noShowAt?: string;
   noShowNote?: string;
   reconfirmedAt?: string;
+  /** Venue policy, resolved from the booking schedule rather than stored on the
+   *  reservation. Only the public guest projection carries these; the staff
+   *  payload declares them and never populates them. */
+  reconfirmationEnabled?: boolean;
+  cancellationWindowMinutes?: number;
   createdAt: string;
   updatedAt: string;
 }

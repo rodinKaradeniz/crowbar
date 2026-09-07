@@ -246,6 +246,14 @@ async def update_area(
         db, business.id, area_id, body.model_dump(exclude_unset=True)
     )
     await db.commit()
+    # TimestampMixin.updated_at carries a SERVER-side `onupdate`, so the UPDATE
+    # flush expires it — `expire_on_commit=False` does not help, because it was
+    # the flush that expired it, not the commit. Serializing the response then
+    # touches the attribute and SQLAlchemy attempts lazy IO outside the async
+    # greenlet: MissingGreenlet, ResponseValidationError, 500 — after the row
+    # has already been written. Refresh explicitly, as the waitlist offer route
+    # does. INSERT paths are unaffected; they get the value back via RETURNING.
+    await db.refresh(area)
     await _publish_change(
         "area.updated", business.id, resource_id=area.id, location_id=area.location_id
     )
@@ -344,6 +352,8 @@ async def update_table(
         db, business.id, table_id, body.model_dump(exclude_unset=True)
     )
     await db.commit()
+    # Expired `updated_at` after an UPDATE — see update_area.
+    await db.refresh(table)
     await _publish_change(
         "table.updated",
         business.id,
@@ -387,6 +397,8 @@ async def set_table_state(
         actor_id=user.id,
     )
     await db.commit()
+    # Expired `updated_at` after an UPDATE — see update_area.
+    await db.refresh(table)
     await _publish_change(
         "table.state_changed",
         business.id,

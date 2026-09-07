@@ -320,13 +320,15 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
                         <p className="text-xs text-muted-foreground italic mt-0.5">{ci.notes}</p>
                       )}
                     </div>
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
                       onClick={() => removeItem(i)}
-                      className="text-muted-foreground hover:text-destructive shrink-0 mt-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                      className="text-muted-foreground shrink-0"
                       aria-label={`Remove ${ci.item.name}`}
                     >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                      <Trash2 />
+                    </Button>
                   </div>
                 );
               })}

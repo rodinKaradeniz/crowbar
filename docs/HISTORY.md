@@ -2524,3 +2524,412 @@ delete. CI is the next pass and needs a seeded stack inside the runner.
 `client/app/business/floor/floor-client.tsx`,
 `client/app/business/orders/ticket-board-client.tsx`,
 `server/db/seeds/001_seed_volt_and_vine.sql`, `docs/TODO.md`, `AGENTS.md`.
+## 2026-09-05 — A realtime surface needs an event for the arrival, not only for the decision
+
+**Context.** The staff screen that approves a guest's table session was scoped
+as client-only: the endpoints, the capability, the WebSocket invalidation and
+the stream routing all shipped months ago, and the board only had to call them.
+It did not work, and the reason was one line that had never been written.
+
+**What was actually missing.** `POST /api/floor-plan/table-guest-sessions/{id}/approve`
+and its `deny` sibling both published `floor_plan.table_guest_session.updated`.
+The guest's scan — `POST /api/ordering/{business_id}/table-sessions`, the thing
+that creates the pending request in the first place — published nothing. So the
+board could be told a decision had been made, and could never be told one was
+needed. A host standing at the floor map would have waited for a badge that
+only a full page load could produce.
+
+**The lesson.** The event that is easy to remember is the one a staff member
+causes, because it happens in code the team is already writing on a route that
+already publishes. The event that matters to a waiting-for-something surface is
+the one the *other* actor causes — the guest, the device, the external system —
+and it is usually on a public route nobody thought of as a producer. For any
+surface whose job is to say "something is waiting", ask which actor starts the
+wait, and whether that action publishes. If it does not, the surface is a
+refresh button wearing a badge.
+
+**Consequences.** The public table-session route now publishes
+`floor_plan.table_guest_session.created` when it opens a `pending` row, with the
+session id and nothing else — never the guest's table token. Two related
+constraints came out of the same pass and bind future work:
+
+- **A tab's `table_id` is not the party's table.** `tab_service` sets it to
+  `table_ids[0]` of an unordered select, so for a seating spanning several
+  tables it is a non-deterministic member of the set. Anything that has to name
+  where a party is sitting — a ticket header, a report, a printed docket — must
+  resolve through `tabs.seating_id → table_seating_tables`, or it will show half
+  a combination, and a different half between reads.
+- **A staff list is not a queue of live work.** `list_for_staff` used to return
+  every `pending` row including expired ones, leaving each surface to exclude
+  what had run out its time. Corrected on 2026-09-05: the read now drops an
+  expired `pending` row, because `decide` already refuses one, so the read and
+  the write agree on what "pending" means. The scoping is the durable part —
+  approved, denied and revoked rows are history and still come back at any age,
+  so an expiry filter here must never be blanket.
+
+**References.** `server/app/routers/ordering.py`,
+`server/app/services/order_service.py`,
+`client/app/business/floor/floor-client.tsx`,
+`client/app/menu/[business]/menu-client.tsx`,
+`client/e2e/service-loop.spec.ts`, `server/db/seeds/001_seed_volt_and_vine.sql`,
+`docs/TODO.md`, `docs/ARCHITECTURE.md`.
+
+## 2026-09-05 — A server-side `onupdate` makes the response, not the write, the thing that fails
+
+**Context.** A failure-mode injection pass stopped Redis and renamed a floor
+area. The endpoint answered `500` while the rename landed in the database. The
+obvious reading was that losing Redis breaks mutations — and it was wrong. The
+same request answered `500` with Redis running: `PATCH /floor-plan/areas/{id}`,
+`PATCH /floor-plan/tables/{id}` and `PUT /floor-plan/tables/{id}/state` had been
+failing unconditionally, and no test covered any of them.
+
+**Decision.** An UPDATE route must `await db.refresh(...)` after its commit
+before returning a mapped instance. `TimestampMixin.updated_at` carries a
+server-side `onupdate`, so the UPDATE flush expires that attribute;
+`expire_on_commit=False` does not save it, because the flush expired it rather
+than the commit. Serializing the response then touches the attribute and
+SQLAlchemy attempts lazy IO outside the async greenlet — `MissingGreenlet`,
+`ResponseValidationError`, `500`. INSERT paths are unaffected: they get the
+value back through `RETURNING`, which is why creating an area always worked and
+renaming one never did.
+
+**Consequences.**
+
+- The failure shape matters more than the frequency. The write commits and the
+  operator is told it failed, so the screen and the record disagree — and a
+  retry writes again. Any route that commits and then returns a mapped instance
+  is suspect; the pattern to copy is the waitlist offer route, which already
+  refreshed.
+- **A dependency outage is a suspect, not a cause.** The injection surfaced this
+  bug but did not create it. Confirm that a failure disappears when the
+  dependency returns before attributing it to the dependency.
+- Route coverage gaps hide unconditional breakage. These three had no test at
+  all; a `500` on every call survived a full green suite.
+
+**References.** `server/app/routers/floor_plan.py`, `server/app/models/base.py`,
+`server/tests/integration/test_floor_plan_routes.py`.
+
+## 2026-09-05 — Optional dependencies degrade correctly; the screens that report them do not
+
+**Context.** The first injection pass took Redis, the WebSocket and the ML
+service away, and read email and SMS in their permanently-unconfigured state.
+The operational record survived all of it — no dependency failure produced a
+wrong or missing row. Every real finding was on the reporting side.
+
+**Decision.** Treat "does the record stay correct" and "does the screen say what
+happened" as two separate acceptance questions. The first is met; the second is
+not, and it is now tracked as its own body of work rather than assumed from the
+first.
+
+**Consequences.**
+
+- **Redis loss is silent.** `publish()` swallows, so the mutation succeeds and
+  the event is lost — but the sockets stay OPEN, so `connected` stays true and
+  the offline bar never appears. There is no outbox, so no reconnect replays it.
+  A failure with no signal is worse than a visible outage.
+- **Honest degradation is worthless if the client discards it.**
+  `/api/insights/*` carefully returns `stale`, `captured_at` and an
+  `unavailable_reason`; `client/lib/ml-api.ts` turns every error response into
+  `null` and the page reads none of the three. A degraded-mode contract is only
+  as real as its consumer, and `AGENTS.md` had been asserting the API's
+  behaviour as if it were the page's.
+- **Reconnect that cannot re-enter is not reconnect.** All four socket hooks
+  back off correctly but `return` without scheduling a retry when the WS-token
+  fetch fails, so one failed attempt ends the chain for the life of the page.
+- **A local container can lie about the code.** `scripts/dev.sh` never rebuilds
+  the ML image, so `ml/` source and the running service drift apart and the
+  divergence presents as a product bug — here, a query against a column
+  migration 013 dropped.
+
+**References.** `server/app/core/events.py`, `server/app/core/rate_limit.py`,
+`client/hooks/use-floor-plan-socket.ts`, `client/lib/ml-api.ts`,
+`server/app/services/email_service.py`, `docs/TODO.md`.
+
+## 2026-09-05 — Reuse a declared step before inventing one, and let the takeover do the lifting
+
+**Context.** Four shared guest primitives sat under the 48px tablet floor:
+`Input` (`h-10`), `SelectTrigger` (`h-9`), the calendar's 32px day cells, and an
+unpadded 16px remove-item control. Two of the four used values the token block
+does not declare, which had been recorded as an open design question.
+
+**Decision.** None of them needed a new token. Each now reads a step `:root`
+already declares, so the existing `@media (width < 1280px)` takeover lifts it —
+the same resolution `Button size="md"` reached. `SelectTrigger`'s undeclared
+36px became `--control-md` (40px) rather than `--control-desktop-min` (34px),
+because a select beside a 40px `Input` must not be shorter than it.
+
+**Consequences.**
+
+- A control expressed as a Tailwind literal is invisible to the responsive rule
+  that governs its own ladder. That is the defect class, not a styling
+  preference, and it recurs because the literal and the token look alike.
+- **Measure the container, not the control.** The calendar was expected to
+  overflow at 390 — 7 × 48 + padding is 360px against a 341px sheet column — but
+  it renders in a `w-fit` popover, so it fits with 3px to spare. The prediction
+  was arithmetic; the answer was a measurement.
+- Reuse shifts desktop sizes, and that is the cost to state: `SelectTrigger`
+  moved 36 → 40 at 1280+ across roughly forty call sites, the calendar 32 → 34.
+  `Input` moved nothing, because its literal already equalled the token.
+
+**References.** `client/components/ui/input.tsx`,
+`client/components/ui/select.tsx`, `client/components/ui/calendar.tsx`,
+`client/app/order/[business]/order-client.tsx`, `client/app/globals.css`,
+`docs/DESIGN.md`, `docs/TODO.md`.
+
+## 2026-09-05 — A demo fixture that contradicts the rule it demonstrates is worse than one that expires
+
+**Context.** `/reserve/waitlist` could not be seen at phone width because the
+seed's live offer had already expired. The seed granted a thirty-minute window
+(`offered_at = NOW() - 10 minutes`, `offer_expires_at = NOW() + 20 minutes`)
+while `OFFER_MINUTES` is 15 and the guest email tells the guest 15.
+
+**Decision.** `OFFER_MINUTES` stays at 15 — it is the product rule and it is
+correct. The seed now mints exactly that window, so it self-destructs sooner,
+not later. Reachability is solved by documenting how to mint a fresh offer
+through the staff API (`CHEATSHEET.txt` §6), including deriving the capability
+token, since the offer link is emailed and email is not configured locally.
+
+**Consequences.**
+
+- No fixed window is long enough for a fixture whose whole subject is a
+  deadline. Lengthening it trades a correct demo for a convenient one, and
+  teaches the wrong product rule to whoever reads the seed next.
+- Prefer minting demo state over reseeding. Reseeding destroys the shift someone
+  is working through; a targeted staff-API write does not.
+- The same shape sits next door: the seeded pending `table_guest_session`
+  expires after 25 minutes. It was left alone, and is now visibly self-expiring
+  because the staff read filters expired pending rows.
+
+**References.** `server/db/seeds/001_seed_volt_and_vine.sql`,
+`server/app/services/reservation_waitlist_service.py`, `CHEATSHEET.txt`,
+`docs/TODO.md`.
+
+## 2026-09-05 — A list route must not serialize through the single-item helper
+
+**Context.** `GET /api/tabs` assembled every tab through `_tab_response`, the
+helper written for one tab, so each tab paid for its own orders, line items,
+status timelines, derived table label, total and settlement trail. A counter on
+`before_cursor_execute` measured it: 16 statements for one tab, 34 for four —
+six per additional tab, growing with the list.
+
+**Decision.** The batched helper is the primary one and the single-item route
+delegates to it with a list of one. `tab_service` gained plural reads for
+orders, totals and settlement events; the router resolves table labels once
+across every order in the list. The count is now flat — 16 for one tab, 16 for
+four — and warm wall time on the seeded five-tab list fell from p50 49ms to p50
+25ms with echo off.
+
+**Consequences.**
+
+- One code path, not two. `GET /{tab_id}` deliberately goes through the same
+  helper so a single-tab route and a list route cannot drift on a derived field,
+  and the single case gets the bound for free.
+- **A statement count is the regression guard, not a timing.** A test asserts the
+  count does not move between one tab and four; wall time on a seeded database
+  is too small and too noisy to catch a reintroduced N+1.
+- The shape to copy is `order_service.resolve_order_table_labels`: an empty list
+  short-circuits, one `IN (...)` query carries the tenant predicate, every id
+  asked for is present in the returned dict so callers never `KeyError`.
+- The response shape is a contract the client reads. Caching, pagination and a
+  new shape were all available and all rejected; narrowing the query was enough.
+
+**References.** `server/app/routers/tabs.py`, `server/app/services/tab_service.py`,
+`server/app/services/order_service.py`,
+`server/tests/integration/test_order_authority.py`.
+
+## 2026-09-06 — The guest projection is narrower than the client type, and the client type does not say so
+
+**Context.** The public menu threw a React key warning on every render:
+`openMenus.map((m) => <section key={m.id}>)`. The id was not duplicated, it was
+`undefined`. `PublicMenuResponse` (`server/app/schemas/menu.py`) carries `name`,
+`description` and `categories` and nothing else — a browser never submits a menu
+id, so the projection does not send one. Categories and items do have ids
+because an order posts them back.
+
+`client/types/index.ts` has one `Menu` type, written for the staff editor, and
+`toMenu` in `client/lib/client-api.ts` casts every field out of a
+`Record<string, unknown>`. `m.id as string` on an absent key is `undefined`
+typed as `string`, so nothing in the toolchain objected: not `tsc`, not lint,
+not the build. Two more fields were absent the same way and had been all along
+— the page rendered `~{item.prepTimeMinutes} min` and a per-item
+`incl. {taxLabel} · {taxRate}% {taxProfileName}` line, and neither field is in
+the projection, so no guest had ever seen either.
+
+**Decision.** Key the menu on its position, with the reason at the call site;
+the list is server-ordered and this page never reorders, filters or edits it.
+Drop the prep-time branch. Restate the tax basis from the two fields the
+projection does send, once, at the foot of the menu — and say nothing at all
+when the open menus mix inclusive and exclusive pricing, because a claim that
+is true of half a list is worse than no line.
+
+**Consequences.**
+
+- **A shared type across a staff route and a public one hides a narrower
+  contract.** The cast-based mappers turn every omitted field into
+  `undefined`-as-`string`, which then reads as a missing key, a missing figure,
+  or — worse — a branch that silently never runs. When adding a field to a
+  guest surface, read the `Public*Response` schema, not the client type.
+- A dead conditional is not a harmless one: two of these were shipped, reviewed
+  and ported through the stage 7 redesign as if they rendered.
+- Fixed alongside, on the same page: the "ordering unavailable" banner wore the
+  critical tokens. `docs/DESIGN.md` classifies *ordering paused by a manager* as
+  **neutral** — a deliberate setting is not a failure — so it is now a quiet
+  band that says the menu is still readable.
+
+**References.** `client/app/menu/[business]/menu-client.tsx`,
+`server/app/schemas/menu.py`, `client/lib/client-api.ts`, `docs/TODO.md` §7a.
+
+## 2026-09-06 — A privacy request that passed its own test and told nobody
+
+**Context.** `POST /api/public/privacy/requests` wrote a
+`customer_data_requests` row and answered the guest "The venue has been asked to
+action your request." Nothing asked the venue anything: no route reads that
+table, it is absent from `CustomerProfileResponse` and every report, no client
+references it, and the router emitted no event and no notification. The sentence
+was false, and `test_an_access_request_is_recorded_as_pending_not_completed`
+passed the whole time — it asserted the row was `pending` and nothing asserted a
+human could ever see it. A test can only guard the half of a feature somebody
+thought to state.
+
+Two adjacent gaps surfaced on the same surface. `PublicReservationResponse`
+withheld `reconfirmation_enabled`, so "I'm still coming" rendered at a venue
+that does not ask for it and the guest got a 409; and it withheld
+`cancellation_window_minutes`, so the guest cancelled with no warning it would
+be recorded late. Separately, `client/components/reservation-form.tsx` linked
+the waitlist management button at `/reserve/waitlist/manage/${token}` — a path
+route `fba6d71` deliberately deleted when it moved that credential into the URL
+fragment. The link 404'd, and it put a bearer token in a path that reaches the
+server and its logs.
+
+**Decision.** Fan the pending request out through the staff inbox that already
+exists, narrowed to holders of `customers.privacy` by a new optional keyword on
+`notification_service.notify_business_staff` rather than a second helper.
+Withdrawal notifies nobody. Expose both policy fields on the public projection
+through one router helper reading one service constant, so the number the guest
+is shown and the number that is enforced cannot drift. Rebuild the manage page
+as a two-column document bounded to the viewport.
+
+**Consequences.**
+
+- **A declared response field is not a populated one.** `ReservationResponse`
+  has declared five policy fields since booking schedules landed, and
+  `Reservation` has none of those columns, so all five serialize as `null`
+  unconditionally. Adding the two to the public schema alone would have
+  reproduced that exactly. Population is an explicit step applied to all six
+  routes that return it.
+- **The two fallbacks disagree, so they had to be named rather than copied.**
+  `cancel_reservation` treats a missing `BookingSchedule` as a 120-minute
+  window; `reconfirm_reservation` treats it as reconfirmation *enabled*. Both
+  are now constants in `reservation_service`, read by the enforcement and by the
+  projection. A guest warned about one deadline and judged against another would
+  have failed silently and forever.
+- **An unread notification also raises a toast.** That is what decided the
+  recipient filter: unnarrowed, a guest's deletion request would appear on the
+  bar screen mid-service, in front of the room, to someone who cannot action it.
+  The keyword is keyword-only and defaults to `None`, so the ten existing call
+  sites are unchanged, and `has_capability` fails closed on an unknown role.
+- **The tablet is below the desktop breakpoint, which is what makes "two
+  columns on desktop" wrong.** At 1024 the `width < 1280px` takeover lifts every
+  control to 48px — the tallest case — so a layout splitting at `desktop:`
+  stacks exactly where it has least room. The split is `phone:`, the declared
+  640.
+- **The page is bounded to the viewport and the slot list is the only region
+  inside it that scrolls.** Slot count is tenant data — service hours over
+  `slot_interval_minutes` — so padding tuned to today's 18 would break the first
+  time a venue chose 15-minute intervals. Measured after: `scrollHeight ==
+  innerHeight` at 1280x800, 1024x768 and 1440x900, from 85px and 218px over.
+- **Labelling the overnight slot runs by date was wrong, and only rendering it
+  showed why.** `availability_service._candidate_slots` walks one service date
+  back so an overnight window contributes early-morning slots, which sort before
+  the evening and read as "the venue opens at midnight". Splitting the runs on a
+  gap wider than `slot_interval_minutes` is exact and invents no threshold — but
+  heading each run with its date printed "7. Sept. 2026" twice, because the
+  small hours fall on the same calendar date as the evening they follow. Each
+  run is headed with its own span instead.
+- **A bearer credential was parked on a possibly shared device with no
+  reader.** `reservation-waitlist-${id}` was written to `localStorage` and read
+  by nothing. Deleted.
+
+**References.** `server/app/routers/public_privacy.py`,
+`server/app/services/notification_service.py`,
+`server/app/constants/notifications.py`,
+`server/app/services/reservation_service.py`,
+`server/app/routers/reservations.py`, `server/app/schemas/reservation.py`,
+`client/app/reserve/manage/[token]/manage-reservation-client.tsx`,
+`client/app/reserve/manage/[token]/guest-privacy-section.tsx`,
+`client/components/reservation-form.tsx`, `client/lib/client-api.ts`,
+`client/lib/severity.ts`, `docs/TODO.md` §8.
+
+## 2026-09-07 — The public booking page takes the auth hinge, and the accordion lost to a measurement
+
+**Context.** `/reserve/[business]` had not been carried through the stage 7
+port. It opened with a 320–416px ink hero whose entire payload was one "Book
+Now" button, repeated the venue's contact details and hours in a paper document
+below it, and kept the actual booking in a 400px `Sheet` that the button opened
+four screens at a time. The first screen a guest saw asked them to open a second
+surface before they could do anything.
+
+**Decision.** The page is now one hairline box: a `.ground-ink` venue panel
+beside the paper booking column, which is the shape `AuthSplit` already is —
+docs/DESIGN.md's "the auth screens are the hinge: an ink panel beside a paper
+form". Grounds stay fixed by surface; a public guest page is still paper, and
+the ink is a subtree inside it exactly as landing §03 carries the bar board.
+The sheet is gone and the four steps run down the paper column.
+
+**Consequences.**
+
+- **The stepper was built as an accordion first and measured out.** Listing
+  every step with the current one expanded keeps each decision on screen and
+  makes correcting one a single click, which is the better shape and was the
+  chosen one. It does not fit: at 1280x800 the expanded steps measured 911, 852
+  and 1003px against a 752px budget, and three collapsed rungs cost 171px of
+  that on every screen. `BookingRail` carries the same information in 24px. What
+  survived is the navigation — `Continue` advances to the first UNANSWERED step,
+  so changing one slot from the review returns to the review rather than
+  marching forwards through details already given.
+- **A ground change is not free vertical space.** The ink panel's own content
+  set a 781px floor under the whole page before the form contributed anything,
+  and 223px of that was seven identical `17:00 – 02:00` rows. Collapsing
+  consecutive days that share hours took the panel to 558. It is also better
+  information design: a guest scanning for "when are they open" had to read
+  seven rows to learn they never differ. Only CONSECUTIVE runs merge —
+  "Monday – Wednesday" across a closed Tuesday would state something false.
+- **`Dialog` is not a container for policy prose.** The terms overlay was a
+  `Dialog` at `max-w-2xl`, against a declared 330–420px and a primitive reserved
+  for "decisions that end a shift or cannot be undone". It is now a native
+  `<details>` opening in place on the review step — the same device the landing
+  FAQ uses, and the right one for the step whose whole job is letting a guest
+  read before they tick a box.
+- **A service-type colour was reaching the DOM raw.** Three call sites painted
+  `style={{ backgroundColor: serviceType.color }}`, and the demo tenant's
+  `#f97316` sits close enough to `--attend-fill` to read as an alarm beside a
+  real one — the exact failure the five declared slots exist to prevent. All
+  three now resolve through `seriesVarForColor`.
+- **`text-transform` folds into the accessible name.** Step titles were drafted
+  in `.type-label`, which is uppercase in CSS; Chrome computes the accessible
+  name from rendered text, so every heading announced in caps and stopped
+  matching the names assistive clients and `e2e/service-loop.spec.ts` look for.
+  The titles are T2. Every accessible name on the surface is unchanged, so the
+  journey spec needed no edit.
+- **`items-stretch` stretches the column, not its child.** The ink panel sized
+  to its own content and stopped 175px short of the box on the review step,
+  ending the split in a strip of paper under a dark panel. Found by measuring
+  the rendered boxes; it passes `tsc`, both grep gates and the build.
+- **A German venue was dating bookings in the guest's browser locale.**
+  `formatSlotDate`/`formatSlotTime` passed `undefined` as the locale while
+  correctly using the venue's timezone. They now take an optional locale,
+  defaulting to the old behaviour, and the public form passes the venue's from
+  `regional-context`. The staff call sites still take the default — recorded in
+  `docs/TODO.md`.
+- `AuthMark` became `components/brand-mark.tsx` `BrandMark` at its sixth file.
+  A guest surface importing a lockup from an auth shell would have been a lie
+  about what the component is.
+
+**References.** `client/app/reserve/[business]/reserve-client.tsx`,
+`client/components/reservation-form.tsx`,
+`client/components/reservation/venue-panel.tsx`,
+`client/components/reservation/booking-rail.tsx`,
+`client/components/booking-privacy-disclosure.tsx`,
+`client/components/brand-mark.tsx`, `client/lib/operating-hours.ts`,
+`client/lib/availability.ts`, `client/tests/unit/operating-hours.test.ts`,
+`docs/DESIGN.md`, `docs/TODO.md` §7b.

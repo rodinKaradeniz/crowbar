@@ -9,8 +9,22 @@ interface SlotAlternativePayload {
   ends_at?: unknown;
 }
 
-export function formatSlotTime(value: string, timezone: string): string {
-  return new Intl.DateTimeFormat(undefined, {
+/**
+ * A slot's time in the VENUE's timezone.
+ *
+ * `locale` is optional and defaults to the browser's, which is what every
+ * caller did implicitly before it existed. Public guest surfaces pass the
+ * venue's configured locale from `contexts/regional-context.tsx`, because
+ * docs/DESIGN.md requires the venue's own region to drive formatting rather
+ * than whichever locale the guest's phone happens to carry. Staff surfaces
+ * still take the default — see docs/TODO.md.
+ */
+export function formatSlotTime(
+  value: string,
+  timezone: string,
+  locale?: string,
+): string {
+  return new Intl.DateTimeFormat(locale, {
     timeZone: timezone,
     hour: "2-digit",
     minute: "2-digit",
@@ -28,8 +42,13 @@ export function formatSlotTimeWithZone(value: string, timezone: string): string 
   }).format(new Date(value));
 }
 
-export function formatSlotDate(value: string, timezone: string): string {
-  return new Intl.DateTimeFormat(undefined, {
+/** A slot's date in the venue's timezone. `locale` as for `formatSlotTime`. */
+export function formatSlotDate(
+  value: string,
+  timezone: string,
+  locale?: string,
+): string {
+  return new Intl.DateTimeFormat(locale, {
     timeZone: timezone,
     weekday: "short",
     month: "short",

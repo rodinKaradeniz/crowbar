@@ -4,7 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 
 import { AuthField, AuthNotice } from "@/components/auth/auth-field";
-import { AuthMark, BackToSignIn } from "@/components/auth/auth-shell";
+import { BrandMark } from "@/components/brand-mark";
+import { BackToSignIn } from "@/components/auth/auth-shell";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -55,7 +56,7 @@ export function ForgotPasswordForm() {
   if (sentTo) {
     return (
       <>
-        <AuthMark tone="brand" size="sm" />
+        <BrandMark tone="brand" size="sm" />
 
         <div className="mt-9 mb-6 border-l-2 border-primary bg-brand-wash-2 px-4 py-3.5">
           <p className="type-label text-primary">Link sent</p>
@@ -84,7 +85,7 @@ export function ForgotPasswordForm() {
 
   return (
     <form onSubmit={handleSubmit} noValidate className="flex flex-1 flex-col">
-      <AuthMark tone="brand" size="sm" />
+      <BrandMark tone="brand" size="sm" />
 
       <h1 className="auth-title-sm mt-9 mb-2.5">Reset your password</h1>
       <p className="mb-6 max-w-[38ch] text-[14.5px] text-text-secondary">

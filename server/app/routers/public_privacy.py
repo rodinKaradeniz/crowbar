@@ -30,6 +30,7 @@ from app.core.rate_limit import (
     enforce_rate_limits,
     get_client_ip,
 )
+from app.constants import notifications as nconst
 from app.database import get_db
 from app.models.customer import CustomerDataRequest
 from app.schemas.public_privacy import (
@@ -37,7 +38,11 @@ from app.schemas.public_privacy import (
     PublicPrivacyRequestResponse,
     PublicPrivacyStateResponse,
 )
-from app.services import marketing_consent_service, reservation_service
+from app.services import (
+    marketing_consent_service,
+    notification_service,
+    reservation_service,
+)
 from app.services.public_session_service import get_public_cookie
 from app.services.reservation_guest_token_service import (
     ReservationGuestTokenError,
@@ -45,6 +50,15 @@ from app.services.reservation_guest_token_service import (
 )
 
 router = APIRouter(prefix="/api/public/privacy", tags=["public-privacy"])
+
+#: How each request type reads in a staff notification. `export` is the guest
+#: asking to see what the venue holds, so it is named for what they asked for
+#: rather than for the machinery that answers it.
+_REQUEST_LABEL = {
+    "export": "a copy of their data",
+    "correction": "a correction to their data",
+    "deletion": "their data to be deleted",
+}
 
 
 def _invalid():
@@ -165,6 +179,40 @@ async def create_privacy_request(
         completed_at=completed_at,
     )
     db.add(data_request)
+    # Flush before notifying so the notification can name the row it is about;
+    # the single commit below still covers both.
+    await db.flush()
+
+    if body.request_type != "withdraw_consent":
+        # Withdrawal is already done and needs nobody; notifying about it would
+        # be noise that trains staff to ignore the kind. Everything else sits
+        # `pending` until a human acts, so without this the venue is told
+        # nothing and the guest is told "the venue has been asked" — a promise
+        # the product could not keep.
+        #
+        # Deliberately no guest name, email or phone: the notification says a
+        # right was exercised, not what the venue holds about them. The
+        # customer id in the payload is what a staff surface resolves.
+        await notification_service.notify_business_staff(
+            db,
+            business_id=business_id,
+            kind=nconst.CUSTOMER_DATA_REQUEST,
+            title="Guest data request",
+            body=(
+                f"A guest asked for {_REQUEST_LABEL[body.request_type]} through "
+                "their reservation link. It is waiting for someone to action it."
+            ),
+            payload={
+                "customer_id": str(customer_id),
+                "request_type": body.request_type,
+                "data_request_id": str(data_request.id),
+            },
+            # Only the people who can action it. An unread notification also
+            # toasts on whatever screen is signed in, and a guest's deletion
+            # request does not belong on the bar screen during service.
+            capability="customers.privacy",
+        )
+
     # Commit before returning: the guest is told this is recorded, so it has to
     # be recorded. There is no event to publish here.
     await db.commit()

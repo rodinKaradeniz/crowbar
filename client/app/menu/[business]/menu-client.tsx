@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  ClientApiError,
   clientCreateTableSession,
   clientGetCurrentTableSession,
   clientGetPublicMenus,
@@ -28,8 +29,10 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ShoppingCart, Plus, Minus, ChefHat } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ShoppingCart, Plus, Minus } from "lucide-react";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/money";
 import { useRegionalSettings } from "@/contexts/regional-context";
 
@@ -48,6 +51,12 @@ export default function MenuClient({ businessId, businessSlug, businessName }: M
   const [cart, setCart] = useState<CartItem[]>([]);
   const [tableSessionStatus, setTableSessionStatus] = useState<string | null>(null);
 
+  // Which category the guest is currently reading, for the nav. Derived from
+  // the page, never from the click: a guest who scrolls past three sections
+  // has moved just as surely as one who tapped.
+  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
+  const navRef = useRef<HTMLDivElement | null>(null);
+
   // Item detail sheet
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [sheetMods, setSheetMods] = useState<SelectedModifier[]>([]);
@@ -65,8 +74,19 @@ export default function MenuClient({ businessId, businessSlug, businessName }: M
       .finally(() => setLoading(false));
   }, [businessId]);
 
+  // The bootstrap CREATES a session — a real mutation — so it runs once per
+  // business. React StrictMode invokes effects twice in dev: the first pass
+  // stripped the fragment and created the session, and the second, now
+  // fragment-less, asked for the "current" session, 404'd before the cookie had
+  // landed and cleared what the first pass had established. The ref survives
+  // the simulated remount; a plain `cancelled` flag did not, it just discarded
+  // the successful first pass. Dev-only, but dev is the configuration a demo is
+  // given from.
+  const bootstrappedFor = useRef<string | null>(null);
+
   useEffect(() => {
-    let cancelled = false;
+    if (bootstrappedFor.current === businessId) return;
+    bootstrappedFor.current = businessId;
     const fragment = new URLSearchParams(window.location.hash.slice(1));
     const tableToken = fragment.get("table_token");
     if (tableToken) {
@@ -82,9 +102,10 @@ export default function MenuClient({ businessId, businessSlug, businessName }: M
       ? clientCreateTableSession(businessId, tableToken, nonce)
       : clientGetCurrentTableSession(businessId);
     void bootstrap
-      .then((session) => { if (!cancelled) setTableSessionStatus(session.status); })
-      .catch(() => { if (!cancelled) setTableSessionStatus(null); });
-    return () => { cancelled = true; };
+      .then((session) => setTableSessionStatus(session.status))
+      // A failed bootstrap IS authoritative: there is no session to show. A
+      // rotated QR must not unlock ordering.
+      .catch(() => setTableSessionStatus(null));
   }, [businessId]);
 
   useEffect(() => {
@@ -92,7 +113,15 @@ export default function MenuClient({ businessId, businessSlug, businessName }: M
     const id = window.setInterval(() => {
       void clientGetCurrentTableSession(businessId)
         .then((session) => setTableSessionStatus(session.status))
-        .catch(() => setTableSessionStatus(null));
+        .catch((cause) => {
+          // A transient read failure is not evidence the session is gone.
+          // Clearing here also clears this effect's own guard, which stops the
+          // interval and strands the guest with no recovery but a reload — so
+          // only the server's authoritative "no such session" (404) clears it.
+          if (cause instanceof ClientApiError && cause.status === 404) {
+            setTableSessionStatus(null);
+          }
+        });
     }, 5_000);
     return () => window.clearInterval(id);
   }, [businessId, tableSessionStatus]);
@@ -127,14 +156,110 @@ export default function MenuClient({ businessId, businessSlug, businessName }: M
   // price belongs to when two are open at once.
   const openMenus = menus.filter((m) => m.categories.some((c) => c.isActive));
   const navCategories = openMenus.flatMap((m) => m.categories.filter((c) => c.isActive));
+  // A stable dependency for the observer below: the identities being watched,
+  // not the array literal a render happens to have produced.
+  const navCategoryKey = navCategories.map((c) => c.id).join(",");
+
+  // How the menu states its prices, taken from the items themselves rather than
+  // asserted. Mixed bases (drinks at one rate, food at another) say nothing at
+  // all: a menu-wide claim that is true of only half the list is worse than no
+  // line. These are the venue's own configured operational rates, not a fiscal
+  // statement — see docs/PRODUCT.md on the tax profile boundary.
+  const priceBases = new Set(
+    openMenus
+      .flatMap((m) => m.categories.filter((c) => c.isActive))
+      .flatMap((c) => c.items.filter((i) => i.isAvailable))
+      .map((i) => i.priceIncludesTax)
+      .filter((v) => v !== undefined),
+  );
+  const priceBasis = priceBases.size === 1 ? [...priceBases][0] : null;
 
   const totalItems = cartItemCount(cart);
   const totalPrice = cartTotal(cart);
 
+  // Mark the category the guest has scrolled to, and keep it in view in a nav
+  // that scrolls sideways on a narrow screen. An IntersectionObserver rather
+  // than a scroll listener: it fires when a section crosses the line, not on
+  // every frame of the way there.
+  useEffect(() => {
+    const ids = navCategoryKey ? navCategoryKey.split(",") : [];
+    if (ids.length === 0) return;
+    const visible = new Set<string>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const id = entry.target.id.replace("cat-", "");
+          if (entry.isIntersecting) visible.add(id);
+          else visible.delete(id);
+        }
+        // The first one in menu order that is on screen — the heading a guest
+        // reading downwards is under, not whichever crossed most recently.
+        setActiveCategoryId(ids.find((id) => visible.has(id)) ?? null);
+      },
+      // The top edge is the nav's own measured height, so the reading line sits
+      // exactly where the guest's first unobstructed row of the menu is; the
+      // bottom cut stops a section barely peeking in from claiming to be the
+      // one being read.
+      { rootMargin: `-${navRef.current?.offsetHeight ?? 0}px 0px -55% 0px` },
+    );
+    const sections = ids
+      .map((id) => document.getElementById(`cat-${id}`))
+      .filter((el): el is HTMLElement => el !== null);
+    sections.forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, [navCategoryKey]);
+
+  // Only the nav's own scroller moves — `scrollIntoView` would walk every
+  // ancestor and fight the page scroll that triggered this in the first place.
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav || !activeCategoryId) return;
+    if (nav.scrollWidth <= nav.clientWidth) return;
+    const link = nav.querySelector<HTMLElement>(`[data-category="${activeCategoryId}"]`);
+    if (!link) return;
+    nav.scrollTo({
+      left: link.offsetLeft - (nav.clientWidth - link.offsetWidth) / 2,
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+    });
+  }, [activeCategoryId]);
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="type-label text-muted-foreground">Opening the menu…</p>
+      <div className="min-h-screen bg-background pb-16" role="status" aria-label="Opening the menu">
+        <header className="px-6 pt-10 pb-6 text-center">
+          <h1 className="type-d3">{businessName}</h1>
+          <div className="border-t border-border mt-5 mx-auto max-w-36" />
+        </header>
+        <div className="border-b border-border">
+          <div className="flex justify-center gap-6 px-6 py-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} index={i} className="h-[1em] w-20" />
+            ))}
+          </div>
+        </div>
+        {/* The same column, the same heading rule, the same row rhythm the real
+            list uses — so nothing moves when the menu lands. */}
+        <div className="px-6 mt-8 max-w-xl mx-auto">
+          <div className="flex items-center gap-4 mb-4">
+            <span className="h-px flex-1 bg-border" aria-hidden />
+            <Skeleton className="h-[1em] w-24" />
+            <span className="h-px flex-1 bg-border" aria-hidden />
+          </div>
+          <div className="divide-y divide-border/60">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="py-4">
+                <div className="flex items-baseline gap-3">
+                  <Skeleton index={i} className="h-[1em] w-40" />
+                  <span className="flex-1" aria-hidden />
+                  <Skeleton index={i} className="h-[1em] w-12 shrink-0" />
+                </div>
+                <Skeleton index={i} className="h-[1em] w-full max-w-64 mt-1.5" />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -144,18 +269,23 @@ export default function MenuClient({ businessId, businessSlug, businessName }: M
   // never set one up.
   if (openMenus.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center px-6">
-          <ChefHat className="h-10 w-10 mx-auto text-muted-foreground mb-4" />
-          <p className="type-t1">No menu available right now</p>
-          <p className="text-sm text-muted-foreground mt-2">Please check back later, or ask a member of staff.</p>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        {/* No illustration — docs/DESIGN.md § the six states. The masthead stays
+            so a guest who has just scanned a code still sees where they are. */}
+        <div className="px-6 text-center enter-rise">
+          <h1 className="type-d3">{businessName}</h1>
+          <div className="border-t border-border mt-5 mb-6 mx-auto max-w-36" />
+          <p className="type-t1 font-normal">Nothing is being served right now</p>
+          <p className="text-sm text-muted-foreground mt-2 max-w-sm mx-auto">
+            The menu comes back when the next service opens. A member of staff can tell you when that is.
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background pb-32">
+    <div className={cn("min-h-screen bg-background", cart.length > 0 ? "pb-32" : "pb-16")}>
 
       {/* Masthead — set like the cover of a printed list */}
       <header className="px-6 pt-10 pb-6 text-center enter-rise">
@@ -164,25 +294,54 @@ export default function MenuClient({ businessId, businessSlug, businessName }: M
         <div className="border-t border-border mt-5 mx-auto max-w-36" />
       </header>
 
-      {/* Not-accepting-orders banner */}
+      {/* Ordering paused.
+          NEUTRAL, deliberately: docs/DESIGN.md classifies "ordering paused by a
+          manager" as neutral — a deliberate setting is not a failure, and the
+          menu itself is still perfectly readable. It is loud by position and
+          weight instead. This carried the critical tokens before. */}
       {!isAcceptingOrders && (
-        <div className="mx-6 mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-2.5 text-sm text-destructive text-center">
-          Ordering is temporarily unavailable. Please check back shortly.
+        <div className="mx-auto mb-6 max-w-xl px-6">
+          <div className="border-y border-border bg-muted/50 px-4 py-3 text-center">
+            <p className="type-label text-muted-foreground">Ordering paused</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              You can still read the menu. Order with a member of staff for now.
+            </p>
+          </div>
         </div>
       )}
 
-      {/* Category nav */}
-      <nav className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border enter-rise" style={{ animationDelay: "80ms" }}>
-        <div className="overflow-x-auto scrollbar-hide flex gap-6 px-6 py-3">
-          {navCategories.map((cat) => (
-            <a
-              key={cat.id}
-              href={`#cat-${cat.id}`}
-              className="type-label text-muted-foreground shrink-0 text-foreground/70 hover:text-primary border-b border-transparent hover:border-primary/60 pb-0.5 transition-colors"
-            >
-              {cat.name}
-            </a>
-          ))}
+      {/* Category nav — centred while it fits, scrolling sideways when it does
+          not. `w-max mx-auto` is what does both: the auto margins collapse to
+          zero the moment the row is wider than the rail, so a long menu starts
+          at its first category rather than mid-list. */}
+      <nav
+        aria-label="Menu categories"
+        className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border enter-rise"
+        style={{ animationDelay: "80ms" }}
+      >
+        <div ref={navRef} className="overflow-x-auto scrollbar-hide">
+          <div className="flex w-max mx-auto gap-6 px-6 py-3">
+            {navCategories.map((cat) => {
+              const isActive = cat.id === activeCategoryId;
+              return (
+                <a
+                  key={cat.id}
+                  href={`#cat-${cat.id}`}
+                  data-category={cat.id}
+                  aria-current={isActive ? "location" : undefined}
+                  className={cn(
+                    "type-label shrink-0 border-b pb-1 transition-colors",
+                    // Brand marks the active nav item — identity, never a rank.
+                    isActive
+                      ? "text-primary border-primary"
+                      : "text-muted-foreground border-transparent hover:text-primary hover:border-primary/60",
+                  )}
+                >
+                  {cat.name}
+                </a>
+              );
+            })}
+          </div>
         </div>
       </nav>
 
@@ -193,67 +352,83 @@ export default function MenuClient({ businessId, businessSlug, businessName }: M
           list a price belongs to. With a single menu open the heading is
           dropped: naming one thing is noise. */}
       <div className="px-6 space-y-10 mt-8 max-w-xl mx-auto">
-        {openMenus.map((m) => (
-          <section key={m.id} className="space-y-10">
+        {/* The guest projection carries no menu id — a browser never submits
+            one, so `PublicMenuResponse` does not send one (server/app/schemas/
+            menu.py). Keying on `m.id` was therefore keying on `undefined`,
+            which React reads as no key at all. The position in a
+            server-ordered list that is never reordered, filtered or edited on
+            this page is the honest key. */}
+        {openMenus.map((m, menuIndex) => (
+          <section key={`menu-${menuIndex}`} className="space-y-10">
             {openMenus.length > 1 && (
-              <div>
+              <div className="text-center">
                 <h2 className="type-t1 font-normal">{m.name}</h2>
                 {m.description && (
-                  <p className="text-[13px] leading-relaxed text-muted-foreground mt-1">
+                  <p className="text-xs leading-relaxed text-muted-foreground mt-1">
                     {m.description}
                   </p>
                 )}
               </div>
             )}
             {m.categories
-          .filter((c) => c.isActive)
-          .map((cat, catIndex) => (
-            <section key={cat.id} id={`cat-${cat.id}`} className="scroll-mt-16 enter-rise" style={{ animationDelay: `${Math.min(catIndex, 4) * 90 + 140}ms` }}>
-              <div className="flex items-center gap-4 mb-4">
-                <span className="h-px flex-1 bg-border" aria-hidden />
-                <h2 className="type-label text-muted-foreground">{cat.name}</h2>
-                <span className="h-px flex-1 bg-border" aria-hidden />
-              </div>
-              <div className="divide-y divide-border/60">
-                {cat.items
-                  .filter((i) => i.isAvailable)
-                  .map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => openItem(item)}
-                      className="group w-full text-left py-3.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                    >
-                      <div className="flex items-baseline gap-2.5">
-                        <span className="min-w-0 font-medium text-[15px] group-hover:text-primary transition-colors">
-                          {item.name}
-                        </span>
-                        <span className="flex-1" aria-hidden />
-                        <span className="font-mono tabular-nums text-sm shrink-0">{money(item.price)}</span>
-                      </div>
-                      {item.description && (
-                        <p className="text-[13px] leading-relaxed text-muted-foreground mt-1 pr-10 line-clamp-2">
-                          {item.description}
-                        </p>
-                      )}
-                      <div className="flex items-center gap-3 mt-1">
-                        {item.prepTimeMinutes && (
-                          <span className="font-mono tabular-nums text-xs text-muted-foreground">
-                            ~{item.prepTimeMinutes} min
-                          </span>
-                        )}
-                        {item.taxProfileName && (
-                          <span className="text-[11px] text-muted-foreground">
-                            {item.priceIncludesTax ? `incl. ${taxLabel}` : `plus ${taxLabel}`} · {item.taxRate}% {item.taxProfileName}
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  ))}
-              </div>
-            </section>
-          ))}
+              .filter((c) => c.isActive)
+              .map((cat, catIndex) => (
+                <section
+                  key={cat.id}
+                  id={`cat-${cat.id}`}
+                  className="scroll-mt-16 enter-rise"
+                  style={{ animationDelay: `${Math.min(catIndex, 4) * 90 + 140}ms` }}
+                >
+                  <div className="flex items-center gap-4 mb-4">
+                    <span className="h-px flex-1 bg-border" aria-hidden />
+                    <h2 className="type-label text-muted-foreground">{cat.name}</h2>
+                    <span className="h-px flex-1 bg-border" aria-hidden />
+                  </div>
+                  <div className="divide-y divide-border/60">
+                    {cat.items
+                      .filter((i) => i.isAvailable)
+                      .map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => openItem(item)}
+                          className="group w-full text-left py-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        >
+                          {/* The ledger row: name left, price right, the space
+                              between them doing the work leader dots do on
+                              paper. */}
+                          <div className="flex items-baseline gap-3">
+                            <span className="min-w-0 font-medium text-sm group-hover:text-primary transition-colors">
+                              {item.name}
+                            </span>
+                            <span className="flex-1" aria-hidden />
+                            <span className="type-data shrink-0 group-hover:text-primary transition-colors">
+                              {money(item.price)}
+                            </span>
+                          </div>
+                          {/* The inset keeps the description clear of the price
+                              column at reading widths; on a phone that gutter
+                              costs a whole line, so it starts at 640. */}
+                          {item.description && (
+                            <p className="text-xs leading-relaxed text-muted-foreground mt-1.5 phone:pr-10 line-clamp-2">
+                              {item.description}
+                            </p>
+                          )}
+                        </button>
+                      ))}
+                  </div>
+                </section>
+              ))}
           </section>
         ))}
+
+        {/* The back page of a printed list: how the prices are stated, said
+            once. Omitted entirely when the menu mixes bases — a claim true of
+            half the list is worse than no line. */}
+        {priceBasis !== null && (
+          <p className="text-xs text-muted-foreground text-center pt-2">
+            {priceBasis ? `Prices include ${taxLabel}` : `Prices exclude ${taxLabel}`}
+          </p>
+        )}
       </div>
 
       {/* Cart bar */}
@@ -272,7 +447,7 @@ export default function MenuClient({ businessId, businessSlug, businessName }: M
               >
                 <Button className="w-full" size="md">
                   <ShoppingCart className="h-5 w-5 mr-2" />
-                  View Cart · {totalItems} item{totalItems !== 1 ? "s" : ""} ·{" "}
+                  View cart · {totalItems} item{totalItems !== 1 ? "s" : ""} ·{" "}
                   <span className="font-mono tabular-nums">{money(totalPrice)}</span>
                 </Button>
               </Link>
@@ -300,7 +475,7 @@ export default function MenuClient({ businessId, businessSlug, businessName }: M
                 {selectedItem.description && (
                   <p className="text-sm leading-relaxed text-muted-foreground">{selectedItem.description}</p>
                 )}
-                <p className="font-mono tabular-nums text-base">{money(selectedItem.price)}</p>
+                <p className="type-data">{money(selectedItem.price)}</p>
               </SheetHeader>
 
               <div className="space-y-5 mt-4 px-[var(--space-16)]">
@@ -355,7 +530,7 @@ export default function MenuClient({ businessId, businessSlug, businessName }: M
                   >
                     <Minus className="h-4 w-4" />
                   </Button>
-                  <span className="w-8 text-center font-mono tabular-nums text-[length:var(--t1-size)]">{sheetQty}</span>
+                  <span className="w-8 text-center type-data">{sheetQty}</span>
                   <Button
                     variant="secondary"
                     size="icon"
@@ -365,7 +540,7 @@ export default function MenuClient({ businessId, businessSlug, businessName }: M
                   </Button>
                 </div>
                 <Button className="w-full" onClick={addToCart}>
-                  Add to Cart ·{" "}
+                  Add to cart ·{" "}
                   <span className="font-mono tabular-nums">
                     {money(
                       (selectedItem.price + modifierTotal(sheetMods)) * sheetQty,

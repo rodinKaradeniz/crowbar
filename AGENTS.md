@@ -141,8 +141,11 @@ no-shows, queue wait and seating conversion, table utilization and turn time,
 station throughput and ticket timing, the three separate ordered / open-tab /
 externally-settled value figures, stock and waste, purchasing spend and staff
 actions — each over a chosen range with CSV export, and none of them a fiscal
-or accounting report. Insights survives an ML restart by serving its last
-result marked stale.
+or accounting report. Insights survives an ML restart **at the API**:
+`/api/insights/*` serves the last result carrying `stale`, `captured_at` and an
+`unavailable_reason`. The page does not read any of those three yet —
+`client/lib/ml-api.ts` collapses every error response to `null` — so a
+remembered figure still reads as a live one. See `docs/TODO.md` stage 8.
 
 Stage 7, the interface redesign pass, is **ported**. The design direction is
 closed: [docs/DESIGN.md](docs/DESIGN.md) is the committed contract, taken from

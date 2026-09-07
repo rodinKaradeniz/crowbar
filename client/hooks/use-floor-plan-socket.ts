@@ -62,6 +62,13 @@ export function useFloorPlanSocket(
       socket.send(JSON.stringify({ type: "authenticate", token }));
       setConnected(true);
       delayRef.current = BASE_DELAY;
+      // Refetch on every open, not just the first. This socket carries
+      // INVALIDATIONS, not state, so an event that fired while the board was
+      // away is simply gone — reconnecting without re-reading leaves the host
+      // looking at a floor that stopped being true during the outage and never
+      // corrects itself. use-tab-socket has always done this; the floor board
+      // was the one live surface that did not.
+      onInvalidateRef.current();
     };
     socket.onmessage = (event) => {
       setLastContactAt(Date.now());

@@ -56,7 +56,7 @@ async def broadcast_order_board(db: AsyncSession, business_id: str) -> None:
     """Re-fetch all active orders and broadcast the current board state."""
     biz_uuid = UUID(business_id)
     orders = await order_service.get_orders_for_board(db, biz_uuid)
-    payload = [order_service.order_to_dict(o) for o in orders]
+    payload = await order_service.orders_to_board_payload(db, biz_uuid, orders)
     await order_manager.broadcast(
         business_id, {"type": "order_updated", "orders": payload}
     )

@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { BrandMark } from "@/components/brand-mark";
+
 /**
  * The auth surfaces are the hinge between the two grounds: an ink panel beside
  * a paper form, inside one hairline box on a tinted page.
@@ -37,7 +39,7 @@ export function AuthSplit({
             panel is gone, so the mark comes back here — otherwise the first
             screen of the product introduces itself with no name on it. */}
         <div className="mb-8 phone:hidden">
-          <AuthMark size="sm" />
+          <BrandMark size="sm" />
         </div>
         {children}
       </div>
@@ -74,47 +76,6 @@ export function AuthPanel({ children }: { children: React.ReactNode }) {
   return (
     <div className="auth-panel ground-ink hidden min-w-[min(100%,300px)] flex-[1_1_380px] flex-col justify-between gap-10 bg-background text-foreground phone:flex">
       {children}
-    </div>
-  );
-}
-
-/**
- * The lockup. `tone` picks the mark's colour: brand on either ground, or
- * critical on a screen whose whole subject is a dead link.
- */
-export function AuthMark({
-  tone = "brand",
-  size = "default",
-}: {
-  tone?: "brand" | "critical" | "paper";
-  size?: "default" | "sm";
-}) {
-  const mark =
-    tone === "critical"
-      ? "bg-critical-fill"
-      : tone === "paper"
-        ? "bg-[var(--brand-wash)]"
-        : "bg-primary";
-
-  return (
-    <div className="flex items-center gap-[9px]">
-      <span
-        className={
-          size === "sm"
-            ? `block size-[10px] ${mark}`
-            : `mkt-logo-mark block ${mark}`
-        }
-        aria-hidden
-      />
-      <span
-        className={
-          size === "sm"
-            ? "font-display text-[16px] font-extrabold tracking-[-0.035em]"
-            : "font-display text-[18px] font-extrabold tracking-[-0.035em]"
-        }
-      >
-        CROWBAR
-      </span>
     </div>
   );
 }

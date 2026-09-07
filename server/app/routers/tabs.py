@@ -32,29 +32,63 @@ router = APIRouter(
 ws_router = APIRouter(tags=["tabs"])
 
 
+async def _tab_responses(db: AsyncSession, business_id: UUID, tabs: list[Tab]) -> list[TabResponse]:
+    """Assemble a TabResponse per tab in a fixed number of statements.
+
+    Every read here is batched across the WHOLE list: the orders and their line
+    items and timelines, the derived table labels, the on-demand totals and the
+    settlement trails. Serializing tab-by-tab was N+1 by construction and cost
+    six statements per additional tab.
+
+    The same OrderResponse field must not mean two things on two routes, so a
+    tab's orders carry the derived table label the ticket board carries — and
+    resolving it for every order across every tab at once is what makes the
+    brief's "one query per serialization batch" actually true of this endpoint.
+    """
+    tab_ids = [tab.id for tab in tabs]
+    orders_by_tab = await tab_service.get_tabs_orders(db, business_id, tab_ids)
+    totals = await tab_service.get_tabs_totals(db, business_id, tab_ids)
+    events_by_tab = await tab_service.get_tabs_settlement_events(db, business_id, tab_ids)
+
+    flat_orders = [order for tab_id in tab_ids for order in orders_by_tab[tab_id]]
+    responses_by_order = {
+        response.id: response
+        for response in await order_service.orders_to_responses(
+            db, business_id, flat_orders
+        )
+    }
+
+    return [
+        TabResponse(
+            id=tab.id,
+            business_id=tab.business_id,
+            table_id=tab.table_id,
+            seating_id=tab.seating_id,
+            customer_id=tab.customer_id,
+            status=tab.status,
+            channel=tab.channel,
+            opened_by=tab.opened_by,
+            opened_at=tab.opened_at,
+            closed_by=tab.closed_by,
+            closed_at=tab.closed_at,
+            settled_method=tab.settled_method,
+            current_settlement_event_id=tab.current_settlement_event_id,
+            settlement_events=events_by_tab[tab.id],
+            total=totals[tab.id],
+            orders=[responses_by_order[order.id] for order in orders_by_tab[tab.id]],
+        )
+        for tab in tabs
+    ]
+
+
 async def _tab_response(db: AsyncSession, tab: Tab) -> TabResponse:
-    """Assemble a TabResponse with the on-demand total and associated orders."""
-    orders = await tab_service.get_tab_orders(db, tab.business_id, tab.id)
-    total = await tab_service.get_tab_total(db, tab.business_id, tab.id)
-    events = await tab_service.get_settlement_events(db, tab.business_id, tab.id)
-    return TabResponse(
-        id=tab.id,
-        business_id=tab.business_id,
-        table_id=tab.table_id,
-        seating_id=tab.seating_id,
-        customer_id=tab.customer_id,
-        status=tab.status,
-        channel=tab.channel,
-        opened_by=tab.opened_by,
-        opened_at=tab.opened_at,
-        closed_by=tab.closed_by,
-        closed_at=tab.closed_at,
-        settled_method=tab.settled_method,
-        current_settlement_event_id=tab.current_settlement_event_id,
-        settlement_events=events,
-        total=total,
-        orders=orders,
-    )
+    """One tab, through the same path as the list.
+
+    Deliberately not a second implementation: a single-tab route and the list
+    route must not be able to drift on the derived table label, and the batched
+    helpers are already correct — and bounded — for a list of one.
+    """
+    return (await _tab_responses(db, tab.business_id, [tab]))[0]
 
 
 @router.post("", response_model=TabResponse, status_code=status.HTTP_201_CREATED,
@@ -150,7 +184,7 @@ async def list_tabs(
 ):
     """List the business's tabs (optionally filter by open or settled_externally)."""
     tabs = await tab_service.list_tabs(db, business.id, status)
-    return [await _tab_response(db, tab) for tab in tabs]
+    return await _tab_responses(db, business.id, tabs)
 
 
 @router.get("/{tab_id}", response_model=TabResponse,
@@ -217,7 +251,7 @@ async def add_order_to_tab(
             business_id=str(business.id),
             payload={"tab_id": str(tab.id), "seating_id": str(tab.seating_id)},
         ))
-    return order
+    return await order_service.order_to_response(db, business.id, order)
 
 
 @router.post("/{tab_id}/settle-externally", response_model=TabResponse,

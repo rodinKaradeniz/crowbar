@@ -184,6 +184,19 @@ async def create_table_guest_session(
         token=raw_token,
         max_age=settings.table_guest_session_ttl_minutes * 60,
     )
+    if guest_session.status == "pending":
+        # A host board can only show a waiting guest if the SCAN publishes, not
+        # just the decision. Approve/deny already publish; without this the
+        # board could confirm a decision it never learned it had to make. Same
+        # event shape floor_plan.py uses, so the stream consumer's existing
+        # `floor_plan.` prefix routing invalidates the board with no new wiring.
+        # The payload names the session only — never the guest's table token.
+        await publish(DomainEvent(
+            event_type="floor_plan.table_guest_session.created",
+            business_id=str(business.id),
+            location_id=str(guest_session.location_id),
+            payload={"resource_id": str(guest_session.id)},
+        ))
     return PublicTableGuestSessionResponse(
         status=guest_session.status,
         table_label=table.label,
@@ -344,7 +357,7 @@ async def list_orders(
     if business.id != business_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     orders = await order_service.get_orders_for_board(db, business_id, status_filter, routing_tag)
-    return orders
+    return await order_service.orders_to_responses(db, business_id, orders)
 
 
 @router.patch(
@@ -378,7 +391,7 @@ async def update_order_status(
         business_id=str(business_id),
         payload={"order_id": str(order.id), "status": order.status},
     ))
-    return order
+    return await order_service.order_to_response(db, business_id, order)
 
 
 @router.patch(
@@ -416,7 +429,7 @@ async def update_order_line_status(
         business_id=str(business.id),
         payload={"order_id": str(order.id), "line_id": str(line_id), "status": body.status},
     ))
-    return order
+    return await order_service.order_to_response(db, business.id, order)
 
 
 @router.post(
@@ -456,7 +469,7 @@ async def correct_order(
             business_id=str(business.id),
             payload={"order_id": str(order.id), "tab_id": str(order.tab_id) if order.tab_id else None},
         ))
-    return order
+    return await order_service.order_to_response(db, business.id, order)
 
 
 @router.post(
@@ -493,7 +506,7 @@ async def cancel_order(
             business_id=str(business.id),
             payload={"order_id": str(order.id), "tab_id": str(order.tab_id) if order.tab_id else None},
         ))
-    return order
+    return await order_service.order_to_response(db, business.id, order)
 
 
 @router.get(
@@ -1132,7 +1145,7 @@ async def orders_websocket(
 
     # Send current board state immediately on connect
     orders = await order_service.get_orders_for_board(db, business_id)
-    payload_orders = [order_service.order_to_dict(o) for o in orders]
+    payload_orders = await order_service.orders_to_board_payload(db, business_id, orders)
 
     try:
         await ws.send_json({"type": "order_updated", "orders": payload_orders})

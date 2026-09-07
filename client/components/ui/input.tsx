@@ -22,8 +22,13 @@ import { cn } from "@/lib/utils"
  * Pair `aria-invalid` with a message that says what to do next.
  */
 const inputSizes = {
-  /** Product default. */
-  default: "h-10",
+  /**
+   * Product default. 40 is --control-md, the same step `Button size="md"`
+   * reads, so the `width < 1280px` takeover lifts it to --control-tablet-min
+   * and nothing moves at 1280+. Written as `h-10` it was invisible to that
+   * rule and measured 40px on a tablet, under the floor.
+   */
+  default: "h-[var(--control-md)]",
   /** Auth and marketing — one-handed, in the dark. */
   auth: "h-12",
   /** Every control on a tablet surface clears --control-tablet-min. */

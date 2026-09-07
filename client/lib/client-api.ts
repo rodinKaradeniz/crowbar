@@ -41,6 +41,7 @@ import {
   RegionalAudit,
   RegionalOption,
   ServiceType,
+  StaffTableGuestSession,
   StockMovement,
   Tab,
   TabSettledMethod,
@@ -256,6 +257,11 @@ function toReservation(r: Record<string, unknown>): Reservation {
     noShowAt: (r.no_show_at as string) || undefined,
     noShowNote: (r.no_show_note as string) || undefined,
     reconfirmedAt: (r.reconfirmed_at as string) || undefined,
+    // `??`, not `||`: `false` is a real answer here and truthiness would eat it.
+    reconfirmationEnabled:
+      (r.reconfirmation_enabled as boolean | null) ?? undefined,
+    cancellationWindowMinutes:
+      (r.cancellation_window_minutes as number | null) ?? undefined,
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
   };
@@ -1823,6 +1829,46 @@ export async function clientOpenFloorPlanSeating(data: {
       table_ids: data.tableIds,
       capacity_override_reason: data.capacityOverrideReason,
     }),
+  });
+}
+
+// A guest scan opens a session staff must decide on. The endpoints ship behind
+// floor.view (list) and floor.operate (approve/deny); the board is the surface
+// that calls them.
+function toStaffTableGuestSession(
+  value: Record<string, unknown>,
+): StaffTableGuestSession {
+  return {
+    id: value.id as string,
+    tableId: value.table_id as string,
+    seatingId: value.seating_id as string,
+    tableLabel: value.table_label as string,
+    status: value.status as StaffTableGuestSession["status"],
+    expiresAt: value.expires_at as string,
+    createdAt: value.created_at as string,
+  };
+}
+
+export async function clientListPendingTableGuestSessions(): Promise<
+  StaffTableGuestSession[]
+> {
+  const result = await authFetch<Record<string, unknown>[]>(
+    "/floor-plan/table-guest-sessions?status=pending",
+  );
+  return (result ?? []).map(toStaffTableGuestSession);
+}
+
+export async function clientApproveTableGuestSession(
+  sessionId: string,
+): Promise<void> {
+  await authFetch(`/floor-plan/table-guest-sessions/${sessionId}/approve`, {
+    method: "POST",
+  });
+}
+
+export async function clientDenyTableGuestSession(sessionId: string): Promise<void> {
+  await authFetch(`/floor-plan/table-guest-sessions/${sessionId}/deny`, {
+    method: "POST",
   });
 }
 

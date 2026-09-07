@@ -4,6 +4,7 @@ from uuid import UUID
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import permissions
 from app.models.notification import Notification
 from app.models.reservation import Reservation
 from app.models.user import User
@@ -35,11 +36,30 @@ async def notify_business_staff(
     body: str,
     payload: dict | None = None,
     exclude_user_id: UUID | None = None,
+    capability: str | None = None,
 ) -> None:
+    """Write one notification row per staff member of a business.
+
+    `capability` narrows the fan-out to the people who can actually act on the
+    thing. It defaults to None — everyone — because most operational events are
+    everyone's business, and every existing caller relies on that. Pass it when
+    the event is not: an unread notification also raises a toast on whatever
+    screen is signed in, so a guest's data-deletion request would otherwise
+    surface on the bar screen mid-service, in front of guests, to someone who
+    cannot action it.
+
+    `has_capability` fails closed on an unknown role, so a role added to the
+    database before it is added to the matrix receives nothing rather than
+    everything.
+    """
     staff_list = await staff_service.get_staff_by_business(db, business_id)
     pl = payload or {}
     for s in staff_list:
         if exclude_user_id is not None and s.user_id == exclude_user_id:
+            continue
+        if capability is not None and not permissions.has_capability(
+            s.role, capability
+        ):
             continue
         db.add(
             Notification(

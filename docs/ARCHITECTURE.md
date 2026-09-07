@@ -529,8 +529,13 @@ rotation revokes it. Session expiry uses the bounded
 hours). `tabs.seating_id` establishes one open tab per seating via a partial
 unique index. Approved guest rounds create or reuse that tab under a seating
 row lock; staff can do the same through the authenticated Floor → Tabs handoff.
-Orders persist the authoritative registered `table_id` and `tab_id`; their
-legacy `table_identifier` stays nullable read-only compatibility data. Closing
+Orders persist the authoritative registered `table_id` and `tab_id`; the legacy
+`table_identifier` column stays nullable and is never written, but the response
+field of that name is **derived at read time** from the tab's seating — every
+table in a combination, joined and ordered the way the floor orders tables — so
+a ticket names the party's whole footprint rather than the one table that was
+scanned. Audit snapshots (`OrderRevision`) keep reporting the persisted column,
+not the derived label. Closing
 a seating locks and rejects an open seating tab, so settlement precedes the
 source visit's completion. QR rotation increments the table revision and
 invalidates earlier credentials without storing a reusable public secret.

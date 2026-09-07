@@ -26,8 +26,10 @@ export default async function FloorPage() {
     <FloorClient
       businessId={business.id}
       canManage={hasCapability(user.role, "floor.configure")}
+      canOperate={hasCapability(user.role, "floor.operate")}
       hasReservations={business.enabledModules.includes("reservations")}
       hasQueue={business.enabledModules.includes("queue")}
+      hasOrdering={business.enabledModules.includes("ordering")}
       businessTimezone={business.timezone ?? "UTC"}
     />
   );

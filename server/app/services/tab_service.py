@@ -207,6 +207,88 @@ async def get_settlement_events(
     return list(rows.all())
 
 
+# ─── Batched reads for a whole list of tabs ──────────────────────────────────
+#
+# The three singular helpers above are the right shape for one tab and are still
+# used by the settlement path. Serializing a LIST through them is N+1 by
+# construction: every tab pays for its own orders, line items, timelines, total
+# and settlement events. These three answer the same questions for a whole list
+# in a fixed number of statements, so `GET /api/tabs` costs the same for four
+# tabs as for one.
+#
+# Each follows the same shape as order_service.resolve_order_table_labels: an
+# empty list short-circuits, one IN (...) query carries the tenant predicate,
+# and the caller indexes the returned dict. Every tab id asked for is present in
+# the result, so a tab with no orders or no settlement events reads as an empty
+# list rather than a KeyError.
+
+
+async def get_tabs_orders(
+    db: AsyncSession, business_id: UUID, tab_ids: list[UUID]
+) -> dict[UUID, list[Order]]:
+    """Every tab's orders, in placed order, from one query."""
+    if not tab_ids:
+        return {}
+    rows = await db.scalars(
+        select(Order)
+        .where(Order.business_id == business_id, Order.tab_id.in_(tab_ids))
+        .options(
+            selectinload(Order.line_items),
+            selectinload(Order.status_timeline),
+        )
+        .order_by(Order.placed_at)
+    )
+    grouped: dict[UUID, list[Order]] = {tab_id: [] for tab_id in tab_ids}
+    for order in rows.unique().all():
+        grouped[order.tab_id].append(order)
+    return grouped
+
+
+async def get_tabs_totals(
+    db: AsyncSession, business_id: UUID, tab_ids: list[UUID]
+) -> dict[UUID, Decimal]:
+    """Every tab's on-demand total, from one aggregate.
+
+    Cancelled orders are excluded here exactly as they are in get_tab_total; a
+    tab whose orders were all cancelled reads as 0, not as missing.
+    """
+    if not tab_ids:
+        return {}
+    totals: dict[UUID, Decimal] = {tab_id: Decimal("0") for tab_id in tab_ids}
+    rows = await db.execute(
+        select(Order.tab_id, func.coalesce(func.sum(Order.total_amount), 0))
+        .where(
+            Order.business_id == business_id,
+            Order.tab_id.in_(tab_ids),
+            Order.status != "cancelled",
+        )
+        .group_by(Order.tab_id)
+    )
+    for tab_id, total in rows.all():
+        totals[tab_id] = Decimal(str(total or 0))
+    return totals
+
+
+async def get_tabs_settlement_events(
+    db: AsyncSession, business_id: UUID, tab_ids: list[UUID]
+) -> dict[UUID, list[TabSettlementEvent]]:
+    """Every tab's settlement trail, oldest first, from one query."""
+    if not tab_ids:
+        return {}
+    rows = await db.scalars(
+        select(TabSettlementEvent)
+        .where(
+            TabSettlementEvent.business_id == business_id,
+            TabSettlementEvent.tab_id.in_(tab_ids),
+        )
+        .order_by(TabSettlementEvent.occurred_at, TabSettlementEvent.id)
+    )
+    grouped: dict[UUID, list[TabSettlementEvent]] = {tab_id: [] for tab_id in tab_ids}
+    for record in rows.all():
+        grouped[record.tab_id].append(record)
+    return grouped
+
+
 async def add_order_to_tab(
     db: AsyncSession,
     business_id: UUID,

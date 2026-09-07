@@ -2,7 +2,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -157,6 +157,20 @@ async def list_for_staff(
             & (Table.business_id == TableGuestSession.business_id),
         )
         .where(TableGuestSession.business_id == business_id)
+        # A request that has run out its time is not somebody still waiting, and
+        # `decide` already refuses it — so an expired PENDING row is not staff
+        # work and must not produce a badge that outlives the guest.
+        #
+        # Scoped to pending on purpose. Approved, denied and revoked rows are
+        # history: they are what a host looks at to see who was let onto which
+        # table, and they must keep coming back however old they are. A blanket
+        # expiry filter here would delete that history from the read.
+        .where(
+            or_(
+                TableGuestSession.status != "pending",
+                TableGuestSession.expires_at > datetime.now(timezone.utc),
+            )
+        )
         .order_by(TableGuestSession.created_at)
     )
     if status is not None:

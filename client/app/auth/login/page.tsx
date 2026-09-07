@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
+import { BrandMark } from "@/components/brand-mark";
 import {
-  AuthMark,
   AuthPage,
   AuthPanel,
   AuthSplit,
@@ -22,7 +22,7 @@ export default function LoginPage() {
       <AuthSplit
         panel={
           <AuthPanel>
-            <AuthMark />
+            <BrandMark />
 
             <div>
               <h2 className="auth-panel-h mb-4">

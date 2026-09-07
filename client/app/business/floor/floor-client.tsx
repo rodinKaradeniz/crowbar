@@ -23,6 +23,9 @@ import { FloorPlanSeatingSheet } from "@/components/floor-plan-seating-sheet";
 import { SkeletonList } from "@/components/ui/skeleton";
 import { useFloorPlanSocket } from "@/hooks/use-floor-plan-socket";
 import {
+  clientApproveTableGuestSession,
+  clientDenyTableGuestSession,
+  clientListPendingTableGuestSessions,
   clientArchiveFloorPlanArea,
   clientArchiveFloorPlanTable,
   clientCloseFloorPlanSeating,
@@ -54,13 +57,16 @@ import type {
   FloorPlanParty,
   FloorPlanSettings,
   FloorPlanTable,
+  StaffTableGuestSession,
 } from "@/types";
 
 interface FloorClientProps {
   businessId: string;
   canManage: boolean;
+  canOperate: boolean;
   hasReservations: boolean;
   hasQueue: boolean;
+  hasOrdering: boolean;
   businessTimezone: string;
 }
 
@@ -150,7 +156,7 @@ function PartyCard({
   );
 }
 
-function TableCard({ table, onClick, businessTimezone }: { table: FloorPlanBoardTable; onClick: () => void; businessTimezone: string }) {
+function TableCard({ table, onClick, businessTimezone, waitingToOrder }: { table: FloorPlanBoardTable; onClick: () => void; businessTimezone: string; waitingToOrder: number }) {
   const detail = table.activeSeating?.source ?? table.activeAssignment ?? table.nextReservation;
   return (
     <button
@@ -165,7 +171,16 @@ function TableCard({ table, onClick, businessTimezone }: { table: FloorPlanBoard
         <span className="font-mono text-[17px] font-semibold tabular-nums">
           {table.label}
         </span>
-        <Badge tone="neutral">{stateLabel(table.displayState)}</Badge>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {/* A host standing at the board has to SEE that someone is waiting
+              without opening anything. A count is the neutral case of the rank
+              (§08) — it is a number, not an alarm — and the word beside it is
+              what carries the meaning. */}
+          {waitingToOrder > 0 ? (
+            <Badge tone="neutral">{waitingToOrder} waiting</Badge>
+          ) : null}
+          <Badge tone="neutral">{stateLabel(table.displayState)}</Badge>
+        </div>
       </div>
       <p className="mt-1 font-mono text-[12px] tabular-nums text-muted-foreground">
         {table.capacity} seats
@@ -385,7 +400,7 @@ function SetupPanel({ onChanged }: { onChanged: () => Promise<void> }) {
   );
 }
 
-export default function FloorClient({ businessId, canManage, hasReservations, hasQueue, businessTimezone }: FloorClientProps) {
+export default function FloorClient({ businessId, canManage, canOperate, hasReservations, hasQueue, hasOrdering, businessTimezone }: FloorClientProps) {
   const [board, setBoard] = useState<FloorPlanBoard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -399,8 +414,15 @@ export default function FloorClient({ businessId, canManage, hasReservations, ha
   const [closeTarget, setCloseTarget] = useState<FloorPlanBoardTable | null>(null);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [qrRotateTarget, setQrRotateTarget] = useState<FloorPlanBoardTable | null>(null);
+  const [pendingSessions, setPendingSessions] = useState<StaffTableGuestSession[]>([]);
 
   const refresh = useCallback(async () => {
+    // The pending guest requests are settled SEPARATELY from the board: a
+    // failure to read them must not blank the floor, which is the screen the
+    // host is standing at.
+    const pending = hasOrdering
+      ? clientListPendingTableGuestSessions().catch(() => null)
+      : Promise.resolve<StaffTableGuestSession[] | null>([]);
     try {
       const next = await clientGetFloorPlanBoard();
       setBoard(next);
@@ -410,11 +432,27 @@ export default function FloorClient({ businessId, canManage, hasReservations, ha
     } finally {
       setLoading(false);
     }
-  }, []);
+    const sessions = await pending;
+    if (sessions) setPendingSessions(sessions);
+  }, [hasOrdering]);
 
   useEffect(() => { void refresh(); }, [refresh]);
   const { connected, lastContactAt } = useFloorPlanSocket(businessId, () => void refresh());
   const allTables = useMemo(() => board?.areas.flatMap((area) => area.tables) ?? [], [board]);
+  const pendingByTable = useMemo(() => {
+    // Expiry is settled on the READ: the staff list no longer returns pending
+    // rows that have run out their time, so everything here is somebody still
+    // waiting. Filtering again in the browser would only re-implement the
+    // server's clock against a less trustworthy one.
+    const grouped = new Map<string, StaffTableGuestSession[]>();
+    for (const session of pendingSessions) {
+      grouped.set(session.tableId, [...(grouped.get(session.tableId) ?? []), session]);
+    }
+    return grouped;
+  }, [pendingSessions]);
+  const selectedTablePending = selectedTable
+    ? pendingByTable.get(selectedTable.id) ?? []
+    : [];
   const availableParties = useMemo(() => [
     ...(hasReservations ? board?.unassignedReservations ?? [] : []),
     ...(hasQueue ? board?.queueEntries ?? [] : []),
@@ -444,6 +482,29 @@ export default function FloorClient({ businessId, canManage, hasReservations, ha
       await refresh();
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Could not update the floor plan.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const decideGuestSession = async (
+    session: StaffTableGuestSession,
+    decision: "approve" | "deny",
+  ) => {
+    setActionLoading(true);
+    try {
+      if (decision === "approve") {
+        await clientApproveTableGuestSession(session.id);
+        toast.success(`Table ${session.tableLabel} can order.`);
+      } else {
+        await clientDenyTableGuestSession(session.id);
+        toast.success(`Request for table ${session.tableLabel} denied.`);
+      }
+      await refresh();
+    } catch (cause) {
+      toast.error(
+        cause instanceof Error ? cause.message : "Could not answer the request.",
+      );
     } finally {
       setActionLoading(false);
     }
@@ -607,7 +668,7 @@ export default function FloorClient({ businessId, canManage, hasReservations, ha
                   ) : board.areas.map((area) => (
                     <section key={area.id}>
                       <div className="mb-3 flex items-baseline justify-between"><h2 className="type-t2">{area.name}</h2><span className="font-mono tabular-nums text-xs text-muted-foreground">{area.tables.length} tables</span></div>
-                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{area.tables.map((table) => <TableCard key={table.id} table={table} businessTimezone={businessTimezone} onClick={() => { setQrUrl(null); setSelectedTable(table); }} />)}</div>
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{area.tables.map((table) => <TableCard key={table.id} table={table} businessTimezone={businessTimezone} waitingToOrder={pendingByTable.get(table.id)?.length ?? 0} onClick={() => { setQrUrl(null); setSelectedTable(table); }} />)}</div>
                     </section>
                   ))}
                 </div>
@@ -719,6 +780,41 @@ export default function FloorClient({ businessId, canManage, hasReservations, ha
                     </>
                   ) : (
                     <>
+                      {/* A booking assigned to this table before its own start
+                          time is neither an active assignment nor an unassigned
+                          arrival, so without this it is reachable from neither
+                          side and a party that turns up early cannot be seated
+                          at all. The booked time is stated because seating now
+                          is a deliberate act, not something the screen hides. */}
+                      {selectedTable.nextReservation ? (
+                        <div className="flex flex-col gap-2 border-b border-border pb-3">
+                          <p className="text-[length:var(--ui-size)]">
+                            <span className="font-medium">
+                              {selectedTable.nextReservation.name}
+                            </span>{" "}
+                            is booked here for{" "}
+                            <span className="font-mono tabular-nums">
+                              {formatVenueTime(
+                                selectedTable.nextReservation.startsAt,
+                                businessTimezone,
+                              )}
+                            </span>
+                            , which has not come round yet.
+                          </p>
+                          <Button
+                            onClick={() =>
+                              startSelection(
+                                selectedTable.nextReservation!,
+                                "seat",
+                                selectedTable.nextReservation!.assignedTableIds,
+                              )
+                            }
+                            disabled={actionLoading}
+                          >
+                            Seat them early
+                          </Button>
+                        </div>
+                      ) : null}
                       <p className="text-[length:var(--ui-size)] text-muted-foreground">
                         Pick an arrival or a walk-in to seat here.
                       </p>
@@ -745,6 +841,54 @@ export default function FloorClient({ businessId, canManage, hasReservations, ha
                       )}
                     </>
                   )}
+
+                  {/* Where the decision about ONE table already gets made.
+                      A scan only resolves against an open seating, so this sits
+                      outside the state branches above rather than inside the
+                      pick-a-party one. */}
+                  {selectedTablePending.length ? (
+                    <div className="flex flex-col gap-3 border border-border p-3">
+                      <p className="type-label text-muted-foreground">
+                        Waiting to order
+                      </p>
+                      {selectedTablePending.map((session) => (
+                        <div key={session.id} className="flex flex-col gap-2">
+                          <p className="text-[13px] text-muted-foreground">
+                            A guest scanned this table&apos;s QR code at{" "}
+                            <span className="font-mono tabular-nums">
+                              {formatVenueTime(session.createdAt, businessTimezone)}
+                            </span>{" "}
+                            and cannot order until someone lets them through.
+                          </p>
+                          {canOperate ? (
+                            <div className="flex gap-2">
+                              <Button
+                                className="flex-1"
+                                onClick={() => void decideGuestSession(session, "approve")}
+                                disabled={actionLoading}
+                              >
+                                Approve
+                              </Button>
+                              {/* Deny is a real action, not a nicety: a scan
+                                  from the wrong table is the case it exists
+                                  for. */}
+                              <Button
+                                variant="destructive-quiet"
+                                onClick={() => void decideGuestSession(session, "deny")}
+                                disabled={actionLoading}
+                              >
+                                Deny
+                              </Button>
+                            </div>
+                          ) : (
+                            <p className="border-l-2 border-border-strong bg-secondary px-3 py-2.5 text-[13px] text-muted-foreground">
+                              Only a host or manager can answer this.
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
 
                   {canManage ? (
                     <details className="border border-border p-3">
