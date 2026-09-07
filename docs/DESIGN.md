@@ -327,6 +327,27 @@ above carry E1.
 | Bottom nav | 76px |
 | Marketing header (`--mkt-header`) | 66px floor |
 | Workspace topbar (`--workspace-header`) | 76px floor |
+| Public booking box (`--booking-column`) | `min(750px, 100svh − 2×--space-24 − 2px)` |
+
+**One height in that table is a `min()`, and that is the point.** The public
+booking box holds ONE height across all four steps of `/reserve/[business]`, so
+the bordered box and the ink panel beside it stop resizing as a guest moves
+between them. Both halves of `--booking-column` are measured, not chosen: 750px
+is the 1280×800 budget — the viewport less the page's own `2×--space-24` and
+less the 2px its own top and bottom hairline adds — and it clears the tallest
+ordinary step, which is the **review** step at 733 (1280×800) and 750
+(1024×768), not the slot step as was assumed. The `min()` is what keeps the box
+inside a shorter viewport: at 1024×768 it resolves to 718, and the step body
+scrolls within it rather than pushing the page. Both designed widths then land
+the box exactly on the viewport with no page scroll at all.
+
+The scroll container is the **step body** in `components/reservation-form.tsx`,
+reached by a `min-h-0` / `flex-1` chain from the column down. Not the column —
+a column that scrolls takes the ink panel's height with it. Not the page — the
+resizing box was the defect. And the height applies only from `phone:` up:
+below that the columns have already stacked, there is no panel to stay level
+with, and a floor there would buy dead space above a short step and a scrollbar
+inside a scrollbar on a phone.
 
 Both headers are sticky, so both are also a **scroll offset**: `--mkt-header`
 sizes `scroll-margin-top` on every in-page anchor target (`.mkt-anchor`), and

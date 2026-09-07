@@ -105,7 +105,14 @@ export default function ReserveClient({ business, serviceTypes }: ReserveClientP
           the booking beside it rather than stopping under its own last line.
         */}
         <div className="flex flex-row-reverse flex-wrap items-stretch border border-ink bg-paper">
-          <div className="flex min-w-[min(100%,320px)] flex-[1_1_460px] flex-col justify-center p-[var(--space-32)]">
+          {/* THE HEIGHT IS WHAT STOPS THE BOX RESIZING. Without it the bordered
+              box grew and shrank as the guest moved between steps — 558 / 622 /
+              598 / 733 at 1280x800 — and the ink panel followed it. The step
+              body inside scrolls when a step outruns the height, so the box
+              itself never moves. Only from `phone:` up: below that the columns
+              have stacked, there is no panel to stay level with, and a floor
+              would only add dead space above a short step. */}
+          <div className="flex min-w-[min(100%,320px)] flex-[1_1_460px] flex-col justify-center p-[var(--space-32)] phone:h-[var(--booking-column)]">
             <ReservationForm
               businessId={business.id}
               businessTimezone={business.timezone ?? "UTC"}

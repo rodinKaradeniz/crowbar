@@ -103,6 +103,28 @@ function stateTone(state: FloorPlanBoardTable["displayState"]) {
   }[state];
 }
 
+/**
+ * What a closed area lid has to say so a host does not open it to learn
+ * anything. All four figures come off the board payload already in hand —
+ * `displayState` and the seating's own party size — so collapsing a room costs
+ * no server call and no new field.
+ *
+ * `reserved` is on the lid because it is now a real state: a table held for a
+ * booking due shortly is neither occupied nor available, and a lid that named
+ * only the other two would hide exactly the tables a host is about to need.
+ */
+function areaSummary(tables: FloorPlanBoardTable[]) {
+  return {
+    occupied: tables.filter((table) => table.displayState === "occupied").length,
+    reserved: tables.filter((table) => table.displayState === "reserved").length,
+    available: tables.filter((table) => table.displayState === "available").length,
+    seated: tables.reduce(
+      (total, table) => total + (table.activeSeating?.source.partySize ?? 0),
+      0,
+    ),
+  };
+}
+
 function stateLabel(state: FloorPlanBoardTable["displayState"]) {
   return state === "cleaning" ? "needs reset" : state.replaceAll("_", " ");
 }
@@ -665,12 +687,39 @@ export default function FloorClient({ businessId, canManage, canOperate, hasRese
                           : "A manager needs to draw the room before this board can seat anyone."
                       }
                     />
-                  ) : board.areas.map((area) => (
-                    <section key={area.id}>
-                      <div className="mb-3 flex items-baseline justify-between"><h2 className="type-t2">{area.name}</h2><span className="font-mono tabular-nums text-xs text-muted-foreground">{area.tables.length} tables</span></div>
-                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{area.tables.map((table) => <TableCard key={table.id} table={table} businessTimezone={businessTimezone} waitingToOrder={pendingByTable.get(table.id)?.length ?? 0} onClick={() => { setQrUrl(null); setSelectedTable(table); }} />)}</div>
-                    </section>
-                  ))}
+                  ) : board.areas.map((area, areaIndex) => {
+                    const summary = areaSummary(area.tables);
+                    return (
+                      /*
+                        A NATIVE `<details>`, and the open state lives nowhere else.
+                        The board re-renders on every socket frame, and React only
+                        patches a DOM prop whose value CHANGED — so `open` on the
+                        first area is an initial state, not a controlled one, and a
+                        host who closes a room keeps it closed through the next
+                        refresh. An Accordion would have needed state that the
+                        refresh then has to be taught not to clobber.
+
+                        THE FIRST AREA IS OPEN AND THE REST ARE NOT. A board that
+                        opens fully collapsed hides the thing the page is named for;
+                        one that opens fully expanded is the long scroll this
+                        replaces. The venue's own area order decides which room that
+                        is, and every closed lid still carries its room's state.
+                      */
+                      <details key={area.id} className="group" open={areaIndex === 0}>
+                        <summary className="mb-[var(--space-12)] flex min-h-[var(--control-desktop-min)] cursor-pointer list-none flex-wrap items-baseline gap-x-[var(--space-12)] gap-y-[var(--space-4)] py-[var(--space-8)] [&::-webkit-details-marker]:hidden">
+                          <ChevronRight className="size-4 shrink-0 self-center text-muted-foreground transition-transform group-open:rotate-90" aria-hidden />
+                          <h2 className="type-t2">{area.name}</h2>
+                          <span className="font-mono tabular-nums text-xs text-muted-foreground">{summary.occupied} occupied · {summary.reserved} reserved · {summary.available} available · {summary.seated} seated</span>
+                          <span className="ml-auto font-mono tabular-nums text-xs text-muted-foreground">{area.tables.length} tables</span>
+                          {/* The affordance says what the host GETS, and only while
+                              it is still true — once the area is open there is
+                              nothing to promise. */}
+                          <span className="basis-full text-xs text-muted-foreground group-open:hidden">Open to see every table here and seat a party.</span>
+                        </summary>
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{area.tables.map((table) => <TableCard key={table.id} table={table} businessTimezone={businessTimezone} waitingToOrder={pendingByTable.get(table.id)?.length ?? 0} onClick={() => { setQrUrl(null); setSelectedTable(table); }} />)}</div>
+                      </details>
+                    );
+                  })}
                 </div>
                 <aside className="space-y-6 xl:sticky xl:top-[calc(var(--workspace-header)+var(--page-header))] xl:self-start">
                   {hasReservations && <section><div className="mb-2 flex items-center justify-between"><p className="type-label text-muted-foreground">Unassigned arrivals</p><span className="font-mono tabular-nums text-xs text-muted-foreground">{board.unassignedReservations.length}</span></div><div className="space-y-2">{board.unassignedReservations.length ? board.unassignedReservations.map((party) => <PartyCard key={party.sourceId} party={party} actionLabel="Seat" secondaryLabel="Assign" businessTimezone={businessTimezone} onAction={() => startSelection(party, "seat")} onSecondary={() => startSelection(party, "assign")} />) : <p className="bg-muted/40 px-3 py-4 text-sm text-muted-foreground">No unassigned arrivals.</p>}</div></section>}
@@ -836,7 +885,13 @@ export default function FloorClient({ businessId, canManage, canOperate, hasRese
                         </div>
                       ) : (
                         <p className="border-l-2 border-border-strong bg-secondary px-3 py-2.5 text-[13px] text-muted-foreground">
-                          Nobody is waiting to be seated.
+                          {/* "Nobody is waiting" is about UNASSIGNED arrivals, and
+                              `availableParties` excludes a party booked at this very
+                              table by construction. Said flat under a named booking
+                              it reads as the panel contradicting itself. */}
+                          {selectedTable.nextReservation
+                            ? "Nobody else is waiting to be seated."
+                            : "Nobody is waiting to be seated."}
                         </p>
                       )}
                     </>

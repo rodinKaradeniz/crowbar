@@ -115,10 +115,13 @@ export function PageHeader({
       >
         <div className="flex flex-wrap items-start gap-[var(--space-16)]">
           <div className="min-w-0 flex-1">
-            {above}
+            {/* The eyebrow carries no spacing of its own, so it sat flush on the
+                title on every page that passes one. Fixed here rather than at
+                the three call sites — the component is what makes them agree. */}
+            {above ? <div className="mb-[var(--space-8)]">{above}</div> : null}
             <h1 className="type-t1 truncate">{title}</h1>
             {description ? (
-              <p className="mt-1 text-[length:var(--ui-size)] text-muted-foreground">
+              <p className="mt-[var(--space-4)] text-[length:var(--ui-size)] text-muted-foreground">
                 {description}
               </p>
             ) : null}

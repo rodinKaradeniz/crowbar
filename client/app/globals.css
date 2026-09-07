@@ -238,6 +238,18 @@
   --rail: 228px;
   --side-panel: 400px;
   --offline-bar: 38px;
+  /* The public booking box holds ONE height across all four steps, so the
+     bordered box and the ink panel beside it stop resizing as the guest moves
+     between them. Measured rather than guessed: the tallest ordinary step is
+     the review, at 733 (1280x800) and 750 (1024x768) — taller than the slot
+     step at every width. 750px is the 1280x800 budget — 800 less the page's own
+     2x--space-24 and less the 2px the box's own top and bottom hairline adds
+     around this column — and it covers that tallest step with 17px to spare.
+     The `min()` is what keeps the box inside a SHORTER viewport: at 1024x768 it
+     resolves to 718, and the step body scrolls within it rather than pushing
+     the page. Both widths then land the box exactly on the viewport with no
+     page scroll at all. */
+  --booking-column: min(750px, calc(100svh - 2 * var(--space-24) - 2px));
   --grid-marketing: 1360px;
   /* The reading measure for a WORKSPACE DOCUMENT page — settings, profile,
      menu, staff, docs. Boards (floor, tickets, tabs, reservations, queue,

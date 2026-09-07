@@ -22,7 +22,10 @@ from app.models.table_seating import TableSeating, TableSeatingTable
 from app.models.tab import Tab
 from app.models.user import User
 from app.services.auth_service import create_access_token
-from app.services.floor_plan_service import resolve_service_window
+from app.services.floor_plan_service import (
+    RESERVATION_HOLD_MINUTES,
+    resolve_service_window,
+)
 from app.services import tax_service
 from app.services.public_session_service import hash_token
 
@@ -804,6 +807,151 @@ async def test_board_projects_assignments_seatings_and_unassigned_parties(
     assert projected_table["active_seating"]["source"]["source_id"] == str(
         reservation.id
     )
+
+
+async def _assigned_booking(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    business: Business,
+    location: Location,
+    headers: dict,
+    table: dict,
+    *,
+    starts_in: timedelta,
+    name: str,
+):
+    """Put one confirmed booking on `table`, starting `starts_in` from now."""
+    customer = Customer(
+        business_id=business.id,
+        name=name,
+        phone="+14155550188",
+        email="hold-guest@example.com",
+    )
+    service = ServiceType(business_id=business.id, name="Dinner", capacity=8)
+    db_session.add_all([customer, service])
+    await db_session.flush()
+    starts_at = datetime.now(timezone.utc) + starts_in
+    reservation = Reservation(
+        business_id=business.id,
+        location_id=location.id,
+        customer_id=customer.id,
+        service_type_id=service.id,
+        time=starts_at,
+        ends_at=starts_at + timedelta(minutes=90),
+        phone=customer.phone,
+        email=customer.email,
+        status="confirmed",
+        guests=2,
+    )
+    db_session.add(reservation)
+    await db_session.commit()
+
+    assigned = await client.put(
+        f"/api/floor-plan/reservations/{reservation.id}/tables",
+        headers=headers,
+        json={"table_ids": [table["id"]]},
+    )
+    assert assigned.status_code == 200, assigned.text
+    return reservation
+
+
+@pytest.mark.asyncio
+async def test_board_holds_a_table_for_a_booking_inside_the_hold_window(
+    client: AsyncClient, db_session: AsyncSession
+):
+    business, _, location, headers = await _tenant(db_session, slug="hold-inside")
+    _, table = await _area_and_table(client, headers, capacity=4)
+    await _assigned_booking(
+        client,
+        db_session,
+        business,
+        location,
+        headers,
+        table,
+        starts_in=timedelta(minutes=RESERVATION_HOLD_MINUTES - 10),
+        name="Held Guest",
+    )
+
+    board = await client.get("/api/floor-plan/board", headers=headers)
+    assert board.status_code == 200, board.text
+    projected_table = board.json()["areas"][0]["tables"][0]
+    assert projected_table["display_state"] == "reserved"
+    # The hold is a display concern only: the booking has not started, so it is
+    # still the table's NEXT reservation and not an active assignment. The card's
+    # "Next 18:30" line and the panel's early-seating action both read this.
+    assert projected_table["active_assignment"] is None
+    assert projected_table["next_reservation"]["name"] == "Held Guest"
+
+
+@pytest.mark.asyncio
+async def test_board_leaves_a_table_available_for_a_booking_outside_the_hold_window(
+    client: AsyncClient, db_session: AsyncSession
+):
+    business, _, location, headers = await _tenant(db_session, slug="hold-outside")
+    _, table = await _area_and_table(client, headers, capacity=4)
+    await _assigned_booking(
+        client,
+        db_session,
+        business,
+        location,
+        headers,
+        table,
+        starts_in=timedelta(minutes=RESERVATION_HOLD_MINUTES + 15),
+        name="Later Guest",
+    )
+
+    board = await client.get("/api/floor-plan/board", headers=headers)
+    assert board.status_code == 200, board.text
+    projected_table = board.json()["areas"][0]["tables"][0]
+    assert projected_table["display_state"] == "available"
+    assert projected_table["next_reservation"]["name"] == "Later Guest"
+
+
+@pytest.mark.asyncio
+async def test_board_keeps_a_seated_table_occupied_inside_the_hold_window(
+    client: AsyncClient, db_session: AsyncSession
+):
+    business, _, location, headers = await _tenant(db_session, slug="hold-seated")
+    _, table = await _area_and_table(client, headers, capacity=4)
+    now = datetime.now(timezone.utc)
+    walk_in = QueueEntry(
+        business_id=business.id,
+        location_id=location.id,
+        service_date=resolve_service_window(business, now=now)[0],
+        session_token_hash=hash_token("hold-walk-in-token"),
+        name="Walk In",
+        party_size=2,
+        status="waiting",
+    )
+    db_session.add(walk_in)
+    await db_session.commit()
+    await _assigned_booking(
+        client,
+        db_session,
+        business,
+        location,
+        headers,
+        table,
+        starts_in=timedelta(minutes=RESERVATION_HOLD_MINUTES - 10),
+        name="Held Guest",
+    )
+
+    opened = await client.post(
+        "/api/floor-plan/seatings",
+        headers=headers,
+        json={
+            "source_type": "queue",
+            "source_id": str(walk_in.id),
+            "table_ids": [table["id"]],
+        },
+    )
+    assert opened.status_code == 201, opened.text
+
+    board = await client.get("/api/floor-plan/board", headers=headers)
+    assert board.status_code == 200, board.text
+    projected_table = board.json()["areas"][0]["tables"][0]
+    assert projected_table["display_state"] == "occupied"
+    assert projected_table["active_seating"]["source"]["name"] == "Walk In"
 
 
 @pytest.mark.asyncio

@@ -540,6 +540,18 @@ in the port.
 Raised rather than answered locally, per rule zero — a value that is needed and
 missing is a design question, not an implementation choice.
 
+- **Two untokenised spacing values neither grep gate can see.**
+  `client/components/page-header.tsx` sets `gap-2` on its actions cluster, and
+  the workspace topbar's `<h1>` carries `mb-[3px]`. Both are sizes, so the hex
+  gate misses them, and neither is a `text-*` step, so the size gate misses them
+  too — the same blind spot `--row-content-min` was declared to close. `gap-2`
+  is 8px and equals `--space-8` exactly, so tokenising it moves nothing; the
+  `3px` matches no declared step at all and is the one that needs a decision.
+  Found while fixing the eyebrow spacing in that same file and deliberately left,
+  because the brief that surfaced them barred rule-zero sweeps beyond the two
+  values it named. **Trigger:** the next deliberate rule-zero pass, or whoever
+  next edits either component.
+
 - ~~**Per-tenant service-type colours.**~~ **Answered by the same set.** The
   picker now offers the five declared slots and nothing else. It previously
   offered twelve arbitrary hues **plus a free hex field and a native colour
@@ -1783,6 +1795,20 @@ the confirmed sequence unless a stage explicitly pulls the item forward.
 
 ## Product and UX
 
+- **Needs decision — a held table is harder to give to a walk-in, and nobody
+  decided that.** The board now reads `reserved` for the 30 minutes before an
+  assigned booking starts (`RESERVATION_HOLD_MINUTES`,
+  `server/app/services/floor_plan_service.py`). `isSelectable` in
+  `client/components/floor-plan-seating-sheet.tsx` treats
+  `displayState === "available"` as "free to seat", so a held table is no longer
+  offered when a host seats a party picked from the sidebar. It is still
+  reachable from the table's own panel, which passes `initialTableIds` and
+  short-circuits the check — so this is one route lost, not the capability. It
+  may well be the right behaviour: the hold exists because seating a walk-in
+  half an hour before a booked party is a mistake. But it is a product decision
+  and the display fix should not make it silently. **Trigger:** the first time a
+  host reports being unable to seat a walk-in from the sidebar, or the next
+  deliberate pass over the seating sheet.
 - **Ready:** Audit both planned enhancements and established workflows for
   unnecessary staff friction or speculative state. Prefer the smallest useful
   operational cue over mandatory acknowledgements, repeated confirmation, or
@@ -1826,6 +1852,15 @@ the confirmed sequence unless a stage explicitly pulls the item forward.
   same picker.
 
 ## Testing and Quality
+
+- **Ready — the journey's remaining under-48px controls on the public booking
+  page.** Measured at 1024x768 and 390 during the booking-height pass: the four
+  `BookingRail` rungs are 24px and the terms `<summary>` is 37px, both under the
+  48px tablet floor. The rail's 24px is a deliberate design decision recorded in
+  `docs/HISTORY.md` 2026-09-07 (it replaced an accordion that cost 171px), so
+  this is a question about whether a rung is a control or an indicator, not an
+  obvious defect. **Trigger:** the next accessibility pass over public guest
+  surfaces, or the first report of a mis-tap on a tablet.
 
 - **Ready — stages 0, 1, and 8:** Build the risk-based acceptance matrix and
   use unit, PostgreSQL integration, contract, end-to-end, visual,

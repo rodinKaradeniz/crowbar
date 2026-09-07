@@ -2933,3 +2933,117 @@ The sheet is gone and the four steps run down the paper column.
 `client/components/brand-mark.tsx`, `client/lib/operating-hours.ts`,
 `client/lib/availability.ts`, `client/tests/unit/operating-hours.test.ts`,
 `docs/DESIGN.md`, `docs/TODO.md` §7b.
+
+## 2026-09-07 — "Reserved" now means held, and a case-sensitive matcher hid a second one
+
+**Context.** Table B1 rendered the badge AVAILABLE at 17:10 over a card that
+said "Rodin K / Next 18:30", and a panel that said the party "is booked here for
+18:30, which has not come round yet" and offered "Seat them early". The same
+card asserted both that the table was free and that it was booked, and the host
+was left to reconcile it. The assignment had persisted correctly; the defect was
+in how `display_state` was derived.
+
+**What was actually wrong.** `active_assignment` is built from
+`current_reservation`, a containment test — `time <= now < ends_at` — so
+`reserved` required the booking's own window to have STARTED. But a party whose
+window has started is normally already seated, and `active_seating` wins the
+branch above with `occupied`. So `reserved` meant "the booking started and
+nobody turned up": a lateness state wearing a reservation's name, which in
+ordinary service never rendered at all. The client had been ready for it the
+whole time — `reserved` was already in the `Literal`, already in
+`FloorPlanDisplayState`, already styled in `stateTone`.
+
+**Decision.** One module-level constant, `RESERVATION_HOLD_MINUTES = 30`, and a
+separate local in the derivation. `current_reservation`, `next_reservation` and
+`active_assignment` are all untouched, because the card's "Next 18:30" line and
+the panel's early-seating action both read `next_reservation` and both were
+already correct. Only the branch widened. Not configurable: one bar, one number,
+and the day a second venue needs a different one is the day to add the column.
+
+**Consequences.**
+
+- **A widened display state is not only a display change.**
+  `floor-plan-seating-sheet.tsx` treats `displayState === "available"` as "free
+  to seat", so a held table is no longer selectable when a host seats a party
+  chosen from the sidebar. It is still selectable from the table's own panel,
+  which passes `initialTableIds` and short-circuits that check — so the walk-in
+  is one route away, not blocked. Left as found and recorded in `docs/TODO.md`:
+  the hold exists precisely because seating a walk-in half an hour before a
+  booked party is a mistake, so tightening that path may be right, but it is a
+  product decision and not one a display fix gets to make quietly.
+- **The journey spec asserted the defect.** `service-loop.spec.ts` required a
+  planned table to read `available`, with a parenthetical explaining that the
+  board "only calls a table reserved once the booking's own time has arrived".
+  The first sentence of that comment is the durable rule — assignment is
+  planning, not occupancy — and it still holds: no seating opens and the plan
+  still rides on `next_reservation`. Only the word changed. The assertion now
+  derives its expectation from the same rule the server applies, because the
+  journey books the first slot of the service day, which is inside the hold
+  window during service and outside it before the doors open.
+- **The empty state contradicted the panel above it.** "Nobody is waiting to be
+  seated." sat directly under a named booking, because `availableParties` is
+  unassigned arrivals plus queue entries and excludes a party assigned to this
+  very table by construction. It now says "Nobody **else**" when the table has a
+  booking of its own. Both branches were individually true; together they read
+  as the panel arguing with itself.
+
+**A second case-sensitive matcher was hiding behind the first.** The brief named
+`/Add to Cart/` against a button that says "Add to cart · <price>", and called
+it the one thing blocking verification. Fixing it advanced the journey to the
+next instance of the identical defect from the identical commit:
+`/View Cart/` against a link that says "View cart · N items · <total>". Both are
+now anchored and case-insensitive. **The lesson is about sequencing, not about
+casing:** a red test hides every failure downstream of the line it dies on, so
+"fix the one red thing" is a hypothesis about how many there are, never a count.
+The remaining eleven matchers were checked against their real strings rather
+than assumed.
+
+**The floor areas collapse, and the lid carries the room.** Every area rendered
+expanded, which on a real floor is a long scroll to reach the room you are
+standing in. Each is now a native `<details>` — no Accordion, no library, no
+persisted state — with occupied / reserved / available / seated on the closed
+lid. `<details open>` survives the board's socket refresh for free, because
+React only patches a DOM prop whose value changed, so a host who closes a room
+keeps it closed. The first area opens and the rest do not: a board that opens
+fully collapsed hides the thing the page is named for, and one that opens fully
+expanded is the scroll being replaced.
+
+**The lid needed a fourth figure the brief did not ask for.** Occupied,
+available and seated were specified; with a hold window, held tables would have
+appeared in none of them, and a closed lid reading "3 available" would hide the
+three tables the host is about to need. The two changes were specified
+separately and collided.
+
+**`min-h-[var(--control-desktop-min)]`, not a padding guess.** The open summary
+measured 37px — inside the desktop 34–44 range, under the 48px tablet floor.
+That token is 34 on desktop and is redefined to `--control-tablet-min` below
+1280, so one class satisfies both targets and neither number is written down.
+Found by measuring at 1024×768; it passed `tsc`, `lint` and both grep gates at
+37px.
+
+**The eyebrow had no spacing of its own.** `PageHeader` rendered `{above}` bare
+against the `<h1>`, so "SERVICE DAY · 2026-09-06" sat on "Floor map" on all
+three pages that pass one. Fixed in the component rather than at the call sites,
+which is what makes them agree; measured at 8px after, 0 before. The
+description's `mt-1` became `mt-[var(--space-4)]` in the same edit — the same
+4px, no longer a raw Tailwind step.
+
+**The public booking box stopped resizing, and the tallest step was not the one
+anyone expected.** See `docs/DESIGN.md` § Space for the token and its
+derivation. The measurement is the point: the box ran 558 / 622 / 598 / **733**
+at 1280×800 across the four steps, so the **review** step is the tallest at
+every width — not the slot grid, which the brief and the previous pass both
+assumed. A scroll container on the slot grid alone could not have held the box
+still. At 1024×768 the review step already overflowed the viewport before any of
+this. Both designed widths now measure one height across all four steps with
+zero page scroll, and 390 keeps no floor at all: natural heights, page scrolls,
+and `nestedScrollers: []` measured — no scrollbar inside a scrollbar.
+
+**References.** `server/app/services/floor_plan_service.py`,
+`server/tests/integration/test_floor_plan_routes.py`,
+`client/app/business/floor/floor-client.tsx`,
+`client/components/page-header.tsx`,
+`client/components/reservation-form.tsx`,
+`client/app/reserve/[business]/reserve-client.tsx`,
+`client/app/globals.css`, `client/e2e/service-loop.spec.ts`,
+`docs/DESIGN.md`, `docs/TODO.md`.

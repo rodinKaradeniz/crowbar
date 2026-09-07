@@ -31,6 +31,14 @@ from app.services.table_qr_service import issue_table_token
 from app.services.customer_service import get_guest_context
 
 
+# A booked table is held from this long before its own start time, so the board
+# says "reserved" while the host can still act on it. Thirty minutes is the
+# venue's own slot interval, and a host who seats a walk-in less than half an
+# hour before a booked party has already made a mistake the board should have
+# shown them.
+RESERVATION_HOLD_MINUTES = 30
+
+
 class FloorPlanError(Exception):
     def __init__(self, status_code: int, message: str, *, code: str = ErrorCode.CONFLICT):
         self.status_code = status_code
@@ -1200,13 +1208,25 @@ async def get_board(
                 and table.operational_state_until is not None
                 and table.operational_state_until <= generated_at
             )
+            # `active_assignment` only covers a booking whose own window has
+            # already started, and a party that far along is normally seated —
+            # so on its own it almost never renders. The hold is what makes
+            # "reserved" mean what a host reads it as: this table is spoken for
+            # shortly. `next_reservation` is already the earliest future booking
+            # on the table and keeps its exact meaning, because the card's
+            # "Next 18:30" line and the panel's early-seating action both read it.
+            held_for_next_reservation = (
+                next_reservation is not None
+                and next_reservation.time - generated_at
+                <= timedelta(minutes=RESERVATION_HOLD_MINUTES)
+            )
             if active_seating:
                 display_state = "occupied"
             elif table.operational_state == "out_of_service" and not state_expired:
                 display_state = "out_of_service"
             elif table.operational_state == "cleaning":
                 display_state = "cleaning"
-            elif active_assignment:
+            elif active_assignment or held_for_next_reservation:
                 display_state = "reserved"
             else:
                 display_state = "available"

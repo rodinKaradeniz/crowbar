@@ -25,7 +25,7 @@ const OWNER_EMAIL = "owner@example.com";
 const SERVICE_TYPE = "Bar Seating";
 const PARTY_SIZE = 2;
 
-type BoardParty = { source_id: string; name: string };
+type BoardParty = { source_id: string; name: string; starts_at: string | null };
 type BoardTable = {
   id: string;
   label: string;
@@ -277,15 +277,26 @@ test("the pilot service loop, from booking to guest and cost history", async ({
         `the assign sheet stayed open, so ${tableLabel} refused the plan`,
       ).toBeHidden();
 
-      // An assignment is planning, not occupancy: the table carries the booking
-      // but stays available for a walk-in until the party is actually seated.
-      // (The board only calls a table "reserved" once the booking's own time has
-      // arrived; before that the plan rides on next_reservation.)
+      // An assignment is planning, not occupancy: no seating is open, the plan
+      // rides on next_reservation, and the host can still put a walk-in on the
+      // table from its own panel.
+      //
+      // The WORD depends on how close the booking is. The board holds a table
+      // for the half hour before a booking starts, so a host never reads
+      // "available" over a named party about to walk in. This journey books the
+      // first slot of the current service day, which is inside that window
+      // during service and outside it before the doors open — so the expected
+      // state is derived from the same rule the server applies rather than
+      // pinned to whichever one this run happens to hit.
+      const HOLD_MINUTES = 30; // RESERVATION_HOLD_MINUTES, floor_plan_service.py
       const planned = await boardTable(tableId);
+      const bookedFor = planned.next_reservation?.starts_at;
+      expect(bookedFor, "the plan did not land on next_reservation").toBeTruthy();
+      const minutesUntilBooking = (new Date(bookedFor!).getTime() - Date.now()) / 60_000;
       expect(
         planned.display_state,
-        "a planned table must still be offerable to a walk-in",
-      ).toBe("available");
+        "a planned table reads reserved inside the hold window, available outside it",
+      ).toBe(minutesUntilBooking <= HOLD_MINUTES ? "reserved" : "available");
       expect(planned.active_seating, "an assignment must not open a seating").toBeNull();
       expect(planned.next_reservation?.name).toBe(guestName);
       await expect(tableCard(tableLabel)).toContainText(guestName);
@@ -340,7 +351,7 @@ test("the pilot service loop, from booking to guest and cost history", async ({
       const addFirstItemToCart = async () => {
         await guest.locator('section[id^="cat-"] button').first().click();
         await guest.getByRole("dialog").getByPlaceholder(/^E\.g\./).fill(journeyTag);
-        await guest.getByRole("button", { name: /Add to Cart/ }).click();
+        await guest.getByRole("button", { name: /^Add to cart/i }).click();
       };
       await addFirstItemToCart();
       await expect(guest.getByRole("button", { name: /Waiting for staff approval/ })).toBeVisible();
@@ -366,7 +377,7 @@ test("the pilot service loop, from booking to guest and cost history", async ({
 
       // No reload: the guest's own poll carries the decision through, so the
       // cart built before the approval is still there.
-      const viewCart = guest.getByRole("link").filter({ hasText: /View Cart/ });
+      const viewCart = guest.getByRole("link").filter({ hasText: /^View cart/i });
       await expect(
         viewCart,
         "the approved table session did not unlock ordering",

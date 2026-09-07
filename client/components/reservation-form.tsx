@@ -441,7 +441,11 @@ export function ReservationForm({
   // ── The stepper ────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col">
+    // `min-h-0` + `flex-1` all the way down to the step body: that chain is what
+    // lets ONE scroll container inside the step absorb a step taller than the
+    // box, instead of the box growing. Without `min-h-0` a flex item refuses to
+    // shrink below its content and the overflow escapes to the page.
+    <div className="flex min-h-0 flex-1 flex-col">
       <BookingRail
         steps={RUNG_TITLES.map((title, index) => ({
           title,
@@ -451,7 +455,7 @@ export function ReservationForm({
         onOpen={(index) => setStep(RUNGS[index])}
       />
 
-      <div className="mt-[var(--space-24)]">
+      <div className="mt-[var(--space-24)] flex min-h-0 flex-1 flex-col">
         {/* ── 1 ───────────────────────────────────────────────────────────── */}
         <StepPanel
           rung="type"
@@ -851,9 +855,15 @@ function StepPanel({
 }) {
   if (current !== rung) return null;
   return (
-    <section>
+    <section className="flex min-h-0 flex-1 flex-col">
       <h2 className="type-t1">{title}</h2>
-      <div className="mt-[var(--space-16)]">{children}</div>
+      {/* THE STEP BODY IS THE SCROLL CONTAINER, not the column and not the page.
+          The title and the rail above it stay put, so a guest correcting an
+          answer always finds the stepper in the same place. Measurement decided
+          this rather than the slot grid: the review step is the tallest at every
+          width (733 / 750 / 815), and opening the terms disclosure adds ~450
+          more, so a scroller on the slots alone could not hold the box still. */}
+      <div className="mt-[var(--space-16)] min-h-0 flex-1 overflow-y-auto">{children}</div>
     </section>
   );
 }
