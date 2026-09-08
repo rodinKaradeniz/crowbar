@@ -74,12 +74,14 @@ export function VenuePanel({ business }: { business: Business }) {
         </Link>
 
         <div>
+          <h1 className="type-d3">{business.name}</h1>
+          {/* What the venue IS, under what it is called. It read as an eyebrow
+              above the name, which put the categories before the identity. */}
           {business.tags && business.tags.length > 0 && (
-            <p className="type-label mb-[var(--space-12)] text-muted-foreground">
+            <p className="type-label mt-[var(--space-12)] text-muted-foreground">
               {business.tags.join("  ·  ")}
             </p>
           )}
-          <h1 className="type-d3">{business.name}</h1>
           {business.description && (
             <p className="mt-[var(--space-16)] max-w-[46ch] text-sm leading-relaxed text-muted-foreground">
               {business.description}

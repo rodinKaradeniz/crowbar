@@ -1,15 +1,30 @@
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+
 /**
- * What the guest is agreeing to, opened in place on the review step.
+ * What the guest is agreeing to, read in a dialog over the review step.
  *
- * IT WAS A `Dialog`, AND THAT WAS THE WRONG PRIMITIVE. docs/DESIGN.md reserves
- * the dialog for "decisions that end a shift or cannot be undone" at 330–420px;
- * this is four sections of policy prose, and it shipped at `max-w-2xl`. It also
- * put an overlay in the middle of the one step whose entire job is letting the
- * guest read before they tick a box.
+ * IT WAS A `Dialog`, THEN A NATIVE `<details>`, AND IT IS A DIALOG AGAIN. The
+ * de-modaling was correct against the contract as it then stood — docs/DESIGN.md
+ * reserved the dialog for "decisions that end a shift or cannot be undone" — and
+ * it was reversed by owner decision. The contract now carries the second,
+ * narrower use this is: a READING dialog, for policy or reference text someone
+ * must be able to read without losing their place in the flow behind it. It runs
+ * wider than the 330–420px decision dialog, capped at a reading measure; it
+ * scrolls internally; its only action is dismissal; it carries no decision. The
+ * decision to agree stays on the checkbox behind it.
  *
- * A native `<details>`, for the same reasons the landing FAQ is one: it is
- * keyboard operable and announced as expandable with no state to hold, and the
- * content stays in the flow of the step rather than covering it.
+ * The trigger is the phrase itself: the "terms and conditions" inside the
+ * agreement sentence, underlined the way inline prose links are elsewhere. It
+ * replaced a chevroned summary row below the checkbox, which read as a
+ * disclosure dropdown and named the policy a second time. It sits OUTSIDE the
+ * checkbox's `<label>` — a button inside a label toggles the box on the way to
+ * opening the dialog.
  *
  * THE COPY IS COMPLIANCE TEXT AND IS UNCHANGED. It states the controller /
  * processor split, separates operational messages from marketing consent, and
@@ -18,60 +33,67 @@
  */
 export function BookingPrivacyDisclosure() {
   return (
-    <details className="group border-t border-border">
-      <summary className="flex cursor-pointer list-none items-center gap-[var(--space-8)] py-[var(--space-12)] text-muted-foreground transition-colors hover:text-primary [&::-webkit-details-marker]:hidden">
-        {/* One glyph rotated off the parent's open state — no second icon to
-            keep in sync, and nothing to track in React. */}
-        <svg
-          className="size-3 shrink-0 transition-transform group-open:rotate-90"
-          viewBox="0 0 12 12"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="square"
-          aria-hidden
+    <Dialog>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          className="cursor-pointer underline underline-offset-4 transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
-          <path d="M4.5 2.5L8 6l-3.5 3.5" />
-        </svg>
-        <span className="type-label">What you are agreeing to</span>
-      </summary>
+          terms and conditions
+        </button>
+      </DialogTrigger>
 
-      <div className="space-y-[var(--space-16)] pb-[var(--space-16)]">
-        <section>
-          <h3 className="type-label text-muted-foreground">Who handles your data</h3>
-          <p className="mt-[var(--space-4)] text-sm leading-relaxed text-muted-foreground">
-            The venue is the data controller. Crowbar acts as its software
-            processor for reservations and related venue operations. Use the
-            venue privacy contact or policy shown on its public page for data
-            rights requests and policy details.
-          </p>
-        </section>
-        <section>
-          <h3 className="type-label text-muted-foreground">Operational messages</h3>
-          <p className="mt-[var(--space-4)] text-sm leading-relaxed text-muted-foreground">
-            Contact details may be used for confirmations, reminders, queue
-            calls, and material booking updates. These operational messages are
-            not marketing consent. Optional email and SMS marketing choices are
-            recorded separately and can be declined.
-          </p>
-        </section>
-        <section>
-          <h3 className="type-label text-muted-foreground">Venue policies</h3>
-          <p className="mt-[var(--space-4)] text-sm leading-relaxed text-muted-foreground">
-            Availability, confirmation, arrival, cancellation, and service
-            decisions belong to the venue. Contact the venue if a booking has
-            started or a private management link is no longer valid.
-          </p>
-        </section>
-        <section>
-          <h3 className="type-label text-muted-foreground">Retention</h3>
-          <p className="mt-[var(--space-4)] text-sm leading-relaxed text-muted-foreground">
-            Personal data is retained or anonymised according to the venue&apos;s
-            configured retention policy and any applicable obligations. This
-            screen does not claim a universal retention period.
-          </p>
-        </section>
-      </div>
-    </details>
+      {/* The reading measure, not a width literal and not a `--grid-*` page
+          width: 1024 would run this prose at about 150 characters a line. The
+          same device the venue panel already uses to bound its description. */}
+      <DialogContent
+        className="max-w-[min(100%,58ch)]"
+        aria-describedby={undefined}
+      >
+        <DialogHeader>
+          <DialogTitle>What you are agreeing to</DialogTitle>
+        </DialogHeader>
+
+        {/* The scroller is HERE and not on the content: the close button is
+            positioned inside the content, and scrolling that would carry the
+            one way out of the dialog off the top of it. */}
+        <div className="max-h-[60svh] space-y-[var(--space-16)] overflow-y-auto">
+          <section>
+            <h3 className="type-label text-muted-foreground">Who handles your data</h3>
+            <p className="mt-[var(--space-4)] text-sm leading-relaxed text-muted-foreground">
+              The venue is the data controller. Crowbar acts as its software
+              processor for reservations and related venue operations. Use the
+              venue privacy contact or policy shown on its public page for data
+              rights requests and policy details.
+            </p>
+          </section>
+          <section>
+            <h3 className="type-label text-muted-foreground">Operational messages</h3>
+            <p className="mt-[var(--space-4)] text-sm leading-relaxed text-muted-foreground">
+              Contact details may be used for confirmations, reminders, queue
+              calls, and material booking updates. These operational messages are
+              not marketing consent. Optional email and SMS marketing choices are
+              recorded separately and can be declined.
+            </p>
+          </section>
+          <section>
+            <h3 className="type-label text-muted-foreground">Venue policies</h3>
+            <p className="mt-[var(--space-4)] text-sm leading-relaxed text-muted-foreground">
+              Availability, confirmation, arrival, cancellation, and service
+              decisions belong to the venue. Contact the venue if a booking has
+              started or a private management link is no longer valid.
+            </p>
+          </section>
+          <section>
+            <h3 className="type-label text-muted-foreground">Retention</h3>
+            <p className="mt-[var(--space-4)] text-sm leading-relaxed text-muted-foreground">
+              Personal data is retained or anonymised according to the venue&apos;s
+              configured retention policy and any applicable obligations. This
+              screen does not claim a universal retention period.
+            </p>
+          </section>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

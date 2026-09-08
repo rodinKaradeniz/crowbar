@@ -199,6 +199,9 @@ test("the pilot service loop, from booking to guest and cost history", async ({
         .getByRole("button", { name: new RegExp(SERVICE_TYPE) })
         .first()
         .click();
+      // Selecting a booking type selects it and nothing more — the footer's
+      // Next is what advances, on this rung as on the other three.
+      await guest.getByRole("button", { name: "Next", exact: true }).click();
       await expect(guest.getByRole("heading", { name: /Select Date/ })).toBeVisible();
 
       await guest.getByLabel("Number of Guests").click();
@@ -214,13 +217,13 @@ test("the pilot service loop, from booking to guest and cost history", async ({
           "and before the next service day begins.",
       ).toBeVisible({ timeout: 20_000 });
       await slots.first().click();
-      await guest.getByRole("button", { name: "Continue" }).click();
+      await guest.getByRole("button", { name: "Next", exact: true }).click();
 
       await guest.getByLabel("First Name").fill("Journey");
       await guest.getByLabel("Last Name").fill(runId);
       await guest.getByLabel("Phone Number").fill(guestPhone);
       await guest.getByLabel("Email").fill(guestEmail);
-      await guest.getByRole("button", { name: "Continue" }).click();
+      await guest.getByRole("button", { name: "Next", exact: true }).click();
 
       await expect(guest.getByRole("heading", { name: /Review Your Reservation/ })).toBeVisible();
       await guest.locator("#terms").click();

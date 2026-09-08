@@ -1728,9 +1728,27 @@ roadmap and feed its stages 1–8.
   phone now attach to the identity. Staff record optional DOB, preferences,
   guest-provided dietary details, tags, and authored notes; Floor presents
   dietary details and tags as passive arrival context. Public reservation
-  confirmation captures separate unchecked email/SMS marketing choices. Owners
-  and managers can merge, export, correct, and anonymise profiles; the
-  one-shot retention job applies the default 24-month inactivity policy.
+  confirmation captures an unchecked email marketing choice; the separate SMS
+  choice still exists end to end but is no longer offered there — see the
+  deferral below. Owners and managers can merge, export, correct, and anonymise
+  profiles; the one-shot retention job applies the default 24-month inactivity
+  policy.
+- **Deferred — the SMS marketing opt-in on the public booking form.** Removed
+  from the review step on 2026-09-08 by owner decision, as a presentation
+  change only. `marketing_sms_opt_in` still runs end to end:
+  `server/app/schemas/reservation.py` defaults it to `False`,
+  `record_public_marketing_consents` still writes a per-channel `sms` consent
+  row, and `send_marketing_sms` still refuses to send without one.
+  `client/lib/client-api.ts` sends `false` for the now-absent field, so every
+  guest booked through the public form from that date is recorded as **not**
+  consenting to marketing SMS — which is the safe direction, but it means the
+  channel has no live source of consent at all: **nothing else in the product
+  can grant it.** There is no staff CRM control for it, and the guest link at
+  `/reserve/manage/[token]` reports consents and withdraws them but cannot add
+  one. Restoring it is re-adding the checkbox and the one payload key — no
+  migration. Decide it alongside the privacy-operations item below rather than
+  on its own: the same legal review governs whether an SMS marketing consent
+  captured this way is usable in the first place.
 - **Deferred — production privacy operations:** Obtain legal review of the
   EU/Germany-facing privacy notice and processor terms, configure venue privacy
   contacts and a production schedule for the retention job, and add guest-led

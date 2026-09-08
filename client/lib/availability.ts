@@ -42,15 +42,23 @@ export function formatSlotTimeWithZone(value: string, timezone: string): string 
   }).format(new Date(value));
 }
 
-/** A slot's date in the venue's timezone. `locale` as for `formatSlotTime`. */
+/**
+ * A slot's date in the venue's timezone. `locale` as for `formatSlotTime`.
+ *
+ * The weekday is ABBREVIATED by default, and that default does not move: every
+ * caller but one lists many dates at once — the slot grid, the staff dialog,
+ * the waitlist panel — and a spelled-out weekday in each would wreck the
+ * column. `weekday: "long"` is for a surface stating one date on its own line.
+ */
 export function formatSlotDate(
   value: string,
   timezone: string,
   locale?: string,
+  options?: { weekday?: "short" | "long" },
 ): string {
   return new Intl.DateTimeFormat(locale, {
     timeZone: timezone,
-    weekday: "short",
+    weekday: options?.weekday ?? "short",
     month: "short",
     day: "numeric",
     year: "numeric",

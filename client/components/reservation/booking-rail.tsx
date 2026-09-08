@@ -87,7 +87,7 @@ export function BookingRail({
         })}
       </ol>
       {/* The position said in words, so the rail is never the sole carrier. */}
-      <p className="type-label mt-[var(--space-12)] text-muted-foreground">
+      <p className="type-label mt-[var(--space-16)] text-muted-foreground">
         Step {currentIndex + 1} of {steps.length}
       </p>
     </nav>

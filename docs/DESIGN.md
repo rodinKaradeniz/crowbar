@@ -447,6 +447,12 @@ them:
   or cannot be undone. The title asks the real question with the real time in
   it; the body states the consequence in real numbers; the safe choice is the
   filled one; the risky choice is a quiet outline in red text.
+- **A reading dialog** is the one other use: policy or reference text the guest
+  or staff member must be able to read without losing their place in the flow
+  behind it. It may run wider than 420px, capped at a reading measure and never
+  at a width literal; it scrolls internally; its only action is dismissal; it
+  never carries a decision. The decision dialog above is unchanged and is still
+  the default.
 
 ## The six states — the build floor
 
@@ -728,6 +734,15 @@ AA for small text everywhere, measured rather than estimated:
 Every severity colour is paired with a word. Every interactive element has a
 visible focus state using the declared ring (`--focus-ring-paper` /
 `--focus-ring-ink`).
+
+Anything that reveals or contains a variable amount of text — a dialog, a
+disclosure, an expandable row, a panel, a popover, a sheet, a toast — is checked
+at 200% browser zoom at the 1280 target, and with the longest content it can
+actually hold rather than a short sample, before it is called done. It has to
+stay usable there: the primary action still reachable without hunting, the
+content scrolling somewhere bounded rather than pushing the layout apart,
+nothing that matters clipped, the task still finishable. A component that fails
+that is the thing that is wrong, not the zoom.
 
 ## Backend gaps this design assumes and the product does not yet supply
 

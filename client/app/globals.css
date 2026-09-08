@@ -240,16 +240,19 @@
   --offline-bar: 38px;
   /* The public booking box holds ONE height across all four steps, so the
      bordered box and the ink panel beside it stop resizing as the guest moves
-     between them. Measured rather than guessed: the tallest ordinary step is
-     the review, at 733 (1280x800) and 750 (1024x768) — taller than the slot
-     step at every width. 750px is the 1280x800 budget — 800 less the page's own
-     2x--space-24 and less the 2px the box's own top and bottom hairline adds
-     around this column — and it covers that tallest step with 17px to spare.
-     The `min()` is what keeps the box inside a SHORTER viewport: at 1024x768 it
-     resolves to 718, and the step body scrolls within it rather than pushing
-     the page. Both widths then land the box exactly on the viewport with no
-     page scroll at all. */
-  --booking-column: min(750px, calc(100svh - 2 * var(--space-24) - 2px));
+     between them. Measured rather than guessed, with the Back/Next footer
+     outside the scroller: the rail, the step title and that footer cost 260px
+     at 1280 and 264 at 1024, leaving 420 / 416 of step body at this cap. The
+     tallest ORDINARY rung is the time step at 373 / 395, so all three of them
+     clear it — by 47 and by 21. The review is 488 / 501 and scrolls, by 68 and
+     by 85, which is what the scroller is for; it is the one rung whose content
+     no honest height holds, and holding the box still is worth more than
+     holding that one rung whole. 750px covered the review at 1280 and still
+     scrolled it at 1024, and it bought that with 70px of dead space under every
+     other rung. The `min()` keeps the box inside a SHORTER viewport — the
+     1280x800 budget is 750 — so the box lands on the viewport with no page
+     scroll at any target height. */
+  --booking-column: min(680px, calc(100svh - 2 * var(--space-24) - 2px));
   --grid-marketing: 1360px;
   /* The reading measure for a WORKSPACE DOCUMENT page — settings, profile,
      menu, staff, docs. Boards (floor, tickets, tabs, reservations, queue,

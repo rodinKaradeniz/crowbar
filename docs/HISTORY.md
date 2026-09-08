@@ -3047,3 +3047,96 @@ and `nestedScrollers: []` measured — no scrollbar inside a scrollbar.
 `client/app/reserve/[business]/reserve-client.tsx`,
 `client/app/globals.css`, `client/e2e/service-loop.spec.ts`,
 `docs/DESIGN.md`, `docs/TODO.md`.
+
+## 2026-09-08 — The terms overlay goes back to a modal, and the contract gains a second dialog
+
+**Context.** The 2026-09-07 booking pass de-modaled the terms disclosure into a
+native `<details>`, correctly against the contract as it then stood:
+`docs/DESIGN.md` reserved `Dialog` for "decisions that end a shift or cannot be
+undone" at 330–420px, and four sections of policy prose at `max-w-2xl` were
+neither. The owner has decided the other way. Changing the component and leaving
+the rule would have guaranteed a third round trip on the same file.
+
+**Decision.** The disclosure is a `Dialog` again, and the rule now admits the use
+it is: a **reading dialog**, for policy or reference text someone must be able to
+read without losing their place in the flow behind it. It may run wider than
+420px — capped at a reading measure, never a width literal — scrolls internally,
+its only action is dismissal, and it carries no decision. The 330–420px decision
+dialog is unchanged and remains the default. The reversal is recorded rather than
+merely applied so the reasoning survives the next design pass.
+
+**Consequences.**
+
+- **There was no declared width token that fit.** The brief asked for "the
+  declared `--grid-*` step that fits"; the only two are 1360 and 1024, and a
+  1024px modal runs this prose at roughly 150 characters a line. It is capped at
+  `max-w-[min(100%,58ch)]` — a reading measure, the same device the venue panel
+  already uses for its description — rather than declaring a token or adopting a
+  page width as a dialog width. `components/ui/dialog.tsx` is untouched; the cap
+  is a caller className.
+- **The scroller is inside the content, not on it.** `DialogContent` positions
+  its close button absolutely, so scrolling the content itself carries the one
+  way out of the dialog off the top of it.
+- **The trigger is the phrase, not a row under it.** It first shipped as the
+  chevroned summary row the `<details>` had left behind, which read as a
+  disclosure dropdown that no longer disclosed anything in place, and named the
+  policy a second time under a checkbox that had already named it. It is now the
+  words "terms and conditions" inside the agreement sentence, underlined like
+  every other inline prose link. Two structural consequences: the trigger sits
+  **outside** the `<label>`, because a button nested in a label ticks the box on
+  the way to opening the dialog — the guest would agree in the act of going to
+  read what they were agreeing to; and the checkbox carries an explicit
+  `aria-label` with the whole sentence, because its associated label text now
+  stops at "the".
+- **The consent block lost its heading, its rule and its SMS box.** The two
+  boxes now sit adjacent in one unruled group. "Stay in touch (optional)" spent
+  a rule, a heading and a parenthetical on one unchecked checkbox, and an
+  unchecked box is already optional; the asterisk on the terms line now carries
+  the only distinction between the two that matters. The SMS opt-in is
+  **removed from this form, not from the product** — `marketing_sms_opt_in`
+  keeps its schema default, its per-channel consent row and its send-time
+  check, and `client-api.ts` sends `false` for the absent field. The
+  consequence to know: the public form was the only place in the product that
+  could ever grant that consent, so from this date the channel has no live
+  source of one. That is the safe direction and it is deliberate, but it is
+  recorded in `docs/TODO.md` as a deferral rather than left to be rediscovered
+  when someone tries to send a marketing SMS.
+- **`docs/DESIGN.md` § Accessibility now carries a larger-text rule.** Anything
+  revealing a variable amount of text is checked at 200% browser zoom at 1280,
+  with the longest content it can hold, before it is called done. This is the
+  same class of defect as the 42px icon button — invisible to both grep gates,
+  `tsc`, `lint` and the build, and only a browser produces it. It went to
+  Accessibility rather than the build floor: that table's count of six is
+  load-bearing and cited from `AGENTS.md`, and this is not a seventh state.
+- **The four rungs share one footer, outside the scroller.** Each step used to
+  carry its own action as the last thing inside its own scroll container, which
+  put the action at a different height on each rung and below the fold on the
+  tallest, and rung 1 had no action at all — selecting a booking type advanced
+  the step. Back and Next are now a sibling of the step body on all four rungs.
+  Back is disabled on rung 1 rather than hidden, because a control that appears
+  and disappears moves the other one.
+- **Next is each form's submit button, not a second control beside it.** Rung 3
+  has five inputs and no other submit; a footer button that merely called the
+  same handler would have silently removed implicit submission and broken Enter
+  in a field. Binding it with `form=` keeps Enter and the click one path.
+- **`--booking-column` is 680px, and the earlier 750 was measured on a different
+  layout.** With the footer outside the scroller the rail, title and footer cost
+  260px at 1280 and 264 at 1024. The three ordinary rungs need at most 373 / 395
+  and clear 680 by 47 and 21; the review needs 488 / 501 and scrolls by 68 and
+  85. 750 covered the review at 1280, still scrolled it at 1024, and bought that
+  with 70px of dead space under every other rung. Holding the box still is worth
+  more than holding the one rung whose content no honest height holds.
+- **The height is a `phone:`-gated property and the equal-height claim is too.**
+  Below `--bp-phone` the box takes its height from content and legitimately
+  differs per rung — 1219 / 1259 / 1272 / 1457 at 390. That is the existing
+  deliberate choice recorded on `reserve-client.tsx`, not a regression.
+- **`formatSlotDate` gained a `weekday` option and kept its default.** The review
+  states one date and spells the weekday out; the slot grid, the staff dialog and
+  the waitlist panel list many at once and keep the abbreviation.
+
+**References.** `client/components/booking-privacy-disclosure.tsx`,
+`client/components/reservation-form.tsx`,
+`client/components/reservation/booking-rail.tsx`,
+`client/components/reservation/venue-panel.tsx`, `client/lib/availability.ts`,
+`client/app/globals.css`, `client/e2e/service-loop.spec.ts`, `docs/DESIGN.md`
+§ Components and § Accessibility.

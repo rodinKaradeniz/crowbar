@@ -56,8 +56,8 @@ import {
  * cost 171px of it on every screen. `BookingRail` carries the same information
  * in 24px, and one step shows at a time.
  *
- * What survives from the accordion is the navigation: `Continue` advances to
- * the first step that is still UNANSWERED, and the rail walks back to any step
+ * What survives from the accordion is the navigation: `Next` advances to the
+ * first step that is still UNANSWERED, and the rail walks back to any step
  * already answered. So changing one slot from the review returns straight to
  * the review rather than marching forwards through details already given.
  *
@@ -110,6 +110,11 @@ export function ReservationForm({
   const { locale } = useRegionalSettings();
   const slotDate = (value: string, timezone: string) =>
     formatSlotDate(value, timezone, locale);
+  // The review states ONE date and has the room to spell its weekday out. The
+  // slot grid and the staff surfaces keep the short form: they list many dates
+  // at once, and a full weekday in each would wreck the column.
+  const slotDateLong = (value: string, timezone: string) =>
+    formatSlotDate(value, timezone, locale, { weekday: "long" });
   const slotTime = (value: string, timezone: string) =>
     formatSlotTime(value, timezone, locale);
   const initialServiceTypeId =
@@ -141,7 +146,6 @@ export function ReservationForm({
   const [note, setNote] = useState("");
   const [waitlistManagementToken, setWaitlistManagementToken] = useState<string | null>(null);
   const [marketingEmailOptIn, setMarketingEmailOptIn] = useState(false);
-  const [marketingSmsOptIn, setMarketingSmsOptIn] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [waitlistTime, setWaitlistTime] = useState("19:00");
@@ -245,9 +249,9 @@ export function ReservationForm({
     setGuests("");
     setSelectedSlot(null);
     setAlternatives([]);
-    // Choosing the booking type IS the whole of this rung — there is nothing
-    // else on it to decide, so it does not also ask for a Continue.
-    setStep("datetime");
+    // Choosing a type SELECTS it and nothing more. It used to advance the rung
+    // on the click, which made this the one step whose action was the answer
+    // itself; the footer now carries the action on all four, in one place.
   };
 
   const handleDateTimeContinue = () => {
@@ -282,7 +286,10 @@ export function ReservationForm({
         guests: Number(guests),
         note: note || undefined,
         marketingEmailOptIn,
-        marketingSmsOptIn,
+        /* No `marketingSmsOptIn`: the box is gone from this form, and
+           `client-api.ts` already sends `marketing_sms_opt_in: false` for an
+           absent field. The column, the schema and the staff CRM control are
+           untouched — see docs/TODO.md. */
       };
       const fingerprint = JSON.stringify(submission);
       if (submissionIdentity.current?.fingerprint !== fingerprint) {
@@ -440,6 +447,31 @@ export function ReservationForm({
 
   // ── The stepper ────────────────────────────────────────────────────────────
 
+  // Everything above returned, so `step` is one of the four rungs from here
+  // down — the waitlist and the outcome screens cannot reach the footer.
+  const rungIndex = RUNGS.indexOf(step);
+  // `answered` is the SAME record the rail reads, so "Next is enabled" and "the
+  // rung renders as answered" cannot disagree. Only the review's pair and the
+  // time step's in-flight check are stated here; neither is a field a rung
+  // collects, so neither belongs in `answered`.
+  const canAdvance =
+    step === "confirmation"
+      ? termsAgreed && !isSubmitting
+      : step === "datetime"
+        ? answered.datetime && !isLoadingAvailability
+        : answered[step];
+  // Rungs 2 and 3 are real forms, and Next is their SUBMIT button rather than a
+  // second control beside one. That is what keeps Enter in a field and a click
+  // on Next one path instead of two that can drift apart — and it is what keeps
+  // Enter working at all: a form with five inputs and no submit button has no
+  // implicit submission.
+  const rungFormId =
+    step === "datetime"
+      ? "booking-datetime"
+      : step === "info"
+        ? "booking-info"
+        : undefined;
+
   return (
     // `min-h-0` + `flex-1` all the way down to the step body: that chain is what
     // lets ONE scroll container inside the step absorb a step taller than the
@@ -533,6 +565,7 @@ export function ReservationForm({
           title={"Select Date & Time"}
         >
           <form
+            id="booking-datetime"
             className="flex flex-col"
             onSubmit={(event) => {
               event.preventDefault();
@@ -678,13 +711,6 @@ export function ReservationForm({
                 <FormFault>{submitError}</FormFault>
               )}
 
-              <Button
-                type="submit"
-                disabled={!date || !selectedSlotIsAvailable || !guests || isLoadingAvailability}
-                className="w-full"
-              >
-                Continue
-              </Button>
             </FieldGroup>
           </form>
         </StepPanel>
@@ -696,6 +722,7 @@ export function ReservationForm({
           title="Your Information"
         >
           <form
+            id="booking-info"
             className="flex flex-col"
             onSubmit={(event) => {
               event.preventDefault();
@@ -727,9 +754,6 @@ export function ReservationForm({
                 <Input id="reservation-note" value={note} onChange={(event) => setNote(event.target.value)} placeholder="Any special requests or notes" />
               </Field>
 
-              <Button type="submit" disabled={!firstName || !lastName || !phone || !email} className="w-full">
-                Continue
-              </Button>
             </FieldGroup>
           </form>
         </StepPanel>
@@ -750,7 +774,7 @@ export function ReservationForm({
                     an English connector wedged inside a German date string is
                     two languages in one line. The middot is the separator the
                     rest of the system already uses. */}
-                {selectedSlot && slotDate(selectedSlot.startsAt, availabilityTimezone)}
+                {selectedSlot && slotDateLong(selectedSlot.startsAt, availabilityTimezone)}
                 {" · "}
                 <span className="type-data">
                   {selectedSlot && slotTime(selectedSlot.startsAt, availabilityTimezone)}
@@ -781,54 +805,96 @@ export function ReservationForm({
               {note && <ReviewRow label="Note">{note}</ReviewRow>}
             </dl>
 
-            <div>
+            {/* ONE GROUP, TWO BOXES, NO HEADING. The marketing box used to sit
+                in a ruled "Stay in touch (optional)" group of its own, which
+                spent a rule, a heading and the word "optional" on a single
+                unchecked checkbox — and an unchecked box is already optional.
+                The two decisions the guest makes here now sit together, and
+                the asterisk carries the only distinction that matters: one is
+                required to submit, the other is not. */}
+            <div className="space-y-[var(--space-12)]">
               <div className="flex items-start gap-[var(--space-8)]">
                 <Checkbox
                   id="terms"
+                  /* The visible label now stops at "the", so the associated
+                     name would read "I agree to the" to a screen reader. Say
+                     the whole sentence here; the phrase itself is a separate
+                     control. `required` is what the asterisk means, spelled
+                     out for anyone who cannot see it. */
+                  aria-label="I agree to the terms and conditions (required)"
+                  aria-required
                   checked={termsAgreed}
                   onCheckedChange={(checked) => setTermsAgreed(checked === true)}
                 />
-                <label htmlFor="terms" className="text-sm leading-none">
-                  I agree to the terms and conditions
-                </label>
+                {/* Two elements, not one: the `<label>` stops before the phrase
+                    so the dialog trigger is not inside it. Nested in a label,
+                    clicking the link would also tick the box — agreeing on the
+                    way to reading what is being agreed to. */}
+                <p className="text-sm leading-none">
+                  <label htmlFor="terms">I agree to the </label>
+                  <BookingPrivacyDisclosure />
+                  {/* Outside the trigger, so the underline covers the phrase
+                      and not the mark. Hidden from the accessible name, which
+                      says "required" in words instead. */}
+                  <span aria-hidden>*</span>
+                </p>
               </div>
-              {/* The policy itself, opened in place. It was a modal, which the
-                  design contract reserves for irreversible decisions — and
-                  covering the step is the wrong answer on the one step whose
-                  job is letting the guest read before they tick the box. */}
-              <div className="mt-[var(--space-12)]">
-                <BookingPrivacyDisclosure />
-              </div>
-            </div>
-
-            {/* A hairline-ruled group, not a bordered box. The review already
-                has one container — the ledger above — and a second one beside
-                it reads as two competing cards; the system separates with rules
-                and keeps structure square. It is also what brings Submit back
-                above the fold on the 1024x768 target, where the boxed version
-                measured 49px over. */}
-            <div className="space-y-[var(--space-12)] border-t border-border pt-[var(--space-16)]">
-              <p className="text-sm font-medium">
-                Stay in touch{" "}
-                <span className="font-normal text-muted-foreground">(optional)</span>
-              </p>
-              <label className="flex items-start gap-[var(--space-8)] text-sm">
-                <Checkbox checked={marketingEmailOptIn} onCheckedChange={(checked) => setMarketingEmailOptIn(checked === true)} />
-                <span>Send me occasional news and offers by email.</span>
-              </label>
-              <label className="flex items-start gap-[var(--space-8)] text-sm">
-                <Checkbox checked={marketingSmsOptIn} onCheckedChange={(checked) => setMarketingSmsOptIn(checked === true)} />
-                <span>Send me occasional news and offers by SMS.</span>
+              <label className="flex items-start gap-[var(--space-8)]">
+                <Checkbox
+                  checked={marketingEmailOptIn}
+                  onCheckedChange={(checked) => setMarketingEmailOptIn(checked === true)}
+                />
+                {/* `leading-none` on both rows, so the two sit on the same
+                    rhythm against their boxes. */}
+                <span className="text-sm leading-none">
+                  Send me occasional news and offers by email.
+                </span>
               </label>
             </div>
 
             {submitError && <FormFault>{submitError}</FormFault>}
-
-            <Button onClick={handleSubmit} className="w-full" disabled={!termsAgreed || isSubmitting}>
-              {isSubmitting ? "Submitting…" : "Submit Reservation"}
-            </Button>
           </div>
         </StepPanel>
+
+        {/* THE FOOTER IS A SIBLING OF THE STEP BODY, NOT A CHILD OF IT. The
+            body is the scroller; this sits outside it, so the action is in the
+            same place on all four rungs however tall the step is. It used to be
+            the last thing inside each step, which put it at a different height
+            on each one and below the fold on the tallest.
+
+            Back is DISABLED on the first rung, not hidden: a control that
+            appears and disappears moves the other one, and a footer that moves
+            is the thing this replaced. */}
+        <div className="mt-[var(--space-16)] flex shrink-0 gap-[var(--space-12)] border-t border-border pt-[var(--space-16)]">
+          <Button
+            type="button"
+            variant="secondary"
+            className="flex-1"
+            disabled={rungIndex === 0}
+            onClick={() => setStep(RUNGS[rungIndex - 1])}
+          >
+            Back
+          </Button>
+          <Button
+            type={rungFormId ? "submit" : "button"}
+            form={rungFormId}
+            className="flex-1"
+            disabled={!canAdvance}
+            onClick={
+              rungFormId
+                ? undefined
+                : step === "confirmation"
+                  ? handleSubmit
+                  : () => advanceFrom("type")
+            }
+          >
+            {step === "confirmation"
+              ? isSubmitting
+                ? "Submitting…"
+                : "Submit Reservation"
+              : "Next"}
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -858,11 +924,12 @@ function StepPanel({
     <section className="flex min-h-0 flex-1 flex-col">
       <h2 className="type-t1">{title}</h2>
       {/* THE STEP BODY IS THE SCROLL CONTAINER, not the column and not the page.
-          The title and the rail above it stay put, so a guest correcting an
-          answer always finds the stepper in the same place. Measurement decided
-          this rather than the slot grid: the review step is the tallest at every
-          width (733 / 750 / 815), and opening the terms disclosure adds ~450
-          more, so a scroller on the slots alone could not hold the box still. */}
+          The title, the rail above it and the footer below it all stay put, so a
+          guest correcting an answer finds the stepper and the action in the same
+          place on every rung. Measurement decided this rather than the slot
+          grid: the review is the tallest rung at every width — 488 at 1280, 501
+          at 1024, against 373 / 395 for the tallest of the other three — so a
+          scroller on the slots alone could never have held the box still. */}
       <div className="mt-[var(--space-16)] min-h-0 flex-1 overflow-y-auto">{children}</div>
     </section>
   );
