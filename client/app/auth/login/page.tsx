@@ -6,7 +6,9 @@ import {
   AuthPanel,
   AuthSplit,
 } from "@/components/auth/auth-shell";
+import { DemoEntry } from "@/components/demo-entry";
 import { LoginForm } from "@/components/login-form";
+import { IS_DEMO } from "@/lib/demo/mode";
 
 export const metadata: Metadata = {
   title: "Sign in · Crowbar",
@@ -61,7 +63,7 @@ export default function LoginPage() {
           </AuthPanel>
         }
       >
-        <LoginForm />
+        {IS_DEMO ? <DemoEntry /> : <LoginForm />}
       </AuthSplit>
     </AuthPage>
   );

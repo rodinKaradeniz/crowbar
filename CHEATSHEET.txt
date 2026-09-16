@@ -59,9 +59,28 @@ Does NOT seed.
 
 Leave the terminal open — Ctrl+C stops backend and frontend.
 
-Only one copy can run at a time. A second run collides on ports 3000/8000
-and falls back to 3001, which is not what the app expects. If that happens,
-see section 5.
+Only one copy can run at a time. dev.sh refuses to start when 3000 or 8000
+is already in use and names the process holding it. Stop that process
+(section 5), or let dev.sh do it:
+
+  KILL_STALE=true ./scripts/dev.sh
+
+Demo only — the frontend alone, on its own read-only mock API. No Docker, no
+venv, no migrations, no API, no ML; nothing to seed and no password:
+
+  ./scripts/dev.sh --demo
+  ./scripts/dev.sh --demo --demo-api-url=https://<demo-domain>/demo-api
+
+  Demo        http://localhost:3000/auth/login   (pick a role; nothing is saved)
+  Mock API    http://localhost:3000/demo-api     (default)
+
+KILL_STALE works the same; SEED_DATA is rejected, as is --demo-api-url
+without --demo. The mock serves client/lib/demo/fixtures/recording.json,
+recorded from the seeded stack. To re-record (full stack running and seeded;
+reads only, writes nothing):
+
+  cd /Users/rodinkaradeniz/projects/crowbar/client
+  DEMO_ADMIN_PASSWORD='<the seeded value>' node scripts/record-demo-fixtures.mjs
 
 
 ────────────────────────────────────────────────────────────────────────

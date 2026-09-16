@@ -1,10 +1,39 @@
 #!/usr/bin/env bash
 # Crowbar - Start all development services
 # Run from project root: ./scripts/dev.sh
+#
+#   ./scripts/dev.sh                          full stack (Docker, API, ML, web)
+#   ./scripts/dev.sh --demo                   frontend-only demo on its own mock API
+#   ./scripts/dev.sh --demo --demo-api-url=URL   demo frontend against another mock,
+#                                             e.g. https://<demo-domain>/demo-api
+#
+# Environment options for the full stack are unchanged: SEED_DATA=true,
+# KILL_STALE=true. KILL_STALE also applies to --demo.
 
 set -e
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+
+# --- Flags: parsed before anything starts, so nonsense never half-starts ---
+USAGE="usage: ./scripts/dev.sh [--demo [--demo-api-url=URL]]"
+DEMO=false
+DEMO_API_URL=""
+for arg in "$@"; do
+  case "$arg" in
+    --demo) DEMO=true ;;
+    --demo-api-url=?*) DEMO_API_URL="${arg#--demo-api-url=}" ;;
+    *) echo "$USAGE" >&2; exit 2 ;;
+  esac
+done
+if [[ -n "$DEMO_API_URL" && "$DEMO" != "true" ]]; then
+  echo "$USAGE  (--demo-api-url needs --demo)" >&2; exit 2
+fi
+if [[ "$DEMO" == "true" && "${SEED_DATA:-false}" == "true" ]]; then
+  echo "$USAGE  (--demo starts no database, so SEED_DATA does not apply)" >&2; exit 2
+fi
+if [[ -n "$DEMO_API_URL" && ! "${DEMO_API_URL%/}" =~ ^https?://.+/demo-api$ ]]; then
+  echo "$USAGE  (URL must be an http(s) address ending in /demo-api)" >&2; exit 2
+fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -95,6 +124,58 @@ cleanup() {
   exit $status
 }
 trap cleanup SIGINT SIGTERM EXIT
+
+# --- Demo: the frontend alone, talking to a mock API. No Docker, no venv, no
+# migrations, no uvicorn, no ML. The API URLs go in the process environment,
+# which Next ranks above client/.env*, so a developer's env file cannot point
+# the demo at a real backend — and next.config.ts refuses to build if it did.
+if [[ "$DEMO" == "true" ]]; then
+  DEMO_API_URL="${DEMO_API_URL:-http://localhost:3000/demo-api}"
+  DEMO_API_URL="${DEMO_API_URL%/}"
+
+  echo ""
+  echo "=========================================="
+  echo "  Crowbar - Demo Startup (no backend)"
+  echo "=========================================="
+  echo ""
+
+  require_free_port 3000 "Frontend"
+
+  log "Setting up frontend..."
+  cd "$ROOT/client"
+  if [[ ! -d node_modules ]]; then
+    log "Installing npm dependencies..."
+    npm install
+    ok "Frontend dependencies installed"
+  else
+    ok "Frontend dependencies already installed"
+  fi
+
+  NEXT_PUBLIC_CROWBAR_DEMO=true \
+    API_INTERNAL_URL="$DEMO_API_URL" \
+    NEXT_PUBLIC_API_URL="$DEMO_API_URL" \
+    npm run dev &
+  FRONTEND_PID=$!
+
+  wait_for_port 3000 "Frontend"
+
+  echo ""
+  echo "=========================================="
+  echo "  Crowbar DEMO - no backend is running"
+  echo "=========================================="
+  echo ""
+  echo "  Demo:      http://localhost:3000/auth/login"
+  echo "  Mock API:  $DEMO_API_URL"
+  echo ""
+  echo "  Read-only sample evening: nothing is saved,"
+  echo "  no guest is contacted, boards do not update live."
+  echo ""
+  echo "  Press Ctrl+C to stop"
+  echo "=========================================="
+  echo ""
+
+  wait
+fi
 
 echo ""
 echo "=========================================="

@@ -3812,3 +3812,48 @@ new address is consumed.
 `server/app/services/auth_service.py`, `server/app/routers/auth.py`,
 `client/app/auth/verify-email/page.tsx`,
 `client/components/verify-email-notice.tsx`.
+
+## 2026-09-16 — The frontend-only demo is a recorded, read-only mock behind the API base URL
+
+**Context.** Railway is paused, and a demo was wanted that runs on the Next.js
+frontend alone — deployable to Vercel with no backend, and runnable locally
+with `./scripts/dev.sh --demo`. An undocumented mock already existed:
+`lib/api-mock.ts` and `lib/mock-data.ts`, switched by
+`NEXT_PUBLIC_USE_MOCK_API` inside ~18 functions of `lib/api.ts`. It covered
+none of the ~200 browser-side calls, could not sign anyone in, and its data had
+drifted from the product (a USD tenant in `America/New_York` with a different
+id from the seed).
+
+**Decision.** Delete that layer. Serve the backend's HTTP contract from a
+route inside the Next app (`/demo-api`) and point both API URLs at it, so no
+call site changes. Record the fixtures from the seeded stack rather than write
+them by hand. Make the demo a read-only snapshot, and enter it with an unsigned
+per-role token.
+
+**Consequences.**
+
+- **Read-only rather than per-visitor state.** Vercel functions keep no memory
+  between invocations. Keeping visitor changes would have meant holding
+  them in a cookie and replaying them through a reimplementation of the service
+  loop's mutations. That needs an in-process mock (cookie state cannot cross
+  the `/api/proxy` hop) and roughly three to four times the work. Every write
+  says "Not saved" instead, and the indicator says so up front.
+- **A build decision with a guard in both directions.** `NEXT_PUBLIC_*` is
+  inlined at build time, so the demo cannot be toggled at runtime. The build
+  refuses a demo pointed at a real API and a real build pointed at a mock.
+- **The token is unsigned on purpose.** The repository's default dev secret is
+  public, so a token signed with it would be accepted by any local API left on
+  the default. Unsigned, with its own audience and `token_use`, it fails every
+  real check.
+- **Boards are not live, and the alarm is untouched.** The socket hooks switch
+  to a no-op at module load in demo builds. `offline-bar.tsx`,
+  `socket-status.ts` and the heartbeat did not change.
+- **Drift is a failing test.** A backend change that breaks a recorded shape
+  fails `test_demo_fixture_contract.py`. The fix is to re-record.
+- **Cost on Vercel.** Each data request makes a second hop to the same
+  deployment, and the production domain must be outside Deployment Protection.
+
+**References.** `client/lib/demo/`, `client/app/demo-api/[...path]/route.ts`,
+`client/app/api/auth/demo/route.ts`, `client/hooks/demo-socket.ts`,
+`client/next.config.ts`, `client/scripts/record-demo-fixtures.mjs`,
+`server/tests/unit/test_demo_fixture_contract.py`, `scripts/dev.sh`.

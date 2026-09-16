@@ -167,3 +167,23 @@ a new explicit instruction.
 
 Deployment actions remain explicit user-confirmed steps. A TODO entry or this
 runbook is not authorization to mutate Railway.
+
+## Frontend-only demo on Vercel
+
+Separate from the Railway rollout, and like it, an action the user takes. The
+demo is a Next.js build with no backend behind it (see
+`docs/ARCHITECTURE.md` § Frontend-only demo).
+
+- Root directory: `client`. Build and start: the Next.js defaults.
+- Environment, for both Build and Runtime:
+  - `NEXT_PUBLIC_CROWBAR_DEMO=true`
+  - `API_INTERNAL_URL=https://<production-domain>/demo-api`
+  - `NEXT_PUBLIC_API_URL=https://<production-domain>/demo-api`
+- Leave every backend, Resend, Twilio, ML and `RESERVATION_FRAME_ANCESTORS`
+  variable unset. The build refuses to run unless both API URLs end in
+  `/demo-api`.
+- The production domain must **not** be behind Vercel Deployment Protection,
+  because the app fetches its own `/demo-api` server-side. Preview URLs are
+  protected by default, so a preview deployment of the demo will not load data.
+- Because `NEXT_PUBLIC_*` is inlined at build time, changing any of these
+  requires a redeploy.

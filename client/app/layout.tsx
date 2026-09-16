@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Archivo, Instrument_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/auth-context";
+import { DemoIndicator } from "@/components/demo-indicator";
 import { Toaster } from "sonner";
 
 // next/font self-hosts the woff2 at build time, which is how the design's
@@ -69,6 +70,7 @@ export default function RootLayout({
       <body
         className={`${displayFace.variable} ${bodyFace.variable} ${dataFace.variable} antialiased min-h-screen m-0 p-0 bg-background`}
       >
+        <DemoIndicator />
         <AuthProvider>{children}</AuthProvider>
         {/* `richColors` is deliberately off: it paints its own green/red
             palette from outside the token system, and a green success toast is

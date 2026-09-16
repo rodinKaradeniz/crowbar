@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useDemoSocket } from "@/hooks/demo-socket";
 import type { SocketStatus } from "@/hooks/socket-status";
+import { IS_DEMO } from "@/lib/demo/mode";
 
 function getWsBase(): string {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -45,7 +47,7 @@ const STABLE_AFTER_MS = 5_000;
  * Receives only invalidations. The board's HTTP snapshot remains the sole
  * client state source, so a socket message always triggers a refetch.
  */
-export function useFloorPlanSocket(
+function useLiveFloorPlanSocket(
   businessId: string,
   onInvalidate: () => void,
 ): SocketStatus {
@@ -185,3 +187,8 @@ export function useFloorPlanSocket(
 
   return { connected, lastContactAt, reconnect };
 }
+
+/** The demo build has no socket server; see `hooks/demo-socket.ts`. */
+export const useFloorPlanSocket: typeof useLiveFloorPlanSocket = IS_DEMO
+  ? useDemoSocket
+  : useLiveFloorPlanSocket;

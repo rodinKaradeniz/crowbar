@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useDemoSocket } from "@/hooks/demo-socket";
 import type { SocketStatus } from "@/hooks/socket-status";
+import { IS_DEMO } from "@/lib/demo/mode";
 import type { QueueEntry } from "@/types";
 
 function toQueueEntryFromWS(e: Record<string, unknown>): QueueEntry {
@@ -70,7 +72,7 @@ const MAX_DELAY = 30_000;
  */
 const STABLE_AFTER_MS = 5_000;
 
-export function useQueueSocket(
+function useLiveQueueSocket(
   businessId: string,
   onUpdate: (entries: QueueEntry[]) => void,
 ): SocketStatus {
@@ -218,3 +220,8 @@ export function useQueueSocket(
 
   return { connected, lastContactAt, reconnect };
 }
+
+/** The demo build has no socket server; see `hooks/demo-socket.ts`. */
+export const useQueueSocket: typeof useLiveQueueSocket = IS_DEMO
+  ? useDemoSocket
+  : useLiveQueueSocket;

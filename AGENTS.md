@@ -34,6 +34,8 @@ For focused work, also read:
   (surface dispositions, risk register, and stage 1–8 evidence contract)
 - Product UI or visual language: `docs/DESIGN.md`
 - Project-specific agent skills: `docs/SKILLS.md`
+- Frontend-only demo (mock API, fixtures, recorder): `client/lib/demo/` and
+  `docs/ARCHITECTURE.md` § Frontend-only demo
 
 `README.md` is the human quick start. This file is the only document ownership
 map and reading order. When documentation disagrees with executable source,
@@ -59,6 +61,10 @@ Crowbar is a multi-tenant operations platform for bars and restaurants:
   scheduled jobs and does not seed demo data unless invoked with
   `SEED_DATA=true`, which is a data mutation — see
   [server/DATABASE.md](server/DATABASE.md).
+- `scripts/dev.sh --demo`: starts only the frontend, as a read-only demo backed
+  by a mock API inside the Next app (`client/lib/demo/`), with no Docker,
+  backend, database or ML. The same build is the frontend-only Vercel demo; see
+  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) § Frontend-only demo.
 - `server/docker-compose.yml` declares the Compose project as `crowbar`; do not
   remove that name or local containers can collide with unrelated repositories
   whose Compose directory is also named `server`.
@@ -192,6 +198,13 @@ Railway, but that intent is not authorization to mutate it.
 
 # Same, plus replace the synthetic demo tenant (data mutation)
 SEED_DATA=true ./scripts/dev.sh
+
+# Frontend-only demo on the built-in mock API (no Docker, no API, nothing saved)
+./scripts/dev.sh --demo
+./scripts/dev.sh --demo --demo-api-url=https://<demo-domain>/demo-api
+
+# Re-record the demo's fixtures (full stack running and seeded; reads only)
+cd client && DEMO_ADMIN_PASSWORD='<the seeded value>' node scripts/record-demo-fixtures.mjs
 
 # Frontend
 cd client

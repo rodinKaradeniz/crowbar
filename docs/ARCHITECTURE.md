@@ -35,7 +35,6 @@ Next.js :3000
   |-- public rewrite /api/backend/* ---------+
   |-- authenticated BFF /api/proxy/* -- JWT |
   |-- server-side typed fetches -------------+--> FastAPI :8000
-  |-- docs assistant ----------------------------> OpenAI API (optional)
                                                     |
 FastAPI :8000 --------------------------------------+--> PostgreSQL :5432
   |                                                 ^
@@ -52,7 +51,8 @@ Local Docker Compose uses the explicit project name `crowbar` and starts
 PostgreSQL, Redis, and ML. The explicit name prevents Docker from grouping the
 stack with unrelated repositories whose Compose directory is also named
 `server`. `scripts/dev.sh` starts FastAPI and Next.js as host processes after
-running migrations and demo seeds.
+running migrations, and seeds the demo tenant only when `SEED_DATA=true`.
+`scripts/dev.sh --demo` starts Next.js alone; see § Frontend-only demo.
 The reservation-reminder job is a separate one-shot command. Its Railway Cron
 configuration declares an hourly production schedule, but that service is not
 deployed while the rollout remains paused.
@@ -73,16 +73,18 @@ deployed while the rollout remains paused.
   authenticated calls use the BFF proxy.
 - `lib/api-client.ts`: low-level typed FastAPI client using snake_case response
   contracts.
-- `lib/api.ts`: server-component facade, auth-cookie access, mock switching,
-  and snake_case-to-camelCase mapping.
+- `lib/api.ts`: server-component facade, auth-cookie access, and
+  snake_case-to-camelCase mapping.
 - `lib/ml-api.ts`: server-side, failure-tolerant insights client. It sends the
   user's JWT to FastAPI and never addresses the private ML service.
 - `types/`: shared frontend domain types.
 - `docs/DESIGN.md`: visual tokens, typography, responsive interaction, and
   accessibility conventions for product UI work.
 - `content/docs/`: MDX end-user docs.
-- `scripts/build-doc-chunks.mjs`: builds the docs assistant's checked-in chunk
-  index before a production build.
+- `scripts/build-doc-chunks.mjs`: builds the checked-in docs chunk index
+  before a production build.
+- `lib/demo/`, `app/demo-api/`, `scripts/record-demo-fixtures.mjs`: the
+  frontend-only demo; see § Frontend-only demo.
 - `tests/`: Vitest, Testing Library, and MSW unit/integration tests.
 
 Middleware provides an early route gate by decoding JWT claims without
@@ -363,6 +365,62 @@ mutation. `inventory.*` events currently have no WebSocket projection.
 In-memory WebSocket managers imply that horizontal API scaling requires a
 shared fan-out design before multiple FastAPI replicas can reliably serve the
 same business board.
+
+### Frontend-only demo
+
+A build of the Next.js app that needs no backend, for a Vercel deployment with
+nothing behind it and for `./scripts/dev.sh --demo`. It is a **read-only
+snapshot of one evening** at the seeded Volt & Vine tenant.
+
+- **A build decision.** `NEXT_PUBLIC_CROWBAR_DEMO=true` is inlined at build
+  time and read only through `lib/demo/mode.ts`. `next.config.ts` refuses to
+  build a demo unless `API_INTERNAL_URL` and `NEXT_PUBLIC_API_URL` both end in
+  `/demo-api`, and refuses a non-demo build if either does. A real deployment
+  cannot be switched into the demo without a rebuild.
+- **The mock speaks the backend's HTTP contract at the base URL.** Both API
+  URLs point at `<origin>/demo-api`, served by `app/demo-api/[...path]`, so the
+  `/api/backend` rewrite, the `/api/proxy` BFF, server components and
+  `ml-api.ts` all reach it unchanged. It sits outside `/api` because `proxy.ts`
+  rejects origin-less writes there, and server-side fetches carry no Origin. In
+  a non-demo build the route returns 404.
+- **Fixtures are recorded.** `scripts/record-demo-fixtures.mjs` walks a
+  production build against a recording proxy in front of a seeded local API,
+  as each demo role and as a guest, and writes every read to
+  `lib/demo/fixtures/recording.json`. The proxy refuses every write, so
+  recording never changes the database. `lib/demo/fixture-rules.mjs` refuses
+  non-fictional contact details, known passwords, and payment or revenue
+  language, and a Vitest test applies the same rules.
+- **Writes are never saved.** Every non-GET returns 409 `DEMO_NOT_SAVED` in the
+  backend's error envelope, and the operator sees it through the normal error
+  paths. The demo indicator in the root layout always says changes are not
+  kept.
+- **Sign-in.** In a demo build `/auth/login` offers one-click entry as
+  Owner, Host / server or Bar / kitchen. `POST /api/auth/demo` sets `rk-token`
+  to an **unsigned** token (`alg: none`, audience `crowbar-demo`,
+  `token_use: demo`) carrying `user_type`, `sub` and `role`. `proxy.ts` gates
+  navigation on those claims as it always has. FastAPI's HS256, audience and
+  `token_use` checks reject the token. Fixtures are recorded per role, so a
+  role sees what the real API gave that role.
+- **Time.** `lib/demo/time-shift.ts` moves every ISO date in a response forward
+  by the whole service days (Europe/Berlin, 04:00 rollover) since the recording,
+  in wall-clock time. It moves request dates back by the same amount before the
+  fixture lookup.
+- **Live boards.** There is no WebSocket server. Each socket hook module
+  exports `useDemoSocket` instead of its real body in a demo build. It opens
+  nothing and reports `connected` with no contact time, which `OfflineBar`
+  renders as nothing. The alarm and the real hooks are unchanged.
+- **Insights** answer with the backend's own "unavailable, nothing captured"
+  body, so the page shows its honest unreachable state and never a prediction.
+  Nothing in the demo sends email or SMS or calls a provider or ML, because
+  nothing in it calls anything.
+- **Scope.** `lib/demo/scope.ts` lists the routes outside the demo: account
+  flows, venue setup and settings, stock counts, and guest links that need a
+  signed credential. Demo builds rewrite them to `/business/not-in-demo` or
+  `/not-in-demo`. The rewrites run after `proxy.ts`. A GET with no recording
+  returns 404 `DEMO_NOT_RECORDED` and is logged by the route.
+- **Drift.** `server/tests/unit/test_demo_fixture_contract.py` checks every
+  recorded read against the live route table and its `response_model`. When it
+  fails, re-record.
 
 ### Scheduled one-shot jobs
 
@@ -739,11 +797,6 @@ migration chain.
   rolling-window rate limits.
 - Resend: email; configuration is optional and services degrade gracefully.
 - Twilio: SMS; optional and failure-tolerant.
-- OpenAI: optional staff docs assistant in a Next.js server route. It is hidden
-  and returns 404 unless both an explicit enable flag and API key are present;
-  authenticated use has bounded history/message/output sizes and a per-process
-  staff rate limit. It embeds checked-in MDX chunks in process memory and calls
-  Chat Completions. Stage 7 still owns distributed production abuse controls.
 - Local file storage: `storage_service.py`; S3 is only an intended extension.
 - Payment provider packages and payment data paths are absent from the MVP.
   Tab closure is the Stage 4 external-settlement assertion; it does not

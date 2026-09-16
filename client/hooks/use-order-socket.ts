@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useDemoSocket } from "@/hooks/demo-socket";
 import type { SocketStatus } from "@/hooks/socket-status";
+import { IS_DEMO } from "@/lib/demo/mode";
 import type { Order } from "@/types";
 import { toMoney } from "@/lib/money";
 
@@ -104,7 +106,7 @@ const MAX_DELAY = 30_000;
  */
 const STABLE_AFTER_MS = 5_000;
 
-export function useOrderSocket(
+function useLiveOrderSocket(
   businessId: string,
   onUpdate: (orders: Order[]) => void,
 ): SocketStatus {
@@ -251,3 +253,8 @@ export function useOrderSocket(
 
   return { connected, lastContactAt, reconnect };
 }
+
+/** The demo build has no socket server; see `hooks/demo-socket.ts`. */
+export const useOrderSocket: typeof useLiveOrderSocket = IS_DEMO
+  ? useDemoSocket
+  : useLiveOrderSocket;

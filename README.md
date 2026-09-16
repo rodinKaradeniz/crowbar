@@ -42,6 +42,13 @@ data is optional and separate from migrations:
 SEED_DATA=true ./scripts/dev.sh
 ```
 
+To run only the frontend against its built-in read-only mock API — no Docker,
+no Python, no database — use demo mode:
+
+```bash
+./scripts/dev.sh --demo
+```
+
 The local-only seeder refuses non-local database hosts, which is what keeps it
 away from anything real. `DEMO_ADMIN_PASSWORD` is optional: set it to pin a login
 you can reuse, or leave it unset and the seeder falls back to a known weak

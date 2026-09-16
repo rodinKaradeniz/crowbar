@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useDemoSocket } from "@/hooks/demo-socket";
 import type { SocketStatus } from "@/hooks/socket-status";
+import { IS_DEMO } from "@/lib/demo/mode";
 
 function wsBase(): string {
   const configured = process.env.NEXT_PUBLIC_API_URL;
@@ -34,7 +36,7 @@ const MAX_DELAY = 30_000;
  */
 const STABLE_AFTER_MS = 5_000;
 
-export function useTabSocket(businessId: string, onInvalidate: () => void): SocketStatus {
+function useLiveTabSocket(businessId: string, onInvalidate: () => void): SocketStatus {
   const [connected, setConnected] = useState(false);
   const [lastContactAt, setLastContactAt] = useState<number | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -162,3 +164,8 @@ export function useTabSocket(businessId: string, onInvalidate: () => void): Sock
 
   return { connected, lastContactAt, reconnect };
 }
+
+/** The demo build has no socket server; see `hooks/demo-socket.ts`. */
+export const useTabSocket: typeof useLiveTabSocket = IS_DEMO
+  ? useDemoSocket
+  : useLiveTabSocket;

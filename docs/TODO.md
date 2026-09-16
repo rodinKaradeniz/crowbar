@@ -1982,8 +1982,8 @@ the confirmed sequence unless a stage explicitly pulls the item forward.
   `ml_result_snapshots` (migration 049) and serves the snapshot marked
   `stale: true` with its capture time when the ML service is unreachable, so a
   restart degrades the dashboard visibly instead of emptying it.
-- **Ready:** Complete abuse controls for the Next.js docs assistant and
-  evaluate whether an edge/WAF layer is warranted. FastAPI now has local,
+- **Ready:** Evaluate whether an edge/WAF layer is warranted. (The Next.js docs
+  assistant this item also covered was removed in `2e15a17`.) FastAPI now has local,
   Redis-backed rolling-window limits for auth, public reservation, queue,
   ordering, and related public reads. Deploying them and verifying Railway
   proxy/IP behavior remain part of the paused deployment arc.
