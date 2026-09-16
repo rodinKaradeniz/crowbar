@@ -36,6 +36,13 @@ class User(Base, UUIDMixin, TimestampMixin):
     deletion_requested_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Migration 053. NULL means the address was never proved. Login is
+    # deliberately NOT gated on this -- an unverified owner signs in and works
+    # normally -- because email delivery is not dependable enough in the pilot
+    # environment to make it a wall. The workspace prompts instead.
+    email_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     anonymized_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -46,8 +53,12 @@ class User(Base, UUIDMixin, TimestampMixin):
     password_reset_tokens: Mapped[list["PasswordResetToken"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    email_verification_tokens: Mapped[list["EmailVerificationToken"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 # Avoid circular import issues
 from app.models.staff import Staff  # noqa: E402
 from app.models.password_reset_token import PasswordResetToken  # noqa: E402
+from app.models.email_verification_token import EmailVerificationToken  # noqa: E402

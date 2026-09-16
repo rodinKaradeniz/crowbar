@@ -14,6 +14,7 @@ import {
   clientGetStaffOverrideTimes,
   clientCreateStaffReservation,
   clientRescheduleReservation,
+  clientRetryReservationDelivery,
   clientUpdateBusiness,
   clientGetOrders,
   clientGetPublicQueueService,
@@ -683,5 +684,42 @@ describe("clientGetPublicManagedReservation", () => {
 
     expect(reservation).not.toHaveProperty("reconfirmation_enabled");
     expect(reservation).not.toHaveProperty("cancellation_window_minutes");
+  });
+});
+
+describe("reservation confirmation delivery", () => {
+  it("maps delivery_state onto the domain field the board reads", async () => {
+    const reservation = await clientRetryReservationDelivery("res-1");
+    expect(reservation.deliveryState).toBe("delivered");
+  });
+
+  it("posts to the retry route beside the waitlist's", async () => {
+    let seen: string | null = null;
+    server.use(
+      http.post("/api/proxy/reservations/:id/delivery/retry", ({ request }) => {
+        seen = new URL(request.url).pathname;
+        return HttpResponse.json({
+          id: "res-9",
+          business_id: "biz-1",
+          customer_id: "cus-1",
+          service_type_id: "svc-1",
+          time: "2026-02-01T18:00:00Z",
+          ends_at: "2026-02-01T20:00:00Z",
+          phone: "+4915112345678",
+          email: "guest@example.com",
+          note: null,
+          status: "confirmed",
+          guests: 2,
+          delivery_state: "failed",
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-01-01T00:00:00Z",
+        });
+      }),
+    );
+
+    const reservation = await clientRetryReservationDelivery("res-9");
+    expect(seen).toBe("/api/proxy/reservations/res-9/delivery/retry");
+    // A resend that failed again still reports the truth rather than optimism.
+    expect(reservation.deliveryState).toBe("failed");
   });
 });

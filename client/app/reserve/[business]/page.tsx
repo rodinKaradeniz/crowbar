@@ -4,6 +4,7 @@ import { AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { fetchBusinessBySlug, fetchServiceTypesByBusiness } from "@/lib/api";
 import { RegionalSettingsProvider } from "@/contexts/regional-context";
+import { renderableImageSrc } from "@/lib/image-url";
 
 interface ReservePageProps {
   params: Promise<{ business: string }>;
@@ -17,11 +18,18 @@ export async function generateMetadata({ params }: ReservePageProps): Promise<Me
   const title = `Reserve at ${business.name} · Crowbar`;
   const description =
     business.description ?? `Book a spot at ${business.name} on Crowbar.`;
-  // Only use image if it's an absolute URL (uploaded to CDN, not a relative path)
-  const ogImage =
-    business.image?.startsWith("http")
-      ? [{ url: business.image, width: 1200, height: 630, alt: business.name }]
-      : [];
+  // Only an absolute URL can be a social-share image, so a relative path under
+  // client/public — which `next/image` renders perfectly well on the page —
+  // yields no OG image. That is accepted: it degrades to a card with a correct
+  // title and description, /reserve/* is already `noindex, nofollow`, and
+  // rewriting a relative path to an absolute one would need a configured public
+  // origin this app does not have. The predicate reuses the render-side rule so
+  // an `http://` value left over from before the save boundary existed cannot
+  // become an OG image either.
+  const renderable = renderableImageSrc(business.image);
+  const ogImage = renderable?.startsWith("https://")
+    ? [{ url: renderable, width: 1200, height: 630, alt: business.name }]
+    : [];
 
   return {
     title,

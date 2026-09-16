@@ -5,6 +5,7 @@ import { fetchBusiness, fetchBusinessVisitors, fetchServiceTypesByBusiness } fro
 import { fetchMLSegmentation } from "@/lib/ml-api";
 import { RoleRestricted } from "@/components/role-restricted";
 import { hasCapability } from "@/lib/permissions";
+import { hasModule, MODULE_KEYS } from "@/lib/modules";
 
 export default async function BusinessCustomers() {
   const user = await getCurrentUser();
@@ -19,12 +20,10 @@ export default async function BusinessCustomers() {
 
   const businessId = user.businessId;
 
-  const [business, visitors, serviceTypes, segmentation] = await Promise.all([
-    fetchBusiness(businessId),
-    fetchBusinessVisitors(businessId),
-    fetchServiceTypesByBusiness(businessId),
-    fetchMLSegmentation(),
-  ]);
+  // The business comes first because the segment fetch is gated on it: the
+  // whole /api/insights router is behind require_module("insights"), so calling
+  // it with the module off is a guaranteed 403.
+  const business = await fetchBusiness(businessId);
 
   if (!business) {
     redirect("/auth/login");
@@ -34,10 +33,23 @@ export default async function BusinessCustomers() {
     redirect("/business/onboarding");
   }
 
-  // Build a map of customer_id → segment_label (reservation customers only)
+  const insightsOn = hasModule(business.enabledModules ?? [], MODULE_KEYS.INSIGHTS);
+
+  const [visitors, serviceTypes, segmentation] = await Promise.all([
+    fetchBusinessVisitors(businessId),
+    fetchServiceTypesByBusiness(businessId),
+    insightsOn ? fetchMLSegmentation() : Promise.resolve(null),
+  ]);
+
+  // Build a map of customer_id → segment_label (reservation customers only).
+  // A segment is decoration on this page: with Insights off, or the model not
+  // yet rebuilt, the badge is simply absent — nothing here claims otherwise.
   const segmentMap: Record<string, string> = {};
-  if (segmentation?.status === "success" && segmentation.customer_segments) {
-    for (const seg of segmentation.customer_segments) {
+  const segments = segmentation?.state === "live" || segmentation?.state === "remembered"
+    ? segmentation.data
+    : null;
+  if (segments?.status === "success" && segments.customer_segments) {
+    for (const seg of segments.customer_segments) {
       segmentMap[seg.customer_id] = seg.segment_label;
     }
   }

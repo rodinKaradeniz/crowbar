@@ -2,6 +2,7 @@ import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, Response, WebSocket, WebSocketDisconnect, status
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -483,7 +484,21 @@ async def queue_websocket(
             waiting_position += 1
         payload.append(await queue_service.entry_to_dict(db, entry, position))
     try:
-        await ws.send_json({"type": "queue_updated", "entries": payload})
+        # jsonable_encoder, NOT the raw dicts. `entry_to_dict` returns
+        # `service_date` as a date and `joined_at`/`called_at` as datetimes, and
+        # `send_json` is `json.dumps`, which raises TypeError on both. That
+        # TypeError is not a WebSocketDisconnect, so it escaped the handler and
+        # tore the socket down with 1006 — every time the queue was NON-EMPTY,
+        # which is the only time the board matters. An empty queue serialises an
+        # empty list and connects fine, which is why this survived: the board
+        # looked healthy until the first party joined, then the offline bar came
+        # up and the client reconnected into the same failure about twice a
+        # second. Measured: 56 identical open → authenticated → 1006 cycles in
+        # 12 seconds. The HTTP projection was never affected; it goes through
+        # Pydantic, which encodes both types.
+        await ws.send_json(
+            jsonable_encoder({"type": "queue_updated", "entries": payload})
+        )
         async for _ in ws.iter_text():
             pass
     except WebSocketDisconnect:

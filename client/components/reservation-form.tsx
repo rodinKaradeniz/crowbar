@@ -356,7 +356,22 @@ export function ReservationForm({
       }
       setStep("waitlist-success");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not join the waitlist";
+      /**
+       * Same two cases the staff waitlist panel reads. The 409 needs BOTH
+       * checks: `BOOKING_UNAVAILABLE` is also raised for "that time is in the
+       * past", with the same code and no details, and `LIVE_SLOT_AVAILABLE`
+       * lives in `details.reason` rather than in `code`.
+       */
+      let message = error instanceof Error ? error.message : "Could not join the waitlist";
+      if (error instanceof ClientApiError) {
+        const details = (error.details ?? {}) as { reason?: string; field?: string };
+        if (error.code === "BOOKING_UNAVAILABLE" && details.reason === "LIVE_SLOT_AVAILABLE") {
+          // The waitlist only accepts a window that is completely full, so this
+          // is good news said badly: go back and book the time that is free.
+          message = "That time is available after all — go back and book it directly.";
+          setStep("datetime");
+        }
+      }
       setSubmitError(message);
       toast.error(message);
     } finally {
@@ -830,7 +845,7 @@ export function ReservationForm({
                     so the dialog trigger is not inside it. Nested in a label,
                     clicking the link would also tick the box — agreeing on the
                     way to reading what is being agreed to. */}
-                <p className="text-sm leading-none">
+                <p className="checkbox-label text-sm leading-none">
                   <label htmlFor="terms">I agree to the </label>
                   <BookingPrivacyDisclosure />
                   {/* Outside the trigger, so the underline covers the phrase
@@ -846,7 +861,7 @@ export function ReservationForm({
                 />
                 {/* `leading-none` on both rows, so the two sit on the same
                     rhythm against their boxes. */}
-                <span className="text-sm leading-none">
+                <span className="checkbox-label text-sm leading-none">
                   Send me occasional news and offers by email.
                 </span>
               </label>

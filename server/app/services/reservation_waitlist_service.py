@@ -100,8 +100,15 @@ async def create_waitlist_entry(
     try:
         normalized_phone = normalize_phone(data.phone, business.country_code)
     except RegionalValidationError as exc:
+        # The message reads "…for the selected country", which named a country
+        # the caller never chose and no client could point at a field. The
+        # field goes on the wire so the form can anchor it to the phone input
+        # instead of raising a generic failure over the whole dialog.
         raise AvailabilityError(
-            status_code=422, code=ErrorCode.VALIDATION_ERROR, message=str(exc)
+            status_code=422,
+            code=ErrorCode.VALIDATION_ERROR,
+            message=str(exc),
+            details={"field": "phone"},
         ) from exc
     if public:
         await ensure_public_booking_access(db, business_id=data.business_id)

@@ -160,7 +160,7 @@ export function LoginForm() {
 
       <Link
         href="/auth/forgot-password"
-        className="mb-1.5 inline-flex h-11 items-center text-[13.5px] text-text-secondary hover:text-primary"
+        className="mb-1.5 inline-flex h-[var(--control-desktop)] items-center text-[13.5px] text-text-secondary hover:text-primary"
       >
         Forgot your password?
       </Link>

@@ -159,11 +159,14 @@ export default function CustomersClient({
                     )}
 
                     <TableCell>
-                      <Link href={`/business/customers/${v.id}`}>
-                        <Button variant="ghost" size="filter" className="text-xs h-7">
+                      {/* asChild, so the anchor IS the control. Wrapping a sized
+                          Button in a bare <Link> left the tappable anchor at
+                          97x18 while the button inside it looked correct. */}
+                      <Button asChild variant="ghost" size="filter" className="text-xs">
+                        <Link href={`/business/customers/${v.id}`}>
                           Profile <ArrowRight className="ml-1 h-3 w-3" />
-                        </Button>
-                      </Link>
+                        </Link>
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}

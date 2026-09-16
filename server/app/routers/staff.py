@@ -37,7 +37,7 @@ from app.services.auth_service import (
     hash_opaque_token,
     hash_password,
 )
-from app.services.email_service import send_staff_invitation
+from app.services.email_service import failure_reason, send_staff_invitation
 from app.services.public_session_service import clear_public_cookie, get_public_cookie
 
 router = APIRouter(prefix="/api/staff", tags=["staff"])
@@ -90,9 +90,10 @@ async def _deliver_invitation(
     now = datetime.now(timezone.utc)
     invitation.sent_at = now if delivered else None
     invitation.delivery_status = "sent" if delivered else "failed"
-    invitation.delivery_error = (
-        None if delivered else "Invitation email provider is unavailable"
-    )
+    # This string is rendered to an operator on the staff page, so it has to
+    # distinguish a venue that never configured email from a provider that
+    # refused this particular message. They call for different actions.
+    invitation.delivery_error = None if delivered else failure_reason()
     await db.commit()
 
 
@@ -423,11 +424,15 @@ async def accept_invite(
             "An account with this email already exists. Please log in.",
         )
 
+    # Verified at the point of acceptance, and never asked again: this person
+    # clicked a tokenised link that was mailed to this exact address, which is
+    # the same proof /auth/verify-email collects. Migration 053.
     new_user = User(
         email=invitation.email,
         name=data.name,
         password_hash=hash_password(data.password),
         user_type="staff",
+        email_verified_at=datetime.now(timezone.utc),
     )
     db.add(new_user)
     await db.flush()

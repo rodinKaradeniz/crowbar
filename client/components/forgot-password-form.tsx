@@ -122,7 +122,7 @@ export function ForgotPasswordForm() {
 
       <Link
         href="/auth/login"
-        className="mt-auto inline-flex h-11 items-center pt-6 text-[length:var(--ui-size)] text-text-secondary hover:text-primary"
+        className="mt-auto inline-flex h-[var(--control-desktop)] items-center pt-6 text-[length:var(--ui-size)] text-text-secondary hover:text-primary"
       >
         ← Back to sign in
       </Link>

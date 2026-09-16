@@ -14,6 +14,8 @@ export default async function BusinessAccountSettings() {
       userEmail={user.email}
       businessId={user.businessId}
       deletionRequestedAt={user.deletionRequestedAt ?? null}
+      emailVerified={user.emailVerified}
+      pendingEmail={user.pendingEmail ?? null}
     />
   );
 }

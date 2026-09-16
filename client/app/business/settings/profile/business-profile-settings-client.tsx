@@ -2,10 +2,14 @@
 
 import { useState } from "react";
 import Image from "next/image";
+
+import { useTenantImage } from "@/hooks/use-tenant-image";
+import { renderableImageSrc } from "@/lib/image-url";
 import { Button } from "@/components/ui/button";
 import {
   Field,
   FieldDescription,
+  FieldError,
   FieldGroup,
   FieldLabel,
   FieldLegend,
@@ -30,6 +34,11 @@ export default function BusinessProfileSettingsClient({
   const [name, setName] = useState(initialName);
   const [phone, setPhone] = useState(initialPhone);
   const [avatar, setAvatar] = useState(initialAvatar);
+  // Same rule and same reason as the venue image: an operator-pasted URL goes
+  // through `next/image`, so an unusable one is refused on save and degrades to
+  // the initials circle here. See hooks/use-tenant-image.
+  const avatarValid = avatar.trim() === "" || renderableImageSrc(avatar) !== null;
+  const avatarImage = useTenantImage(avatar);
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -100,14 +109,22 @@ export default function BusinessProfileSettingsClient({
                   <FieldLabel htmlFor="avatar">Avatar URL</FieldLabel>
                   <Input
                     id="avatar"
-                    type="url"
+                    type="text"
+                    inputMode="url"
                     value={avatar}
                     onChange={(e) => setAvatar(e.target.value)}
                     placeholder="https://example.com/avatar.jpg"
+                    aria-invalid={!avatarValid || undefined}
                   />
                   <FieldDescription>
-                    URL to your profile picture (optional)
+                    An https link to a picture already published on the web
+                    (optional). Crowbar does not host images.
                   </FieldDescription>
+                  {!avatarValid && (
+                    <FieldError>
+                      Use an https:// link, or leave this empty.
+                    </FieldError>
+                  )}
                 </Field>
               </FieldSet>
 
@@ -131,14 +148,9 @@ export default function BusinessProfileSettingsClient({
           <div className="sticky top-[calc(var(--workspace-header)+var(--page-header))] flex flex-col justify-center lg:h-[calc(100svh-var(--workspace-header)-var(--page-header))] lg:overflow-y-auto lg:py-[var(--space-24)]">
             <div className="flex flex-col gap-4 border border-border p-6">
               <div className="flex items-center gap-4">
-                {avatar ? (
+                {avatarImage ? (
                   <div className="relative h-16 w-16 overflow-hidden rounded-full">
-                    <Image
-                      src={avatar}
-                      alt={name}
-                      fill
-                      className="object-cover"
-                    />
+                    <Image {...avatarImage} alt={name} fill className="object-cover" />
                   </div>
                 ) : (
                   <div className="flex size-16 items-center justify-center rounded-full bg-primary type-t1 text-primary-foreground">

@@ -34,7 +34,7 @@ export function DashboardHeaderTrailing({
   if (!mounted) {
     return (
       <div className="flex shrink-0 items-center gap-2">
-        <span className="hidden h-9 w-9 shrink-0 phone:inline-block" aria-hidden />
+        <span className="hidden size-[var(--control-desktop-min)] shrink-0 phone:inline-block" aria-hidden />
       </div>
     );
   }

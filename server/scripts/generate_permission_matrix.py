@@ -79,6 +79,7 @@ CAPABILITY_EXEMPT = {
     ("auth", "PATCH", "/api/auth/me"),
     ("auth", "GET", "/api/auth/me/context"),
     ("auth", "POST", "/api/auth/change-email"),
+    ("auth", "POST", "/api/auth/resend-verification"),
     ("auth", "POST", "/api/auth/change-password"),
     ("auth", "POST", "/api/auth/disable-account"),
     ("auth", "POST", "/api/auth/delete-account"),

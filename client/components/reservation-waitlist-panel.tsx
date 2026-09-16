@@ -21,6 +21,7 @@ import {
   clientCreateReservationWaitlist, clientGetStaffReservationAvailability,
   clientGetReservationWaitlist, clientOfferReservationWaitlist,
   clientRemoveReservationWaitlist, clientRetryReservationWaitlistDelivery,
+  ClientApiError,
 } from "@/lib/client-api";
 import type { CustomerResponse } from "@/lib/api-client";
 import type { AvailabilitySlot, ReservationWaitlistEntry, ServiceType } from "@/types";
@@ -32,6 +33,18 @@ interface ReservationWaitlistPanelProps {
   businessMaxGuests: number;
   serviceTypes: ServiceType[];
   customers: CustomerResponse[];
+  /**
+   * The server normalises a typed number against the VENUE's country before it
+   * validates it, and its rejection says "the selected country" — a country
+   * this form never showed. Naming it here is what makes that message usable.
+   */
+  businessCountryCode: string;
+  /**
+   * Every write below is `reservations.manage` on the server. Without this the
+   * panel offered Add / Offer / Retry / Remove to any role that could merely
+   * VIEW the book — four buttons that all came back 403.
+   */
+  canManage: boolean;
 }
 
 function displayEntryStatus(entry: ReservationWaitlistEntry, timezone: string) {
@@ -42,7 +55,7 @@ function displayEntryStatus(entry: ReservationWaitlistEntry, timezone: string) {
 }
 
 export function ReservationWaitlistPanel({
-  initialEntries, businessId, businessTimezone, businessMaxGuests, serviceTypes, customers,
+  initialEntries, businessId, businessTimezone, businessMaxGuests, serviceTypes, customers, businessCountryCode, canManage,
 }: ReservationWaitlistPanelProps) {
   const [entries, setEntries] = useState(initialEntries);
   const [createOpen, setCreateOpen] = useState(false);
@@ -68,6 +81,15 @@ export function ReservationWaitlistPanel({
   const [slotsTimezone, setSlotsTimezone] = useState(businessTimezone);
   const [selectedSlot, setSelectedSlot] = useState<string>("");
   const [loadingSlots, setLoadingSlots] = useState(false);
+  /**
+   * Which field is wrong and why, rather than one toast naming four fields.
+   * The old guard ORed seven conditions behind "Complete the guest, booking
+   * type, party size, and requested time." — a message that did not mention
+   * email (which it also required) and did mention the time (which is guarded
+   * separately). An operator who tripped it on party size was told to check
+   * three fields that were already correct.
+   */
+  const [fieldError, setFieldError] = useState<{ field: string; message: string } | null>(null);
 
   useEffect(() => setEntries(initialEntries), [initialEntries]);
 
@@ -78,6 +100,24 @@ export function ReservationWaitlistPanel({
   const serviceById = useMemo(() => new Map(serviceTypes.map((service) => [service.id, service])), [serviceTypes]);
   const selectedService = serviceById.get(serviceTypeId);
   const maxGuests = Math.min(businessMaxGuests, selectedService?.capacity ?? businessMaxGuests);
+  // WHICH limit is binding decides what the operator is told. "Bar Seating
+  // seats 2" is actionable — pick another booking type; "this venue takes 8" is
+  // a different fact with a different remedy.
+  const capacityIsBinding =
+    selectedService !== undefined && selectedService.capacity < businessMaxGuests;
+  const partySizeCeiling = capacityIsBinding && selectedService
+    ? `${selectedService.name} seats at most ${maxGuests}.`
+    : `This venue takes at most ${maxGuests} on one booking.`;
+  // The ceiling moves with the booking type. Without this, switching from an
+  // 8-cover type to a 2-cover one left an invalid number sitting in the field
+  // looking accepted, and the only signal was a toast on submit.
+  useEffect(() => {
+    setGuests((current) => {
+      const count = Number(current);
+      return Number.isInteger(count) && count > maxGuests ? String(maxGuests) : current;
+    });
+  }, [maxGuests]);
+
   const activeEntries = entries.filter((entry) => entry.status === "waiting" || entry.status === "offered");
   const visibleEntries = view === "active" ? activeEntries : entries.filter((entry) => entry.status !== "waiting" && entry.status !== "offered");
 
@@ -125,14 +165,67 @@ export function ReservationWaitlistPanel({
     setName(""); setPhone(""); setEmail("");
   };
 
+  /**
+   * One failure, one field, one reason. Each branch says which control is wrong
+   * and what would make it right; the party-size case names the limit AND where
+   * the limit comes from, because "3 is too many" is a bug report and "Bar
+   * Seating seats 2" is something a bartender can act on.
+   */
+  const validateCreate = (
+    requestedStartsAt: string | null,
+    guestCount: number,
+  ): { field: string; message: string } | null => {
+    if (!requestedStartsAt) {
+      return { field: "time", message: "That time does not occur at the venue on this date." };
+    }
+    if (!serviceTypeId) {
+      return { field: "serviceType", message: "Choose the booking type the guest is waiting for." };
+    }
+    if (!name.trim()) {
+      return { field: "name", message: "Enter the guest's name." };
+    }
+    if (!phone.trim()) {
+      return { field: "phone", message: "Enter a phone number — the offer is sent to it." };
+    }
+    if (!email.trim()) {
+      return { field: "email", message: "Enter an email address." };
+    }
+    if (!Number.isInteger(guestCount) || guestCount < 1) {
+      return { field: "guests", message: "Party size must be a whole number of guests." };
+    }
+    if (guestCount > maxGuests) {
+      return {
+        field: "guests",
+        message: capacityIsBinding
+          ? `${partySizeCeiling} Choose a different booking type, or a smaller party.`
+          : partySizeCeiling,
+      };
+    }
+    return null;
+  };
+
+  /** The one failing field's reason, rendered under that field. */
+  const FieldFault = ({ field }: { field: string }) =>
+    fieldError?.field === field ? (
+      <p role="alert" className="text-[length:var(--ui-size)] text-critical-text">
+        {fieldError.message}
+      </p>
+    ) : null;
+
   const createEntry = async () => {
     const selectedDate = new Date(`${date}T12:00:00`);
     const requestedStartsAt = venueLocalDateTimeToIso(selectedDate, time, businessTimezone);
     const guestCount = Number(guests);
-    if (!requestedStartsAt) return toast.error("That time does not occur at the venue on this date.");
-    if (!serviceTypeId || !name.trim() || !phone.trim() || !email.trim() || !Number.isInteger(guestCount) || guestCount < 1 || guestCount > maxGuests) {
-      return toast.error("Complete the guest, booking type, party size, and requested time.");
+    const invalid = validateCreate(requestedStartsAt, guestCount);
+    if (invalid || !requestedStartsAt) {
+      const failure = invalid ?? {
+        field: "time",
+        message: "That time does not occur at the venue on this date.",
+      };
+      setFieldError(failure);
+      return toast.error(failure.message);
     }
+    setFieldError(null);
     setSaving(true);
     try {
       const entry = await clientCreateReservationWaitlist({
@@ -146,6 +239,29 @@ export function ReservationWaitlistPanel({
       resetCreateForm();
       toast.success("Guest added to the waitlist");
     } catch (error) {
+      /**
+       * The panel used to read only `error.message`, so two failures the server
+       * describes precisely arrived as bare text with nothing to do about them.
+       *
+       * NOTE the 409 needs BOTH checks: `BOOKING_UNAVAILABLE` is also raised for
+       * "the requested time is in the past", with the same code and no details.
+       * `LIVE_SLOT_AVAILABLE` lives in `details.reason`, not in `code`.
+       */
+      if (error instanceof ClientApiError) {
+        const details = (error.details ?? {}) as { reason?: string; field?: string };
+        if (error.code === "BOOKING_UNAVAILABLE" && details.reason === "LIVE_SLOT_AVAILABLE") {
+          const message =
+            "That time is still free — book it instead. A guest can only be waitlisted for a window that is completely full.";
+          setFieldError({ field: "time", message });
+          toast.error(message);
+          return;
+        }
+        if (error.code === "VALIDATION_ERROR" && details.field === "phone") {
+          setFieldError({ field: "phone", message: error.message });
+          toast.error(error.message);
+          return;
+        }
+      }
       toast.error(error instanceof Error ? error.message : "Could not add the guest");
     } finally { setSaving(false); }
   };
@@ -186,10 +302,15 @@ export function ReservationWaitlistPanel({
   };
 
   return (
-    <section className="mt-8 border bg-card p-4 sm:p-6" aria-labelledby="waitlist-heading">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div><h2 id="waitlist-heading" className="type-t1">Waitlist</h2><p className="mt-1 text-sm text-muted-foreground">Offer a live, matching slot one guest at a time. Offers expire after 15 minutes.</p></div>
-        <div className="flex gap-2"><Button type="button" size="filter" variant={view === "active" ? "primary" : "secondary"} onClick={() => void switchView("active")}>Active</Button><Button type="button" size="filter" variant={view === "history" ? "primary" : "secondary"} onClick={() => void switchView("history")}>History</Button><Button type="button" size="filter" onClick={() => { resetCreateForm(); setCreateOpen(true); }}><Plus /> Add guest</Button></div>
+    /* A tab panel now, not a card stacked under the book: the tab strip carries
+       the name this used to repeat in its own <h2>, and the border and the
+       `mt-8` were separating it from a table that is no longer above it.
+       Active/History stays — it filters WITHIN the waitlist and is not a peer
+       of the tabs. */
+    <div>
+      <div className="flex flex-wrap items-start justify-between gap-[var(--space-12)]">
+        <p className="text-sm text-muted-foreground">Offer a live, matching slot one guest at a time. Offers expire after 15 minutes.</p>
+        <div className="flex gap-[var(--space-8)]"><Button type="button" size="filter" variant={view === "active" ? "primary" : "secondary"} onClick={() => void switchView("active")}>Active</Button><Button type="button" size="filter" variant={view === "history" ? "primary" : "secondary"} onClick={() => void switchView("history")}>History</Button>{canManage && <Button type="button" size="filter" onClick={() => { resetCreateForm(); setCreateOpen(true); }}><Plus /> Add guest</Button>}</div>
       </div>
       <div className="mt-5 divide-y rounded-md border">
         {visibleEntries.length === 0 ? <p className="p-5 text-sm text-muted-foreground">{view === "active" ? "No active waitlist requests." : "No waitlist history yet."}</p> : visibleEntries.map((entry) => (
@@ -197,15 +318,15 @@ export function ReservationWaitlistPanel({
             <div className="min-w-0"><p className="font-medium">{customerNames.get(entry.customerId) || "Guest"} <span className="ml-1 text-sm font-normal text-muted-foreground">· {entry.guests} {entry.guests === 1 ? "guest" : "guests"}</span></p>
               <p className="mt-1 text-sm text-muted-foreground">{serviceById.get(entry.serviceTypeId)?.name || "Booking type"} · {formatSlotDate(entry.requestedStartsAt, businessTimezone)} · {formatSlotTime(entry.requestedStartsAt, businessTimezone)}–{formatSlotTime(entry.flexibleUntil, businessTimezone)}</p>
               <p className="mt-1 text-xs text-muted-foreground">{displayEntryStatus(entry, businessTimezone)}{entry.deliveryState ? ` · delivery ${entry.deliveryState}` : ""}{entry.terminalReasonCode ? ` · ${entry.terminalReasonCode.replaceAll("_", " ")}` : ""}</p></div>
-            <div className="flex gap-2">{entry.status === "waiting" && <Button type="button" size="filter" variant="secondary" onClick={() => setOfferingEntry(entry)}><Send /> Offer slot</Button>}{entry.status === "offered" && entry.deliveryState !== "delivered" && <Button type="button" size="filter" variant="secondary" onClick={() => void retryDelivery(entry)}><RefreshCw /> Retry delivery</Button>}{(entry.status === "waiting" || entry.status === "offered") && <Button type="button" size="filter" variant="ghost" className="text-destructive" onClick={() => { setRemoveTarget(entry); setRemoveReason("staff_removed"); setRemoveNote(""); }}><Trash2 /> Remove</Button>}</div>
+            {canManage && <div className="flex gap-[var(--space-8)]">{entry.status === "waiting" && <Button type="button" size="filter" variant="secondary" onClick={() => setOfferingEntry(entry)}><Send /> Offer slot</Button>}{entry.status === "offered" && entry.deliveryState !== "delivered" && <Button type="button" size="filter" variant="secondary" onClick={() => void retryDelivery(entry)}><RefreshCw /> Retry delivery</Button>}{(entry.status === "waiting" || entry.status === "offered") && <Button type="button" size="filter" variant="ghost" className="text-destructive" onClick={() => { setRemoveTarget(entry); setRemoveReason("staff_removed"); setRemoveNote(""); }}><Trash2 /> Remove</Button>}</div>}
           </div>
         ))}
       </div>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl"><DialogHeader><DialogTitle>Add to waitlist</DialogTitle><DialogDescription>Record the guest&apos;s preferred venue-local time and how far later they can accept.</DialogDescription></DialogHeader>
-        <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2 sm:col-span-2"><Label htmlFor="waitlist-staff-name">Guest name</Label><Input id="waitlist-staff-name" value={name} onChange={(event) => setName(event.target.value)} /></div><div className="space-y-2"><Label htmlFor="waitlist-staff-phone">Phone</Label><Input id="waitlist-staff-phone" type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} /></div><div className="space-y-2"><Label htmlFor="waitlist-staff-email">Email</Label><Input id="waitlist-staff-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></div>
-          <div className="space-y-2"><Label>Booking type</Label><Select value={serviceTypeId} onValueChange={setServiceTypeId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{serviceTypes.map((service) => <SelectItem key={service.id} value={service.id}>{service.name}</SelectItem>)}</SelectContent></Select></div><div className="space-y-2"><Label htmlFor="waitlist-staff-guests">Party size</Label><Input id="waitlist-staff-guests" type="number" min="1" max={maxGuests} value={guests} onChange={(event) => setGuests(event.target.value)} /></div>
-          <div className="space-y-2"><Label htmlFor="waitlist-staff-date">Date</Label><Input id="waitlist-staff-date" type="date" min={format(venueToday, "yyyy-MM-dd")} value={date} onChange={(event) => setDate(event.target.value)} /></div><div className="space-y-2"><Label htmlFor="waitlist-staff-time">Preferred time</Label><Input id="waitlist-staff-time" type="time" value={time} onChange={(event) => setTime(event.target.value)} /></div>
+        <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2 sm:col-span-2"><Label htmlFor="waitlist-staff-name">Guest name</Label><Input id="waitlist-staff-name" value={name} aria-invalid={fieldError?.field === "name"} onChange={(event) => setName(event.target.value)} /><FieldFault field="name" /></div><div className="space-y-2"><Label htmlFor="waitlist-staff-phone">Phone</Label><Input id="waitlist-staff-phone" type="tel" value={phone} aria-invalid={fieldError?.field === "phone"} aria-describedby="waitlist-staff-phone-hint" onChange={(event) => setPhone(event.target.value)} /><p id="waitlist-staff-phone-hint" className="text-[length:var(--ui-size)] text-muted-foreground">Numbers are read as {businessCountryCode} unless written in full international form.</p><FieldFault field="phone" /></div><div className="space-y-2"><Label htmlFor="waitlist-staff-email">Email</Label><Input id="waitlist-staff-email" type="email" value={email} aria-invalid={fieldError?.field === "email"} onChange={(event) => setEmail(event.target.value)} /><FieldFault field="email" /></div>
+          <div className="space-y-2"><Label htmlFor="waitlist-staff-service">Booking type</Label><Select value={serviceTypeId} onValueChange={setServiceTypeId}><SelectTrigger id="waitlist-staff-service"><SelectValue placeholder="Choose a booking type" /></SelectTrigger><SelectContent>{serviceTypes.map((service) => <SelectItem key={service.id} value={service.id}>{service.name}</SelectItem>)}</SelectContent></Select><FieldFault field="serviceType" /></div><div className="space-y-2"><Label htmlFor="waitlist-staff-guests">Party size</Label><Input id="waitlist-staff-guests" type="number" min={1} max={maxGuests} value={guests} aria-invalid={fieldError?.field === "guests"} aria-describedby="waitlist-staff-guests-hint" onChange={(event) => setGuests(event.target.value)} />{/* The ceiling BEFORE submission, and it moves with the booking type — `max` on a number input does not stop anyone typing past it. */}<p id="waitlist-staff-guests-hint" className="text-[length:var(--ui-size)] text-muted-foreground">{partySizeCeiling}</p><FieldFault field="guests" /></div>
+          <div className="space-y-2"><Label htmlFor="waitlist-staff-date">Date</Label><Input id="waitlist-staff-date" type="date" min={format(venueToday, "yyyy-MM-dd")} value={date} onChange={(event) => setDate(event.target.value)} /></div><div className="space-y-2"><Label htmlFor="waitlist-staff-time">Preferred time</Label><Input id="waitlist-staff-time" type="time" value={time} aria-invalid={fieldError?.field === "time"} onChange={(event) => setTime(event.target.value)} /><FieldFault field="time" /></div>
           <div className="space-y-2 sm:col-span-2"><Label>Can accept up to</Label><Select value={flexibility} onValueChange={setFlexibility}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="30">30 minutes later</SelectItem><SelectItem value="60">1 hour later</SelectItem><SelectItem value="90">90 minutes later</SelectItem></SelectContent></Select></div></div>
         <DialogFooter><Button type="button" variant="secondary" onClick={() => setCreateOpen(false)} disabled={saving}>Cancel</Button><Button type="button" onClick={() => void createEntry()} disabled={saving}>{saving ? "Saving…" : "Add guest"}</Button></DialogFooter>
       </DialogContent></Dialog>
@@ -216,6 +337,6 @@ export function ReservationWaitlistPanel({
         {loadingSlots ? <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">Checking live availability…</div> : slots.length === 0 ? <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">No live slots remain in this guest&apos;s requested window.</p> : <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{slots.map((slot) => <Button key={slot.startsAt} type="button" variant={selectedSlot === slot.startsAt ? "primary" : "secondary"} onClick={() => setSelectedSlot(slot.startsAt)} className="font-mono tabular-nums"><Clock />{formatSlotTime(slot.startsAt, slotsTimezone)}</Button>)}</div>}
         <DialogFooter><Button type="button" variant="secondary" onClick={() => setOfferingEntry(null)} disabled={saving}>Cancel</Button><Button type="button" onClick={() => void sendOffer()} disabled={!selectedSlot || saving}>{saving ? "Sending…" : "Send 15-minute offer"}</Button></DialogFooter>
       </DialogContent></Dialog>
-    </section>
+    </div>
   );
 }

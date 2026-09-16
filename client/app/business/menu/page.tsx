@@ -33,6 +33,7 @@ export default async function MenuPage() {
       businessId={business.id}
       businessSlug={business.slug}
       canManageTax={hasCapability(user.role, "menu.pricing")}
+      canConfigureStations={hasCapability(user.role, "stations.configure")}
     />
   );
 }

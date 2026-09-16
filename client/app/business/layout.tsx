@@ -5,6 +5,8 @@ import { BusinessShell } from "@/components/business-shell";
 import { DashboardErrorBoundary } from "@/components/dashboard-error-boundary";
 import { Ground } from "@/components/ground";
 import { RegionalSettingsProvider } from "@/contexts/regional-context";
+import { WorkspaceUnreachable } from "@/components/workspace-unreachable";
+import { ApiUnreachableError } from "@/lib/api-client";
 import { fetchBusiness } from "@/lib/api";
 import { getCurrentUser } from "@/lib/auth";
 
@@ -24,7 +26,25 @@ export default async function BusinessLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const user = await getCurrentUser();
+  // This layout is the FIRST gate, so it is where an outage has to be caught:
+  // a `redirect()` cannot be caught by `error.tsx`, so once a page redirects to
+  // the login screen no boundary can undo it. `getCurrentUser` now rethrows an
+  // unreachable server rather than reporting "not signed in", and the shell is
+  // replaced by an honest screen with the session left intact.
+  let user;
+  try {
+    user = await getCurrentUser();
+  } catch (error) {
+    if (error instanceof ApiUnreachableError) {
+      return (
+        <>
+          <Ground ground="ink" />
+          <WorkspaceUnreachable />
+        </>
+      );
+    }
+    throw error;
+  }
 
   if (!user) {
     redirect("/auth/login");

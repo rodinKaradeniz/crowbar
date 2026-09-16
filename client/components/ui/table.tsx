@@ -112,7 +112,10 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
         "px-[var(--space-12)] text-left align-middle whitespace-nowrap",
         "font-mono uppercase font-medium text-muted-foreground",
         "text-[length:var(--micro-size)] leading-[var(--micro-lh)] tracking-[var(--micro-ls)]",
-        "h-8 [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        // The row token, not `h-8`. A header cell can host a checkbox, and the
+        // checkbox is now a --control-desktop-min target (34 → 48), which a
+        // 32px cell cannot contain.
+        "h-[var(--row-desktop)] [&:has([role=checkbox])]:pr-0",
         className
       )}
       {...props}

@@ -105,6 +105,21 @@ PASSWORD_RESET_IDENTITY_LIMIT = RateLimitPolicy(
     window_seconds=60 * 60,
 )
 
+# Email verification. Sized to match the password-reset pair above: both routes
+# make Crowbar send mail to an address, so both are an email-flooding tool if
+# left open. The identity budget is keyed on the TARGET address, so filling one
+# person's inbox costs an attacker one address's budget rather than the venue's.
+EMAIL_VERIFICATION_IP_LIMIT = RateLimitPolicy(
+    name="auth_email_verification_ip",
+    limit=10,
+    window_seconds=60 * 60,
+)
+EMAIL_VERIFICATION_IDENTITY_LIMIT = RateLimitPolicy(
+    name="auth_email_verification_identity",
+    limit=3,
+    window_seconds=60 * 60,
+)
+
 # Public guest policies. Generous IP ceilings avoid penalizing venue Wi-Fi NAT.
 PUBLIC_IDENTITY_WRITE_LIMIT = RateLimitPolicy(
     name="public_identity_write",

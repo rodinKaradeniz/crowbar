@@ -114,7 +114,13 @@ export function PageHeader({
         )}
       >
         <div className="flex flex-wrap items-start gap-[var(--space-16)]">
-          <div className="min-w-0 flex-1">
+          {/* The row already wrapped; the content block had no floor, so at 390
+              it shrank to 79px and truncated "Menu Management" to "Menu Ma…"
+              rather than letting the action cluster drop to a second line.
+              `--row-content-min` is the declared width for exactly this — see
+              docs/DESIGN.md § Responsive, "A row that does not fit wraps". It is
+              inert wherever the line has room, so the tablet range is unmoved. */}
+          <div className="min-w-[var(--row-content-min)] flex-1">
             {/* The eyebrow carries no spacing of its own, so it sat flush on the
                 title on every page that passes one. Fixed here rather than at
                 the three call sites — the component is what makes them agree. */}

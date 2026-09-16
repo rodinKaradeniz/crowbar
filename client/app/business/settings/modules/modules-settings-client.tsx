@@ -120,14 +120,13 @@ export default function ModulesSettingsClient({ businessId }: Props) {
                   checked={enabled}
                   disabled={isSaving || required}
                   onCheckedChange={() => void handleToggle(key, enabled)}
-                  className="mt-0.5"
                 />
                 <Icon
                   aria-hidden
                   className="mt-0.5 size-4 shrink-0 text-muted-foreground"
                 />
                 <div className="flex-1">
-                  <Label htmlFor={inputId} className="type-t2 normal-case">
+                  <Label htmlFor={inputId} className="checkbox-label type-t2 normal-case">
                     {label}
                   </Label>
                   <p className="mt-0.5 text-[length:var(--ui-size)] text-muted-foreground">

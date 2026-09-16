@@ -1,70 +1,14 @@
-import RequestsClient from "./requests-client";
-import { getCurrentUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import {
-  fetchBusiness,
-  fetchBusinessReservations,
-  fetchServiceTypesByBusiness,
-  fetchBusinessCustomers,
-} from "@/lib/api";
-import { fetchMLSegmentation } from "@/lib/ml-api";
-import { ModuleDisabled } from "@/components/module-disabled";
-import { hasModule, MODULE_KEYS } from "@/lib/modules";
-import { hasCapability } from "@/lib/permissions";
-import { RoleRestricted } from "@/components/role-restricted";
 
-export default async function Requests() {
-  const user = await getCurrentUser();
-
-  if (!user || user.type !== "staff") {
-    redirect("/auth/login");
-  }
-
-  const businessId = user.businessId;
-
-  const [business, reservations, serviceTypes, customers, segmentation] =
-    await Promise.all([
-      fetchBusiness(businessId),
-      fetchBusinessReservations(businessId, "pending"),
-      fetchServiceTypesByBusiness(businessId),
-      fetchBusinessCustomers(businessId),
-      fetchMLSegmentation(),
-    ]);
-
-  if (!business) {
-    redirect("/auth/login");
-  }
-
-  if (!hasModule(business.enabledModules ?? [], MODULE_KEYS.RESERVATIONS)) {
-    return <ModuleDisabled moduleName="Reservations" />;
-  }
-
-  if (!hasCapability(user.role, "reservations.view")) {
-    return <RoleRestricted surface="Booking requests" role={user.role} />;
-  }
-
-  if (!business.onboardingComplete) {
-    redirect("/business/onboarding");
-  }
-
-  // Build a map of customer_id → segment_label for risk context
-  const customerSegments: Record<string, string> = {};
-  if (segmentation?.status === "success" && segmentation.customer_segments) {
-    for (const seg of segmentation.customer_segments) {
-      customerSegments[seg.customer_id] = seg.segment_label;
-    }
-  }
-
-  return (
-    <RequestsClient
-      initialReservations={reservations}
-      serviceTypes={serviceTypes}
-      customers={customers}
-      customerSegments={customerSegments}
-      businessTimezone={business.timezone ?? "UTC"}
-      businessMaxGuests={business.maxGuests}
-      currentTime={new Date().toISOString()}
-      canOverride={hasCapability(user.role, "reservations.override")}
-    />
-  );
+/**
+ * Requests is a tab of the reservations workspace now, not a route of its own —
+ * it was always the same rows as the book in a different status, sharing the
+ * table, the filter and the reschedule dialog with it.
+ *
+ * The redirect stays rather than the directory being deleted outright: this
+ * path is in operators' bookmarks and in the "Booking settings" link on the
+ * requests empty state, and a 404 is a worse answer than the tab they wanted.
+ */
+export default function RequestsPage() {
+  redirect("/business/reservations?tab=requests");
 }

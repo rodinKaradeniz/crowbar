@@ -3140,3 +3140,675 @@ merely applied so the reasoning survives the next design pass.
 `client/components/reservation/venue-panel.tsx`, `client/lib/availability.ts`,
 `client/app/globals.css`, `client/e2e/service-loop.spec.ts`, `docs/DESIGN.md`
 § Components and § Accessibility.
+
+## 2026-09-09 — A control with no height is invisible to the same rule a literal is
+
+**Context.** The 48px tablet floor is implemented once, as a media query in
+`globals.css` that redefines five tokens below 1280. A control only moves with
+it if it *reads* one of those tokens. `Button size="md"`'s `h-10` was found and
+fixed on 2026-09-05; the same defect survived in `ui/tabs.tsx`, in nine call
+sites on the menu page, and in roughly a dozen more places. Measured at a
+verified `innerWidth === 1024`, the top-level navigation of the floor board,
+Reports, Inventory and Insights was **29px tall** — a 36px `TabsList` less its
+own `p-[3px]` and the trigger's `-1px`.
+
+**Decision.** Every survivor now reads a declared step. No token was added.
+`TabsTrigger` takes `--control-desktop-min` — the filter-chip step, because a
+tab is that class of control — and the list sizes to its triggers instead of
+carrying `h-9`. The menu page's `h-7 w-7 p-0` and `h-8 w-8 p-0` overrides are
+gone in favour of `size="icon-sm"`. `SelectTrigger`'s `data-[size=sm]:h-8`
+escape hatch, which let any call site drop under the floor while passing every
+gate, was **deleted** rather than tokenised; it had no call sites.
+
+**Consequences.**
+
+- **The grep that finds this class of bug cannot find all of it.** A literal
+  like `h-7` is greppable. A control with *no height at all* is not, and two of
+  the three worst offenders were that shape: the station Rename/Archive buttons
+  carried only `type-label` (54x13, 57x13) and the menu selector buttons carried
+  only padding (36px). A third — `<Link>` wrapping a correctly sized `Button` —
+  measured 97x18 while the button inside it looked right. **Measuring a rendered
+  page in a browser found all three; no static check did, and none would have.**
+- **The target is the trigger, not the container.** Sizing `TabsList` to 48
+  would have produced a 41px trigger. The same reasoning drove the checkbox and
+  the dialog/sheet close buttons: an `::after` overlay does not change what
+  `getBoundingClientRect()` reports, so the element itself has to grow. The
+  Radix checkbox Root is now a 34→48 transparent target with the drawn 16px box
+  centred inside it, unchanged.
+- **Reuse shifts desktop sizes, and that is the cost to state.** The tab trigger
+  moves 29 → 34 and its list 36 → 40 at 1280+. `Input`'s `auth` step, the two
+  auth links and the calendar caption moved nothing — their literals already
+  equalled the token.
+- **Seven native `<input type="checkbox">` were a second checkbox
+  implementation** and are now the primitive. That was a design-system fix the
+  touch-target sweep merely uncovered.
+- Measured after: **zero** controls under the floor on all 24 workspace routes
+  at a verified 1280 (34px), 1024 (48px) and 390 (48px). The four inline text
+  links inside prose on the public booking page are excluded deliberately — a
+  link inside a sentence cannot be 48px tall without breaking its line box.
+
+**References.** `client/components/ui/tabs.tsx`, `checkbox.tsx`, `select.tsx`,
+`input.tsx`, `command.tsx`, `calendar.tsx`, `table.tsx`, `dialog.tsx`,
+`sheet.tsx`, `client/app/business/menu/menu-management-client.tsx`,
+`client/components/page-header.tsx`, `client/components/reservation/booking-rail.tsx`,
+`docs/DESIGN.md` § Space and § Responsive.
+
+## 2026-09-09 — The server was honest about a remembered number and the client threw it away
+
+**Context.** `/api/insights/*` degrades carefully: an unreachable ML service
+serves the last snapshot stamped `stale`, `captured_at` and an
+`unavailable_reason`, "so an operator can always tell a remembered number from a
+live one". `client/lib/ml-api.ts` collapsed **every** non-`ok` response to
+`null` — a 403 for a switched-off module, a 404 for a model with no result, a
+degraded 200, and a dropped connection alike — and the page rendered the same
+empty state for all of them: *"Crowbar needs a few weeks of your own service
+history."* That sentence is a claim about the venue's data, and it was false in
+three of those four cases. On Overview it was the first screen a manager saw,
+blaming Crowbar's data for the owner's own setting.
+
+**Decision.** `mlFetch` returns a state, not a null: `live`, `remembered`,
+`unreachable`, `no-result`, `module-disabled`, `error`. Overview gates the
+forecast fetch on the Insights module the way it already gated the customers
+fetch on a capability, and renders **neither** the panel nor the "Next 7 nights"
+figure when the module is off — a disabled module leaves no hole and no
+explanation. Insights renders a remembered-at line in the venue's timezone and
+locale, and says the service is unreachable rather than "no insights yet".
+
+**Consequences.**
+
+- **A 404 is the most useful answer the service gives.** It means "I am up and
+  this model has no result", and its message is specific — *"9 day(s) of usable
+  history; at least 14 are needed to forecast."* That now reaches the operator
+  verbatim, replacing our vaguer sentence.
+- The gateway labels that 404's body `INTERNAL_ERROR`. The **status** is the
+  honest half and is what the client branches on; the misleading code is
+  recorded in `docs/TODO.md` rather than changed here.
+- Two more pages fetched insights ungated — `/business/customers` and
+  `/business/requests` — and neither was named in the brief. The compiler found
+  them when the return type changed.
+- A remembered figure is **neutral**. It is not one of the four exhaustive
+  critical cases and must never get the offline bar.
+- `fetchMLHealth` was a stub that returned `null` without calling anything;
+  it and two unused response types are gone.
+
+**References.** `client/lib/ml-api.ts`,
+`client/app/business/overview/page.tsx`, `business-overview-client.tsx`,
+`client/app/business/insights/insights-client.tsx`,
+`client/app/business/customers/page.tsx`, `client/app/business/requests/page.tsx`,
+`server/app/services/ml_snapshot_service.py`.
+
+## 2026-09-09 — One `return` with no retry ends a backoff chain forever
+
+**Context.** All four live-board socket hooks opened with
+`const jwt = await fetchJwt(); if (!jwt) return;`. `onclose` had a correct
+1s→30s exponential backoff, but a failed **token fetch** creates no socket, so
+`onclose` never fires and nothing is ever scheduled. `/api/ws-token` is exactly
+what fails while the backend is down. Measured previously: 50+ seconds after the
+backend returned, the page had made **1** socket attempt and **1** token fetch,
+and only a full page reload recovered.
+
+**Decision.** The backoff is a `scheduleRetry()` that both the token-fetch path
+and `onclose` call, in each of the four hooks. `SocketStatus` — the one place
+the shape is declared — gained `reconnect()`, and the four consumers wire the
+offline bar's Retry to **both** the reconnect and the existing refetch.
+
+**Consequences.**
+
+- Walked, not reasoned about: with the API killed, the offline bar appeared
+  within 6s and the chain kept running — **12** token fetches across the outage
+  with widening intervals, against 1 before. Retry pressed while still down
+  fired an immediate attempt. The board recovered **5 seconds** after the API
+  came back, with no page reload.
+- The four hooks were deliberately **not** collapsed into a shared abstraction:
+  they differ in payload decoding and in what an update means. They have since
+  diverged a second way — floor-plan and tabs refetch on every open, queue and
+  orders do not — which is the argument for revisiting it in its own pass, not
+  this one.
+
+**References.** `client/hooks/socket-status.ts`, `use-queue-socket.ts`,
+`use-order-socket.ts`, `use-floor-plan-socket.ts`, `use-tab-socket.ts`,
+`client/components/offline-bar.tsx` and its four consumers.
+
+## 2026-09-09 — A dead server is not an expired session, and the code already knew
+
+**Context.** `getCurrentUser()` wrapped `apiGetMe` in a bare
+`catch { return null }`, and every workspace page turns `null` into
+`redirect("/auth/login")`. So a backend restart mid-shift put a password prompt
+on top of a dead board — measured: reloading `/business/floor` during an outage
+landed on `/auth/login?redirect=…`, and a normal reload afterwards did not,
+because the session had been valid the whole time.
+
+**Decision.** `apiFetch` now catches `fetch`'s own `TypeError` and rethrows it
+as `ApiUnreachableError`; an error *response* still throws `ApiError`.
+`getCurrentUser` returns `null` only for a genuine identity failure and rethrows
+an unreachable server. The workspace layout catches it and renders an honest
+screen with the session untouched; `app/business/error.tsx` is the backstop for
+the per-page guards. The nine swallowing `catch → null` helpers in `lib/api.ts`
+rethrow it too — twenty pages redirect to the login screen when `fetchBusiness`
+returns null, so swallowing an outage there was the same bug by another route.
+
+**Consequences.**
+
+- **A `redirect()` cannot be caught by `error.tsx`.** Once a page redirects to
+  the login screen no boundary can undo it, which is why the fix had to be at
+  the point the distinction is made, not at the point it is rendered.
+- **`error.digest` is the only field Next forwards to a client error boundary
+  in a production build** — the message is replaced by a generic string. So the
+  branch is on a fixed digest, and it was verified against `npm run build &&
+  npm start`, not just `next dev`, where the message survives and would have
+  masked a failure of the mechanism.
+- The token payload was deliberately **not** extended. It carries `sub`,
+  `user_type` and `session_version` only; adding `business_id` and `role` would
+  let the workspace render stale authorization from an unverifiable source,
+  which is worse than the bug.
+- The other half still holds: after reseeding, the browser's genuinely invalid
+  session redirected to the login screen exactly as it should.
+
+**References.** `client/lib/api-client.ts`, `client/lib/auth.ts`,
+`client/lib/api.ts`, `client/app/business/layout.tsx`,
+`client/app/business/error.tsx`, `client/components/workspace-unreachable.tsx`.
+
+## 2026-09-09 — The one guest message that left no trace
+
+**Context.** Queue "table ready", waitlist offers and the reminder job each
+persist a `DeliveryAttempt` with a `last_error` an operator can see. Reservation
+confirmation — the first message a guest is promised — had none of it:
+`_send_reservation_email` was `-> None` around a call whose `bool` it discarded,
+so a booking returned 201 `confirmed`, the row was correct, no email went out,
+and the only evidence anywhere was a `logger.debug`.
+
+**Decision.** The helper records the outcome through
+`reservation_service.record_confirmation_delivery`, with the same shape the
+reminder job uses. No migration: `message_kind` is an unconstrained
+`String(32)`, and the existing `created` / `rescheduled` vocabulary the email
+service already used was reused rather than inventing a third name.
+
+**Consequences.**
+
+- It runs as a `BackgroundTasks` task, after the response, so it opens its own
+  session from the app pool — the request's is already closed. Both the send and
+  the recording are wrapped: a guest must never see a failure of this, and the
+  reservation is already committed and correct.
+- Verified end to end through the public booking form: the row is
+  `created / email / failed`, `attempt_count = 1`, with an operator-readable
+  `last_error`.
+- **Not built, deliberately:** exposing this on the staff reservation surface.
+  `ReservationResponse` has no delivery field and `reservations-client.tsx`
+  reads none, unlike the waitlist which exposes `delivery_state`. That is a
+  schema, mapper, type and UI change across four layers — more than the field
+  read the brief permitted, so it is recorded rather than built.
+
+**References.** `server/app/routers/reservations.py`,
+`server/app/services/reservation_service.py`,
+`server/tests/integration/test_reservation_confirmation_delivery.py`.
+
+## 2026-09-09 — A heartbeat that proves only the socket proves nothing
+
+**Context.** `events.publish()` logs and swallows a Redis failure by design — a
+failed publish must not fail an HTTP request that already committed. The cost
+was the one dependency failure with no signal at all: with Redis stopped a
+mutation returned 200 and the record was correct, but the event never entered
+the stream, no consumer ran, no frame was sent — **and the sockets stayed
+open**, so `connected` stayed true, the offline bar never appeared, and a second
+operator's board sat unchanged with nothing on screen saying so.
+
+**Decision.** A liveness beat, published as an ordinary `DomainEvent` and
+delivered by the ordinary consumer: `publish()` → Redis stream →
+`ws_push_consumer` → `_dispatch` → the connection managers. Its arrival on a
+board therefore proves the whole chain a real event travels. The client counts
+from `lastContactAt`, which every hook already reported, and the existing
+`OfflineBar` renders it. Nothing new was invented on either side, and it is the
+same critical tier the rank already names.
+
+**Consequences.**
+
+- **Where the beat originates is the whole design.** Sent from the WebSocket
+  endpoint it would prove only that the socket is alive, which was never in
+  doubt while the event path behind it was dead. That is the version that looks
+  identical in a diff and reports liveness it cannot observe.
+- **Single instance, and this inherits rather than introduces that.** Delivery
+  is via a Redis consumer group, so exactly one process receives each beat; with
+  more than one API process the others' boards would go quiet and wrongly report
+  themselves stale. The in-memory connection managers are already documented as
+  single-instance only. Recorded in `docs/TODO.md`.
+- The threshold is a cross-language coupling — 15s server, 45s client — and a
+  test asserts the client's constant stays at least two beats above the
+  server's, because nothing else can.
+- `use-tab-socket` invalidated on **any** frame, so it would have refetched
+  every 15 seconds forever; it now matches on message type like its three
+  siblings.
+- The bar's duration label became **"no contact"**. "Offline" is false when the
+  socket is open and the path behind it is dead, and one phrase that is true in
+  both cases beats two that each hold half the time.
+- Verified: Redis stopped, the board reported "Not updating · no contact 01:06"
+  with the socket still open; Redis restarted, the alarm cleared 9 seconds later
+  with no reload.
+
+**References.** `server/app/core/heartbeat.py`, `stream_consumer.py`,
+`ws_projections.py`, the four `*_ws_manager.py`, `server/app/main.py`,
+`client/hooks/socket-status.ts`, `client/components/offline-bar.tsx`.
+
+## 2026-09-09 — A container that never rebuilds makes its own bugs look like ours
+
+**Context.** `scripts/dev.sh` ran `docker compose up -d` with no `--build`, and
+`server/docker-compose.yml` gives the ml service `restart: unless-stopped`. So a
+stale image survived reboots indefinitely and every change under `ml/` silently
+did not take effect. Measured: the running `crowbar-ml` image was built
+**2026-07-28** and its `/app/src` contained six references to `payment_amount`,
+a column migration 013 dropped, while the repository's `ml/` contained zero.
+`POST /api/insights/run` therefore failed locally, and that failure read as a
+Crowbar defect.
+
+**Decision.** `docker compose up -d --build`. The layer cache makes the
+no-change case cheap — a full rebuild measured 15.6s — and a real change costs a
+rebuild here instead of an afternoon. `wait_for_port 8001 "ML"` was added beside
+the existing two; the banner advertised a port nothing waited for.
+
+**Consequences.**
+
+- **Rebuilding revealed a second drift the first had hidden.** With the
+  payment-era image replaced, the pipeline failed on `column r.custom_fields
+  does not exist` — the repository's own `ml/src/db.py` still selected a sibling
+  column the same migration 013 dropped, and nothing in `ml/` consumed it. One
+  line. `/business/insights` has now produced a first live result locally, which
+  it had never done.
+- Two operator-visible strings said *"Retraining is scheduled for Stage 6"* —
+  a roadmap stage as a user-facing promise, of a stage that has since shipped.
+  They now say what is true about the model. `docs/RULES.md` bars naming things
+  by the stage that introduced them; this is the same rule applied to copy.
+- `.playwright-cli/` is now ignored. Every width check the design workflow
+  requires left an untracked directory in the repository root.
+
+**References.** `scripts/dev.sh`, `.gitignore`, `ml/src/db.py`,
+`ml/src/pipelines/insights_pipeline.py`.
+
+## 2026-09-09 — A field no seeded tenant exercises ships its defect to production
+
+**Context.** `businesses.image` is a URL a venue owner pastes into
+`/business/profile/info`. Nothing validated it, and both render sites passed it
+to `next/image`, which rejects every remote host `client/next.config.ts` does
+not declare — and that file had no `images` block at all. Measured on the
+running stack: setting the demo tenant's image to a real Unsplash URL made
+`/reserve/volt-and-vine` return **HTTP 500**; the same request with the fix
+returns 200. The public booking page could be taken down by a value an operator
+typed into a settings form, and had been able to since the field existed.
+
+Nothing caught it because the demo tenant's `image` has always been NULL. That
+is the reusable lesson, and it is not about images: **a field the seed never
+populates is a field no walk-through ever exercises.** The privacy contact, the
+website, the venue tags and the staff avatar are all in the same position.
+
+**Decision.** Two boundaries, neither of them the Next image optimizer.
+
+- **Save:** `server/app/core/image_url.validate_image_url` accepts `https://…`
+  with a host, or a `/`-prefixed path this app serves itself, and refuses
+  everything else with a sentence the owner can act on. It is the rule
+  `app/core/public_access.has_privacy_contact` already applies to the venue's
+  policy URL, reused rather than reinvented. It also trims, and stores a cleared
+  field as NULL rather than `""`. Called from `business_service` for the venue
+  image and from `auth.update_me` for `users.avatar`, which is the same defect
+  class on a staff surface. The rule is enforced in the service/router and not
+  as a Pydantic `field_validator`, because `core/errors` flattens every
+  validation failure to "Request validation failed" — which is what the owner's
+  toast would then have said.
+- **Render:** `client/hooks/use-tenant-image` passes `unoptimized`, which
+  returns the src before the loader runs, so the hostname check is unreachable
+  and **no `images` block is needed**. That is the point. An
+  `images.remotePatterns` entry of `hostname: "**"` would make the optimizer a
+  fetch proxy for any host an operator can name — a server-side request forgery
+  surface and a bandwidth one — and an allowlist would only move the throw to
+  the first host outside it. The hook also latches a failed load by URL, so a
+  404 or a dead host collapses to exactly the venue's existing no-image state
+  rather than a broken frame.
+
+**Consequences.**
+
+- Measured at `window.innerWidth` 1280 across a remote https URL, an
+  unresolvable host, a 404, a garbage string, an `http://` URL and a relative
+  path: every one returns 200, and every one but the working photograph renders
+  byte-for-byte the state a NULL image renders. `/_next/image` is never
+  requested.
+- A relative `/`-prefixed path still yields no OpenGraph image, because only an
+  absolute URL can be one. **Accepted, not fixed.** It degrades to a card with a
+  correct title and description, `/reserve/*` is already `noindex, nofollow`, and
+  rewriting would need a configured public origin this app does not have.
+- The field stays a URL the owner pastes. No upload endpoint, no hosting, no
+  media library. `MenuItem.image` remains modelled and rendered nowhere.
+
+**References.** `server/app/core/image_url.py`,
+`client/hooks/use-tenant-image.ts`, `client/lib/image-url.ts`,
+`client/components/reservation/venue-panel.tsx`,
+`server/tests/integration/test_business_image_url.py`.
+
+## 2026-09-09 — Confirmation delivery is latest-attempt-wins, not any-delivered
+
+**Context.** The write half of the confirmation-delivery fix landed earlier the
+same day: a failed reservation confirmation persists a `DeliveryAttempt` with an
+operator-readable `last_error`. Nothing read it back. A guest could book, the
+email could silently fail, the row could say so, and no human being would ever
+see it — barely better than the `logger.debug` it replaced.
+
+**Decision.** Copy the three sibling channels rather than design a fourth.
+`ReservationResponse` carries `delivery_state` — the same field name, type and
+four-word vocabulary the waitlist already uses, so one `deliverySeverity` reads
+queue, waitlist and reservations alike. `POST
+/api/reservations/{id}/delivery/retry` sits beside the waitlist's retry, in the
+same router, under the same `reservations.manage` capability and `reservations`
+module guard.
+
+The collapse rule is where the copy deliberately stops.
+`reservation_waitlist_service.delivery_state` uses **any-delivered**, which is
+right for one message over two channels. A reservation has two *different*
+messages: a delivered `created` says nothing about whether the `rescheduled`
+mail landed, and any-delivered would hide precisely the failure an operator
+needs. `reservation_service.confirmation_delivery_states` therefore takes the
+**latest attempt**, over `("created", "rescheduled")` only — `reminder` is a
+separate message with its own job. Same shape, different rule; sharing the
+helper would have propagated a bug rather than a primitive. The resend follows
+the same logic and re-sends the kind that was last attempted, so a failed
+reschedule cannot stay failed forever behind a re-sent original.
+
+**Consequences.**
+
+- A failed confirmation is `attend`, never critical. §08's critical rank is
+  exhaustive and does not include it: the booking is correct and the table is
+  held. It gets a badge in the reservations row and a sentence in the side
+  panel, and no offline bar, red page or undismissable toast.
+- The badge sits in the guest cell, not the status cell: a punctual booking
+  whose email failed is not late, and the row tint takes `worstSeverity` of the
+  two while the Status column stays about lateness alone.
+- The copy says **"sent"**, not the queue board's "delivered".
+  `send_reservation_confirmation` reports that the provider accepted the
+  message, which is not evidence the guest read it.
+- **A known limit, accepted.** One word per booking cannot distinguish "the
+  provider is switched off" from "this address bounced", so with Resend
+  unconfigured every booking reads `failed`. Acceptable for a supervised pilot
+  where the operator knows whether email is set up; the upgrade path is the
+  queue's existing richer `DeliverySummary`, deliberately not pre-built.
+- No migration. The table, its partial unique index and its composite tenant
+  foreign keys already existed (migrations 036/038/042).
+
+**References.** `server/app/services/reservation_service.py`,
+`server/app/routers/reservations.py`, `client/components/reservation-table.tsx`,
+`client/components/reservation-panel.tsx`,
+`server/tests/integration/test_reservation_delivery_visibility.py`.
+
+## 2026-09-10 — Space reserved for a control is expressed in the control's own token
+
+**Context.** A pass raised every interactive control to a touch floor:
+`--control-desktop-min` becomes 48px under `@media (width < 1280px)`. The
+controls grew; the layouts that had hard-coded the space around them did not.
+Four separate reports were the same defect — a checkbox 10px below its own
+label, a Retry button taller than the band containing it, a sheet's close button
+overlapping the button beside it, a toast with no dismiss control that cleared
+no floor at all.
+
+**Decision.** Space reserved for a control is declared in the same token that
+sizes the control, as a `calc()` over the token block — never as a second number
+measured against it.
+
+- `--offline-bar` is `calc(var(--control-desktop-min) + 2 * var(--space-4))`
+  rather than `38px`, so it follows the tablet takeover on its own.
+- `SheetHeader` reserves
+  `calc(var(--space-8) + var(--control-desktop-min) + var(--space-8))` on its
+  right — the absolutely positioned close button's own footprint, read from the
+  two tokens that place and size it.
+- `.checkbox-row` pads a label by `calc((var(--control-desktop-min) - 1lh) / 2)`
+  so the drawn 16px box centres on the label's FIRST line.
+
+**Consequences.**
+
+- **`1lh` enters the system as a derived unit, not a literal.** It is the
+  label's own computed line-height. `items-center` was rejected because it
+  centres the whole text block: a label that wraps — the terms and marketing
+  rows at 390px, which is where this was reported — pushes its first line back
+  up away from the box. Padding moves only the first line; the rest flow below.
+- No transform, negative margin, or measured pixel offset anywhere in the fix.
+  Each was tried and rejected: the element's own box is what a pointer and an
+  audit both measure.
+- 20 checkbox call sites converge on one utility rather than each carrying its
+  own alignment. One of them was a raw `<input type="checkbox">` scaled to
+  `--control-desktop-min`, which grew the DRAWN box instead of the hit target;
+  it now uses the primitive.
+
+**References.** `client/app/globals.css`, `client/components/ui/checkbox.tsx`,
+`client/components/ui/sheet.tsx`, `client/components/offline-bar.tsx`,
+`client/app/layout.tsx`.
+
+## 2026-09-10 — A dialog may hold a short configuration form
+
+**Context.** `dialog.tsx` and `docs/DESIGN.md` both read "**only** for decisions
+that end a shift or cannot be undone. A dialog is not a container for a form."
+The consequence was visible on two boards: preparation stations held a
+permanently expanded editor at the top of the menu page for two records touched
+about twice a year, and the queue board gave its top quarter to a standing
+section holding the cover cap, the open/close switch and a walk-in form.
+
+**Decision.** The rule is relaxed to admit a second use, alongside the decision
+dialog and the reading dialog: a short configuration form. It must fit the
+330–420px measure without becoming a workspace, its actions are Save/Cancel
+rather than a safe/risky pair, and dismissing it must lose nothing already
+saved. Anything larger, or anything worked IN rather than filled and dismissed,
+is still a side panel.
+
+**Consequences.**
+
+- The user was asked and chose this over the Sheet alternative, on the grounds
+  that these forms are too small to justify a side panel.
+- The cost accepted: a scrim no longer means "stop and decide". That signal was
+  the reason for the original rule.
+- Operational state does NOT move behind a dialog with its controls. The queue
+  board keeps "open / closed / at the cover cap" visible on the board itself —
+  hiding it is how someone spends ten minutes wondering why nobody is joining.
+
+**References.** `client/components/ui/dialog.tsx`, `docs/DESIGN.md`,
+`client/app/business/queue/queue-board-client.tsx`,
+`client/app/business/menu/menu-management-client.tsx`.
+
+## 2026-09-10 — A socket's backoff resets on the authenticated frame, not on open
+
+**Context.** The queue board's offline bar flickered. The tell was a counter
+reading "NO CONTACT 00:00", which can only come from the `!connected` branch
+with a fresh `lastContactAt` — the socket was opening, dropping and reopening.
+All four socket hooks reset `delayRef.current = BASE_DELAY` inside `onopen`.
+
+**Decision.** Opening is not success. The server accepts a socket and validates
+its first authenticate frame afterwards (`websocket_auth.py`), so a rejected
+token produces open → close; `queue.py` has a second such path that closes
+cleanly when the tenant has no location. `setConnected(true)`, the backoff
+reset, and `lastContactAt` all now wait for the server's `{"type":
+"authenticated"}` frame, which every `onmessage` previously discarded.
+
+**Consequences.**
+
+- An accept-then-close loop now backs off 1s → 30s instead of retrying at the
+  base delay forever, and the bar stays up steadily rather than flickering —
+  which is honest, because the board genuinely is not connected.
+- `use-floor-plan-socket` and `use-tab-socket` fired their refetch callback in
+  `onopen`; under the loop that was an HTTP storm on top of the socket storm.
+  Both moved behind the same frame.
+- A handshake is not contact, so `lastContactAt` no longer advances on open and
+  the "no contact" counter reflects real silence.
+- All four hooks were written from one template and all four had it. Fixing one
+  would have left three boards looping.
+
+**References.** `client/hooks/use-queue-socket.ts`,
+`client/hooks/use-order-socket.ts`, `client/hooks/use-floor-plan-socket.ts`,
+`client/hooks/use-tab-socket.ts`, `server/app/services/websocket_auth.py`.
+
+## 2026-09-10 — Reservations is one tabbed route, gated on `reservations.manage`
+
+**Context.** Reservations, Requests and the waitlist were three views of one
+domain across two routes and a panel. `nav.ts` gated the Requests entry on
+`reservations.manage` while the page itself checked only `reservations.view`, so
+a `bar_kitchen` user could reach it by URL and never see a link to it.
+
+**Decision.** One route, `/business/reservations`, with client-side tabs and a
+`?tab=` deep link — the shape `inventory-workspace-client.tsx` already
+established. **`reservations.manage` is the correct capability**, and the page
+gate was the side that was wrong: Accept and Decline hit
+`PATCH /api/reservations/{id}`, which is `reservations.manage` on the server.
+`bar_kitchen` holds `view` but not `manage`, so under `view` it saw buttons that
+returned 403.
+
+**Consequences.**
+
+- The Requests and Waitlist tabs are hidden, not disabled, without `manage`, and
+  their server reads are skipped for that role.
+- `ReservationWaitlistPanel` gained the same gate. It had none, and offered Add,
+  Offer, Retry and Remove to anyone who could view the book — four buttons that
+  all 403'd.
+- **A real cost, accepted knowingly:** a host can no longer see the book and the
+  waitlist at once. That is the right trade for an occasional list against a
+  constant one, but it is a loss.
+- `/business/requests` redirects rather than 404s — the path is in bookmarks and
+  in a link from the booking settings empty state.
+- `docs/permission-matrix.md` does not move: it is generated from
+  `require_capability` closures, not from route paths, and no server guard
+  changed.
+
+**References.** `client/app/business/reservations/`, `client/lib/nav.ts`,
+`server/app/core/permissions.py`.
+
+## 2026-09-10 — Preparation stations are gated on `stations.configure`
+
+**Context.** The menu page gated its station controls on a prop named
+`canManageTax`, derived from `menu.pricing`. Tax has nothing to do with
+preparation stations.
+
+**Decision.** Use `stations.configure`, which already existed
+(`server/app/core/permissions.py`) and enforces the three station endpoints in
+`ordering.py` — but had **zero client call sites**.
+
+**Consequences.**
+
+- Not a security hole today: `menu.pricing`, `menu.configure` and
+  `stations.configure` are all held by exactly `{owner, manager}`, so the union
+  was coincidentally correct. It would have become one the moment any of the
+  three moved to a fourth role.
+- **A known remaining defect, deliberately not fixed here.** The same
+  `canManageTax` prop still gates library items and category actions, which the
+  server guards with `menu.configure`. Correcting it means splitting one prop
+  across ~20 call sites, which is a larger change than this pass authorised.
+- Stations do **not** belong on the floor map. A station is a routing
+  destination for order lines — read by the ticket board and the station
+  throughput report — not a place in the room.
+
+**References.** `client/app/business/menu/menu-management-client.tsx`,
+`client/app/business/menu/page.tsx`, `server/app/routers/ordering.py`.
+
+## 2026-09-10 — A rejected field says which field, and why
+
+**Context.** The staff waitlist form put seven ORed conditions behind one
+message: "Complete the guest, booking type, party size, and requested time." It
+did not mention email, which it also required, and did mention the time, which
+is guarded separately. An operator hit it with every field filled; the real
+cause was party size 3 against Bar Seating's capacity of 2.
+
+**Decision.** One failure, one field, one reason — and the constraint is visible
+before submission, not only after it.
+
+**Consequences.**
+
+- The party-size message names the limit AND where it comes from, because "3 is
+  too many" is a bug report and "Bar Seating seats at most 2" is something a
+  bartender can act on. Which limit is binding — the booking type's capacity or
+  the venue maximum — decides which sentence is shown.
+- Party size re-clamps when the booking type changes. `max` on a number input
+  does not stop anyone typing past it.
+- Two server errors the client discarded are now read. The 409 needs **both**
+  checks: `LIVE_SLOT_AVAILABLE` is `details.reason`, not the code, and the code
+  `BOOKING_UNAVAILABLE` is shared with "that time is in the past".
+- The phone rejection gained `details={"field": "phone"}` server-side. Its
+  message says "for the selected country", naming a country the form never
+  displayed; the venue's country code is now shown on the field.
+- The public waitlist path had the same generic catch and got the same
+  treatment.
+
+**References.** `client/components/reservation-waitlist-panel.tsx`,
+`client/components/reservation-form.tsx`,
+`server/app/services/reservation_waitlist_service.py`.
+
+## 2026-09-10 — A failed email is a warning with no address in it
+
+**Context.** All five senders in `email_service.py` ended in a bare
+`except Exception: return False` that logged nothing. A revoked key, a rate
+limit, a malformed address and a network timeout produced the identical silent
+`False`, and the caller persisted the same string it writes when no provider is
+configured at all. An investigation into three "emails that did not work" —
+which had all in fact been accepted by the provider — could not start from the
+logs, because there were none.
+
+**Decision.** Every rejection logs at warning, naming the send kind, a keyed
+HMAC reference to the recipient, the exception type, and a scrubbed message.
+The recipient address is never written. An unconfigured provider stays at debug.
+
+**Consequences.**
+
+- **`logger.exception` is not used, and must not be.** `SensitiveDataFilter` in
+  `core/log_redaction.py` rewrites `record.msg` and nothing else — it never
+  touches `record.exc_info`, so a traceback bypasses redaction entirely. Resend
+  echoes the recipient in some error bodies, so a traceback would put an
+  unredacted guest address in the log. This is the reason the module logs a
+  scrubbed `str(exc)` plus the exception type instead of a stack trace.
+- The configured API key is matched and replaced literally, because the shared
+  patterns only catch `key=value` shapes and not a bare credential in a
+  sentence.
+- `destination_reference` moved from `sms_service` to `core/log_redaction` so
+  both services share one definition.
+- Two persisted failure strings now distinguish "not configured" from "the
+  provider rejected it", via `email_service.failure_reason()`. Applied where an
+  operator actually reads the string: the staff invitation's `delivery_error`,
+  which is rendered on the staff page, and `record_confirmation_delivery`. The
+  waitlist and reminder-job strings were deliberately left — the first is never
+  rendered, the second is a machine token.
+
+**References.** `server/app/services/email_service.py`,
+`server/app/core/log_redaction.py`, `server/app/routers/staff.py`,
+`server/app/services/reservation_service.py`.
+
+## 2026-09-10 — An email change does not happen until the address is proved
+
+**Context.** Nothing in the codebase verified an email address. `users` had no
+verification column and no route issued or consumed a verification token.
+`POST /api/auth/change-email` checked the password and then wrote
+`current_user.email` directly. Since `forgot-password` mails a reset link to
+whatever address is on the account, an unproven address was a password-recovery
+channel.
+
+**Decision.** Migration 053 adds `users.email_verified_at` and
+`email_verification_tokens`, a clone of `password_reset_tokens` with one added
+column, `new_email`. `users.email` is not written until a token mailed to the
+new address is consumed.
+
+**Consequences.**
+
+- **The pending address lives on the token row, not on the user.** A single
+  `users.pending_email` column would let a user who requests a change to A and
+  then to B leave the still-live A token able to apply B. Keeping the address on
+  the row that proves it makes each token authoritative for exactly the address
+  it was mailed to.
+- **`session_version` moved with the write.** It used to be bumped when the
+  change was requested, which was correct while the write happened there. It is
+  now bumped inside `consume_email_verification`, and **only when `new_email` is
+  set** — confirming the address an account registered with changes no
+  credential, and bumping would sign out the person who just clicked the link.
+- **Login is not gated on verification, deliberately.** Email delivery is not
+  dependable enough in the pilot environment to risk locking an owner out of
+  their own venue over an undelivered message. The workspace raises a
+  dismissible prompt instead; dismissal lasts the browser session.
+- Uniqueness is re-checked at consume time, not only at request time: a token
+  can sit in an inbox for 24 hours, and the `users.email` UNIQUE constraint
+  would otherwise surface as a 500.
+- `change-email` now normalizes with `.strip().casefold()`. It did not before,
+  so an address saved with mixed case could not be found by `forgot-password`,
+  which looks up casefolded.
+- Staff who accept an invitation are marked verified at that moment. They
+  clicked a tokenised link mailed to that address, which is the same proof.
+- Existing rows are grandfathered verified by the migration. `now()` there
+  records when they were grandfathered, not a proof that never happened.
+
+**References.** `server/db/migrations/053_email_address_verification.sql`,
+`server/app/services/auth_service.py`, `server/app/routers/auth.py`,
+`client/app/auth/verify-email/page.tsx`,
+`client/components/verify-email-notice.tsx`.

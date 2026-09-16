@@ -46,17 +46,19 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type {
+  MLResult,
   MLSegmentationResult,
   MLCancellationResult,
   MLDemandForecastResult,
   MLStatusResponse,
 } from "@/lib/ml-api";
+import { formatBusinessDateTime } from "@/lib/business-time";
 
 interface InsightsClientProps {
-  status: MLStatusResponse | null;
-  segmentation: MLSegmentationResult | null;
-  cancellation: MLCancellationResult | null;
-  demandForecast: MLDemandForecastResult | null;
+  status: MLResult<MLStatusResponse>;
+  segmentation: MLResult<MLSegmentationResult>;
+  cancellation: MLResult<MLCancellationResult>;
+  demandForecast: MLResult<MLDemandForecastResult>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   rawKpis: any | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -102,8 +104,16 @@ export default function InsightsClient({
   const router = useRouter();
   const [isRunning, setIsRunning] = useState(false);
 
-  const hasData = status?.status === "ok";
-  const lastRun = status?.latest_run;
+  // THREE DIFFERENT ANSWERS, and they used to be one. `status.state === "ok"`
+  // was the only test, so an unreachable insights service produced the same
+  // "No insights yet — run the pipeline" card as a venue that genuinely has
+  // never run one. The first is a Crowbar problem the operator can do nothing
+  // about; the second is an action they can take.
+  const statusPayload =
+    status.state === "live" || status.state === "remembered" ? status.data : null;
+  const hasData = statusPayload?.status === "ok";
+  const serviceUnreachable = status.state === "unreachable";
+  const lastRun = statusPayload?.latest_run;
 
   const handleRunPipeline = async () => {
     setIsRunning(true);
@@ -176,11 +186,38 @@ export default function InsightsClient({
       />
 
       <PageBody wide>
-        {/* No data state */}
-        {!hasData && (
+        {/* The RUN STATUS itself can be remembered — the page header's "Last
+            updated" then describes a run Crowbar is recalling, not one it just
+            confirmed. Said once at the top rather than on each panel, because
+            it is a statement about the whole screen. */}
+        {status.capturedAt ? (
+          <RememberedLine
+            capturedAt={status.capturedAt}
+            timezone={businessTimezone}
+            locale={locale}
+          />
+        ) : null}
+
+        {/* The service is away. Not an empty venue — and offering a Run button
+            here would be offering an action that cannot succeed. */}
+        {serviceUnreachable && (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-16">
-              <BrainCircuit className="h-12 w-12 text-muted-foreground mb-4" />
+              <BrainCircuit className="h-12 w-12 text-muted-foreground mb-4" aria-hidden />
+              <h3 className="type-t2 mb-2">Insights is unreachable</h3>
+              <p className="text-sm text-muted-foreground text-center max-w-md">
+                {status.unavailableReason ??
+                  "Crowbar cannot reach the insights service right now. Nothing else on this screen is affected."}
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Genuinely nothing has run for this venue yet. */}
+        {!hasData && !serviceUnreachable && (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-16">
+              <BrainCircuit className="h-12 w-12 text-muted-foreground mb-4" aria-hidden />
               <h3 className="type-t2 mb-2">No insights yet</h3>
               <p className="text-sm text-muted-foreground text-center max-w-md mb-6">
                 Run the ML pipeline to generate demand forecasts from operational
@@ -197,11 +234,19 @@ export default function InsightsClient({
         {hasData && (
           <>
             {/* Section 1: Demand Forecast */}
-            <DemandForecastSection demandForecast={demandForecast} locale={locale} />
+            <DemandForecastSection
+              demandForecast={demandForecast}
+              locale={locale}
+              businessTimezone={businessTimezone}
+            />
 
             {/* Section 2: Customer Segmentation + Cancellation side by side */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <SegmentationSection segmentation={segmentation} />
+              <SegmentationSection
+                segmentation={segmentation}
+                businessTimezone={businessTimezone}
+                locale={locale}
+              />
               <CancellationSection
                 cancellation={cancellation}
                 highRiskReservations={rawHighRisk ?? []}
@@ -219,34 +264,71 @@ export default function InsightsClient({
   );
 }
 
+/**
+ * "This number is remembered, not live."
+ *
+ * A remembered figure is NEUTRAL. `client/lib/severity.ts` lists the four
+ * critical cases exhaustively and this is not one of them — it gets no tone, no
+ * icon and never the offline bar. It exists because the server takes the
+ * trouble to stamp `captured_at` on a snapshot precisely so an operator can
+ * tell the two apart, and until now nothing in the client read it.
+ */
+function RememberedLine({
+  capturedAt,
+  timezone,
+  locale,
+}: {
+  capturedAt: string;
+  timezone: string;
+  locale: string;
+}) {
+  return (
+    <p className="mb-3 text-sm text-muted-foreground">
+      Remembered from {formatBusinessDateTime(capturedAt, timezone, locale)}.
+      Crowbar could not reach the insights service to refresh it.
+    </p>
+  );
+}
+
 // ─── Demand Forecast Section ────────────────────────────────────────────────
 
 function DemandForecastSection({
   demandForecast,
   locale,
+  businessTimezone,
 }: {
-  demandForecast: MLDemandForecastResult | null;
+  demandForecast: MLResult<MLDemandForecastResult>;
   locale: string;
+  businessTimezone: string;
 }) {
-  if (!demandForecast || demandForecast.status !== "success") {
+  const payload =
+    demandForecast.state === "live" || demandForecast.state === "remembered"
+      ? demandForecast.data
+      : null;
+
+  if (!payload || payload.status !== "success") {
     return (
       <Card>
         <CardHeader>
           <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <TrendingUp className="h-4 w-4" />
+            <TrendingUp className="h-4 w-4" aria-hidden />
             7-Day Demand Forecast
           </CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Not enough data to generate a demand forecast yet.
+            {/* The service's own sentence when it gave one — it is more use
+                than ours ("9 days of usable history; at least 14 are needed"). */}
+            {demandForecast.unavailableReason ??
+              payload?.reason ??
+              "Not enough data to generate a demand forecast yet."}
           </p>
         </CardContent>
       </Card>
     );
   }
 
-  const forecasts = demandForecast.forecasts || {};
+  const forecasts = payload.forecasts || {};
   const businessNames = Object.keys(forecasts);
 
   // Aggregate all businesses or show the first one
@@ -326,6 +408,13 @@ function DemandForecastSection({
         </CardTitle>
       </CardHeader>
       <CardContent>
+        {demandForecast.capturedAt ? (
+          <RememberedLine
+            capturedAt={demandForecast.capturedAt}
+            timezone={businessTimezone}
+            locale={locale}
+          />
+        ) : null}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Chart */}
           <div className="md:col-span-2">
@@ -408,21 +497,31 @@ function DemandForecastSection({
 
 function SegmentationSection({
   segmentation,
+  businessTimezone,
+  locale,
 }: {
-  segmentation: MLSegmentationResult | null;
+  segmentation: MLResult<MLSegmentationResult>;
+  businessTimezone: string;
+  locale: string;
 }) {
-  if (!segmentation || segmentation.status !== "success") {
+  const payload =
+    segmentation.state === "live" || segmentation.state === "remembered"
+      ? segmentation.data
+      : null;
+
+  if (!payload || payload.status !== "success") {
     return (
       <Card>
         <CardHeader>
           <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Users className="h-4 w-4" />
+            <Users className="h-4 w-4" aria-hidden />
             Customer Segments
           </CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            {segmentation?.reason ||
+            {segmentation.unavailableReason ||
+              payload?.reason ||
               "Not enough customer data for segmentation yet."}
           </p>
         </CardContent>
@@ -430,8 +529,8 @@ function SegmentationSection({
     );
   }
 
-  const segments = segmentation.segments || {};
-  const totalCustomers = segmentation.n_customers || 0;
+  const segments = payload.segments || {};
+  const totalCustomers = payload.n_customers || 0;
 
   const pieData = Object.entries(segments).map(([label, count]) => ({
     name: label,
@@ -465,6 +564,13 @@ function SegmentationSection({
         </CardTitle>
       </CardHeader>
       <CardContent>
+        {segmentation.capturedAt ? (
+          <RememberedLine
+            capturedAt={segmentation.capturedAt}
+            timezone={businessTimezone}
+            locale={locale}
+          />
+        ) : null}
         <div className="flex items-start gap-4">
           {/* Donut chart */}
           <div className="shrink-0">
@@ -532,24 +638,30 @@ function CancellationSection({
   businessTimezone,
   locale,
 }: {
-  cancellation: MLCancellationResult | null;
+  cancellation: MLResult<MLCancellationResult>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   highRiskReservations: any[];
   businessTimezone: string;
   locale: string;
 }) {
-  if (!cancellation || cancellation.status !== "success") {
+  const payload =
+    cancellation.state === "live" || cancellation.state === "remembered"
+      ? cancellation.data
+      : null;
+
+  if (!payload || payload.status !== "success") {
     return (
       <Card>
         <CardHeader>
           <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4" />
+            <AlertTriangle className="h-4 w-4" aria-hidden />
             Cancellation Prediction
           </CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            {cancellation?.reason ||
+            {cancellation.unavailableReason ||
+              payload?.reason ||
               "Not enough resolved reservations to train the model yet."}
           </p>
         </CardContent>
@@ -557,8 +669,8 @@ function CancellationSection({
     );
   }
 
-  const metrics = cancellation.metrics!;
-  const featureImportance = cancellation.feature_importance || {};
+  const metrics = payload.metrics!;
+  const featureImportance = payload.feature_importance || {};
 
   // Top 6 features for the chart
   const topFeatures = Object.entries(featureImportance)
@@ -602,6 +714,13 @@ function CancellationSection({
         </CardTitle>
       </CardHeader>
       <CardContent>
+        {cancellation.capturedAt ? (
+          <RememberedLine
+            capturedAt={cancellation.capturedAt}
+            timezone={businessTimezone}
+            locale={locale}
+          />
+        ) : null}
         <div className="space-y-4">
           {/* Metrics grid */}
           <div className="grid grid-cols-4 gap-2">

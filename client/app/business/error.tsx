@@ -6,6 +6,16 @@ import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
+/**
+ * Must match `ApiUnreachableError.digest` in `lib/api-client.ts`.
+ *
+ * `digest` rather than the message because Next.js replaces a server error's
+ * message with a generic string in a production build and forwards only the
+ * digest — so branching on `error.message` here would work in `next dev` and
+ * silently stop working in the build that ships.
+ */
+const API_UNREACHABLE = "CROWBAR_API_UNREACHABLE";
+
 export default function DashboardError({
   error,
   reset,
@@ -16,6 +26,33 @@ export default function DashboardError({
   useEffect(() => {
     console.error(error);
   }, [error]);
+
+  // A backend outage is not "something went wrong in this section", and it is
+  // certainly not a reason to sign anyone out. The workspace layout catches
+  // this first on a full load; this is the backstop for the 28 per-page guards
+  // that call getCurrentUser() themselves.
+  if (error.digest === API_UNREACHABLE) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-6">
+        <Card className="w-full max-w-md text-center">
+          <CardHeader className="pb-3">
+            <CardTitle>Crowbar cannot reach the server</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            <p>
+              You are still signed in and nothing has been lost. The board
+              cannot load until the server answers again.
+            </p>
+          </CardContent>
+          <CardFooter className="flex justify-center">
+            <Button variant="secondary" onClick={reset}>
+              Try again
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-1 items-center justify-center p-6">

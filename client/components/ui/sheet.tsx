@@ -88,7 +88,8 @@ function SheetContent({
         {...props}
       >
         {children}
-        <SheetPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none">
+        {/* Same as dialog.tsx: the target was the 16px icon. Now a real square. */}
+        <SheetPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute top-[var(--space-8)] right-[var(--space-8)] grid size-[var(--control-desktop-min)] place-content-center rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none">
           <XIcon className="size-4" />
           <span className="sr-only">Close</span>
         </SheetPrimitive.Close>
@@ -103,6 +104,17 @@ function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
       data-slot="sheet-header"
       className={cn(
         "flex flex-col gap-[var(--space-4)] border-b p-[var(--space-16)]",
+        // THE CLOSE BUTTON IS ABSOLUTE, so it takes no space in the layout and
+        // nothing here reserved any. It sits at `right-[var(--space-8)]` and is
+        // --control-desktop-min wide, so it covers the header's last 42px at
+        // desktop and 56px below 1280 — where the token takes over at 48 and
+        // the overlap gets worse. Anything the header puts at its right edge,
+        // and any title long enough to reach it, lands underneath.
+        //
+        // Reserve exactly the button's own footprint plus one more --space-8 of
+        // separation, read from the same two tokens that place and size it, so
+        // the reservation tracks the takeover instead of being re-measured.
+        "pr-[calc(var(--space-8)+var(--control-desktop-min)+var(--space-8))]",
         className
       )}
       {...props}

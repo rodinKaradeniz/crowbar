@@ -66,7 +66,7 @@ const businessSearchItems: SearchItem[] = [
   },
   {
     title: "Requests",
-    url: "/business/requests",
+    url: "/business/reservations?tab=requests",
     icon: Bell,
     group: "Operations",
     keywords: ["pending", "notifications"],

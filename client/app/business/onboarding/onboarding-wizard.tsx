@@ -325,13 +325,13 @@ export default function OnboardingWizard({
                 return (
                   <div key={day} className="flex items-center gap-3">
                     <div className="w-28 text-sm font-medium">{DAY_LABELS[day]}</div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-start gap-[var(--space-8)]">
                       <Checkbox
                         id={`closed-${day}`}
                         checked={h.closed}
                         onCheckedChange={(v) => setDayField(day, "closed", !!v)}
                       />
-                      <Label htmlFor={`closed-${day}`} className="text-muted-foreground">Closed</Label>
+                      <Label htmlFor={`closed-${day}`} className="checkbox-label text-muted-foreground">Closed</Label>
                     </div>
                     {!h.closed && (
                       <div className="flex items-center gap-1.5 ml-auto">
@@ -359,13 +359,13 @@ export default function OnboardingWizard({
           {/* Step 3: First Service Type */}
           {step === 2 && (
             <>
-              <div className="flex items-center gap-2 mb-4">
+              <div className="flex items-start gap-[var(--space-8)] mb-4">
                 <Checkbox
                   id="skip-service"
                   checked={skipService}
                   onCheckedChange={(v) => setSkipService(!!v)}
                 />
-                <Label htmlFor="skip-service" className="text-sm text-muted-foreground">
+                <Label htmlFor="skip-service" className="checkbox-label text-sm text-muted-foreground">
                   Skip for now — I&apos;ll add services later
                 </Label>
               </div>
@@ -458,10 +458,9 @@ export default function OnboardingWizard({
                     id={`mod-${mod.id}`}
                     checked={selectedModules.includes(mod.id)}
                     onCheckedChange={() => toggleModule(mod.id)}
-                    className="mt-0.5"
                   />
                   <div>
-                    <Label htmlFor={`mod-${mod.id}`} className="type-t2 normal-case">
+                    <Label htmlFor={`mod-${mod.id}`} className="checkbox-label type-t2 normal-case">
                       {mod.label}
                     </Label>
                     <p className="mt-0.5 text-[length:var(--ui-size)] text-muted-foreground">

@@ -237,7 +237,14 @@
   --bottom-nav: 76px;
   --rail: 228px;
   --side-panel: 400px;
-  --offline-bar: 38px;
+  /* The band must CONTAIN its Retry button, which is `size="filter"` and so
+     reads --control-desktop-min. At 38px it left 2px of clearance at 1440 and
+     was 10px SHORTER than the button below 1280, where the token takes over at
+     48 — an unmeasured overflow on the primary tablet target, invisible only
+     because this bar appears during an outage. Derived from the control it
+     holds rather than restated as a number, so it follows the takeover on its
+     own: 42px at 1440, 56px below 1280, 4px of clearance at both. */
+  --offline-bar: calc(var(--control-desktop-min) + 2 * var(--space-4));
   /* The public booking box holds ONE height across all four steps, so the
      bordered box and the ink panel beside it stop resizing as the guest moves
      between them. Measured rather than guessed, with the Back/Next footer
@@ -1261,6 +1268,44 @@
   animation: offline-alarm var(--dur-alarm) var(--ease-press) infinite;
 }
 
+/*
+ * ── A checkbox and the label it belongs to ──────────────────────────────────
+ * The Radix Root IS the hit target (--control-desktop-min, 34 → 48 under the
+ * takeover); the bordered 16px square that reads as "the checkbox" is drawn at
+ * its centre. See components/ui/checkbox.tsx.
+ *
+ * So `items-start` on the row aligns the 34/48px ROOT with the top of a ~14px
+ * line, and the drawn box lands 9px low at desktop and 16px low below 1280 —
+ * which is where the user saw it. `items-center` fixes only the single-line
+ * case: a label that wraps makes the text block the taller item and its first
+ * line rises away from the box again. Several of these labels DO wrap at 390,
+ * and the wrapped case measured 7.5px out under `items-center`.
+ *
+ * Pad the label instead, so its FIRST line box centres on the drawn box and
+ * every line after it flows below untouched. Both halves come from the token
+ * that sizes the Root and from the label's own line-height, so there is no
+ * second number to keep in step and nothing to re-measure at the next change.
+ * `1lh` is that element's computed line-height as a unit, not a literal.
+ *
+ * APPLIED TO THE LABEL, NOT INFERRED FROM THE ROW. This began as
+ * `.checkbox-row > :not([data-slot="checkbox"])` and that was wrong twice over:
+ * it also padded the `<Icon>` sitting between the box and the text on the
+ * modules rows, and the trailing price `<span>` on a menu modifier row. It also
+ * read `1lh` off whichever wrapper happened to be the row's child rather than
+ * off the element that actually renders the first line. One class, named on the
+ * element that owns that line, has neither problem.
+ *
+ * TEXT ONLY. It is not for an icon sitting in the same row: `1lh` on an `<svg>`
+ * is the line box it inherits, not the glyph, so the modules row's 16px icon
+ * measured 16px LOW under this rule — worse than the `mt-0.5` it already had,
+ * which is what it kept. Aligning a glyph to a first line is a different sum
+ * (half the difference of two heights, neither of them a line-height) and no
+ * row in this codebase needed it enough to declare one.
+ */
+.checkbox-label {
+  padding-block-start: calc((var(--control-desktop-min) - 1lh) / 2);
+}
+
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -1295,6 +1340,54 @@
 .ground-ink {
   scrollbar-width: thin;
   scrollbar-color: var(--surface-raised) transparent;
+}
+
+/*
+ * ── The toast close control ─────────────────────────────────────────────────
+ * sonner ships `closeButton` as a 20px circle hung OUTSIDE the toast's top-LEFT
+ * corner (`translate(-35%, -35%)`), painted from its own `--gray*` scale. Two
+ * problems: 20px is well under the floor every other control in the system
+ * clears, and that palette is not declared here — on the ink ground it renders
+ * a near-white chip.
+ *
+ * These rules live here rather than on the `Toaster`'s `toastOptions.classNames`
+ * — which is where they were first written, and where they were measured doing
+ * nothing. sonner's own selector is `[data-sonner-toast][data-styled='true']
+ * [data-close-button]`, three attributes deep, so a single Tailwind utility
+ * class loses the cascade every time.
+ *
+ * Matching that depth is not enough either, and that was the second measured
+ * failure: sonner INJECTS its stylesheet at runtime, so it lands after this
+ * file in document order and wins every specificity tie. Hence the leading
+ * `[data-sonner-toaster]` — one attribute deeper than sonner's own rule, which
+ * settles it on specificity rather than on an `!important` that would have to
+ * be argued with later. Every value is read from the token block above.
+ *
+ * Top-RIGHT and fully inside the toast, which is where every other close in
+ * this product is (sheet.tsx, dialog.tsx), and the toast reserves the button's
+ * own footprint so its text never runs underneath — the same calc the sheet
+ * header uses for the same reason.
+ */
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] {
+  padding-right: calc(
+    var(--space-8) + var(--control-desktop-min) + var(--space-8)
+  );
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-close-button] {
+  left: auto;
+  right: var(--space-4);
+  top: var(--space-4);
+  width: var(--control-desktop-min);
+  height: var(--control-desktop-min);
+  transform: none;
+  /* COLOUR IS DELIBERATELY NOT TOUCHED. Painting this from the token block was
+     tried and measured wrong: the toast BODY is still sonner's own white, so
+     `--card` put a near-black chip in the corner of a white card on the ink
+     ground. The button keeps the palette it already had, which introduces no
+     colour the token block does not declare because it introduces none at all.
+     Tokenising the toast surface itself is the real fix and is a separate
+     piece of work — see the note in AGENTS.md / TODO. */
 }
 
 /* All motion is off under prefers-reduced-motion — §07 of the System canvas. */

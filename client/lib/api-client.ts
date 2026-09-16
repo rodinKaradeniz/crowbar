@@ -19,10 +19,18 @@ async function apiFetch<T>(path: string, options: FetchOptions = {}): Promise<T>
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
-    headers,
-    ...rest,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      headers,
+      ...rest,
+    });
+  } catch (cause) {
+    // NOT the same thing as an error response, and the difference decides
+    // whether a bartender gets asked for their password. See
+    // `ApiUnreachableError`.
+    throw new ApiUnreachableError(cause);
+  }
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({}));
@@ -42,6 +50,34 @@ async function apiFetch<T>(path: string, options: FetchOptions = {}): Promise<T>
   }
 
   return response.json();
+}
+
+/**
+ * The request never got an answer: the server is down, DNS failed, the
+ * connection was refused. `fetch` reports this as a bare `TypeError`, which is
+ * indistinguishable from a programming mistake unless it is caught where it
+ * happens — so it is caught in `apiFetch` and named here.
+ *
+ * THE DISTINCTION IS THE POINT. A 401 means the session is genuinely invalid
+ * and the operator must sign in again. A transport failure means the SERVER is
+ * unreachable and the session is perfectly fine — which is why a reload after
+ * the outage used to work. `getCurrentUser()` collapsed both into `null` and
+ * every workspace page turned `null` into `redirect("/auth/login")`, so a
+ * backend restart mid-shift put a password prompt on top of a dead board.
+ *
+ * `digest` is not decoration: it is the only field Next.js forwards from a
+ * server-thrown error to a client `error.tsx` in a production build, where the
+ * message is replaced by a generic string. The workspace error boundary
+ * branches on it.
+ */
+export class ApiUnreachableError extends Error {
+  /** Read by `app/business/error.tsx`. Must stay in sync with it. */
+  readonly digest = "CROWBAR_API_UNREACHABLE";
+
+  constructor(public readonly cause?: unknown) {
+    super("Crowbar could not reach the server.");
+    this.name = "ApiUnreachableError";
+  }
 }
 
 export class ApiError extends Error {
@@ -79,6 +115,8 @@ export interface UserResponse {
   user_type: string;
   created_at: string;
   deletion_requested_at?: string | null;
+  email_verified?: boolean;
+  pending_email?: string | null;
   business_id?: string;
   role?: string;
 }
@@ -257,6 +295,7 @@ export interface ReservationResponse {
   no_show_at: string | null;
   no_show_note: string | null;
   reconfirmed_at: string | null;
+  delivery_state: string;
   created_at: string;
   updated_at: string;
 }

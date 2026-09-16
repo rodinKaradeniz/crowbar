@@ -58,9 +58,15 @@ export function BookingRail({
           return (
             <li key={step.title} className="flex flex-1 items-center gap-[var(--space-8)]">
               {canOpen ? (
+                // The DRAWN rung stays 24px — that size is measured, and the
+                // header comment above explains what it bought. What was too
+                // small was the TARGET: the button wrapped the rung and took
+                // its size, so an answered step was a 24x24 tap on a surface
+                // whose floor is 48. The button now carries
+                // --control-desktop-min and centres the unchanged rung in it.
                 <button
                   type="button"
-                  className="group/rung focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  className="group/rung grid size-[var(--control-desktop-min)] place-content-center focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                   onClick={() => onOpen(index)}
                 >
                   {rung}
@@ -69,7 +75,10 @@ export function BookingRail({
                   </span>
                 </button>
               ) : (
-                <span aria-current={isCurrent ? "step" : undefined}>
+                <span
+                  aria-current={isCurrent ? "step" : undefined}
+                  className="grid size-[var(--control-desktop-min)] place-content-center"
+                >
                   {rung}
                   <span className="sr-only">
                     Step {index + 1}, {step.title}

@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -309,7 +310,7 @@ export default function BusinessTypesClient({
                   <select
                     value={availabilityResourceMode}
                     onChange={(event) => setAvailabilityResourceMode(event.target.value as "legacy" | "tables" | "covers")}
-                    className="mt-2 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                    className="mt-2 flex h-[var(--control-md)] w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
                   >
                     <option value="covers">Shared cover capacity</option>
                     <option value="tables">Physical tables and configured combinations</option>
@@ -368,15 +369,13 @@ export default function BusinessTypesClient({
                 </Field>
 
                 <Field>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
+                  <div className="flex items-start gap-[var(--space-8)]">
+                    <Checkbox
                       id="isPendingEnabled"
                       checked={isPendingEnabled}
-                      onChange={(e) => setIsPendingEnabled(e.target.checked)}
-                      className="rounded border-input"
+                      onCheckedChange={(value) => setIsPendingEnabled(value === true)}
                     />
-                    <FieldLabel htmlFor="isPendingEnabled" className="mb-0">
+                    <FieldLabel htmlFor="isPendingEnabled" className="checkbox-label mb-0">
                       Require confirmation
                     </FieldLabel>
                   </div>

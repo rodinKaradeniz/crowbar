@@ -10,6 +10,7 @@ from app.models.menu import ItemLibrary, MenuItem
 from app.models.order import Order
 from app.models.tax import BusinessRegionalAudit
 from app.schemas.business import BusinessCreate, BusinessUpdate
+from app.core.image_url import validate_image_url
 from app.core.regional import (
     RegionalValidationError,
     normalize_phone,
@@ -55,6 +56,10 @@ async def create_business(db: AsyncSession, data: BusinessCreate) -> Business:
         tax_label = validate_tax_label(data.tax_label)
     except RegionalValidationError as exc:
         raise BusinessConfigurationError(str(exc)) from exc
+    try:
+        image = validate_image_url(data.image)
+    except ValueError as exc:
+        raise BusinessConfigurationError(str(exc)) from exc
     business = Business(
         name=data.name,
         slug=data.slug,
@@ -67,7 +72,7 @@ async def create_business(db: AsyncSession, data: BusinessCreate) -> Business:
         tax_label=tax_label,
         address=data.address,
         description=data.description,
-        image=data.image,
+        image=image,
         website=data.website,
         tags=data.tags or [],
         max_guests=data.max_guests,
@@ -120,6 +125,14 @@ async def update_business(
         try:
             update_data["tax_label"] = validate_tax_label(update_data["tax_label"])
         except RegionalValidationError as exc:
+            raise BusinessConfigurationError(str(exc)) from exc
+    if "image" in update_data:
+        # Refused here rather than at render: the owner learns the link is
+        # unusable in the form where they can fix it, not from a guest whose
+        # booking page went down. See app/core/image_url.
+        try:
+            update_data["image"] = validate_image_url(update_data["image"])
+        except ValueError as exc:
             raise BusinessConfigurationError(str(exc)) from exc
 
     if (

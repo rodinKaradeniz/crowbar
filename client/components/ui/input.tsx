@@ -29,8 +29,9 @@ const inputSizes = {
    * rule and measured 40px on a tablet, under the floor.
    */
   default: "h-[var(--control-md)]",
-  /** Auth and marketing — one-handed, in the dark. */
-  auth: "h-12",
+  /** Auth and marketing — one-handed, in the dark. Same 48 as the tablet
+   *  floor, and now written as that token rather than as `h-12`. */
+  auth: "h-[var(--control-tablet-min)]",
   /** Every control on a tablet surface clears --control-tablet-min. */
   tablet: "h-[var(--control-tablet-min)]",
 } as const
@@ -54,7 +55,7 @@ function Input({
         "focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-ring",
         "aria-invalid:border-field-invalid aria-invalid:ring-[3px] aria-invalid:ring-[var(--field-invalid-ring)]",
         "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
-        "file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground",
+        "file:inline-flex file:h-[var(--control-desktop-min)] file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground",
         inputSizes[inputSize],
         className
       )}

@@ -20,6 +20,7 @@ import {
   formatBusinessTime,
 } from "@/lib/business-time";
 import type { CustomerResponse } from "@/lib/api-client";
+import { deliverySeverity } from "@/lib/severity";
 import type { Reservation, ServiceType } from "@/types";
 
 /**
@@ -87,6 +88,7 @@ export function ReservationPanel({
               ["Email", customer?.email],
               ["Phone", customer?.phone ?? reservation.phone],
               ["Note", reservation.note],
+              ["Guest message", <GuestMessage key="msg" reservation={reservation} />],
             ]}
           />
 
@@ -134,6 +136,46 @@ export function ReservationPanel({
         ) : null}
       </SheetContent>
     </Sheet>
+  );
+}
+
+/**
+ * Whether the guest's confirmation email actually went out.
+ *
+ * Attend, never critical: the booking is correct and the table is held, so this
+ * is work for before the night ends rather than for the next two minutes.
+ * `deliverySeverity` owns that call — §08's critical rank is exhaustive and a
+ * failed guest message is not in it.
+ *
+ * "Sent", not "delivered": `send_reservation_confirmation` reports that the
+ * provider ACCEPTED the message, which is not the same as a guest reading it,
+ * and the copy rules forbid claiming more than the record supports.
+ */
+function GuestMessage({ reservation }: { reservation: Reservation }) {
+  const state = reservation.deliveryState;
+
+  if (deliverySeverity(state) === "attend") {
+    return (
+      <span className="flex flex-wrap items-center gap-2">
+        <Badge tone="attend">Message failed</Badge>
+        <span className="text-muted-foreground">
+          The booking stands, but the guest has not been told.
+        </span>
+      </span>
+    );
+  }
+  if (state === "delivered") {
+    return <span className="text-muted-foreground">Confirmation email sent.</span>;
+  }
+  if (state === "pending") {
+    return <span className="text-muted-foreground">Confirmation email sending.</span>;
+  }
+  return (
+    <span className="text-muted-foreground">
+      {reservation.email
+        ? "No confirmation email has been sent yet."
+        : "No email address for this booking."}
+    </span>
   );
 }
 

@@ -138,7 +138,7 @@ Defined in `server/db/migrations/002_ml_tables.sql`:
 - **Insights page**: `client/app/business/insights/` — full ML dashboard with demand forecast chart, segmentation donut, cancellation metrics + feature importance
 - **Overview page**: `client/app/business/overview/` — forecast teaser card (7-day total + busiest day) and segmentation teaser card (customer count + largest segment), with "Details →" links to Insights. Falls back to a "Set up" CTA when no ML data exists.
 - **Customers page**: `client/app/business/customers/` — segment badge column in the customers table (Champions, Loyal, At Risk, etc.) when segmentation data is available. Column auto-hides when no ML data.
-- **Requests page**: `client/app/business/requests/` — customer segment hint (emoji + label) shown next to Accept/Reject buttons, giving context on customer value when reviewing pending requests.
+- **Requests tab**: `client/app/business/reservations/requests-client.tsx`, reached at `/business/reservations?tab=requests` — customer segment hint shown as a neutral badge next to the Accept/Decline actions, giving context on customer value when reviewing pending requests. The segment fetch stays gated on the Insights module and on `reservations.manage`, so a role without it costs no ML call.
 - **Sidebar**: "Insights" link with `BrainCircuit` icon, placed between Overview and Operations
 - **Search**: Indexed in command palette under Navigation group
 

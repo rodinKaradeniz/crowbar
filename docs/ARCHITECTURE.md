@@ -165,10 +165,23 @@ Do not read the cookie from client JavaScript or treat a browser-supplied
 business ID as authority.
 
 Staff accounts enter through the atomic business-owner registration path or a
-business-scoped invitation. Invitation and password-reset secrets are stored as
-hashes, expire, and are consumed once; request endpoints return generic
-responses, while invitation management records truthful send/failure state for
-authorized owners/managers. Role mutations prevent self-removal and removal of
+business-scoped invitation. Invitation, password-reset and email-verification
+secrets are stored as hashes, expire, and are consumed once; request endpoints
+return generic responses, while invitation management records truthful
+send/failure state for authorized owners/managers.
+
+Email addresses are verified (migration 053). Registration mints a verification
+token and mails it; the account is fully usable while unverified and **login is
+deliberately not gated** on it, because undelivered mail must not lock a venue
+out of its own workspace — the workspace raises a dismissible prompt instead.
+`POST /api/auth/change-email` **requests** a change rather than performing one:
+the new address is held on the token row, `users.email` is untouched, and the
+account keeps its current address — and therefore its password-recovery
+channel — until the token mailed to the new address is consumed.
+`session_version` is incremented at that confirmation, not at the request, so a
+change that has not happened cannot end a session. Staff who join by invitation
+are marked verified when they accept, because the tokenised link they clicked
+was mailed to that address and is the same proof. Role mutations prevent self-removal and removal of
 the last owner, and derive the tenant from the authenticated assignment rather
 than request identifiers.
 

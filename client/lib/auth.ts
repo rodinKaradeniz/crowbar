@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
 import { Customer, Staff } from "@/types";
-import { apiGetMe } from "@/lib/api-client";
+import { ApiUnreachableError, apiGetMe } from "@/lib/api-client";
 
 export type AuthUser = Customer | Staff;
 
@@ -10,6 +10,18 @@ const TOKEN_COOKIE_NAME = "rk-token";
 /**
  * Get current user from session (Server Component)
  * Calls the FastAPI /auth/me endpoint with the stored JWT token
+ *
+ * `null` MEANS "NOT SIGNED IN", AND NOTHING ELSE. Every workspace page turns
+ * `null` into `redirect("/auth/login")`, so anything else that returns `null`
+ * from here becomes a password prompt. This used to be a bare
+ * `catch { return null }`, which meant a backend restart mid-shift signed the
+ * floor out — measured: reloading /business/floor during an outage landed on
+ * `/auth/login?redirect=…`, and a normal reload afterwards did not, because the
+ * session had been fine the whole time.
+ *
+ * So an unreachable server RETHROWS rather than returning null, and the
+ * workspace segment renders an outage screen instead. The cookie is not
+ * touched on either path.
  */
 export async function getCurrentUser(): Promise<AuthUser | null> {
   const cookieStore = await cookies();
@@ -30,6 +42,11 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       avatar: user.avatar || undefined,
       createdAt: user.created_at,
       deletionRequestedAt: user.deletion_requested_at || undefined,
+      // `??`, not `||`: false is a real answer here and truthiness would eat
+      // it. Defaults to true so a server that has not been redeployed yet
+      // cannot make every signed-in operator look unverified.
+      emailVerified: user.email_verified ?? true,
+      pendingEmail: user.pending_email || undefined,
     };
 
     if (user.user_type === "staff" && user.business_id) {
@@ -45,7 +62,14 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       ...baseUser,
       type: "customer" as const,
     };
-  } catch {
+  } catch (error) {
+    // The server is down: the session is untouched and still valid. Let the
+    // workspace error boundary say so — never sign anyone out for this.
+    if (error instanceof ApiUnreachableError) {
+      throw error;
+    }
+    // An error RESPONSE (401 for an invalid or expired session, 403 on
+    // identity) is a real answer: the operator does need to sign in again.
     return null;
   }
 }

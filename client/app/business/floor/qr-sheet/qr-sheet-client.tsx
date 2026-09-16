@@ -70,7 +70,7 @@ export default function QrSheetClient() {
         above={
           <Link
             href="/business/floor"
-            className="type-label inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+            className="type-label inline-flex h-[var(--control-desktop-min)] items-center gap-1 text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="size-3" aria-hidden />
             Floor map

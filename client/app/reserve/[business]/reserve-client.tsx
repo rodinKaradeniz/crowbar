@@ -112,7 +112,13 @@ export default function ReserveClient({ business, serviceTypes }: ReserveClientP
               itself never moves. Only from `phone:` up: below that the columns
               have stacked, there is no panel to stay level with, and a floor
               would only add dead space above a short step. */}
-          <div className="flex min-w-[min(100%,320px)] flex-[1_1_460px] flex-col justify-center p-[var(--space-32)] phone:h-[var(--booking-column)]">
+          {/* MEASURED at 1440: the footer gives the buttons 16px between the
+              rule above them and their own top edge, and this column's uniform
+              32px gutter then gave them 32 below — twice as much under as over,
+              which is what reads as floating rather than seated. The bottom
+              gutter alone drops to the footer's own step so the buttons sit
+              level in their band; the reading gutters stay at 32. */}
+          <div className="flex min-w-[min(100%,320px)] flex-[1_1_460px] flex-col justify-center p-[var(--space-32)] pb-[var(--space-16)] phone:h-[var(--booking-column)]">
             <ReservationForm
               businessId={business.id}
               businessTimezone={business.timezone ?? "UTC"}

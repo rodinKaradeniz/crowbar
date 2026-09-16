@@ -19,6 +19,7 @@ from app.core.regional import (
 )
 from app.models.business import Business
 from app.models.location import Location
+from app.models.email_verification_token import EmailVerificationToken
 from app.models.password_reset_token import PasswordResetToken
 from app.models.staff import Staff
 from app.models.user import User
@@ -277,6 +278,120 @@ async def consume_password_reset(
     user.session_version += 1
     await db.flush()
     return user
+
+
+#: A verification link is a single-use proof of control, not a session. 24 hours
+#: is long enough to survive an overnight delay or a spam-folder rescue and
+#: short enough that a forwarded mailbox is not a standing key to the account.
+EMAIL_VERIFICATION_TTL = timedelta(hours=24)
+
+
+async def create_email_verification(
+    db: AsyncSession, user: User, *, new_email: str | None = None
+) -> tuple[EmailVerificationToken, str]:
+    """Mint a verification link for `user`.
+
+    `new_email` NULL proves the address already on the account. `new_email` set
+    holds a REQUESTED change: users.email is untouched until this exact token is
+    consumed, so the account keeps its current address -- and therefore its
+    password recovery -- until the new one is proved.
+
+    Issuing invalidates the user's other unused tokens, so one live link at a
+    time, matching create_password_reset. That is also what makes "change to A,
+    then change to B" safe: requesting B retires A.
+    """
+    now = datetime.now(timezone.utc)
+    active_tokens = await db.scalars(
+        select(EmailVerificationToken).where(
+            EmailVerificationToken.user_id == user.id,
+            EmailVerificationToken.used_at.is_(None),
+        )
+    )
+    for existing in active_tokens:
+        existing.used_at = now
+
+    raw_token = secrets.token_urlsafe(32)
+    verification = EmailVerificationToken(
+        user_id=user.id,
+        token_hash=hash_opaque_token(raw_token),
+        new_email=new_email,
+        expires_at=now + EMAIL_VERIFICATION_TTL,
+    )
+    db.add(verification)
+    await db.flush()
+    return verification, raw_token
+
+
+class EmailAlreadyTakenError(Exception):
+    """A pending address was claimed by another account before confirmation."""
+
+
+async def consume_email_verification(
+    db: AsyncSession, raw_token: str
+) -> User | None:
+    """Redeem a verification link. Returns None for every failure mode.
+
+    Missing, already used, expired, or an inactive user all return None so the
+    router can answer with one indistinguishable error, matching
+    consume_password_reset.
+
+    SESSION_VERSION. Confirming a CHANGE bumps it; confirming the address the
+    account already has does not. change-email used to bump at request time
+    (routers/auth.py, before migration 053), which was right when the write
+    happened there. Now that the write happens here, the bump moves with it --
+    bumping at request time would sign the owner out over a change that had not
+    happened yet. Confirming a registration address changes no credential, and
+    bumping would sign out the very person who just clicked the link.
+    """
+    now = datetime.now(timezone.utc)
+    verification = await db.scalar(
+        select(EmailVerificationToken)
+        .where(EmailVerificationToken.token_hash == hash_opaque_token(raw_token))
+        .with_for_update()
+    )
+    if (
+        verification is None
+        or verification.used_at is not None
+        or verification.expires_at <= now
+    ):
+        return None
+
+    user = await db.scalar(
+        select(User).where(User.id == verification.user_id).with_for_update()
+    )
+    if user is None or not user.is_active:
+        return None
+
+    if verification.new_email is not None:
+        # Re-checked HERE, not only when the change was requested: the address
+        # was free then, and a token can sit in an inbox for 24 hours. The
+        # users.email UNIQUE constraint would otherwise surface as a 500.
+        taken = await db.scalar(
+            select(User.id).where(
+                User.email == verification.new_email, User.id != user.id
+            )
+        )
+        if taken is not None:
+            raise EmailAlreadyTakenError()
+        user.email = verification.new_email
+        user.session_version += 1
+
+    verification.used_at = now
+    user.email_verified_at = now
+    await db.flush()
+    return user
+
+
+async def pending_email_for(db: AsyncSession, user: User) -> str | None:
+    """The address this user has asked to move to, if a live token holds one."""
+    return await db.scalar(
+        select(EmailVerificationToken.new_email).where(
+            EmailVerificationToken.user_id == user.id,
+            EmailVerificationToken.used_at.is_(None),
+            EmailVerificationToken.new_email.is_not(None),
+            EmailVerificationToken.expires_at > datetime.now(timezone.utc),
+        )
+    )
 
 
 async def anonymize_user(db: AsyncSession, user: User, *, now: datetime | None = None) -> None:

@@ -227,8 +227,8 @@ export function CountSessionClient({ businessId, sessionId, canManage }: Props) 
         <div className="max-w-md mx-auto flex items-center gap-2">
           <Button
             variant="ghost"
-            size="filter"
-            className="h-9 w-9 p-0 shrink-0"
+            size="icon-sm"
+            className="shrink-0"
             onClick={() => router.push("/business/inventory")}
             aria-label="Back to inventory"
           >
@@ -398,7 +398,7 @@ function CountLineCard({
                 onChange({ ...current, mode: mode as EntryMode, value: "" });
               }}
             >
-              <SelectTrigger className="w-[130px] h-10">
+              <SelectTrigger className="w-[130px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -408,7 +408,7 @@ function CountLineCard({
               </SelectContent>
             </Select>
             <Input
-              className="h-10 flex-1 font-mono tabular-nums"
+              className="flex-1 font-mono tabular-nums"
               inputMode="decimal"
               placeholder="Count"
               value={current.value}
@@ -421,7 +421,7 @@ function CountLineCard({
               value={current.packConversionId}
               onValueChange={(id) => onChange({ ...current, packConversionId: id })}
             >
-              <SelectTrigger className="h-10">
+              <SelectTrigger>
                 <SelectValue placeholder="Which pack?" />
               </SelectTrigger>
               <SelectContent>
@@ -441,7 +441,7 @@ function CountLineCard({
                 value={current.shrinkageReason}
                 onValueChange={(reason) => onChange({ ...current, shrinkageReason: reason })}
               >
-                <SelectTrigger id={`reason-${line.id}`} className="h-10">
+                <SelectTrigger id={`reason-${line.id}`}>
                   <SelectValue placeholder="Required for a shortfall" />
                 </SelectTrigger>
                 <SelectContent>

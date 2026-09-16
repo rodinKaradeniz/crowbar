@@ -7,8 +7,6 @@ Never raises exceptions — always returns bool.
 """
 
 import logging
-import hashlib
-import hmac
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -16,20 +14,13 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.core.log_redaction import destination_reference as _destination_reference
 from app.services.marketing_consent_service import (
     MessageClass,
     is_suppressed,
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _destination_reference(to_number: str) -> str:
-    return hmac.new(
-        settings.rate_limit_hmac_secret.encode("utf-8"),
-        to_number.encode("utf-8"),
-        hashlib.sha256,
-    ).hexdigest()[:12]
 
 
 def send_sms(

@@ -9,6 +9,7 @@ import {
 } from "@/lib/api";
 import { getCurrentUser } from "@/lib/auth";
 import { fetchMLDemandForecast } from "@/lib/ml-api";
+import { hasModule, MODULE_KEYS } from "@/lib/modules";
 import { hasCapability } from "@/lib/permissions";
 
 export default async function BusinessOverview() {
@@ -25,16 +26,28 @@ export default async function BusinessOverview() {
   // them.
   const canSeeGuests = hasCapability(user.role, "customers.view");
 
-  const [business, stats, serviceTypes, demandForecast, customers] =
-    await Promise.all([
-      fetchBusiness(user.businessId),
-      fetchBusinessDashboardStats(user.businessId),
-      fetchServiceTypesByBusiness(user.businessId),
-      fetchMLDemandForecast(),
-      canSeeGuests ? fetchBusinessCustomers(user.businessId) : Promise.resolve([]),
-    ]);
+  // The business is awaited on its own because the forecast fetch is gated on
+  // it. The ENTIRE /api/insights router sits behind require_module("insights"),
+  // so with the module off this call was a guaranteed 403 — which mlFetch used
+  // to turn into `null`, which ForecastPanel rendered as "Crowbar needs a few
+  // weeks of your own service history". That sentence blamed Crowbar's data for
+  // the owner's own setting, on the first screen a manager sees.
+  const business = await fetchBusiness(user.businessId);
 
-  if (!business || !stats) {
+  if (!business) {
+    redirect("/auth/login");
+  }
+
+  const insightsOn = hasModule(business.enabledModules ?? [], MODULE_KEYS.INSIGHTS);
+
+  const [stats, serviceTypes, demandForecast, customers] = await Promise.all([
+    fetchBusinessDashboardStats(user.businessId),
+    fetchServiceTypesByBusiness(user.businessId),
+    insightsOn ? fetchMLDemandForecast() : Promise.resolve(null),
+    canSeeGuests ? fetchBusinessCustomers(user.businessId) : Promise.resolve([]),
+  ]);
+
+  if (!stats) {
     redirect("/auth/login");
   }
 

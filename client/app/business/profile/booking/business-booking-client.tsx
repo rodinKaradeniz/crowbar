@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -397,21 +398,25 @@ export default function BusinessBookingClient({
               </p>
             </div>
             {canEdit && (
-              <label className="flex items-center gap-2 text-sm font-medium">
-                <input
-                  type="checkbox"
+              <label className="flex items-start gap-[var(--space-8)] text-sm font-medium">
+                <Checkbox
                   checked={customEnabled}
-                  onChange={(event) => {
-                    if (!event.target.checked && selectedOverride) {
+                  onCheckedChange={(value) => {
+                    const next = value === true;
+                    if (!next && selectedOverride) {
                       setConfirmRevert(true);
                     } else {
-                      setCustomEnabled(event.target.checked);
+                      setCustomEnabled(next);
                       setDraft(toDraft(schedules.defaultSchedule));
                     }
                   }}
-                  className="size-4 rounded border-input"
                 />
-                Use custom schedule
+                {/* Wrapped so the first line can carry `checkbox-label`; it was
+                    a bare text node, which no selector can reach. The Checkbox
+                    also carried `size-4 rounded border-input`, which shrank the
+                    ROOT — the hit target — back to the 16px drawn box and
+                    undid the touch floor on this row alone. See checkbox.tsx. */}
+                <span className="checkbox-label">Use custom schedule</span>
               </label>
             )}
           </div>
@@ -545,25 +550,21 @@ export default function BusinessBookingClient({
                 ))}
               </div>
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                <label className="flex items-start gap-3 rounded-md border p-3 text-sm">
-                  <input
-                    type="checkbox"
+                <label className="flex items-start gap-[var(--space-12)] rounded-md border p-3 text-sm">
+                  <Checkbox
                     checked={draft.reminderEnabled}
-                    onChange={(event) => setDraft((current) => ({ ...current, reminderEnabled: event.target.checked }))}
+                    onCheckedChange={(value) => setDraft((current) => ({ ...current, reminderEnabled: value === true }))}
                     disabled={!editable}
-                    className="mt-0.5 size-4 rounded border-input"
                   />
-                  <span><span className="block font-medium">Send reminder</span><span className="text-muted-foreground">Send the configured transactional reminder before the reservation.</span></span>
+                  <span className="checkbox-label"><span className="block font-medium">Send reminder</span><span className="text-muted-foreground">Send the configured transactional reminder before the reservation.</span></span>
                 </label>
-                <label className="flex items-start gap-3 rounded-md border p-3 text-sm">
-                  <input
-                    type="checkbox"
+                <label className="flex items-start gap-[var(--space-12)] rounded-md border p-3 text-sm">
+                  <Checkbox
                     checked={draft.reconfirmationEnabled}
-                    onChange={(event) => setDraft((current) => ({ ...current, reconfirmationEnabled: event.target.checked }))}
+                    onCheckedChange={(value) => setDraft((current) => ({ ...current, reconfirmationEnabled: value === true }))}
                     disabled={!editable}
-                    className="mt-0.5 size-4 rounded border-input"
                   />
-                  <span><span className="block font-medium">Allow guest reconfirmation</span><span className="text-muted-foreground">Show “I&apos;m still coming” on the secure reservation link; no reply never cancels a booking.</span></span>
+                  <span className="checkbox-label"><span className="block font-medium">Allow guest reconfirmation</span><span className="text-muted-foreground">Show “I&apos;m still coming” on the secure reservation link; no reply never cancels a booking.</span></span>
                 </label>
               </div>
             </section>
@@ -668,19 +669,18 @@ export default function BusinessBookingClient({
                             required
                           />
                         </label>
-                        <label className="mb-2 flex items-center gap-2 text-sm font-medium">
-                          <input
-                            type="checkbox"
+                        <label className="mb-2 flex items-start gap-[var(--space-8)] text-sm font-medium">
+                          <Checkbox
                             checked={exception.isClosed}
-                            onChange={(event) =>
+                            onCheckedChange={(value) =>
                               setDraft((current) => ({
                                 ...current,
                                 exceptions: current.exceptions.map((item, candidate) =>
                                   candidate === index
                                     ? {
                                         ...item,
-                                        isClosed: event.target.checked,
-                                        windows: event.target.checked
+                                        isClosed: value === true,
+                                        windows: value === true
                                           ? []
                                           : [{ startTime: "18:00", endTime: "20:00", endsNextDay: false }],
                                       }
@@ -689,9 +689,8 @@ export default function BusinessBookingClient({
                               }))
                             }
                             disabled={!editable}
-                            className="size-4 rounded border-input"
                           />
-                          Closed all day
+                          <span className="checkbox-label">Closed all day</span>
                         </label>
                         {editable && (
                           <Button

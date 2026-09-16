@@ -330,7 +330,7 @@ export default function MenuClient({ businessId, businessSlug, businessName }: M
                   data-category={cat.id}
                   aria-current={isActive ? "location" : undefined}
                   className={cn(
-                    "type-label shrink-0 border-b pb-1 transition-colors",
+                    "type-label inline-flex h-[var(--control-desktop-min)] shrink-0 items-end border-b pb-1 transition-colors",
                     // Brand marks the active nav item — identity, never a rank.
                     isActive
                       ? "text-primary border-primary"
@@ -487,7 +487,7 @@ export default function MenuClient({ businessId, businessSlug, businessName }: M
                     </div>
                     <div className="space-y-2.5">
                       {group.modifiers.filter((m) => m.isAvailable).map((mod) => (
-                        <div key={mod.id} className="flex items-center gap-2.5">
+                        <div key={mod.id} className="flex items-start gap-[var(--space-8)]">
                           <Checkbox
                             id={mod.id}
                             checked={sheetMods.some((m) => m.modifierId === mod.id)}
@@ -495,7 +495,7 @@ export default function MenuClient({ businessId, businessSlug, businessName }: M
                               toggleMod(group, { id: mod.id, name: mod.name, priceDelta: mod.priceDelta })
                             }
                           />
-                          <Label htmlFor={mod.id} className="flex-1 text-sm cursor-pointer">
+                          <Label htmlFor={mod.id} className="checkbox-label flex-1 text-sm cursor-pointer">
                             {mod.name}
                           </Label>
                           {mod.priceDelta > 0 && (

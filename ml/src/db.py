@@ -78,7 +78,6 @@ def load_reservations(business_id: str) -> pd.DataFrame:
             r.status,
             r.guests,
             r.note,
-            r.custom_fields,
             r.created_at AS booked_at,
             b.name AS business_name,
             b.tags AS business_tags,

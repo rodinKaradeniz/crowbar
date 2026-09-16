@@ -90,7 +90,9 @@ Every authenticated route names exactly one capability, except the self-service 
 | PATCH | `/api/auth/me` | _self-service_ | — | the signed-in user |
 | GET | `/api/auth/me/context` | _self-service_ | — | the signed-in user |
 | POST | `/api/auth/register-business` | _public_ | — | anyone |
+| POST | `/api/auth/resend-verification` | _self-service_ | — | the signed-in user |
 | POST | `/api/auth/reset-password` | _public_ | — | anyone |
+| POST | `/api/auth/verify-email` | _public_ | — | anyone |
 | POST | `/api/auth/ws-token` | _self-service_ | — | the signed-in user |
 
 ### `availability.py`
@@ -375,6 +377,7 @@ Every authenticated route names exactly one capability, except the self-service 
 | GET | `/api/reservations/{reservation_id}` | `reservations.view` | reservations | owner, manager, host_server, bar_kitchen |
 | PATCH | `/api/reservations/{reservation_id}` | `reservations.manage` | reservations | owner, manager, host_server |
 | GET | `/api/reservations/{reservation_id}/availability` | `reservations.view` | reservations | owner, manager, host_server, bar_kitchen |
+| POST | `/api/reservations/{reservation_id}/delivery/retry` | `reservations.manage` | reservations | owner, manager, host_server |
 | POST | `/api/reservations/{reservation_id}/no-show` | `reservations.manage` | reservations | owner, manager, host_server |
 | POST | `/api/reservations/{reservation_id}/reschedule` | `reservations.manage` | reservations | owner, manager, host_server |
 

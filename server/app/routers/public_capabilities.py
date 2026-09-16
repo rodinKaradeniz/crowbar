@@ -16,6 +16,7 @@ from app.database import get_db
 from app.models.business import Business
 from app.models.reservation import Reservation
 from app.models.reservation_waitlist import ReservationWaitlistEntry
+from app.models.email_verification_token import EmailVerificationToken
 from app.models.password_reset_token import PasswordResetToken
 from app.models.staff_invitation import StaffInvitation
 from app.schemas.public_capability import PublicCapabilityExchange
@@ -76,6 +77,26 @@ async def exchange_public_capability(
             )
             response.status_code = status.HTTP_204_NO_CONTENT
             return None
+        if body.kind == "email_verify":
+            resource = await db.scalar(
+                select(EmailVerificationToken).where(
+                    EmailVerificationToken.token_hash == hash_opaque_token(body.token),
+                    EmailVerificationToken.used_at.is_(None),
+                    EmailVerificationToken.expires_at > datetime.now(timezone.utc),
+                )
+            )
+            if resource is None:
+                raise _invalid_capability()
+            # An auth kind, so it returns here rather than falling through to the
+            # reservation tail: there is no business to resolve and no module to
+            # be entitled to. The cookie outliving the token is harmless --
+            # consume_email_verification re-checks expiry.
+            set_public_cookie(
+                response, kind="email_verify", token=body.token, max_age=24 * 60 * 60
+            )
+            response.status_code = status.HTTP_204_NO_CONTENT
+            return None
+
         if body.kind == "staff_invite":
             resource = await db.scalar(
                 select(StaffInvitation).where(

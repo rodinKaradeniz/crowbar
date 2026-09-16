@@ -9,6 +9,7 @@ import {
   VisitorResponse,
 } from "@/types";
 import {
+  ApiUnreachableError,
   apiGetBusinesses,
   apiGetCurrentBusiness,
   apiGetBusinessBySlug,
@@ -208,6 +209,7 @@ function toReservation(r: ReservationResponse): Reservation {
     noShowAt: r.no_show_at || undefined,
     noShowNote: r.no_show_note || undefined,
     reconfirmedAt: r.reconfirmed_at || undefined,
+    deliveryState: r.delivery_state || undefined,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -249,7 +251,12 @@ export async function serverGetMe() {
 
   try {
     return await apiGetMe(token);
-  } catch {
+  } catch (error) {
+    // An unreachable server is not "no data". Twenty workspace pages
+    // redirect to /auth/login when one of these returns null, so
+    // swallowing an outage here is what put a password prompt on top of
+    // a dead board. See ApiUnreachableError.
+    if (error instanceof ApiUnreachableError) throw error;
     return null;
   }
 }
@@ -278,6 +285,8 @@ export async function serverGetMeContext(): Promise<MeContext | null> {
         phone: data.user.phone,
         avatar: data.user.avatar,
         userType: data.user.user_type,
+        emailVerified: data.user.email_verified ?? true,
+        pendingEmail: data.user.pending_email || undefined,
       },
       business: {
         id: data.business.id,
@@ -292,7 +301,12 @@ export async function serverGetMeContext(): Promise<MeContext | null> {
       capabilities: data.capabilities ?? [],
       enabledModules: data.enabled_modules ?? [],
     };
-  } catch {
+  } catch (error) {
+    // An unreachable server is not "no data". Twenty workspace pages
+    // redirect to /auth/login when one of these returns null, so
+    // swallowing an outage here is what put a password prompt on top of
+    // a dead board. See ApiUnreachableError.
+    if (error instanceof ApiUnreachableError) throw error;
     return null;
   }
 }
@@ -313,7 +327,12 @@ export async function fetchBusiness(id: string): Promise<Business | null> {
     const data = await apiGetCurrentBusiness(token);
     if (data.id !== id) return null;
     return toBusiness(data);
-  } catch {
+  } catch (error) {
+    // An unreachable server is not "no data". Twenty workspace pages
+    // redirect to /auth/login when one of these returns null, so
+    // swallowing an outage here is what put a password prompt on top of
+    // a dead board. See ApiUnreachableError.
+    if (error instanceof ApiUnreachableError) throw error;
     return null;
   }
 }
@@ -323,7 +342,12 @@ export async function fetchBusinessBySlug(slug: string): Promise<Business | null
   try {
     const data = await apiGetBusinessBySlug(slug);
     return toBusiness(data);
-  } catch {
+  } catch (error) {
+    // An unreachable server is not "no data". Twenty workspace pages
+    // redirect to /auth/login when one of these returns null, so
+    // swallowing an outage here is what put a password prompt on top of
+    // a dead board. See ApiUnreachableError.
+    if (error instanceof ApiUnreachableError) throw error;
     return null;
   }
 }
@@ -345,7 +369,12 @@ export async function fetchServiceType(id: string): Promise<ServiceType | null> 
     const token = await getToken();
     const data = await apiGetServiceType(id, token || undefined);
     return toServiceType(data);
-  } catch {
+  } catch (error) {
+    // An unreachable server is not "no data". Twenty workspace pages
+    // redirect to /auth/login when one of these returns null, so
+    // swallowing an outage here is what put a password prompt on top of
+    // a dead board. See ApiUnreachableError.
+    if (error instanceof ApiUnreachableError) throw error;
     return null;
   }
 }
@@ -360,7 +389,12 @@ export async function fetchBookingSchedules(): Promise<BookingScheduleCollection
       defaultSchedule: toBookingSchedule(data.default_schedule),
       serviceOverrides: data.service_overrides.map(toBookingSchedule),
     };
-  } catch {
+  } catch (error) {
+    // An unreachable server is not "no data". Twenty workspace pages
+    // redirect to /auth/login when one of these returns null, so
+    // swallowing an outage here is what put a password prompt on top of
+    // a dead board. See ApiUnreachableError.
+    if (error instanceof ApiUnreachableError) throw error;
     return null;
   }
 }
@@ -395,7 +429,12 @@ export async function fetchBusinessDashboardStats(
   if (!token) return null;
   try {
     return await apiGetBusinessStats(businessId, token);
-  } catch {
+  } catch (error) {
+    // An unreachable server is not "no data". Twenty workspace pages
+    // redirect to /auth/login when one of these returns null, so
+    // swallowing an outage here is what put a password prompt on top of
+    // a dead board. See ApiUnreachableError.
+    if (error instanceof ApiUnreachableError) throw error;
     return null;
   }
 }
@@ -406,7 +445,12 @@ export async function fetchBusinessKpis(businessId: string): Promise<any | null>
   if (!token) return null;
   try {
     return await apiGetBusinessKpis(businessId, token);
-  } catch {
+  } catch (error) {
+    // An unreachable server is not "no data". Twenty workspace pages
+    // redirect to /auth/login when one of these returns null, so
+    // swallowing an outage here is what put a password prompt on top of
+    // a dead board. See ApiUnreachableError.
+    if (error instanceof ApiUnreachableError) throw error;
     return null;
   }
 }
@@ -417,7 +461,12 @@ export async function fetchHighRiskReservations(businessId: string): Promise<any
   if (!token) return [];
   try {
     return await apiGetHighRiskReservations(businessId, token);
-  } catch {
+  } catch (error) {
+    // An unreachable server is not "no data". Twenty workspace pages
+    // redirect to /auth/login when one of these returns null, so
+    // swallowing an outage here is what put a password prompt on top of
+    // a dead board. See ApiUnreachableError.
+    if (error instanceof ApiUnreachableError) throw error;
     return [];
   }
 }

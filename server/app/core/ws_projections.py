@@ -14,6 +14,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fastapi.encoders import jsonable_encoder
 from app.services import order_service, queue_service
 from app.services.floor_plan_ws_manager import manager as floor_plan_manager
 from app.services.order_ws_manager import manager as order_manager
@@ -46,8 +47,14 @@ async def broadcast_queue_state(db: AsyncSession, business_id: str) -> None:
         if e.status == "waiting":
             waiting_pos += 1
         payload_entries.append(await queue_service.entry_to_dict(db, e, pos))
+    # jsonable_encoder for the same reason as the queue WS handler in
+    # routers/queue.py: `entry_to_dict` yields date/datetime values and
+    # `manager.broadcast` json.dumps them. Here the TypeError was quieter still
+    # — broadcast catches every exception per socket and simply drops that
+    # socket as dead, so a live board went silent with no error anywhere.
     await queue_manager.broadcast(
-        business_id, {"type": "queue_updated", "entries": payload_entries}
+        business_id,
+        jsonable_encoder({"type": "queue_updated", "entries": payload_entries}),
     )
     logger.debug("broadcast_queue_state: business=%s entries=%d", business_id, len(payload_entries))
 
@@ -61,3 +68,16 @@ async def broadcast_order_board(db: AsyncSession, business_id: str) -> None:
         business_id, {"type": "order_updated", "orders": payload}
     )
     logger.debug("broadcast_order_board: business=%s orders=%d", business_id, len(payload))
+
+
+async def broadcast_liveness() -> None:
+    """Deliver one liveness beat to every board this process is serving.
+
+    Carries no data: its ARRIVAL is the whole message. Each hook records it as
+    contact and does not treat it as an update, so it costs no refetch.
+    See `app/core/heartbeat.py` for why it comes the long way round.
+    """
+    frame = {"type": "heartbeat"}
+    for manager in (queue_manager, order_manager, tab_manager, floor_plan_manager):
+        for business_id in manager.connected_business_ids():
+            await manager.broadcast(business_id, frame)

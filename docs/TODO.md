@@ -1381,75 +1381,95 @@ is a data mutation that needs explicit authorization.
     stopped spinning; the server's honest 503 never reached anyone. It now
     raises a toast. Deliberately only that — see the ML finding below.
 
-  **Findings, not fixed. These are the next pass.**
+  **Findings from that pass. Six of the seven were fixed on 2026-09-09; what
+  replaced each one is recorded below, and `docs/HISTORY.md` carries the
+  reasoning.**
 
-  - **A dropped WebSocket never reconnects, and Retry does not reconnect it
-    either.** Measured: with the backend killed, the offline bar appears and its
-    copy is good — "NOT UPDATING · OFFLINE 01:51 · The floor map is not
-    receiving new activity. Keep serving from what is on screen." But after the
-    backend came back, **50+ seconds later the page had made exactly 1 socket
-    attempt and 1 `/api/ws-token` fetch, and never tried again.** All four hooks
-    `return` silently when the token fetch yields null and schedule NO retry, so
-    the first failed attempt kills the backoff chain permanently. Pressing
-    *Retry* does not help: `onRetry` calls `refresh()`, which refetches board
-    DATA and never touches the socket — the alarm stayed up and the counter kept
-    climbing to 02:14. **Only a full page reload recovers.** For a pilot this
-    means one backend blip silently ends live updating on every open board until
-    someone notices the bar and reloads. *Fix:* schedule the same backoff retry
-    when the token fetch fails, and make `onRetry` reconnect as well as refetch.
-    Four hooks, one shape — deliberately not attempted in a report-biased pass.
-  - **Redis loss is SILENT staleness — the one failure with no signal at all.**
-    Verified: with Redis stopped, a mutation returns 200 and the record is
-    correct (`B1 out_of_service` on the server), the rate limiter fails open so
-    login and reads keep working, and `publish()` logs and swallows exactly as
-    designed. But the event never enters the stream, so no consumer runs and no
-    frame is sent — while **the sockets stay OPEN, so `connected` stays true and
-    the offline bar never appears.** A second operator's board sat unchanged
-    with nothing on screen saying so. There is no outbox, so no reconnect can
-    replay it. This is the inverse of the WebSocket case: there the screen is
-    honest and the recovery is broken; here recovery is irrelevant because
-    nothing ever knew. *Trigger:* it needs a health signal the client can see,
-    which is a design question, not a patch.
-  - **A backend restart signs staff out.** Reloading `/business/floor` during
-    the outage landed on `/auth/login?redirect=…`, and a normal reload
-    afterwards did not — so the session is dropped by the outage, not expired.
-    Mid-shift that is a password prompt on top of a dead board.
-  - **The ML service's honesty stops at the wire.** The API is exactly right:
-    with `crowbar-ml` stopped, `/api/insights/status` returned 200 with
-    `stale: true`, a real `captured_at` and "The insights service is
-    unreachable…", `/demand` returned a clean `unavailable`, and `/run` a 503.
-    **None of it reaches the page.** `client/lib/ml-api.ts` turns every
-    non-`ok` response into `null`, and `stale`, `captured_at` and
-    `unavailable_reason` are read nowhere in the client — none of the `ML*`
-    interfaces even declare them. The page showed "No insights yet", the same
-    thing it shows when nothing has ever run. `AGENTS.md` said "Insights
-    survives an ML restart by serving its last result marked stale"; that was
-    true of the API and false of the page, and the sentence has been corrected.
-    *Fix:* carry the three fields through `ml-api.ts` and render a remembered-at
-    banner. Bigger than the one honest line this pass allowed.
-  - **The local `crowbar-ml` image is a stale build, and nothing says so.**
-    `POST /api/insights/run` fails with `column r.payment_amount does not
-    exist` — a column migration 013 dropped. The repo's `ml/src/db.py` does not
-    reference it; the running container's `/app/src/db.py` does. `scripts/dev.sh`
-    runs `docker compose up -d`, which never rebuilds, so `ml/` changes silently
-    do not take effect and the local Insights surface has never produced a first
-    result. *Fix:* rebuild in `dev.sh` or document it; either way the stale-image
-    failure should not look like a product bug.
-  - **A failed reservation confirmation leaves no trace whatsoever.** Verified
-    end to end: a guest booking returned 201 `confirmed`, the row is in the
-    record, no email went out (Resend unconfigured), and there is no
-    `DeliveryAttempt` row, no response field and — until this pass — no log
-    line, because `email_service.py` had no logger at all. Every other channel
-    already does this properly: queue "table ready", waitlist offers, staff
-    invitations and the reminder job each persist a `DeliveryAttempt` with a
-    `last_error` the operator can see, and the waitlist offer this pass minted
-    came back with `"delivery_state": "failed"`. Reservation confirmation is the
-    only guest-facing message with none of it. A `logger.debug` now marks the
-    skip, matching `sms_service`, but that is an operator-of-the-server signal,
-    not a staff-facing one. *Fix:* a `ReservationDeliveryAttempt` on the
-    confirmation path — the reminder job is already its only writer, so the
-    table exists. Deliberately not built here; the brief's instruction was not
-    to invent a notification subsystem.
+  - ~~**A dropped WebSocket never reconnects, and Retry does not reconnect it
+    either.**~~ **Fixed 2026-09-09.** All four hooks now schedule the same
+    backoff when the token fetch yields null — the bug was one `return` that
+    bypassed `onclose`, where the backoff lived — and `SocketStatus.reconnect`
+    makes the offline bar's Retry reconnect as well as refetch. Walked: bar
+    within 6s of the API dying, 12 token fetches across the outage with widening
+    intervals (against 1 before), recovery 5s after the API returned with no
+    page reload. **Still open, and now with a second reason:** the four hooks
+    were deliberately not collapsed into a shared core, and they have since
+    diverged twice — the token/retry shape (now identical again) and
+    refetch-on-open, which floor-plan and tabs do and queue and orders do not.
+    Worth its own pass; not worth doing inside a bug fix.
+  - ~~**Redis loss is SILENT staleness — the one failure with no signal at
+    all.**~~ **Fixed 2026-09-09.** A liveness beat is published as an ordinary
+    `DomainEvent` and delivered by the ordinary consumer, so its arrival proves
+    the whole `publish()` → stream → consumer → manager chain rather than just
+    the socket. The client counts from `lastContactAt` and the existing
+    `OfflineBar` renders it; no new severity, no new component, no outbox.
+    Verified: Redis stopped, the board reported "Not updating · no contact
+    01:06" with the socket still open; restarted, the alarm cleared in 9s.
+    **Constraint to carry forward:** delivery is via a Redis consumer group, so
+    exactly one process receives each beat. With more than one API process the
+    other processes' boards would go quiet and wrongly call themselves stale.
+    This is inherited, not introduced — the in-memory connection managers are
+    already single-instance only (`queue_ws_manager.py`) — but it must be
+    solved together with them if the pilot ever runs more than one instance.
+  - ~~**A backend restart signs staff out.**~~ **Fixed 2026-09-09.**
+    `apiFetch` rethrows a transport failure as `ApiUnreachableError`,
+    `getCurrentUser` returns `null` only for a genuine identity failure, and the
+    workspace renders an honest outage screen with the session untouched. The
+    nine swallowing `catch → null` helpers in `lib/api.ts` rethrow it too, since
+    twenty pages redirect to the login screen when `fetchBusiness` returns null.
+    Verified in **both** `next dev` and a production build, because
+    `error.digest` is the only field Next forwards to a client error boundary in
+    production.
+  - ~~**The ML service's honesty stops at the wire.**~~ **Fixed 2026-09-09.**
+    `mlFetch` returns a state — `live`, `remembered`, `unreachable`,
+    `no-result`, `module-disabled`, `error` — and the pages read it. Overview
+    gates the forecast fetch on the Insights module and renders neither the
+    panel nor the "Next 7 nights" figure when it is off. Insights shows a
+    remembered-at line in the venue timezone and says the service is unreachable
+    rather than "no insights yet".
+    **Open, small, and found while doing it:** `/api/insights/*` returns **404**
+    for "this model has no result" while labelling the body `INTERNAL_ERROR`.
+    The status is honest and is what the client branches on, but the code is
+    misleading to anyone reading a log. Separately, `client/lib/api-client.ts`'s
+    `ApiError` carries no `code` field at all and reads an `errorBody.detail`
+    key the error handler does not emit — so that client could not surface
+    `MODULE_DISABLED` even if a caller wanted it. Neither was changed here;
+    both are contract changes that deserve their own decision.
+  - ~~**The local `crowbar-ml` image is a stale build, and nothing says so.**~~
+    **Fixed 2026-09-09.** `dev.sh` runs `docker compose up -d --build`; a full
+    rebuild measured 15.6s and the layer cache makes the no-change case cheap.
+    Rebuilding revealed a second drift the first had hidden — the repository's
+    own `ml/src/db.py` still selected `custom_fields`, a sibling column the same
+    migration 013 dropped. `/business/insights` has now produced a first live
+    result locally, which it never had.
+  - ~~**A failed reservation confirmation leaves no trace whatsoever.**~~
+    **Fixed 2026-09-09.** The confirmation path persists a `DeliveryAttempt`
+    with the shape the reminder job uses. No migration was needed;
+    `message_kind` is an unconstrained `String(32)` and the existing
+    `created` / `rescheduled` vocabulary was reused.
+    **The read half followed on 2026-09-09.** `ReservationResponse` now carries
+    `delivery_state`, `POST /api/reservations/{id}/delivery/retry` resends
+    beside the waitlist's retry, and the reservations board marks a booking
+    whose guest was never told. Collapsing the confirmation state to one word
+    per booking cannot distinguish "the provider is switched off" from "this
+    address bounced"; that is accepted for a supervised pilot and the upgrade
+    path, if it is ever needed, is the queue's existing `DeliverySummary`.
+
+  - **Touch targets found by the 2026-09-09 sweep and deliberately left.** Four
+    inline text links inside prose on the public booking page measure under the
+    tablet floor at 1024 — the terms link inside "I agree to the terms and
+    conditions", the CROWBAR wordmark, and the venue's phone and email in the
+    "Find us" block. A link inside a sentence cannot be 48px tall without
+    breaking its line box, and the target table in `docs/DESIGN.md` is about
+    controls. If this is ever revisited, the answer is a layout change (lifting
+    the contact links out of prose into a control row), not a height.
+  - **The height-literal grep cannot find the whole defect class.** Three of the
+    worst offenders that pass found had *no height at all*: two bare `<button>`s
+    styled only with `type-label`, a menu selector with only padding, and a
+    `<Link>` wrapping a correctly sized `Button` that measured 97x18 while the
+    button inside it looked right. Only a rendered measurement finds those.
+    A `playwright-cli` sweep over every route at 1280/1024/390 is the check;
+    automating it is stage 8's browser-journey work, not a separate task.
   - **SMS sends block the event loop.** `sms_service` calls Twilio
     synchronously from async request paths, so a hung provider connection stalls
     a worker. Not reachable locally (no credentials), so this is read, not

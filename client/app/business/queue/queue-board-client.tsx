@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, Plus, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -238,6 +238,11 @@ export function QueueBoardClient({
   const [walkInPartySize, setWalkInPartySize] = useState(2);
   const [walkInPhone, setWalkInPhone] = useState("");
   const [walkInSaving, setWalkInSaving] = useState(false);
+  // Both used to be a standing two-column section taking the top quarter of the
+  // board. Neither is service work: the cap and the open/closed switch are set
+  // once a night, and a walk-in is added between other things.
+  const [walkInDialog, setWalkInDialog] = useState(false);
+  const [policyDialog, setPolicyDialog] = useState(false);
   const [copied, setCopied] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<QueueEntry | null>(null);
   const [removeReason, setRemoveReason] = useState<"guest_left" | "no_show" | "staff_removed">("no_show");
@@ -247,7 +252,7 @@ export function QueueBoardClient({
   const [seatingLoading, setSeatingLoading] = useState(false);
 
   const { now } = useServiceClock();
-  const { connected, lastContactAt } = useQueueSocket(businessId, (updated) => {
+  const { connected, lastContactAt, reconnect } = useQueueSocket(businessId, (updated) => {
     setEntries(updated);
   });
 
@@ -364,6 +369,7 @@ export function QueueBoardClient({
       });
       setEntries((current) => [...current.filter((entry) => entry.id !== result.entry.id), result.entry]);
       setWalkInName(""); setWalkInPhone(""); setWalkInPartySize(2);
+      setWalkInDialog(false);
       setService(await clientGetQueueServiceDay());
       toast.success("Walk-in added to the queue.");
     } catch (error) {
@@ -410,7 +416,13 @@ export function QueueBoardClient({
         connected={connected}
         lastContactAt={lastContactAt}
         surface="This queue"
-        onRetry={() => void refresh()}
+        // BOTH: the socket carries new activity, the refetch corrects what was
+        // missed while it was down. Retry used to do only the second, so under
+        // a live offline bar it fetched once and left the board just as dead.
+        onRetry={() => {
+          reconnect();
+          void refresh();
+        }}
       />
 
       <>
@@ -437,6 +449,25 @@ export function QueueBoardClient({
               {copied ? "Link copied" : "Copy queue link"}
             </span>
           </Button>
+          <Button
+            variant="secondary"
+            size="filter"
+            className="min-w-[var(--control-desktop-min)]"
+            aria-label="Service day settings"
+            onClick={() => setPolicyDialog(true)}
+          >
+            <Settings2 aria-hidden />
+            <span className="hidden phone:inline">Service day</span>
+          </Button>
+          <Button
+            size="filter"
+            className="min-w-[var(--control-desktop-min)]"
+            aria-label="Add a walk-in"
+            onClick={() => setWalkInDialog(true)}
+          >
+            <Plus aria-hidden />
+            <span className="hidden phone:inline">Add a walk-in</span>
+          </Button>
           </>
         }
       />
@@ -453,92 +484,26 @@ export function QueueBoardClient({
           </div>
         ) : null}
 
-        <section className="grid border border-border bg-card lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-          <div className="flex flex-col gap-3 border-b border-border p-4 lg:border-r lg:border-b-0">
-            <div>
-              <p className="type-t2">This service day</p>
-              <p className="mt-1 font-mono text-[12.5px] tabular-nums text-muted-foreground">
-                {service?.serviceDate ?? "—"} · {service?.waitingCovers ?? 0} waiting
-                covers
-              </p>
-            </div>
+        {/* THIS STAYS ON THE BOARD. Its CONTROLS moved behind a button, but
+            whether the queue is open is operational state a bartender has to
+            see without clicking — hiding "the queue is closed" behind a dialog
+            is how someone spends ten minutes wondering why nobody is joining.
 
-            <div className="flex items-end gap-2">
-              <div className="flex-1">
-                <Label htmlFor="queue-cover-cap" className="mb-[7px]">
-                  Waiting-cover cap
-                </Label>
-                <Input
-                  id="queue-cover-cap"
-                  type="number"
-                  min={1}
-                  max={1000}
-                  value={coverCap}
-                  onChange={(event) => setCoverCap(Number(event.target.value))}
-                />
-              </div>
-              <Button
-                size="md"
-                variant="secondary"
-                disabled={policySaving || coverCap < 1}
-                onClick={() => void updatePolicy(service?.isOpen ? "closed" : "open")}
-              >
-                {service?.isOpen ? "Close queue" : "Open queue"}
-              </Button>
-            </div>
-
-            {/* Neutral. Whether the queue is open, and how long the wait is
-                running, are facts about the night — not things to act on now. */}
-            <p className="text-[13px] text-muted-foreground">
-              {service?.isOpen
-                ? service.isFull
-                  ? "Open, but at the cover cap."
-                  : "Open to new walk-ins."
-                : "Closed to new walk-ins. Parties already in the queue still work normally."}{" "}
-              {service?.estimatedWaitMinutes !== undefined
-                ? `Measured wait, from tonight's own turn times: ${service.estimatedWaitMinutes} min.`
-                : "No measured wait yet tonight."}
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-3 p-4">
-            <p className="type-t2">Add a walk-in</p>
-            <div className="grid gap-2 sm:grid-cols-[1fr_100px_1fr_auto]">
-              <Input
-                aria-label="Guest name"
-                placeholder="Guest name"
-                value={walkInName}
-                onChange={(event) => setWalkInName(event.target.value)}
-              />
-              <Input
-                aria-label="Party size"
-                type="number"
-                min={1}
-                max={20}
-                value={walkInPartySize}
-                onChange={(event) => setWalkInPartySize(Number(event.target.value))}
-              />
-              <Input
-                aria-label="Phone, optional"
-                placeholder="Phone (optional)"
-                value={walkInPhone}
-                onChange={(event) => setWalkInPhone(event.target.value)}
-              />
-              <Button
-                size="md"
-                disabled={
-                  walkInSaving ||
-                  !service?.isOpen ||
-                  service?.isFull ||
-                  !walkInName.trim()
-                }
-                onClick={() => void addWalkIn()}
-              >
-                Add
-              </Button>
-            </div>
-          </div>
-        </section>
+            Neutral. Whether the queue is open, and how long the wait is
+            running, are facts about the night — not things to act on now. */}
+        <p className="text-[length:var(--ui-size)] text-muted-foreground">
+          {service?.isOpen
+            ? service.isFull
+              ? "Open, but at the cover cap."
+              : "Open to new walk-ins."
+            : "Closed to new walk-ins. Parties already in the queue still work normally."}{" "}
+          {service?.estimatedWaitMinutes !== undefined
+            ? `Measured wait, from tonight's own turn times: ${service.estimatedWaitMinutes} min.`
+            : "No measured wait yet tonight."}{" "}
+          <span className="font-mono tabular-nums">
+            {service?.serviceDate ?? "—"} · {service?.waitingCovers ?? 0} waiting covers
+          </span>
+        </p>
 
         {!loadError && waiting.length === 0 && called.length === 0 ? (
           <EmptyState
@@ -562,7 +527,11 @@ export function QueueBoardClient({
               )}
             </QueueColumn>
 
-            <QueueColumn title="Called" entries={called} emptyText="No parties called yet">
+            {/* "Called" was ambiguous — called on the phone, or called across
+                the room? The card underneath already carries the accurate idea
+                ("Called · waiting for arrival"); the column says the same thing
+                in fewer words. */}
+            <QueueColumn title="Waiting for arrival" entries={called} emptyText="No parties called yet">
               {(entry) => (
                 <CalledEntryCard
                   entry={entry}
@@ -578,6 +547,117 @@ export function QueueBoardClient({
 
         {/* A real dialog, not a panel pinned to the bottom of the viewport.
             Removing a party is a decision that cannot be undone from here. */}
+        <Dialog open={walkInDialog} onOpenChange={setWalkInDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add a walk-in</DialogTitle>
+              <DialogDescription>
+                The party joins at the back of the queue, in the order they
+                arrived. A phone number lets the board message them when called.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-[var(--space-12)]">
+              <div>
+                <Label htmlFor="walk-in-name">Guest name</Label>
+                <Input
+                  id="walk-in-name"
+                  autoFocus
+                  placeholder="Guest name"
+                  value={walkInName}
+                  onChange={(event) => setWalkInName(event.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="walk-in-party-size">Party size</Label>
+                <Input
+                  id="walk-in-party-size"
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={walkInPartySize}
+                  onChange={(event) => setWalkInPartySize(Number(event.target.value))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="walk-in-phone">Phone (optional)</Label>
+                <Input
+                  id="walk-in-phone"
+                  placeholder="Phone (optional)"
+                  value={walkInPhone}
+                  onChange={(event) => setWalkInPhone(event.target.value)}
+                />
+              </div>
+              {!service?.isOpen ? (
+                <p className="text-[length:var(--ui-size)] text-muted-foreground">
+                  The queue is closed to new walk-ins. Open it under Service day
+                  to add a party.
+                </p>
+              ) : service?.isFull ? (
+                <p className="text-[length:var(--ui-size)] text-muted-foreground">
+                  The queue is at its waiting-cover cap. Raise the cap under
+                  Service day to add a party.
+                </p>
+              ) : null}
+            </div>
+            <DialogFooter>
+              <Button variant="secondary" onClick={() => setWalkInDialog(false)}>
+                Cancel
+              </Button>
+              <Button
+                disabled={
+                  walkInSaving ||
+                  !service?.isOpen ||
+                  service?.isFull ||
+                  !walkInName.trim()
+                }
+                onClick={() => void addWalkIn()}
+              >
+                {walkInSaving ? "Adding…" : "Add to queue"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={policyDialog} onOpenChange={setPolicyDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Service day</DialogTitle>
+              <DialogDescription>
+                Whether the queue takes new walk-ins tonight, and how many
+                waiting covers it holds before it reports itself full.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-[var(--space-12)]">
+              <p className="font-mono text-[length:var(--ui-size)] tabular-nums text-muted-foreground">
+                {service?.serviceDate ?? "—"} · {service?.waitingCovers ?? 0} waiting
+                covers
+              </p>
+              <div>
+                <Label htmlFor="queue-cover-cap">Waiting-cover cap</Label>
+                <Input
+                  id="queue-cover-cap"
+                  type="number"
+                  min={1}
+                  max={1000}
+                  value={coverCap}
+                  onChange={(event) => setCoverCap(Number(event.target.value))}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="secondary" onClick={() => setPolicyDialog(false)}>
+                Done
+              </Button>
+              <Button
+                disabled={policySaving || coverCap < 1}
+                onClick={() => void updatePolicy(service?.isOpen ? "closed" : "open")}
+              >
+                {service?.isOpen ? "Close queue" : "Open queue"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <Dialog
           open={removeTarget !== null}
           onOpenChange={(open) => !open && setRemoveTarget(null)}
@@ -600,7 +680,7 @@ export function QueueBoardClient({
                 </Label>
                 <select
                   id="remove-reason"
-                  className="h-10 w-full rounded-[var(--radius-3)] border border-input bg-input-background px-[13px] text-[length:var(--ui-size)] text-foreground"
+                  className="h-[var(--control-md)] w-full rounded-[var(--radius-3)] border border-input bg-input-background px-[13px] text-[length:var(--ui-size)] text-foreground"
                   value={removeReason}
                   onChange={(event) =>
                     setRemoveReason(event.target.value as typeof removeReason)

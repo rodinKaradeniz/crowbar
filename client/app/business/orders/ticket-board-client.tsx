@@ -136,7 +136,7 @@ export function TicketBoardClient({ businessId }: { businessId: string }) {
     void refresh();
   }, [refresh]);
 
-  const { connected, lastContactAt } = useOrderSocket(businessId, (incoming) => {
+  const { connected, lastContactAt, reconnect } = useOrderSocket(businessId, (incoming) => {
     incoming.forEach((order) => {
       if (!knownIds.current.has(order.id)) {
         knownIds.current.add(order.id);
@@ -290,7 +290,13 @@ export function TicketBoardClient({ businessId }: { businessId: string }) {
         connected={connected}
         lastContactAt={lastContactAt}
         surface="This board"
-        onRetry={() => void refresh()}
+        // BOTH: the socket carries new activity, the refetch corrects what was
+        // missed while it was down. Retry used to do only the second, so under
+        // a live offline bar it fetched once and left the board just as dead.
+        onRetry={() => {
+          reconnect();
+          void refresh();
+        }}
       />
 
       <>

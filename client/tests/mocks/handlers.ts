@@ -149,6 +149,39 @@ export const handlers = [
       ],
     });
   }),
+
+  // ─── Reservation confirmation delivery ────────────────────────────────────
+
+  // The resend behind the reservations panel's "Send again". Echoes back the
+  // booking with the state the send produced, which is what the caller renders.
+  http.post("/api/proxy/reservations/:id/delivery/retry", ({ params }) => {
+    return HttpResponse.json({
+      id: params.id,
+      business_id: "biz-1",
+      customer_id: "cus-1",
+      service_type_id: "svc-1",
+      time: "2026-02-01T18:00:00Z",
+      ends_at: "2026-02-01T20:00:00Z",
+      phone: "+4915112345678",
+      email: "guest@example.com",
+      note: null,
+      status: "confirmed",
+      guests: 2,
+      availability_override_by: null,
+      availability_override_actor_name: null,
+      availability_override_reason: null,
+      availability_overridden_at: null,
+      cancelled_at: null,
+      cancelled_by: null,
+      cancelled_late: null,
+      no_show_at: null,
+      no_show_note: null,
+      reconfirmed_at: null,
+      delivery_state: "delivered",
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+    });
+  }),
 ];
 
 export const server = setupServer(...handlers);

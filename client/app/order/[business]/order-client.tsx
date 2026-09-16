@@ -350,13 +350,12 @@ export default function OrderClient({ businessId, businessSlug, legalDrinkingAge
               <div className="border-t border-border" />
               <div className="p-4 max-w-md mx-auto">
                 {cartHasAlcohol && (
-                  <label className="flex items-start gap-2.5 mb-3 rounded-md border bg-muted/40 p-3 text-sm cursor-pointer">
+                  <label className="flex items-start gap-[var(--space-8)] mb-3 rounded-md border bg-muted/40 p-3 text-sm cursor-pointer">
                     <Checkbox
                       checked={ageConfirmed}
                       onCheckedChange={(v) => setAgeConfirmed(v === true)}
-                      className="mt-0.5"
                     />
-                    <span>
+                    <span className="checkbox-label">
                       This order contains alcohol. I confirm I am at least{" "}
                       {legalDrinkingAge} years old.
                     </span>

@@ -52,7 +52,7 @@ export function ReservationSearchFilter({
       {showSelect &&
         (!mounted ? (
           <div
-            className="h-9 w-full shrink-0 rounded-md border border-input bg-muted/30 sm:w-[200px]"
+            className="h-[var(--control-md)] w-full shrink-0 rounded-md border border-input bg-muted/30 sm:w-[200px]"
             aria-hidden
           />
         ) : (

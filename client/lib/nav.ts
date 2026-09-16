@@ -81,12 +81,6 @@ export const NAV_GROUPS: NavGroup[] = [
         capability: "reservations.view",
       },
       {
-        href: "/business/requests",
-        label: "Requests",
-        module: "reservations",
-        capability: "reservations.manage",
-      },
-      {
         href: "/business/queue",
         label: "Walk-in queue",
         module: "queue",

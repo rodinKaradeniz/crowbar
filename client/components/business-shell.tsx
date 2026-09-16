@@ -4,6 +4,7 @@ import {
   BusinessBottomBar,
   TabletPrimaryAction,
 } from "@/components/business-bottom-bar";
+import { VerifyEmailNotice } from "@/components/verify-email-notice";
 import { BusinessRail } from "@/components/business-rail";
 import { BusinessTopbar } from "@/components/business-topbar";
 import { useWorkspaceNav } from "@/hooks/use-workspace-nav";
@@ -67,6 +68,8 @@ export function BusinessShell({
             button. Only where that bar exists: on a phone there is nothing
             fixed to the bottom, and the reserve would be dead space under the
             last row of every list on the shortest screen in the product. */}
+        <VerifyEmailNotice />
+
         <main className="flex-1 pb-0 phone:pb-[calc(var(--bottom-nav)+96px)] desktop:pb-0">
           {children}
         </main>

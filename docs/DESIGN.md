@@ -327,19 +327,32 @@ above carry E1.
 | Bottom nav | 76px |
 | Marketing header (`--mkt-header`) | 66px floor |
 | Workspace topbar (`--workspace-header`) | 76px floor |
-| Public booking box (`--booking-column`) | `min(750px, 100svh − 2×--space-24 − 2px)` |
+| Public booking box (`--booking-column`) | `min(680px, 100svh − 2×--space-24 − 2px)` |
+
+**A target is the element, not the ink.** Some controls are smaller than the
+floor because being small is what they are: a checkbox reads as a 16px box, a
+booking-progress rung as a 24px circle, a dialog close as a 16px glyph.
+Enlarging the drawn thing would be a different design. So the ELEMENT carries
+`--control-desktop-min` and the drawn thing sits inside it unchanged — the tap
+area grows, the picture does not. An `::after` overlay is not an alternative:
+`getBoundingClientRect()` still reports the small box, so a pointer and an audit
+both still see the old target. *Found by measuring — every one of these passed
+`tsc`, both grep gates and the build at 16px.*
 
 **One height in that table is a `min()`, and that is the point.** The public
 booking box holds ONE height across all four steps of `/reserve/[business]`, so
 the bordered box and the ink panel beside it stop resizing as a guest moves
-between them. Both halves of `--booking-column` are measured, not chosen: 750px
-is the 1280×800 budget — the viewport less the page's own `2×--space-24` and
-less the 2px its own top and bottom hairline adds — and it clears the tallest
-ordinary step, which is the **review** step at 733 (1280×800) and 750
-(1024×768), not the slot step as was assumed. The `min()` is what keeps the box
-inside a shorter viewport: at 1024×768 it resolves to 718, and the step body
-scrolls within it rather than pushing the page. Both designed widths then land
-the box exactly on the viewport with no page scroll at all.
+between them. Both halves of `--booking-column` are measured, not chosen: 680px
+clears the three ordinary rungs at both designed viewports, and the review step
+— the one no honest height holds — scrolls inside it rather than buying 70px of
+dead space under every other rung. See `docs/HISTORY.md`, 2026-09-07, for the
+per-rung numbers behind that choice; the earlier 750 recorded here was the
+figure that was rejected. The `min()` is what keeps the box inside a shorter
+viewport, and the step body scrolls within it rather than pushing the page.
+
+*Re-measured 2026-09-09* after the checkbox target grew from 16 to 34/48px:
+all four steps still resolve to a 680px box with no page scroll and no overflow
+inside the column, at both 1280×800 and 1024×768.
 
 The scroll container is the **step body** in `components/reservation-form.tsx`,
 reached by a `min-h-0` / `flex-1` chain from the column down. Not the column —
@@ -424,6 +437,13 @@ them:
 - **Input** — 48px auth / 40px product, radius 3, 13px inset. Label 10.5 mono
   uppercase **above**; never a floating placeholder. Focus is a deep-green
   border plus a 3px lit-green ring.
+- **Tabs** — sub-navigation, and the trigger is the target. It reads
+  `--control-desktop-min`, the same step a filter chip uses, so the tablet
+  takeover lifts it; the list takes its height from the triggers rather than
+  carrying one. It shipped as the shadcn default — a 36px list producing a 29px
+  trigger — which is the defect class a literal always produces.
+- **Checkbox** — a 16px drawn box inside a `--control-desktop-min` target. See
+  *A target is the element, not the ink* above.
 - **Badge** — the only status object in the system. Mono 10px, radius 2, 2/7
   padding, tabular. Filled critical, filled attend, or hairline. It carries a
   count or a two-word state. No dots in nav, no coloured pills, no icon badges,
@@ -443,11 +463,20 @@ them:
   `--control-disabled-foreground` text, a plain hairline border, no hover. Both
   tokens resolve per ground. Never a translucent version of the enabled
   control, which still reads as the primary action and invites the click.
-- **Dialog** — 330–420px, radius 4, E1. **Only** for decisions that end a shift
-  or cannot be undone. The title asks the real question with the real time in
-  it; the body states the consequence in real numbers; the safe choice is the
+- **Dialog** — 330–420px, radius 4, E1. The default use is decisions that end a
+  shift or cannot be undone. The title asks the real question with the real time
+  in it; the body states the consequence in real numbers; the safe choice is the
   filled one; the risky choice is a quiet outline in red text.
-- **A reading dialog** is the one other use: policy or reference text the guest
+- **A short configuration form** is the second use. This entry previously read
+  "**only** for decisions", and the cost was that settings touched twice a night
+  — preparation stations, the queue's cover cap, adding one walk-in — had
+  nowhere to go but a standing section on a board they were not the work of,
+  each taking roughly a quarter of it. The bar: it fits the 330–420px measure
+  without becoming a workspace, its actions are Save/Cancel rather than a
+  safe/risky pair, and dismissing it loses nothing already saved. Anything
+  larger, or anything worked IN rather than filled and dismissed, is a side
+  panel.
+- **A reading dialog** is the third use: policy or reference text the guest
   or staff member must be able to read without losing their place in the flow
   behind it. It may run wider than 420px, capped at a reading measure and never
   at a width literal; it scrolls internally; its only action is dismissal; it
@@ -466,7 +495,7 @@ unfinished.**
 | Module-disabled | `module-disabled.tsx` | The nav entry is **removed, not greyed**. "Your venue has not bought this." |
 | Permission-denied | `role-restricted.tsx` | "Your job does not include this." Deliberately a different answer from module-disabled — telling an operator the wrong one sends them to a settings page that cannot help. |
 | Error | `app/error.tsx`, `dashboard-error-boundary.tsx` | Critical, with a retry. |
-| Offline | `offline-bar.tsx` | A persistent 38px band at the top of the viewport carrying the time since last contact and a retry. **Never a toast. Never self-dismissing.** It is the one alarm in the system. The count of work held on the device is **omitted** — there is no offline outbox, and claiming one would be a lie about what is safe. |
+| Offline | `offline-bar.tsx` | A persistent 38px band at the top of the viewport carrying the time since last contact and a retry. **Never a toast. Never self-dismissing.** It is the one alarm in the system. The count of work held on the device is **omitted** — there is no offline outbox, and claiming one would be a lie about what is safe. It covers **two** ways a board stops being live: a closed socket, and an open socket that has heard nothing past the liveness threshold (the Redis case — a swallowed publish left `connected` true forever). The duration reads "no contact", not "offline", because only one of the two is an offline socket. |
 
 ## Motion
 

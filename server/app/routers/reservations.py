@@ -1,3 +1,4 @@
+import logging
 from datetime import date, datetime, timezone
 from uuid import UUID
 
@@ -14,7 +15,7 @@ from app.core.rate_limit import (
     enforce_rate_limits,
     get_client_ip,
 )
-from app.database import get_db
+from app.database import async_session, get_db
 from app.dependencies import (
     get_current_business,
     get_current_user,
@@ -71,12 +72,15 @@ from app.services.reservation_waitlist_token_service import (
     parse_management_token,
     parse_offer_token,
 )
+from app.models.reservation import Reservation
 from app.models.reservation_waitlist import ReservationWaitlistEntry
 from app.services.public_session_service import (
     clear_public_cookie,
     get_public_cookie,
     set_public_cookie,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/reservations", tags=["reservations"])
 
@@ -90,7 +94,7 @@ def _availability_http_error(exc: AvailabilityError):
     )
 
 
-def _send_reservation_email(
+async def _send_reservation_email(
     *,
     to_email: str | None,
     customer_name: str,
@@ -101,28 +105,67 @@ def _send_reservation_email(
     guests: int,
     status: str,
     reservation_id: str,
+    business_id: str,
     business_timezone: str,
     calendar_sequence: int,
     message_kind: str = "created",
     management_url: str | None = None,
 ) -> None:
+    """Send the guest's confirmation AND record whether it arrived.
+
+    This used to be `-> None` around a call whose `bool` it discarded, so a
+    confirmation that never went out left no `DeliveryAttempt`, no response
+    field and only a `logger.debug`. It runs as a `BackgroundTasks` task, after
+    the response, so it opens its own short-lived session from the app pool
+    rather than borrowing the request's — that one is already closed.
+
+    A failure here must never surface to the guest: the reservation is
+    committed and correct, and the operator, not the guest, is the one who
+    needs to know the message did not land.
+    """
     if not to_email:
         return
-    email_service.send_reservation_confirmation(
-        to_email=to_email,
-        customer_name=customer_name,
-        business_name=business_name,
-        service_type_name=service_type_name,
-        reservation_time=reservation_time,
-        duration_minutes=duration_minutes,
-        guests=guests,
-        status=status,
-        reservation_id=reservation_id,
-        business_timezone=business_timezone,
-        calendar_sequence=calendar_sequence,
-        message_kind=message_kind,
-        management_url=management_url,
-    )
+
+    delivered = False
+    error: str | None = None
+    try:
+        delivered = email_service.send_reservation_confirmation(
+            to_email=to_email,
+            customer_name=customer_name,
+            business_name=business_name,
+            service_type_name=service_type_name,
+            reservation_time=reservation_time,
+            duration_minutes=duration_minutes,
+            guests=guests,
+            status=status,
+            reservation_id=reservation_id,
+            business_timezone=business_timezone,
+            calendar_sequence=calendar_sequence,
+            message_kind=message_kind,
+            management_url=management_url,
+        )
+    except Exception as exc:  # noqa: BLE001 - recorded, never raised at a guest
+        error = f"Email provider raised: {type(exc).__name__}"
+        logger.exception(
+            "reservation confirmation send failed reservation_id=%s", reservation_id
+        )
+
+    try:
+        async with async_session() as db:
+            await reservation_service.record_confirmation_delivery(
+                db,
+                business_id=UUID(business_id),
+                reservation_id=UUID(reservation_id),
+                channel="email",
+                message_kind=message_kind,
+                delivered=delivered,
+                error=error,
+            )
+            await db.commit()
+    except Exception:  # noqa: BLE001 - the reservation itself is already safe
+        logger.exception(
+            "could not record confirmation delivery reservation_id=%s", reservation_id
+        )
 
 
 def _reservation_management_url(reservation) -> str:
@@ -225,9 +268,18 @@ async def list_business_reservations(
     """List reservations for the authenticated user's business."""
     if current_business.id != business_id:
         raise forbidden("Not authorized for this business")
-    return await reservation_service.get_reservations_by_business(
+    reservations = await reservation_service.get_reservations_by_business(
         db, business_id, status=status_filter
     )
+    # One query for the whole board. The waitlist list accepts a per-row call
+    # because it is a handful of active entries; this list has no date bound.
+    states = await reservation_service.confirmation_delivery_states(
+        db, business_id=business_id, reservation_ids=[r.id for r in reservations]
+    )
+    return [
+        _reservation_response(reservation, states[reservation.id])
+        for reservation in reservations
+    ]
 
 
 @router.get("/availability", response_model=AvailabilityResponse,
@@ -312,7 +364,7 @@ async def get_reservation(
     )
     if reservation is None:
         raise not_found("Reservation")
-    return reservation
+    return await _reservation_with_delivery(db, reservation)
 
 
 @router.post("/public", response_model=PublicReservationResponse, status_code=status.HTTP_201_CREATED)
@@ -374,6 +426,7 @@ async def create_public_reservation(
             guests=reservation.guests,
             status=reservation.status,
             reservation_id=str(reservation.id),
+            business_id=str(reservation.business_id),
             business_timezone=reservation.business.timezone if reservation.business else "UTC",
             calendar_sequence=int(reservation.updated_at.timestamp()),
             management_url=_reservation_management_url(reservation),
@@ -500,6 +553,7 @@ async def reschedule_public_reservation(
         guests=reservation.guests,
         status=reservation.status,
         reservation_id=str(reservation.id),
+        business_id=str(reservation.business_id),
         business_timezone=reservation.business.timezone if reservation.business else "UTC",
         calendar_sequence=int(reservation.updated_at.timestamp()),
         message_kind="rescheduled",
@@ -520,6 +574,32 @@ async def reschedule_public_reservation(
         ),
     )
     return await _public_reservation_response(db, reservation)
+
+
+def _reservation_response(
+    reservation: Reservation, delivery_state: str
+) -> ReservationResponse:
+    """Attach the confirmation's delivery state, which the row does not carry.
+
+    Every endpoint returning a `ReservationResponse` runs this, including the
+    ones that create or change a booking. Those queue their confirmation behind
+    the response, so a freshly created booking honestly reads `unavailable` —
+    nothing has been attempted yet — and the board picks up the real state on
+    its next load.
+    """
+    return ReservationResponse.model_validate(reservation).model_copy(
+        update={"delivery_state": delivery_state}
+    )
+
+
+async def _reservation_with_delivery(
+    db: AsyncSession, reservation: Reservation
+) -> ReservationResponse:
+    """The single-row form. Lists use `confirmation_delivery_states` directly."""
+    states = await reservation_service.confirmation_delivery_states(
+        db, business_id=reservation.business_id, reservation_ids=[reservation.id]
+    )
+    return _reservation_response(reservation, states[reservation.id])
 
 
 async def _waitlist_response(
@@ -983,6 +1063,7 @@ async def create_reservation(
         guests=reservation.guests,
         status=reservation.status,
         reservation_id=str(reservation.id),
+        business_id=str(reservation.business_id),
         business_timezone=reservation.business.timezone if reservation.business else "UTC",
         calendar_sequence=int(reservation.updated_at.timestamp()),
         management_url=_reservation_management_url(reservation),
@@ -1004,7 +1085,7 @@ async def create_reservation(
             "actor_user_id": str(current_user.id),
         },
     ))
-    return reservation
+    return await _reservation_with_delivery(db, reservation)
 
 
 @router.get(
@@ -1111,6 +1192,7 @@ async def reschedule_reservation(
         guests=reservation.guests,
         status=reservation.status,
         reservation_id=str(reservation.id),
+        business_id=str(reservation.business_id),
         business_timezone=business_timezone,
         calendar_sequence=int(reservation.updated_at.timestamp()),
         message_kind="rescheduled",
@@ -1146,7 +1228,7 @@ async def reschedule_reservation(
             },
         )
     )
-    return reservation
+    return await _reservation_with_delivery(db, reservation)
 
 
 @router.patch("/{reservation_id}", response_model=ReservationResponse,
@@ -1196,6 +1278,7 @@ async def update_reservation(
             guests=reservation.guests,
             status="confirmed",
             reservation_id=str(reservation.id),
+            business_id=str(reservation.business_id),
             business_timezone=(
                 reservation.business.timezone if reservation.business else "UTC"
             ),
@@ -1215,7 +1298,7 @@ async def update_reservation(
             "new_status": data.status or old_snap.status,
         },
     ))
-    return reservation
+    return await _reservation_with_delivery(db, reservation)
 
 
 @router.post("/{reservation_id}/no-show", response_model=ReservationResponse,
@@ -1246,7 +1329,46 @@ async def mark_reservation_no_show(
         business_id=str(reservation.business_id),
         payload={"reservation_id": str(reservation.id), "actor_user_id": str(current_user.id)},
     ))
-    return reservation
+    return await _reservation_with_delivery(db, reservation)
+
+
+@router.post(
+    "/{reservation_id}/delivery/retry",
+    response_model=ReservationResponse,
+    dependencies=[Depends(require_capability("reservations.manage"))],
+)
+async def retry_reservation_delivery(
+    reservation_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    business: Business = Depends(get_current_business),
+    _: None = Depends(require_module("reservations")),
+):
+    """Send the guest's confirmation again.
+
+    The sibling of `POST /waitlist/{entry_id}/delivery/retry`, in the same
+    router and under the same capability. A staff member who can see that a
+    guest was never told needs a way to act on it, and this is the whole of
+    that way — there is no automatic retry and no queue behind it.
+    """
+    reservation = await reservation_service.get_reservation_by_id(
+        db, reservation_id, business_id=business.id, load_relations=True
+    )
+    if reservation is None:
+        raise not_found("Reservation")
+    attempt = await reservation_service.resend_confirmation(db, reservation=reservation)
+    if attempt is None:
+        raise api_error(
+            409,
+            "DELIVERY_UNAVAILABLE",
+            "This booking has no email address to send to",
+        )
+    await db.commit()
+    await publish(DomainEvent(
+        event_type="reservation.delivery_updated",
+        business_id=str(business.id),
+        payload={"reservation_id": str(reservation.id), "state": attempt.status},
+    ))
+    return await _reservation_with_delivery(db, reservation)
 
 
 @router.delete("/{reservation_id}", status_code=status.HTTP_204_NO_CONTENT,

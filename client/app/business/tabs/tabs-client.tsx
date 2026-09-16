@@ -116,7 +116,7 @@ export function TabsClient({
     void refreshTabs();
   }, [refreshTabs]);
 
-  const { connected, lastContactAt } = useTabSocket(businessId, refreshTabs);
+  const { connected, lastContactAt, reconnect } = useTabSocket(businessId, refreshTabs);
 
   const upsertTab = useCallback(
     (tab: Tab) =>
@@ -210,7 +210,13 @@ export function TabsClient({
         connected={connected}
         lastContactAt={lastContactAt}
         surface="Tabs"
-        onRetry={() => void refreshTabs()}
+        // BOTH: the socket carries new activity, the refetch corrects what was
+        // missed while it was down. Retry used to do only the second, so under
+        // a live offline bar it fetched once and left the board just as dead.
+        onRetry={() => {
+          reconnect();
+          void refreshTabs();
+        }}
       />
 
       <>

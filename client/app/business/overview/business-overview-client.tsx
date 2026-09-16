@@ -10,10 +10,11 @@ import { useRegionalSettings } from "@/contexts/regional-context";
 import { useServiceClock } from "@/hooks/use-service-clock";
 import type { BusinessDashboardStats } from "@/lib/api-client";
 import {
+  formatBusinessDateTime,
   formatBusinessServiceDay,
   formatBusinessTime,
 } from "@/lib/business-time";
-import type { MLDemandForecastResult } from "@/lib/ml-api";
+import type { MLDemandForecastResult, MLResult } from "@/lib/ml-api";
 import { formatMoney } from "@/lib/money";
 import { bookingLateSeverity } from "@/lib/severity";
 import type { Business, ServiceType } from "@/types";
@@ -23,7 +24,11 @@ interface BusinessOverviewClientProps {
   business: Business;
   stats: BusinessDashboardStats;
   serviceTypes: ServiceType[];
-  demandForecast?: MLDemandForecastResult | null;
+  /**
+   * `null` means the Insights MODULE IS OFF — the page never asked. A result
+   * carries its own state: live, remembered, unreachable, or no-result.
+   */
+  demandForecast?: MLResult<MLDemandForecastResult> | null;
   /** customer id → name. Empty when the role may not see guest records. */
   guestNames: Record<string, string>;
 }
@@ -56,11 +61,19 @@ export default function BusinessOverviewClient({
   const { now, ready } = useServiceClock();
   const ops = stats.ops ?? {};
 
+  // A disabled module leaves NO HOLE and no explanation: the owner turned it
+  // off and does not need Overview to tell them so.
+  const forecastAvailable = demandForecast != null;
+
   const forecastDays = useMemo(() => {
-    if (demandForecast?.status !== "success" || !demandForecast.forecasts) {
+    const payload =
+      demandForecast?.state === "live" || demandForecast?.state === "remembered"
+        ? demandForecast.data
+        : null;
+    if (payload?.status !== "success" || !payload.forecasts) {
       return [];
     }
-    return Object.values(demandForecast.forecasts)
+    return Object.values(payload.forecasts)
       .flat()
       .slice(0, 7)
       .map((day) => ({
@@ -68,6 +81,12 @@ export default function BusinessOverviewClient({
         covers: Math.round(day.predicted_reservations),
       }));
   }, [demandForecast]);
+
+  /** The server's own sentence about why this is not a live number, or null. */
+  const forecastNotice =
+    demandForecast && demandForecast.state !== "live"
+      ? demandForecast.unavailableReason
+      : null;
 
   const forecastTotal = forecastDays.reduce((sum, day) => sum + day.covers, 0);
   const peak = forecastDays.reduce<{ date: string; covers: number } | null>(
@@ -140,25 +159,31 @@ export default function BusinessOverviewClient({
           </FigureCell>
         ) : null}
 
-        <FigureCell last className="block phone:hidden desktop:order-4 desktop:block">
-          <Figure
-            size="headline"
-            label="Next 7 nights"
-            value={forecastTotal || null}
-            comparison="forecast covers"
-          />
-        </FigureCell>
+        {forecastAvailable ? (
+          <FigureCell last className="block phone:hidden desktop:order-4 desktop:block">
+            <Figure
+              size="headline"
+              label="Next 7 nights"
+              value={forecastTotal || null}
+              comparison="forecast covers"
+            />
+          </FigureCell>
+        ) : null}
       </div>
 
       <div className="flex flex-wrap items-stretch">
         <section className="min-w-[min(100%,420px)] flex-[1_1_560px]">
-          <ForecastPanel
-            days={forecastDays}
-            peak={peak}
-            monthChange={stats.month_change}
-            locale={locale}
-            timezone={timezone}
-          />
+          {forecastAvailable ? (
+            <ForecastPanel
+              days={forecastDays}
+              peak={peak}
+              monthChange={stats.month_change}
+              locale={locale}
+              timezone={timezone}
+              capturedAt={demandForecast?.capturedAt ?? null}
+              notice={forecastNotice}
+            />
+          ) : null}
 
           <ArrivingNext
             stats={stats}
@@ -208,12 +233,18 @@ function ForecastPanel({
   monthChange,
   locale,
   timezone,
+  capturedAt,
+  notice,
 }: {
   days: { date: string; covers: number }[];
   peak: { date: string; covers: number } | null;
   monthChange: number;
   locale: string;
   timezone: string;
+  /** Set only when the figures are REMEMBERED, not live. */
+  capturedAt: string | null;
+  /** The server's own sentence about why this is not live. */
+  notice: string | null;
 }) {
   const ceiling = days.reduce((max, day) => Math.max(max, day.covers), 0);
 
@@ -221,10 +252,23 @@ function ForecastPanel({
     <div className="border-b border-border px-[clamp(16px,2.5vw,32px)] py-[22px]">
       <h2 className="type-t2 mb-5">Demand forecast</h2>
 
+      {/* A REMEMBERED number is not an alarm. `docs/DESIGN.md`'s severity rank
+          is exhaustive and this is not one of the four critical cases, so it
+          reads as a neutral line and never gets a tone or the offline bar. */}
+      {capturedAt ? (
+        <p className="mb-3 text-[length:var(--ui-size)] text-muted-foreground">
+          Remembered from {formatBusinessDateTime(capturedAt, timezone, locale)}.
+          Crowbar could not reach the insights service to refresh it.
+        </p>
+      ) : null}
+
       {days.length === 0 ? (
         <p className="text-[length:var(--ui-size)] text-muted-foreground">
-          No forecast yet. Crowbar needs a few weeks of your own service history
-          before it will put a number on a night.
+          {/* Only ONE of these is a statement about the venue's data, and it is
+              only shown when that is actually the reason. The others are the
+              server's own words about its own state. */}
+          {notice ??
+            "No forecast yet. Crowbar needs a few weeks of your own service history before it will put a number on a night."}
         </p>
       ) : (
         <>
@@ -333,7 +377,7 @@ function ArrivingNext({
         <h2 className="type-t2">Arriving next</h2>
         <Link
           href="/business/reservations"
-          className="type-label text-text-on-ink-faint hover:text-primary"
+          className="type-label inline-flex h-[var(--control-desktop-min)] items-center text-text-on-ink-faint hover:text-primary"
         >
           Full book →
         </Link>

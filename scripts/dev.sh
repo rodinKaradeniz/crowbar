@@ -107,14 +107,25 @@ require_free_port 8000 "Backend"
 require_free_port 3000 "Frontend"
 
 # --- 1. Docker ---
+# --build, not a bare `up -d`. The ml service builds from ../ml, and Compose
+# reuses an existing image forever unless asked to rebuild — so every change
+# under ml/ silently did not take effect. The container drifted far enough that
+# POST /api/insights/run failed on `column r.payment_amount does not exist`, a
+# column migration 013 dropped: the repo's ml/src no longer mentions it, the
+# running image's copy still did. That reads as a Crowbar defect and is not one.
+# The layer cache makes the no-change case cheap; a real change costs a rebuild
+# here instead of an afternoon.
 log "Starting Docker containers (postgres, redis, ml)..."
 cd "$ROOT/server"
-docker compose up -d
+docker compose up -d --build
 cd "$ROOT"
 ok "Docker containers started"
 
 wait_for_port 5432 "PostgreSQL"
 wait_for_port 6379 "Redis"
+# The banner below advertises the ML service; wait for it rather than printing a
+# URL that is not listening yet.
+wait_for_port 8001 "ML"
 
 # --- 2. Backend ---
 log "Setting up backend..."

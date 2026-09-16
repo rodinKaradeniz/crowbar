@@ -101,13 +101,24 @@ re-run it against a database someone has actually worked a shift through.
 Adding rows to a RESTRICT table without adding its delete to the cleanup block
 breaks re-seeding, and only the SECOND run shows it.
 
-Full stack, seeded:
+STOP THE API BEFORE SEEDING. With uvicorn up, SEED_DATA=true blocks on a
+relation lock held by an `idle in transaction` session from the live backend,
+and the stream consumer's 30s retry loop piles up behind it. It looks like a
+hang; it completes immediately once the API is stopped. Cost the 2026-09-09
+pass ten minutes.
+
+  pkill -f "uvicorn app.main:app"
+
+Full stack, seeded (dev.sh refuses to start on an occupied port 8000, so a
+leftover API stops this run before it ever reaches the seed):
 
   cd /Users/rodinkaradeniz/projects/crowbar
   SEED_DATA=true ./scripts/dev.sh
 
-Reseed only, without restarting the app (Docker must be up):
+Reseed only, without restarting the app (Docker must be up). This is the path
+that deadlocks — stop the API first:
 
+  pkill -f "uvicorn app.main:app"
   cd /Users/rodinkaradeniz/projects/crowbar/server
   SEED_DATA=true venv/bin/python -m db.migrate
 
@@ -186,9 +197,13 @@ Log in and offer the seeded waiting entry:
 one has already been used. `requested_starts_at` on the entry is a slot that
 works.
 
-The offer link is emailed, and email is not configured locally, so the response
-comes back with `"delivery_state": "failed"` and no link. Mint the capability
-token by hand — it is derived, not stored:
+The offer link is emailed. Whether that works locally depends on whether
+RESEND_API_KEY is set in server/.env — it IS set on this machine, with a
+verified sending domain, so the response comes back `"delivery_state":
+"delivered"` and the link goes to a real inbox. With the key unset you get
+`"delivery_state": "failed"` and no link at all. Either way you can mint the
+capability token by hand rather than waiting on a mailbox — it is derived, not
+stored:
 
   cd server
   REV=$(docker exec crowbar-db psql -U postgres -d crowbar -tAc \

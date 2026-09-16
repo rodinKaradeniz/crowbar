@@ -1,5 +1,7 @@
 import hashlib
 import json
+import logging
+from collections.abc import Sequence
 from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
@@ -27,10 +29,15 @@ from app.services.availability_service import (
     validate_booking_slot,
     validate_override_slot,
 )
+from app.config import settings
 from app.core.errors import ErrorCode
 from app.core.regional import RegionalValidationError, normalize_phone
+from app.services import email_service
+from app.services.reservation_guest_token_service import issue_guest_token
 from app.services.customer_identity_service import upsert_customer
 from app.services.customer_service import record_public_marketing_consents
+
+logger = logging.getLogger(__name__)
 
 
 class ReservationIdempotencyConflict(ValueError):
@@ -614,3 +621,207 @@ async def create_public_reservation(
     )
     reservation._idempotent_created = True
     return reservation
+
+
+async def record_confirmation_delivery(
+    db: AsyncSession,
+    *,
+    business_id: UUID,
+    reservation_id: UUID,
+    channel: str,
+    message_kind: str,
+    delivered: bool,
+    error: str | None = None,
+) -> ReservationDeliveryAttempt:
+    """Persist the outcome of a reservation confirmation send.
+
+    THE ONLY GUEST-FACING MESSAGE THAT LEFT NO TRACE. Queue "table ready",
+    waitlist offers and the reminder job each write a `DeliveryAttempt` with a
+    `last_error` an operator can see; the confirmation path returned 201, the
+    row was correct, no email went out, and the only evidence anywhere was a
+    `logger.debug` in `email_service`. An operator had no way to know a guest
+    was never told.
+
+    Same shape as `reservation_reminders` and `deliver_waitlist_offer`:
+    create-if-missing, increment the counter, then a terminal status. The row is
+    keyed by `(reservation_id, message_kind, channel)` — the partial unique
+    index `uq_delivery_attempt_reservation_message_channel` — so a resend or a
+    staff confirmation after a pending booking updates the existing row rather
+    than accumulating one per attempt. `with_for_update` because a resend and
+    the reminder batch can touch the same reservation.
+    """
+    attempt = await db.scalar(
+        select(ReservationDeliveryAttempt)
+        .where(
+            ReservationDeliveryAttempt.reservation_id == reservation_id,
+            ReservationDeliveryAttempt.message_kind == message_kind,
+            ReservationDeliveryAttempt.channel == channel,
+        )
+        .with_for_update()
+    )
+    if attempt is None:
+        attempt = ReservationDeliveryAttempt(
+            business_id=business_id,
+            reservation_id=reservation_id,
+            message_kind=message_kind,
+            channel=channel,
+            status="pending",
+        )
+        db.add(attempt)
+
+    attempt.attempt_count = (attempt.attempt_count or 0) + 1
+    attempt.last_attempt_at = datetime.now(timezone.utc)
+
+    if delivered:
+        attempt.status = "delivered"
+        attempt.delivered_at = datetime.now(timezone.utc)
+        attempt.last_error = None
+    else:
+        attempt.status = "failed"
+        attempt.delivered_at = None
+        attempt.last_error = error or email_service.failure_reason()
+
+    await db.flush()
+    return attempt
+
+
+#: The two message kinds that ARE the guest's confirmation. `reminder` is a
+#: separate message with its own attempt row and its own job; folding it in here
+#: would let a failed reminder read as a failed confirmation on the staff board.
+CONFIRMATION_MESSAGE_KINDS = ("created", "rescheduled")
+
+
+async def confirmation_delivery_states(
+    db: AsyncSession, *, business_id: UUID, reservation_ids: Sequence[UUID]
+) -> dict[UUID, str]:
+    """Collapse each booking's confirmation attempts to one operator-readable word.
+
+    Returns the same vocabulary the queue and waitlist already use — `delivered`,
+    `pending`, `failed`, `unavailable` — so one `deliverySeverity` on the client
+    reads all three surfaces. `unavailable` means no attempt row exists at all:
+    a booking with no email address, or one whose confirmation has not been
+    attempted yet.
+
+    LATEST ATTEMPT WINS, which is deliberately NOT the rule
+    `reservation_waitlist_service.delivery_state` uses. An offer is one message
+    over two channels, so any-delivered is the truth there. A reservation has two
+    DIFFERENT messages: a delivered `created` says nothing about whether the
+    `rescheduled` mail landed, and an any-delivered ladder would hide exactly
+    the failure an operator needs to see. Copied rather than shared for that
+    reason — the shape is the same, the rule is not.
+
+    One query for the whole board rather than the waitlist list's per-row call:
+    `get_reservations_by_business` has no date bound, so this runs over every
+    confirmed booking the venue has.
+    """
+    ids = list(reservation_ids)
+    states: dict[UUID, str] = {reservation_id: "unavailable" for reservation_id in ids}
+    if not ids:
+        return states
+
+    rows = await db.scalars(
+        select(ReservationDeliveryAttempt)
+        .where(
+            ReservationDeliveryAttempt.business_id == business_id,
+            ReservationDeliveryAttempt.reservation_id.in_(ids),
+            ReservationDeliveryAttempt.message_kind.in_(CONFIRMATION_MESSAGE_KINDS),
+        )
+        .order_by(
+            ReservationDeliveryAttempt.reservation_id,
+            ReservationDeliveryAttempt.last_attempt_at.asc().nulls_first(),
+        )
+    )
+    for attempt in rows:
+        states[attempt.reservation_id] = attempt.status
+    return states
+
+
+async def resend_confirmation(
+    db: AsyncSession, *, reservation: Reservation
+) -> ReservationDeliveryAttempt | None:
+    """Send the guest's confirmation again and record the outcome.
+
+    Returns `None` when there is nothing that could be sent — no email address,
+    or a booking that is no longer live — so the caller can answer 409 rather
+    than pretend it tried.
+
+    Lives here, not in the router, because `deliver_waitlist_offer` sets the
+    precedent: the sibling channel owns its own send and its own attempt row in
+    its service. The confirmation's ORIGINAL send is the outlier, and only
+    because it has to run as a `BackgroundTasks` entry point on its own session
+    after the response; nothing about a staff resend needs that.
+
+    Synchronous on the request session, again like the waitlist retry: a staff
+    member pressed "Send again" and the response IS the evidence. Backgrounding
+    it would hand back the state they already saw and invite a second press.
+
+    Resends the message kind that was last attempted rather than always
+    `created`. A venue that reschedules a booking and whose reschedule mail
+    fails would otherwise resend the original confirmation forever, leaving the
+    failed row failed and the board marked.
+    """
+    if not reservation.email:
+        return None
+    if reservation.status not in ("pending", "confirmed"):
+        return None
+
+    last_attempt = await db.scalar(
+        select(ReservationDeliveryAttempt)
+        .where(
+            ReservationDeliveryAttempt.reservation_id == reservation.id,
+            ReservationDeliveryAttempt.message_kind.in_(CONFIRMATION_MESSAGE_KINDS),
+        )
+        .order_by(ReservationDeliveryAttempt.last_attempt_at.desc().nulls_last())
+        .limit(1)
+    )
+    message_kind = last_attempt.message_kind if last_attempt else "created"
+
+    business = reservation.business
+    delivered = False
+    error: str | None = None
+    try:
+        delivered = email_service.send_reservation_confirmation(
+            to_email=reservation.email,
+            customer_name=(
+                (reservation.customer.name if reservation.customer else None)
+                or reservation.phone
+                or ""
+            ),
+            business_name=business.name if business else "",
+            service_type_name=(
+                reservation.service_type.name if reservation.service_type else ""
+            ),
+            reservation_time=reservation.time,
+            duration_minutes=max(
+                int((reservation.ends_at - reservation.time).total_seconds() // 60), 1
+            ),
+            guests=reservation.guests,
+            status=reservation.status,
+            reservation_id=str(reservation.id),
+            business_timezone=business.timezone if business else "UTC",
+            calendar_sequence=int(reservation.updated_at.timestamp()),
+            message_kind=message_kind,
+            management_url=(
+                f"{settings.frontend_url}/reserve/manage#token="
+                + issue_guest_token(
+                    business_id=reservation.business_id,
+                    reservation_id=reservation.id,
+                    revision=reservation.guest_token_revision,
+                )
+            ),
+        )
+    except Exception as exc:  # noqa: BLE001 - recorded, never raised at the operator
+        error = f"Email provider raised: {type(exc).__name__}"
+        logger.exception(
+            "reservation confirmation resend failed reservation_id=%s", reservation.id
+        )
+
+    return await record_confirmation_delivery(
+        db,
+        business_id=reservation.business_id,
+        reservation_id=reservation.id,
+        channel="email",
+        message_kind=message_kind,
+        delivered=delivered,
+        error=error,
+    )

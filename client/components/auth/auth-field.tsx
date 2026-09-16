@@ -113,7 +113,7 @@ export function RevealToggle({
     <button
       type="button"
       onClick={onToggle}
-      className="mkt-chip flex h-9 items-center rounded-[var(--radius-2)] px-2.5 text-muted-foreground hover:text-foreground"
+      className="mkt-chip flex h-[var(--control-md)] items-center rounded-[var(--radius-2)] px-2.5 text-muted-foreground hover:text-foreground"
     >
       {shown ? "Hide" : "Show"}
     </button>

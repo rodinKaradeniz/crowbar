@@ -20,8 +20,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events import STREAM_KEY
 from app.core.redis_client import get_redis
+from app.core.heartbeat import HEARTBEAT_EVENT_TYPE
 from app.core.ws_projections import (
     broadcast_floor_plan_invalidation,
+    broadcast_liveness,
     broadcast_order_board,
     broadcast_queue_state,
     broadcast_tab_invalidation,
@@ -96,6 +98,16 @@ async def _dispatch(fields: dict) -> bool:
     """
     event_type = fields.get("event_type", "")
     business_id = fields.get("business_id", "")
+
+    # The liveness beat is deliberately handled HERE rather than at the socket:
+    # reaching this line is the proof it carries. It is business-agnostic and
+    # needs no DB session.
+    if event_type == HEARTBEAT_EVENT_TYPE:
+        try:
+            await broadcast_liveness()
+        except Exception:
+            logger.exception("stream_consumer: heartbeat broadcast failed")
+        return True
 
     try:
         async with async_session() as db:

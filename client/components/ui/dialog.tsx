@@ -7,13 +7,30 @@ import { XIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 /**
- * ONLY for decisions that end a shift or cannot be undone. A dialog is not a
- * container for a form — it is the product stopping to ask.
+ * THE DECISION DIALOG is the default and is unchanged: for decisions that end a
+ * shift or cannot be undone — the product stopping to ask.
  *
  * 330–420px, radius 4, E1. The title asks the real question with the real time
  * in it ("Close the night at 01:12?"); the body states the consequence in real
  * numbers; the SAFE choice is the filled one, and the risky choice is a quiet
  * outline in red text (`variant="destructive-quiet"`).
+ *
+ * A SHORT CONFIGURATION FORM is the second use. This line used to read "a
+ * dialog is not a container for a form", which sent settings that are touched
+ * twice a night — preparation stations, the queue's cover cap, adding one
+ * walk-in — into standing sections that each took a quarter of a board they
+ * were not the work of. Those forms are now dialogs.
+ *
+ * The bar it has to clear: it fits the 330–420px measure without becoming a
+ * workspace, its actions are Save/Cancel rather than a safe/risky pair, and
+ * closing it loses nothing that was not already saved. Anything larger, or
+ * anything worked IN rather than filled and dismissed, is still a side panel —
+ * see sheet.tsx.
+ *
+ * A READING DIALOG is the third: policy or reference text that must be read
+ * without losing the flow behind it. It may run wider than 420px, capped at a
+ * reading measure and never at a width literal; it scrolls internally; its only
+ * action is dismissal; it never carries a decision.
  */
 function Dialog({
   ...props
@@ -82,7 +99,10 @@ function DialogContent({
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+            // The close control had no size of its own: its target was the 16px
+            // icon and nothing else. It is now a real --control-desktop-min
+            // square (34 → 48) with the icon centred inside it.
+            className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-[var(--space-8)] right-[var(--space-8)] grid size-[var(--control-desktop-min)] place-content-center rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
           >
             <XIcon />
             <span className="sr-only">Close</span>

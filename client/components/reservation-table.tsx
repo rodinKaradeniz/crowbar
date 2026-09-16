@@ -18,7 +18,12 @@ import {
   formatBusinessTime,
 } from "@/lib/business-time";
 import type { CustomerResponse } from "@/lib/api-client";
-import { bookingLateSeverity, type Severity } from "@/lib/severity";
+import {
+  bookingLateSeverity,
+  deliverySeverity,
+  worstSeverity,
+  type Severity,
+} from "@/lib/severity";
 import type { Reservation, ServiceType } from "@/types";
 
 interface ReservationTableProps {
@@ -111,7 +116,13 @@ export function ReservationTable({
         {reservations.map((reservation) => {
           const customer = customerMap.get(reservation.customerId);
           const serviceType = serviceTypeMap.get(reservation.serviceTypeId);
-          const severity = lateness(reservation, now);
+          const late = lateness(reservation, now);
+          // A guest who was never told is attend, exactly like a booking
+          // running late — `deliverySeverity` owns that call and never
+          // promotes it. Both are attend, so the row tint is the worse of the
+          // two and nothing is escalated.
+          const delivery = deliverySeverity(reservation.deliveryState);
+          const severity = worstSeverity([late, delivery]);
 
           return (
             <TableRow
@@ -149,6 +160,18 @@ export function ReservationTable({
                     Note
                   </span>
                 ) : null}
+                {/* The one marker for a confirmation that never reached the
+                    guest. It sits in this cell, the table's only auto-width
+                    column, because the Status column is 120px and already
+                    carries a badge, and the action column already holds three
+                    controls where this file asks for one or two. The sentence
+                    and the resend are in the side panel — a row that grows to
+                    carry them pushes the rest of the book off the screen. */}
+                {delivery === "attend" ? (
+                  <Badge tone="attend" className="ml-2.5">
+                    Message failed
+                  </Badge>
+                ) : null}
               </TableCell>
 
               <TableCell numeric>{reservation.guests}</TableCell>
@@ -158,7 +181,9 @@ export function ReservationTable({
               </TableCell>
 
               <TableCell>
-                {severity === "attend" ? (
+                {/* `late`, not the combined severity: a punctual booking whose
+                    email failed is not late, and saying so would be wrong. */}
+                {late === "attend" ? (
                   <Badge tone="attend">Late</Badge>
                 ) : (
                   <Badge tone="neutral">{reservation.status}</Badge>

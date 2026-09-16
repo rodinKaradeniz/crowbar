@@ -20,6 +20,7 @@ from app.core.errors import http_exception_handler, validation_exception_handler
 from app.core.events import STREAM_KEY
 from app.core.log_redaction import install_log_redaction
 from app.core.redis_client import close_redis, get_redis
+from app.core.heartbeat import liveness_heartbeat
 from app.core.stream_consumer import GROUP_NAME, ws_push_consumer
 from app.database import get_db
 from app.services.floor_plan_service import FloorPlanError
@@ -148,12 +149,17 @@ async def lifespan(app: FastAPI):
             logger.warning("lifespan: xgroup_create error: %s", exc)
 
     consumer_task = asyncio.create_task(ws_push_consumer(), name="ws_push_consumer")
+    # The liveness beat travels the same path a real event does, so a board can
+    # tell "nothing is happening" from "nothing can reach me". See
+    # `app/core/heartbeat.py`.
+    heartbeat_task = asyncio.create_task(liveness_heartbeat(), name="liveness_heartbeat")
 
     yield
 
     # ── Shutdown ──────────────────────────────────────────────────────────────
     consumer_task.cancel()
-    await asyncio.gather(consumer_task, return_exceptions=True)
+    heartbeat_task.cancel()
+    await asyncio.gather(consumer_task, heartbeat_task, return_exceptions=True)
     await close_redis()
     logger.info("lifespan: shutdown complete")
 

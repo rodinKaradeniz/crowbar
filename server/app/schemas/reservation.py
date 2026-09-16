@@ -124,6 +124,14 @@ class ReservationResponse(AppBaseModel):
     reminder_enabled: bool | None = None
     reminder_lead_minutes: int | None = None
     reconfirmation_enabled: bool | None = None
+    #: Whether the guest's confirmation email actually went out: `delivered`,
+    #: `pending`, `failed` or `unavailable`. Not carried by the `Reservation`
+    #: row — attached by `_reservation_response` in the router, which EVERY
+    #: endpoint returning this model runs. Non-optional with a default on
+    #: purpose: a builder missed at a new call site degrades to the honest
+    #: "nothing recorded" rather than to the serialized `null` the fields above
+    #: still produce.
+    delivery_state: str = "unavailable"
     created_at: datetime
     updated_at: datetime
 

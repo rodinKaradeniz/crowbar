@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { LIVENESS_STALE_AFTER_MS } from "@/hooks/socket-status";
 
 /**
  * The one alarm in the system.
@@ -23,6 +24,17 @@ import { Button } from "@/components/ui/button";
  * lie about what is safe. Omitted rather than invented; recorded in
  * `docs/TODO.md`. The reassurance copy is trimmed to match what is actually
  * true.
+ *
+ * TWO WAYS A BOARD STOPS BEING LIVE, and only one of them closes the socket.
+ * `connected: false` is the obvious one. The other is the Redis case: a failed
+ * publish is logged and swallowed by design, so the event never enters the
+ * stream, no frame is ever sent — AND THE SOCKET STAYS OPEN. `connected` stayed
+ * true and this bar never appeared, while a second operator's board sat
+ * unchanged with nothing on screen saying so. The server now sends a liveness
+ * beat along the same path a real event travels, so silence past
+ * LIVENESS_STALE_AFTER_MS means the path is broken. Same alarm, same tier: this
+ * is not a new severity, it is the same "live board that has lost its
+ * connection" the rank already names.
  */
 export function OfflineBar({
   connected,
@@ -37,7 +49,52 @@ export function OfflineBar({
   /** What has stopped updating, in the operator's words — "This board". */
   surface: string;
 }) {
-  if (connected) return null;
+  if (!connected) {
+    return (
+      <OfflineBanner
+        lastContactAt={lastContactAt}
+        onRetry={onRetry}
+        surface={surface}
+      />
+    );
+  }
+  // Connected but silent for too long. `lastContactAt` is null only before the
+  // first frame ever arrives, which the `connected` check above already covers.
+  return (
+    <StalenessWatch
+      lastContactAt={lastContactAt}
+      onRetry={onRetry}
+      surface={surface}
+    />
+  );
+}
+
+/**
+ * Watches an OPEN socket that has gone quiet.
+ *
+ * Separate from `OfflineBanner` so that the once-per-second clock only runs
+ * where it is needed, and so the "connected" path costs one comparison per
+ * second rather than a re-render of the board.
+ */
+function StalenessWatch({
+  lastContactAt,
+  onRetry,
+  surface,
+}: {
+  lastContactAt: number | null;
+  onRetry: () => void;
+  surface: string;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  if (lastContactAt === null) return null;
+  if (now - lastContactAt < LIVENESS_STALE_AFTER_MS) return null;
+
   return (
     <OfflineBanner
       lastContactAt={lastContactAt}
@@ -78,9 +135,13 @@ function OfflineBanner({
       className="offline-alarm sticky top-0 z-50 flex h-[var(--offline-bar)] w-full items-center gap-[var(--space-12)] bg-critical-fill px-[var(--space-16)] text-critical-on-fill"
     >
       <span className="shrink-0 font-mono uppercase font-semibold text-[length:var(--label-size)] tracking-[var(--label-ls)]">
-        {/* Colour is never the sole carrier of meaning — the word is here too. */}
+        {/* Colour is never the sole carrier of meaning — the word is here too.
+            "No contact" rather than "offline": the bar now also covers an OPEN
+            socket whose event path has died, where "offline" would be false.
+            One phrase that is true in both cases beats two that each hold
+            half the time. */}
         Not updating
-        {elapsed ? ` · offline ${elapsed}` : ""}
+        {elapsed ? ` · no contact ${elapsed}` : ""}
       </span>
 
       <span className="truncate text-[length:var(--ui-size)]">

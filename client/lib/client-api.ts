@@ -262,6 +262,7 @@ function toReservation(r: Record<string, unknown>): Reservation {
       (r.reconfirmation_enabled as boolean | null) ?? undefined,
     cancellationWindowMinutes:
       (r.cancellation_window_minutes as number | null) ?? undefined,
+    deliveryState: (r.delivery_state as string) || undefined,
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
   };
@@ -588,14 +589,26 @@ export async function clientUpdateProfile(data: {
   });
 }
 
+/**
+ * REQUESTS an email change. Does not apply it — the account keeps its current
+ * address until the link mailed to the new one is confirmed. The 202 body
+ * carries the pending address back so the UI can name it.
+ */
 export async function clientChangeEmail(data: {
   new_email: string;
   password: string;
-}): Promise<{ message: string }> {
+}): Promise<{ message: string; pending_email: string }> {
   return authFetch("/auth/change-email", {
     method: "POST",
     body: JSON.stringify(data),
   });
+}
+
+export async function clientResendVerification(): Promise<{
+  message: string;
+  pending_email: string | null;
+}> {
+  return authFetch("/auth/resend-verification", { method: "POST" });
 }
 
 export async function clientChangePassword(data: {
@@ -1081,6 +1094,14 @@ export async function clientMarkReservationNoShow(id: string, note?: string): Pr
   }));
 }
 
+/** Send the guest's confirmation email again. The sibling of
+ *  `clientRetryReservationWaitlistDelivery` and `clientRetryQueueDelivery`. */
+export async function clientRetryReservationDelivery(id: string): Promise<Reservation> {
+  return toReservation(await authFetch<Record<string, unknown>>(
+    `/reservations/${id}/delivery/retry`, { method: "POST" },
+  ));
+}
+
 export async function clientGetReservationRescheduleAvailability(data: {
   reservationId: string;
   serviceTypeId: string;
@@ -1229,6 +1250,17 @@ export async function clientGetMeContext(): Promise<MeContext | null> {
         phone: (data.user as Record<string, unknown>).phone as string | undefined,
         avatar: (data.user as Record<string, unknown>).avatar as string | undefined,
         userType: (data.user as Record<string, unknown>).user_type as string,
+        // `??`, not `||`: false is a real answer. Defaults to true so a server
+        // that predates migration 053 cannot make everyone look unverified.
+        emailVerified:
+          ((data.user as Record<string, unknown>).email_verified as
+            | boolean
+            | undefined) ?? true,
+        pendingEmail:
+          ((data.user as Record<string, unknown>).pending_email as
+            | string
+            | null
+            | undefined) || undefined,
       },
       business: {
         id: biz.id as string,
@@ -2089,7 +2121,13 @@ export async function clientGetCurrentTableSession(
 }
 
 export async function clientExchangePublicCapability(
-  kind: "reservation" | "waitlist_manage" | "waitlist_offer" | "password_reset" | "staff_invite",
+  kind:
+    | "reservation"
+    | "waitlist_manage"
+    | "waitlist_offer"
+    | "password_reset"
+    | "staff_invite"
+    | "email_verify",
   token: string,
 ): Promise<void> {
   await clientFetch(`/public/capabilities/exchange`, {

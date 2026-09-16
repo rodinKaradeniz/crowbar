@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { EmptyState } from "@/components/empty-state";
 import { ReservationTable } from "@/components/reservation-table";
 import { Badge } from "@/components/ui/badge";
-import { ReservationSearchFilter } from "@/components/reservation-search-filter";
 import { Button } from "@/components/ui/button";
 import { StaffReservationDialog } from "@/components/staff-reservation-dialog";
 import { Reservation, ServiceType } from "@/types";
@@ -13,7 +12,6 @@ import { CustomerResponse } from "@/lib/api-client";
 import { clientUpdateReservation } from "@/lib/client-api";
 import { toast } from "sonner";
 import { isReservationReschedulable } from "@/lib/availability";
-import { PageBody, PageHeader } from "@/components/page-header";
 
 interface RequestsClientProps {
   initialReservations: Reservation[];
@@ -24,6 +22,9 @@ interface RequestsClientProps {
   businessMaxGuests: number;
   currentTime: string;
   canOverride: boolean;
+  /** Shared with the Book tab, so a search survives switching between them. */
+  searchQuery: string;
+  serviceTypeFilter: string;
 }
 
 /**
@@ -47,10 +48,10 @@ export default function RequestsClient({
   businessMaxGuests,
   currentTime,
   canOverride,
+  searchQuery,
+  serviceTypeFilter,
 }: RequestsClientProps) {
   const router = useRouter();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [serviceTypeFilter, setServiceTypeFilter] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [reschedulingReservation, setReschedulingReservation] =
     useState<Reservation | null>(null);
@@ -115,22 +116,6 @@ export default function RequestsClient({
 
   return (
     <>
-      <PageHeader
-        wide
-        title="Requests"
-        description="Bookings waiting on a yes or a no."
-      >
-        <ReservationSearchFilter
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          serviceTypeFilter={serviceTypeFilter}
-          onServiceTypeFilterChange={setServiceTypeFilter}
-          serviceTypes={serviceTypes}
-        />
-      </PageHeader>
-
-      <PageBody wide>
-
         {initialReservations.length === 0 ? (
           <EmptyState
             title="Nothing waiting"
@@ -196,7 +181,6 @@ export default function RequestsClient({
             router.refresh();
           }}
         />
-      </PageBody>
     </>
   );
 }

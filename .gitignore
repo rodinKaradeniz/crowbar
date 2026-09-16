@@ -109,6 +109,10 @@ ml/mlflow.db
 .agents/
 .idea/
 .vscode/
+# Written by playwright-cli, which the design workflow requires for every width
+# check — so an untracked directory appeared in the repository root after each
+# one. Root-anchored for the same reason /reports/ is, above.
+/.playwright-cli/
 
 # Local public-mirror exports
 portfolio-export/

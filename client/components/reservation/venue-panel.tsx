@@ -3,6 +3,7 @@ import Image from "next/image";
 import { Mail, Phone, MapPin, Globe } from "lucide-react";
 
 import { BrandMark } from "@/components/brand-mark";
+import { useTenantImage } from "@/hooks/use-tenant-image";
 import type { Business } from "@/types";
 import { collapseOperatingHours } from "@/lib/operating-hours";
 
@@ -37,6 +38,7 @@ function PanelHeading({ children }: { children: React.ReactNode }) {
 }
 
 export function VenuePanel({ business }: { business: Business }) {
+  const image = useTenantImage(business.image);
   const hours = business.operatingHours ?? {};
   const hasHours = Object.keys(hours).length > 0;
 
@@ -53,15 +55,21 @@ export function VenuePanel({ business }: { business: Business }) {
         it is subordinate to the booking. Most venues — the demo tenant
         included — have none, and the panel is complete without it.
       */}
-      {business.image && (
+      {image && (
         <div className="relative h-40 w-full shrink-0 overflow-hidden">
+          {/* `useTenantImage` returns null for a URL that is unusable or has
+              already failed to load, so the band and its gradient disappear
+              together and the panel falls back to exactly the no-image state
+              described above. A guest never sees a broken frame, and never a
+              500. `priority` is deliberately gone: an unoptimized decorative
+              image gets no LCP benefit from preloading a URL we do not
+              control, and a dead preload only logs a warning. */}
           <Image
-            src={business.image}
+            {...image}
             alt=""
             fill
             sizes="(max-width: 900px) 100vw, 40vw"
             className="object-cover"
-            priority
           />
           {/* Settles the photograph into the ground below it. */}
           <div className="absolute inset-0 bg-linear-to-b from-transparent to-background" />

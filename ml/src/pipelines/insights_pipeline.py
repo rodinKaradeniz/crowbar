@@ -95,16 +95,23 @@ class InsightsPipeline:
             f"{len(daily_demand)} daily records"
         )
 
-        # These models previously depended on removed payment-era fields. They
-        # remain unavailable until Stage 6 supplies a newly accepted training
-        # contract and evidence using permitted operational inputs.
+        # These two models were trained on payment-era fields that migration 013
+        # removed, so they have no usable inputs and are reported as unavailable
+        # rather than served stale. The reason string reaches the operator on
+        # /business/insights, so it says what is true rather than naming a
+        # roadmap stage — it previously read "scheduled for Stage 6", which was
+        # both a schedule Crowbar does not owe the venue and, once that stage
+        # shipped, false.
+        _NOT_RETRAINED = (
+            "This model has not been rebuilt on the venue's operational data yet."
+        )
         segmentation_result = {
             "status": "unavailable",
-            "reason": "Retraining is scheduled for Stage 6",
+            "reason": _NOT_RETRAINED,
         }
         cancellation_result = {
             "status": "unavailable",
-            "reason": "Retraining is scheduled for Stage 6",
+            "reason": _NOT_RETRAINED,
         }
 
         # ── Step 5: Demand Forecasting ──

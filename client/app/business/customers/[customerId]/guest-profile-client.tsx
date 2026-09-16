@@ -6,6 +6,7 @@ import { ArrowLeft, Download, GitMerge, Plus, Save, Tags, Trash2 } from "lucide-
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Skeleton, SkeletonList } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
@@ -157,7 +158,7 @@ export default function GuestProfileClient({ customerId, canManage, businessTime
             <div className="grid gap-3 sm:grid-cols-2"><Input value={guest.phone ?? ""} readOnly aria-label="Guest phone" /><Input name="dateOfBirth" type="date" defaultValue={guest.dateOfBirth} aria-label="Optional date of birth" /></div>
             <Textarea name="preferences" defaultValue={guest.preferences} placeholder="Preferences, seating requests, favourite drinks…" aria-label="Guest preferences" />
             <Textarea name="dietaryDetails" defaultValue={guest.dietaryDetails} placeholder="Allergy or dietary detail, only when the guest asked to retain it" aria-label="Dietary or allergy details" />
-            <label className="flex items-start gap-2 text-sm"><input name="saveDietaryDetails" type="checkbox" defaultChecked={Boolean(guest.dietaryDetails)} className="mt-0.5" /><span>The guest asked us to save this for future visits.</span></label>
+            <label className="flex items-start gap-[var(--space-8)] text-sm"><Checkbox name="saveDietaryDetails" defaultChecked={Boolean(guest.dietaryDetails)} /><span className="checkbox-label">The guest asked us to save this for future visits.</span></label>
             <Button type="submit" disabled={busy}><Save /> Save details</Button>
           </form>
         </section>

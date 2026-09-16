@@ -332,9 +332,15 @@ export function NotificationTrigger({
       >
         <SheetTitle className="sr-only">Notifications</SheetTitle>
 
-        {/* Header */}
-        <div className="flex shrink-0 items-center justify-between border-b px-5 py-4">
-          <div className="flex items-center gap-2">
+        {/* Header. This is a hand-rolled row rather than `SheetHeader`, so it
+            does not inherit that component's reservation and needs its own:
+            the sheet's close button is absolutely positioned and takes no
+            layout space, and `justify-between` pushes "Mark all read" hard
+            against the right edge, straight underneath it — worse below 1280
+            where the close button grows to 48px. Same calc as sheet.tsx, read
+            from the tokens that place and size that button. */}
+        <div className="flex shrink-0 items-center justify-between border-b px-[var(--space-16)] py-[var(--space-16)] pr-[calc(var(--space-8)+var(--control-desktop-min)+var(--space-8))]">
+          <div className="flex items-center gap-[var(--space-8)]">
             <Bell className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-semibold">Notifications</span>
             {unread > 0 && (
@@ -348,7 +354,7 @@ export function NotificationTrigger({
               type="button"
               variant="ghost"
               size="filter"
-              className="h-7 text-xs text-muted-foreground hover:text-foreground"
+              className="text-xs text-muted-foreground hover:text-foreground"
               onClick={() => void onMarkAllRead()}
             >
               Mark all read

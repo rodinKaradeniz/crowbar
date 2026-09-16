@@ -11,6 +11,7 @@ import {
   FieldSet,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Business } from "@/types";
 import { clientUpdateBusiness } from "@/lib/client-api";
 import { DAYS_OF_WEEK } from "@/lib/days";
@@ -157,19 +158,17 @@ export default function BusinessHoursClient({
                         disabled={isClosed}
                         className="w-32"
                       />
-                      <div className="flex items-center gap-2 ml-4">
-                        <input
-                          type="checkbox"
+                      <div className="flex items-start gap-[var(--space-8)] ml-4">
+                        <Checkbox
                           id={`closed-${day.key}`}
                           checked={isClosed}
-                          onChange={(e) =>
-                            handleDayChange(day.key, "closed", e.target.checked)
+                          onCheckedChange={(value) =>
+                            handleDayChange(day.key, "closed", value === true)
                           }
-                          className="h-4 w-4 rounded border-input"
                         />
                         <label
                           htmlFor={`closed-${day.key}`}
-                          className="text-sm text-muted-foreground cursor-pointer"
+                          className="checkbox-label text-sm text-muted-foreground cursor-pointer"
                         >
                           Closed
                         </label>

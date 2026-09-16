@@ -72,8 +72,19 @@ export default function RootLayout({
         <AuthProvider>{children}</AuthProvider>
         {/* `richColors` is deliberately off: it paints its own green/red
             palette from outside the token system, and a green success toast is
-            exactly the pattern the settlement rules forbid. */}
-        <Toaster position="top-right" />
+            exactly the pattern the settlement rules forbid.
+
+            `closeButton` is on because sonner auto-dismisses at 4s but PAUSES
+            that timer while the pointer is over the toast — so a toast under a
+            resting cursor stays until the cursor moves, with no way to send it
+            away. One prop, rather than a duration on 253 call sites.
+
+            Where that button sits, how big it is and what colour it is are set
+            in globals.css under `[data-sonner-toast]`, NOT here. They started
+            on this component's `toastOptions.classNames` and were measured
+            doing nothing: sonner's own rule is three attributes deep, so a
+            single Tailwind utility class never wins the cascade. */}
+        <Toaster position="top-right" closeButton />
       </body>
     </html>
   );

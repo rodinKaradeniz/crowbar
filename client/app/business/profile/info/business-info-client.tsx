@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import {
   Field,
   FieldDescription,
+  FieldError,
   FieldGroup,
   FieldLabel,
   FieldLegend,
@@ -19,6 +20,8 @@ import { Mail, Phone, MapPin, ExternalLink, Copy, Check } from "lucide-react";
 import { Business } from "@/types";
 import { clientUpdateBusiness } from "@/lib/client-api";
 import { TimezoneCombobox } from "@/components/timezone-combobox";
+import { useTenantImage } from "@/hooks/use-tenant-image";
+import { renderableImageSrc } from "@/lib/image-url";
 import { toast } from "sonner";
 
 import { PageBody, PageHeader } from "@/components/page-header";
@@ -53,6 +56,12 @@ export default function BusinessInfoClient({
   const privacyReady =
     privacyContact.trim().length > 0 &&
     /^https:\/\/[^/\s]+/.test(privacyPolicyUrl.trim());
+  // Mirrors app/core/image_url.validate_image_url, which refuses the rest with
+  // this same rule on save. Form validation, not a severity — docs/DESIGN.md
+  // keeps an invalid field on --field-invalid and off the three-tier rank.
+  const imageValid =
+    businessImage.trim() === "" || renderableImageSrc(businessImage) !== null;
+  const imagePreview = useTenantImage(businessImage);
   const [businessTimezone, setBusinessTimezone] = useState(
     initialBusiness?.timezone || "UTC"
   );
@@ -203,12 +212,27 @@ export default function BusinessInfoClient({
 
               <Field>
                 <FieldLabel htmlFor="businessImage">Image URL</FieldLabel>
+                {/* Not type="url": the browser's own bubble accepts http://,
+                    which the server refuses, and rejects /venue.jpg, which the
+                    server accepts. Letting it enforce a contradicting rule is
+                    worse than enforcing ours. */}
                 <Input
                   id="businessImage"
-                  type="url"
+                  type="text"
+                  inputMode="url"
                   value={businessImage}
                   onChange={(e) => setBusinessImage(e.target.value)}
+                  aria-invalid={!imageValid || undefined}
                 />
+                <FieldDescription>
+                  Paste an https link to a photo already published on the web.
+                  Crowbar does not host images.
+                </FieldDescription>
+                {!imageValid && (
+                  <FieldError>
+                    Use an https:// link, or leave this empty.
+                  </FieldError>
+                )}
               </Field>
 
               {!privacyReady && (
@@ -274,9 +298,12 @@ export default function BusinessInfoClient({
         <div className="sticky top-[calc(var(--workspace-header)+var(--page-header))] flex flex-col justify-center gap-[var(--space-24)] lg:h-[calc(100svh-var(--workspace-header)-var(--page-header))] lg:overflow-y-auto lg:py-[var(--space-24)]">
           <div className="border bg-card overflow-hidden">
             <div className="relative h-32 w-full">
-              {businessImage && (
+              {/* The preview shows the guest's outcome, so it degrades the same
+                  way the public page does: a URL that is unusable or fails to
+                  load leaves the frame empty rather than a broken box. */}
+              {imagePreview && (
                 <Image
-                  src={businessImage}
+                  {...imagePreview}
                   alt={businessName}
                   fill
                   className="object-cover"
@@ -326,7 +353,7 @@ export default function BusinessInfoClient({
                 <button
                   type="button"
                   onClick={handleCopyUrl}
-                  className="flex-1 flex items-center justify-center gap-1.5 text-xs px-2 py-1.5 rounded-md border hover:bg-muted transition-colors"
+                  className="flex-1 flex h-[var(--control-desktop-min)] items-center justify-center gap-1.5 text-xs px-2 rounded-md border hover:bg-muted transition-colors"
                 >
                   {slugCopied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                   {slugCopied ? "Copied" : "Copy URL"}
@@ -335,7 +362,7 @@ export default function BusinessInfoClient({
                   href={bookingUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 flex items-center justify-center gap-1.5 text-xs px-2 py-1.5 rounded-md border hover:bg-muted transition-colors"
+                  className="flex-1 flex h-[var(--control-desktop-min)] items-center justify-center gap-1.5 text-xs px-2 rounded-md border hover:bg-muted transition-colors"
                 >
                   <ExternalLink className="w-3 h-3" /> Preview
                 </a>

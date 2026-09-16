@@ -141,11 +141,13 @@ no-shows, queue wait and seating conversion, table utilization and turn time,
 station throughput and ticket timing, the three separate ordered / open-tab /
 externally-settled value figures, stock and waste, purchasing spend and staff
 actions — each over a chosen range with CSV export, and none of them a fiscal
-or accounting report. Insights survives an ML restart **at the API**:
-`/api/insights/*` serves the last result carrying `stale`, `captured_at` and an
-`unavailable_reason`. The page does not read any of those three yet —
-`client/lib/ml-api.ts` collapses every error response to `null` — so a
-remembered figure still reads as a live one. See `docs/TODO.md` stage 8.
+or accounting report. Insights survives an ML restart end to end. `/api/insights/*` serves the
+last result carrying `stale`, `captured_at` and an `unavailable_reason`, and
+**the page now reads all three**: `client/lib/ml-api.ts` returns a state rather
+than collapsing every failure to `null`, so a remembered figure says when it was
+captured, an unreachable service says so instead of claiming the venue has no
+history, and a switched-off Insights module leaves no panel and no explanation
+on Overview rather than blaming Crowbar's data for the owner's setting.
 
 Stage 7, the interface redesign pass, is **ported**. The design direction is
 closed: [docs/DESIGN.md](docs/DESIGN.md) is the committed contract, taken from
@@ -176,7 +178,7 @@ pilot (10), and a mobile client (11).
 [docs/TODO.md](docs/TODO.md) owns the exact 0–11 order, exit gates, and
 post-MVP deferrals.
 
-Migrations 023–049 are local only. Railway remains at migrations 001–022; its
+Migrations 023–053 are local only. Railway remains at migrations 001–022; its
 partially provisioned rollout is intentionally paused until stages 0–8 pass
 locally and the user explicitly authorizes deployment. The user plans to use
 Railway, but that intent is not authorization to mutate it.

@@ -175,7 +175,7 @@ export function TabOrderCompose({
                     {group.modifiers
                       .filter((m) => m.isAvailable)
                       .map((mod) => (
-                        <div key={mod.id} className="flex items-center gap-2">
+                        <div key={mod.id} className="flex items-start gap-[var(--space-8)]">
                           <Checkbox
                             id={`mod-${mod.id}`}
                             checked={detailMods.some(
@@ -191,7 +191,7 @@ export function TabOrderCompose({
                           />
                           <Label
                             htmlFor={`mod-${mod.id}`}
-                            className="flex-1 text-sm cursor-pointer"
+                            className="checkbox-label flex-1 text-sm cursor-pointer"
                           >
                             {mod.name}
                           </Label>

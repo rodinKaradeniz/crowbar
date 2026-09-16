@@ -25,6 +25,16 @@ class QueueConnectionManager:
         self._connections[business_id].discard(ws)
         logger.debug("WS disconnected: business=%s total=%d", business_id, len(self._connections[business_id]))
 
+    def connected_business_ids(self) -> list[str]:
+        """Businesses with at least one live socket on THIS process.
+
+        Used by the liveness heartbeat: there is nothing to tell a business
+        nobody is watching. The dict is a defaultdict, so a business that has
+        disconnected can still hold an empty set — filter, do not just take
+        the keys.
+        """
+        return [bid for bid, conns in self._connections.items() if conns]
+
     async def broadcast(self, business_id: str, payload: dict) -> None:
         dead: set[WebSocket] = set()
         for ws in list(self._connections.get(business_id, [])):

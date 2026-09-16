@@ -173,7 +173,7 @@ function PartyCard({
           <Button size="filter" variant="secondary" onClick={onSecondary}>{secondaryLabel}</Button>
         )}
       </div>
-      {party.customerId && <Link href={`/business/customers/${party.customerId}`} className="mt-3 inline-block text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">Guest profile</Link>}
+      {party.customerId && <Link href={`/business/customers/${party.customerId}`} className="mt-3 inline-flex h-[var(--control-desktop-min)] items-center text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">Guest profile</Link>}
     </div>
   );
 }
@@ -405,7 +405,7 @@ function SetupPanel({ onChanged }: { onChanged: () => Promise<void> }) {
         <section className="border bg-card p-4">
           <p className="type-label text-muted-foreground">Add table</p>
           <div className="mt-3 space-y-2">
-            <select value={newTable.areaId} onChange={(event) => setNewTable((current) => ({ ...current, areaId: event.target.value }))} className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"><option value="">Choose area</option>{areas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}</select>
+            <select value={newTable.areaId} onChange={(event) => setNewTable((current) => ({ ...current, areaId: event.target.value }))} className="h-[var(--control-md)] w-full rounded-md border bg-transparent px-3 text-sm"><option value="">Choose area</option>{areas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}</select>
             <Input value={newTable.label} onChange={(event) => setNewTable((current) => ({ ...current, label: event.target.value }))} placeholder="Table label" />
             <Input type="number" min="1" value={newTable.capacity} onChange={(event) => setNewTable((current) => ({ ...current, capacity: event.target.value }))} aria-label="Table capacity" />
             <Button className="w-full" disabled={busy || !newTable.areaId || !newTable.label.trim() || Number(newTable.capacity) < 1} onClick={async () => { setBusy(true); try { await clientCreateFloorPlanTable({ areaId: newTable.areaId, label: newTable.label.trim(), capacity: Number(newTable.capacity), shape: "square" }); setNewTable((current) => ({ ...current, label: "", capacity: "2" })); await finishMutation("Table created."); } catch (error) { toast.error(error instanceof Error ? error.message : "Could not create table."); } finally { setBusy(false); } }}>Add table</Button>
@@ -459,7 +459,7 @@ export default function FloorClient({ businessId, canManage, canOperate, hasRese
   }, [hasOrdering]);
 
   useEffect(() => { void refresh(); }, [refresh]);
-  const { connected, lastContactAt } = useFloorPlanSocket(businessId, () => void refresh());
+  const { connected, lastContactAt, reconnect } = useFloorPlanSocket(businessId, () => void refresh());
   const allTables = useMemo(() => board?.areas.flatMap((area) => area.tables) ?? [], [board]);
   const pendingByTable = useMemo(() => {
     // Expiry is settled on the READ: the staff list no longer returns pending
@@ -610,7 +610,13 @@ export default function FloorClient({ businessId, canManage, canOperate, hasRese
         connected={connected}
         lastContactAt={lastContactAt}
         surface="The floor map"
-        onRetry={() => void refresh()}
+        // BOTH: the socket carries new activity, the refetch corrects what was
+        // missed while it was down. Retry used to do only the second, so under
+        // a live offline bar it fetched once and left the board just as dead.
+        onRetry={() => {
+          reconnect();
+          void refresh();
+        }}
       />
 
       <>

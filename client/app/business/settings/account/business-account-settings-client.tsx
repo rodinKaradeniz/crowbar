@@ -14,11 +14,13 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import {
   clientChangeEmail,
   clientChangePassword,
+  clientResendVerification,
   clientDisableAccount,
   clientRequestAccountDeletion,
   clientUpdateNotificationChannels,
@@ -36,12 +38,18 @@ interface BusinessAccountSettingsClientProps {
   userEmail: string;
   businessId: string;
   deletionRequestedAt: string | null;
+  emailVerified: boolean;
+  /** An address requested and not yet confirmed. The account still uses
+   * `userEmail` until the link sent to this one is opened. */
+  pendingEmail: string | null;
 }
 
 export default function BusinessAccountSettingsClient({
   userEmail,
   businessId,
   deletionRequestedAt,
+  emailVerified,
+  pendingEmail,
 }: BusinessAccountSettingsClientProps) {
   const router = useRouter();
   const { logout, meContext } = useAuth();
@@ -75,6 +83,8 @@ export default function BusinessAccountSettingsClient({
   const [newEmail, setNewEmail] = useState("");
   const [emailPassword, setEmailPassword] = useState("");
   const [isChangingEmail, setIsChangingEmail] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const [pending, setPending] = useState<string | null>(pendingEmail);
   const [emailError, setEmailError] = useState("");
 
   // Password change state
@@ -111,16 +121,38 @@ export default function BusinessAccountSettingsClient({
 
     setIsChangingEmail(true);
     try {
-      await clientChangeEmail({ new_email: newEmail, password: emailPassword });
-      toast.success("Email updated. Please sign in again.");
-      await logout();
-      router.push("/auth/login");
+      const result = await clientChangeEmail({
+        new_email: newEmail,
+        password: emailPassword,
+      });
+      // NOT "updated", and no sign-out. Nothing has changed yet: the account
+      // keeps this address until the link sent to the new one is opened, and
+      // signing the operator out here would claim otherwise.
+      setPending(result.pending_email);
+      setNewEmail("");
+      setEmailPassword("");
+      toast.success(
+        `Confirmation link sent to ${result.pending_email}. This account keeps ${userEmail} until you open it.`,
+      );
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to change email";
+      const message = error instanceof Error ? error.message : "Failed to request the change";
       setEmailError(message);
       toast.error(message);
     } finally {
       setIsChangingEmail(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    setIsResending(true);
+    try {
+      await clientResendVerification();
+      toast.success(`Confirmation link sent to ${pending ?? userEmail}.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to send the link";
+      toast.error(message);
+    } finally {
+      setIsResending(false);
     }
   };
 
@@ -206,7 +238,42 @@ export default function BusinessAccountSettingsClient({
               <Field>
                 <FieldLabel>Current Email</FieldLabel>
                 <Input value={userEmail} disabled className="bg-muted" />
+                {/* The Badge is the only status object in the system, so the
+                    state is a Badge and the explanation is a sentence beside
+                    it — never colour on its own. */}
+                <div className="flex flex-wrap items-center gap-[var(--space-8)]">
+                  <Badge>{emailVerified ? "Confirmed" : "Unconfirmed"}</Badge>
+                  {!emailVerified && (
+                    <FieldDescription>
+                      This address has not been confirmed, so it cannot be
+                      trusted to recover the account.
+                    </FieldDescription>
+                  )}
+                  {(!emailVerified || pending) && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="filter"
+                      onClick={handleResendVerification}
+                      disabled={isResending}
+                    >
+                      {isResending ? "Sending" : "Send the link again"}
+                    </Button>
+                  )}
+                </div>
               </Field>
+
+              {pending && (
+                <Field>
+                  <FieldLabel>Waiting on confirmation</FieldLabel>
+                  <Input value={pending} disabled className="bg-muted" />
+                  <FieldDescription>
+                    This account still uses {userEmail}. It moves to {pending}
+                    {" "}only when the link sent there is opened, and the link
+                    expires 24 hours after it was sent.
+                  </FieldDescription>
+                </Field>
+              )}
 
               <Field>
                   <FieldLabel htmlFor="newEmail">New Email Address</FieldLabel>
@@ -247,7 +314,7 @@ export default function BusinessAccountSettingsClient({
             <Field>
               <div className="flex justify-end">
                 <Button type="submit" disabled={isChangingEmail}>
-                  {isChangingEmail ? "Sending..." : "Update Email"}
+                  {isChangingEmail ? "Sending..." : "Send confirmation link"}
                 </Button>
               </div>
             </Field>
@@ -355,10 +422,9 @@ export default function BusinessAccountSettingsClient({
                   checked={smsEnabled}
                   disabled={savingSms}
                   onCheckedChange={(next: boolean | "indeterminate") => handleSmsToggle(next === true)}
-                  className="mt-0.5"
                 />
                 <div className="flex-1">
-                  <Label htmlFor="sms-notifications" className="type-t2 normal-case">
+                  <Label htmlFor="sms-notifications" className="checkbox-label type-t2 normal-case">
                     SMS
                   </Label>
                   <p className="mt-0.5 text-[length:var(--ui-size)] text-muted-foreground">

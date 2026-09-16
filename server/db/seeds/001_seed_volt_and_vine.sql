@@ -117,7 +117,13 @@ INSERT INTO businesses (
   '+12025550100',
   'Musterstraße 1, 10115 Berlin, Germany',
   'A wholly synthetic venue used only for local demonstration data.',
-  NULL,
+  -- Served from client/public, so it needs no `images` config in next.config.ts
+  -- and no host allowlist: `renderableImageSrc` passes a `/`-prefixed path
+  -- straight through. An invented interior with no faces, text or real location,
+  -- matching this venue's "wholly synthetic" description above. It is on the
+  -- tracked-file allowlist in scripts/export-portfolio.sh; a seed that points at
+  -- a file the export omits would ship a broken image.
+  '/volt-and-vine.jpg',
   '',
   ARRAY['Bar', 'Cocktails', 'Craft Beer', 'Bar Food', 'Nightlife'],
   8, 90, 30, 14,
@@ -154,12 +160,16 @@ ALTER TABLE item_library ALTER COLUMN tax_profile_id
 -- One demo account per role, so the stage-6 permission matrix is demonstrable
 -- by logging in rather than by reading a table. Every account shares
 -- __DEMO_PASSWORD_HASH__; see server/DATABASE.md for the seeding contract.
-INSERT INTO users (id, email, name, phone, password_hash, user_type, created_at) VALUES
-('00000000-0000-0000-0002-000000000010', 'owner@example.com',     'Demo Owner',              '+12025550101', '__DEMO_PASSWORD_HASH__', 'staff', NOW() - INTERVAL '45 days'),
-('00000000-0000-0000-0002-000000000011', 'manager@example.com',   'Demo Manager',            '+12025550102', '__DEMO_PASSWORD_HASH__', 'staff', NOW() - INTERVAL '44 days'),
-('00000000-0000-0000-0002-000000000012', 'host@example.com',      'Demo Host / Server',      '+12025550103', '__DEMO_PASSWORD_HASH__', 'staff', NOW() - INTERVAL '43 days'),
-('00000000-0000-0000-0002-000000000013', 'bar@example.com',       'Demo Bartender',          '+12025550104', '__DEMO_PASSWORD_HASH__', 'staff', NOW() - INTERVAL '42 days'),
-('00000000-0000-0000-0002-000000000014', 'inventory@example.com', 'Demo Inventory Operator', '+12025550105', '__DEMO_PASSWORD_HASH__', 'staff', NOW() - INTERVAL '41 days');
+-- email_verified_at is set for every demo account (migration 053). These are
+-- @example.com addresses that can never receive mail, so a demo tenant that
+-- seeded them unverified would show the confirm-your-address prompt on every
+-- workspace page with no way to clear it.
+INSERT INTO users (id, email, name, phone, password_hash, user_type, created_at, email_verified_at) VALUES
+('00000000-0000-0000-0002-000000000010', 'owner@example.com',     'Demo Owner',              '+12025550101', '__DEMO_PASSWORD_HASH__', 'staff', NOW() - INTERVAL '45 days', NOW()),
+('00000000-0000-0000-0002-000000000011', 'manager@example.com',   'Demo Manager',            '+12025550102', '__DEMO_PASSWORD_HASH__', 'staff', NOW() - INTERVAL '44 days', NOW()),
+('00000000-0000-0000-0002-000000000012', 'host@example.com',      'Demo Host / Server',      '+12025550103', '__DEMO_PASSWORD_HASH__', 'staff', NOW() - INTERVAL '43 days', NOW()),
+('00000000-0000-0000-0002-000000000013', 'bar@example.com',       'Demo Bartender',          '+12025550104', '__DEMO_PASSWORD_HASH__', 'staff', NOW() - INTERVAL '42 days', NOW()),
+('00000000-0000-0000-0002-000000000014', 'inventory@example.com', 'Demo Inventory Operator', '+12025550105', '__DEMO_PASSWORD_HASH__', 'staff', NOW() - INTERVAL '41 days', NOW());
 
 INSERT INTO staff (id, user_id, business_id, role, created_at) VALUES
 ('00000000-0000-0000-0003-000000000010', '00000000-0000-0000-0002-000000000010', '00000000-0000-0000-0000-000000000002', 'owner',              NOW() - INTERVAL '45 days'),

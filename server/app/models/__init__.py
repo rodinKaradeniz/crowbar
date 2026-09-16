@@ -14,6 +14,7 @@ from app.models.location import Location
 from app.models.menu import ItemLibrary, Menu, MenuActivationWindow, MenuCategory, MenuItem, MenuItemAvailabilityEvent, Modifier, ModifierGroup
 from app.models.notification import Notification
 from app.models.password_reset_token import PasswordResetToken
+from app.models.email_verification_token import EmailVerificationToken
 from app.models.queue_entry import QueueEntry, QueueEntryEvent, QueueServiceDay
 from app.models.order import Order, OrderLineItem, OrderLineStatusTimeline, OrderRevision, OrderStatusTimeline
 from app.models.preparation_station import PreparationStation
@@ -59,6 +60,7 @@ __all__ = [
     "QueueEntryEvent",
     "QueueServiceDay",
     "PasswordResetToken",
+    "EmailVerificationToken",
     "Menu",
     "MenuActivationWindow",
     "MenuCategory",

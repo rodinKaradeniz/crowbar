@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { toast } from "sonner";
 import {
   clientGetMenus,
@@ -55,6 +55,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -102,6 +103,14 @@ interface Props {
   businessId: string;
   businessSlug: string;
   canManageTax: boolean;
+  /**
+   * `stations.configure` — the capability that actually governs preparation
+   * stations. These controls were gated on `canManageTax` (`menu.pricing`),
+   * which has nothing to do with them; both happen to be owner+manager today,
+   * so it was a naming defect rather than a hole, and would have become one the
+   * moment either capability moved.
+   */
+  canConfigureStations: boolean;
 }
 
 type WindowForm = {
@@ -138,7 +147,7 @@ function activationSummary(menu: Menu): string {
   return `${live.length} windows`;
 }
 
-export function MenuManagementClient({ businessId, businessSlug, canManageTax }: Props) {
+export function MenuManagementClient({ businessId, businessSlug, canManageTax, canConfigureStations }: Props) {
   const { currencyCode, locale, taxLabel, timezone } = useRegionalSettings();
   const money = (value: number | string) => formatMoney(value, currencyCode, locale);
   const [menus, setMenus] = useState<Menu[]>([]);
@@ -146,6 +155,11 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
   const [loading, setLoading] = useState(true);
   const [taxProfiles, setTaxProfiles] = useState<TaxProfile[]>([]);
   const [stations, setStations] = useState<PreparationStation[]>([]);
+  const [stationsDialog, setStationsDialog] = useState(false);
+  const activeStations = useMemo(
+    () => stations.filter((station) => station.isActive),
+    [stations],
+  );
   const [newStationName, setNewStationName] = useState("");
   const [renamingStationId, setRenamingStationId] = useState<string | null>(null);
   const [renameStationDraft, setRenameStationDraft] = useState("");
@@ -869,112 +883,68 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
         description="Create menus, categories, and items for your ordering board."
         actions={
           <>
+            {/* Copy/open used to be a full-width bordered card holding a URL and
+                two buttons, directly under this header. Same idiom as the queue
+                board's "Copy queue link": icon alone below --bp-phone, the tick
+                as the copied confirmation, and the full label on `aria-label`
+                in both states so it survives the label being hidden. */}
             <Button
               variant="secondary"
+              size="filter"
+              className="min-w-[var(--control-desktop-min)]"
+              aria-label={menuLinkCopied ? "Link copied" : "Copy public menu link"}
+              onClick={handleCopyMenuLink}
+            >
+              {menuLinkCopied ? <Check aria-hidden /> : <Copy aria-hidden />}
+              <span className="hidden phone:inline">
+                {menuLinkCopied ? "Link copied" : "Copy link"}
+              </span>
+            </Button>
+            <Button
+              variant="secondary"
+              size="filter"
+              className="min-w-[var(--control-desktop-min)]"
+              aria-label="Open the public menu in a new tab"
+              asChild
+            >
+              <Link href={`/menu/${businessSlug}`} target="_blank">
+                <ExternalLink aria-hidden />
+                <span className="hidden phone:inline">Open</span>
+              </Link>
+            </Button>
+            {canConfigureStations && (
+              <Button
+                variant="secondary"
+                size="filter"
+                className="min-w-[var(--control-desktop-min)]"
+                aria-label="Preparation stations"
+                onClick={() => setStationsDialog(true)}
+              >
+                <Utensils aria-hidden />
+                <span className="hidden phone:inline">Stations</span>
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              size="filter"
               onClick={() => {
                 void loadLibrary();
                 setLibraryTargetCategoryId(null);
                 setLibraryDialog(true);
               }}
             >
-              <BookMarked className="h-4 w-4 mr-2" />
-              Library
+              <BookMarked aria-hidden />
+              <span className="hidden phone:inline">Library</span>
             </Button>
-            <Button onClick={openCreateMenu}>
-              <Plus className="h-4 w-4 mr-2" />
-              New Menu
+            <Button size="filter" onClick={openCreateMenu}>
+              <Plus aria-hidden />
+              <span className="hidden phone:inline">New Menu</span>
             </Button>
           </>
         }
       />
 
       <PageBody>
-        {/* Public QR-menu link — the URL customers scan/open to order */}
-        <div className="flex items-center justify-between gap-3 border bg-card p-3">
-          <div className="min-w-0">
-            <p className="text-sm font-medium">Public menu link</p>
-            <p className="text-xs text-muted-foreground truncate">
-              {publicMenuUrl}
-            </p>
-          </div>
-          <div className="flex gap-2 shrink-0">
-            <Button size="filter" variant="secondary" onClick={handleCopyMenuLink}>
-              {menuLinkCopied ? (
-                <>
-                  <Check className="h-3.5 w-3.5 mr-1.5" /> Copied
-                </>
-              ) : (
-                <>
-                  <Copy className="h-3.5 w-3.5 mr-1.5" /> Copy link
-                </>
-              )}
-            </Button>
-            <Link href={`/menu/${businessSlug}`} target="_blank">
-              <Button size="filter" variant="secondary">
-                <ExternalLink className="h-3.5 w-3.5 mr-1.5" /> Open
-              </Button>
-            </Link>
-          </div>
-        </div>
-
-        <section className="border bg-card p-4 space-y-3">
-          <div><p className="font-medium">Preparation stations</p><p className="text-xs text-muted-foreground">Items route to one station or the shared queue.</p></div>
-          <div className="flex flex-wrap gap-2">
-            {stations.filter((station) => station.isActive).map((station) => (
-              <div key={station.id} className="inline-flex items-center gap-[var(--space-8)] rounded-[var(--radius-3)] border border-border px-3 py-2 text-[length:var(--ui-size)]">
-                {renamingStationId === station.id ? (
-                  <>
-                    <Input
-                      autoFocus
-                      value={renameStationDraft}
-                      onChange={(event) => setRenameStationDraft(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") void renameStation(station);
-                        if (event.key === "Escape") setRenamingStationId(null);
-                      }}
-                      className="h-[var(--control-desktop)] w-40"
-                      aria-label={`Rename ${station.name}`}
-                    />
-                    <Button size="filter" variant="secondary" onClick={() => void renameStation(station)}>
-                      Save
-                    </Button>
-                    <Button size="filter" variant="ghost" onClick={() => setRenamingStationId(null)}>
-                      Cancel
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <span>{station.name}</span>
-                    {canManageTax && (
-                      <>
-                        <button
-                          type="button"
-                          className="type-label text-muted-foreground hover:text-foreground"
-                          onClick={() => {
-                            setRenamingStationId(station.id);
-                            setRenameStationDraft(station.name);
-                          }}
-                        >
-                          Rename
-                        </button>
-                        <button
-                          type="button"
-                          className="type-label text-muted-foreground hover:text-critical-text"
-                          onClick={() => void archiveStation(station)}
-                        >
-                          Archive
-                        </button>
-                      </>
-                    )}
-                  </>
-                )}
-              </div>
-            ))}
-            {stations.filter((station) => station.isActive).length === 0 && <p className="text-sm text-muted-foreground">No active station. Items can still use the shared queue.</p>}
-          </div>
-          {canManageTax && <div className="flex max-w-sm gap-2"><Input placeholder="New station name" value={newStationName} onChange={(event) => setNewStationName(event.target.value)} /><Button variant="secondary" onClick={() => void addStation()} disabled={!newStationName.trim()}>Add station</Button></div>}
-        </section>
-
         {menus.length === 0 ? (
           <EmptyState
             icon={ChefHat}
@@ -990,7 +960,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
                 <button
                   key={menu.id}
                   onClick={() => setSelectedMenuId(menu.id)}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${
+                  className={`inline-flex h-[var(--control-desktop-min)] items-center px-3 rounded-md text-sm font-medium border transition-colors ${
                     selectedMenuId === menu.id
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-background border-border hover:bg-muted"
@@ -1224,7 +1194,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
                   Times are in {timezone}. An end time earlier than the start
                   runs past midnight into the next morning.
                 </p>
-                <div className="flex items-center gap-2">
+                <div className="flex items-start gap-[var(--space-8)]">
                   <Checkbox
                     id="window-active"
                     checked={windowForm.isActive}
@@ -1232,7 +1202,7 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
                       setWindowForm((f) => ({ ...f, isActive: v === true }))
                     }
                   />
-                  <Label htmlFor="window-active" className="font-normal">
+                  <Label htmlFor="window-active" className="checkbox-label font-normal">
                     Window is in use
                   </Label>
                 </div>
@@ -1342,6 +1312,130 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
           </DialogContent>
         </Dialog>
 
+        {/* ── Preparation stations ──────────────────────────────────────────────
+            This was a permanently expanded section at the top of the body — a
+            standing panel for two records that are touched about twice a year.
+            A station is a ROUTING DESTINATION for order lines, read by the
+            ticket board and the throughput report; the menu page is where it
+            belongs only because menu items pick one. So it keeps its place
+            here, behind a button, rather than a third of the page.
+
+            Rows rather than the wrapped chips it used to be: the dialog measure
+            is narrower than the page was, and a 160px rename field inside a
+            chip does not wrap gracefully at it. */}
+        <Dialog open={stationsDialog} onOpenChange={setStationsDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Preparation stations</DialogTitle>
+              <DialogDescription>
+                Items route to one station or to the shared queue. Tickets reach
+                the right bar or kitchen by this.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="max-h-[50vh] divide-y divide-border overflow-y-auto border border-border">
+              {activeStations.length === 0 && (
+                <p className="p-[var(--space-16)] text-[length:var(--ui-size)] text-muted-foreground">
+                  No active station. Items can still use the shared queue.
+                </p>
+              )}
+              {activeStations.map((station) => (
+                <div
+                  key={station.id}
+                  className="flex items-center gap-[var(--space-8)] p-[var(--space-8)]"
+                >
+                  {renamingStationId === station.id ? (
+                    <>
+                      <Input
+                        autoFocus
+                        value={renameStationDraft}
+                        onChange={(event) => setRenameStationDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") void renameStation(station);
+                          if (event.key === "Escape") setRenamingStationId(null);
+                        }}
+                        className="h-[var(--control-desktop)] min-w-0 flex-1"
+                        aria-label={`Rename ${station.name}`}
+                      />
+                      <Button
+                        size="filter"
+                        variant="secondary"
+                        onClick={() => void renameStation(station)}
+                      >
+                        Save
+                      </Button>
+                      <Button
+                        size="filter"
+                        variant="ghost"
+                        onClick={() => setRenamingStationId(null)}
+                      >
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="min-w-0 flex-1 truncate text-[length:var(--ui-size)]">
+                        {station.name}
+                      </span>
+                      {canConfigureStations && (
+                        <>
+                          <Button
+                            variant="link"
+                            size="filter"
+                            className="text-muted-foreground hover:text-foreground"
+                            onClick={() => {
+                              setRenamingStationId(station.id);
+                              setRenameStationDraft(station.name);
+                            }}
+                          >
+                            Rename
+                          </Button>
+                          <Button
+                            variant="link"
+                            size="filter"
+                            className="text-muted-foreground hover:text-critical-text"
+                            onClick={() => void archiveStation(station)}
+                          >
+                            Archive
+                          </Button>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {canConfigureStations && (
+              <div className="flex gap-[var(--space-8)]">
+                <Input
+                  placeholder="New station name"
+                  aria-label="New station name"
+                  className="min-w-0 flex-1"
+                  value={newStationName}
+                  onChange={(event) => setNewStationName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && newStationName.trim()) void addStation();
+                  }}
+                />
+                <Button
+                  variant="secondary"
+                  onClick={() => void addStation()}
+                  disabled={!newStationName.trim()}
+                >
+                  Add station
+                </Button>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="secondary" onClick={() => setStationsDialog(false)}>
+                Done
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* ── Library sheet ─────────────────────────────────────────────────────── */}
         <Sheet open={libraryDialog} onOpenChange={setLibraryDialog}>
           <SheetContent className="w-[400px] sm:max-w-[400px] flex flex-col">
@@ -1414,9 +1508,9 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
                     <div className="flex gap-1 shrink-0">
                       {libraryTargetCategoryId && (
                         <Button
-                          size="filter"
+                          size="icon-sm"
                           variant="ghost"
-                          className="h-8 w-8 p-0 text-primary hover:text-primary"
+                          className="text-primary hover:text-primary"
                           title="Add to category"
                           onClick={() => addFromLibrary(item)}
                         >
@@ -1424,17 +1518,20 @@ export function MenuManagementClient({ businessId, businessSlug, canManageTax }:
                         </Button>
                       )}
                       <Button
-                        size="filter"
+                        size="icon-sm"
                         variant="ghost"
-                        className="h-8 w-8 p-0"
+                        title="Edit library item"
+                        aria-label={`Edit ${item.name} in the library`}
                         onClick={() => openEditLibraryItem(item)}
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
                       <Button
-                        size="filter"
+                        size="icon-sm"
                         variant="ghost"
-                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                        title="Delete library item"
+                        aria-label={`Delete ${item.name} from the library`}
+                        className="text-destructive hover:text-destructive"
                         onClick={() =>
                           setDeleteTarget({
                             id: item.id,
@@ -1645,17 +1742,16 @@ function ItemFormFields({
         <p className="text-xs text-muted-foreground">{canManageTax ? `Modifiers inherit this profile. Estimates are non-fiscal ${taxLabel} data.` : "Only owners and managers can change tax assignments."}</p>
       </div>
       {showAlcohol && (
-        <div className="flex items-start gap-2 rounded-md border p-3">
+        <div className="flex items-start gap-[var(--space-8)] rounded-md border p-3">
           <Checkbox
             id="isAlcoholic"
             checked={form.isAlcoholic}
             onCheckedChange={(v) =>
               onChange((f) => ({ ...f, isAlcoholic: v === true }))
             }
-            className="mt-0.5"
           />
           <div className="space-y-0.5">
-            <Label htmlFor="isAlcoholic" className="text-sm cursor-pointer">
+            <Label htmlFor="isAlcoholic" className="checkbox-label text-sm cursor-pointer">
               Contains alcohol
             </Label>
             <p className="text-xs text-muted-foreground">
@@ -1846,41 +1942,44 @@ function CategorySection({
                 <Button
                   size="filter"
                   variant="ghost"
-                  className="text-xs h-7 px-2"
+                  className="text-xs"
                   onClick={() => onToggleAvail(item, category.id)}
                 >
                   {item.isAvailable ? "86" : "Restore"}
                 </Button>
                 <Button
-                  size="filter"
+                  size="icon-sm"
                   variant="ghost"
-                  className="h-7 w-7 p-0"
                   title="Edit recipe"
+                  aria-label={`Edit recipe for ${item.name}`}
                   onClick={() => onEditRecipe(item)}
                 >
                   <FlaskConical className="h-3.5 w-3.5" />
                 </Button>
                 <Button
-                  size="filter"
+                  size="icon-sm"
                   variant="ghost"
-                  className="h-7 w-7 p-0"
                   title="Save to library"
+                  aria-label={`Save ${item.name} to the library`}
                   onClick={() => onSaveToLibrary(item)}
                 >
                   <Bookmark className="h-3.5 w-3.5" />
                 </Button>
                 <Button
-                  size="filter"
+                  size="icon-sm"
                   variant="ghost"
-                  className="h-7 w-7 p-0"
+                  title="Edit item"
+                  aria-label={`Edit ${item.name}`}
                   onClick={() => onEditItem(item, category.id)}
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>
                 <Button
-                  size="filter"
+                  size="icon-sm"
                   variant="ghost"
-                  className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                  title="Delete item"
+                  aria-label={`Delete ${item.name}`}
+                  className="text-destructive hover:text-destructive"
                   onClick={() => onDeleteItem(item, menu.id, category.id)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -2110,9 +2209,11 @@ function RecipeEditorDialog({
                       </span>
                     )}
                     <Button
-                      size="filter"
+                      size="icon-sm"
                       variant="ghost"
-                      className="h-8 w-8 p-0 text-destructive hover:text-destructive shrink-0"
+                      title="Remove ingredient"
+                      aria-label="Remove ingredient"
+                      className="text-destructive hover:text-destructive shrink-0"
                       onClick={() => removeRow(idx)}
                     >
                       <Trash2 className="h-3.5 w-3.5" />

@@ -93,6 +93,17 @@ function toOrderFromWS(o: Record<string, unknown>): Order {
 const BASE_DELAY = 1000;
 const MAX_DELAY = 30_000;
 
+/**
+ * How long a socket must stay up before its backoff is allowed to reset.
+ *
+ * "A frame arrived" is not enough on its own: the queue socket's own failure
+ * authenticated successfully every time and then died ~30ms later, so any
+ * frame-based reset held the retry at 1s forever. Comfortably longer than the
+ * failures observed (25–135ms to close) and shorter than the server's 15s
+ * liveness beat, so a genuinely healthy socket always clears it.
+ */
+const STABLE_AFTER_MS = 5_000;
+
 export function useOrderSocket(
   businessId: string,
   onUpdate: (orders: Order[]) => void,
@@ -102,6 +113,7 @@ export function useOrderSocket(
   const wsRef = useRef<WebSocket | null>(null);
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const delayRef = useRef(BASE_DELAY);
+  const stableRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const intentionalClose = useRef(false);
   const onUpdateRef = useRef(onUpdate);
   // Holds the latest `connect` so the reconnect timer can re-invoke it without
@@ -109,9 +121,32 @@ export function useOrderSocket(
   // declaration). Both refs are synced in effects below, never during render.
   const connectRef = useRef<() => void>(() => {});
 
+  /**
+   * The backoff, in one place, so the token-fetch path and `onclose` cannot
+   * drift apart. They did: `onclose` had a correct 1s→30s chain and a failed
+   * token fetch simply returned, scheduling nothing — and `/api/ws-token` is
+   * exactly what fails while the backend is down. One `return` ended the retry
+   * chain permanently and only a full page reload brought the board back.
+   */
+  const scheduleRetry = useCallback(() => {
+    if (intentionalClose.current) return;
+    if (retryRef.current) clearTimeout(retryRef.current);
+    const delay = delayRef.current;
+    delayRef.current = Math.min(delay * 2, MAX_DELAY);
+    retryRef.current = setTimeout(() => connectRef.current(), delay);
+  }, []);
+
   const connect = useCallback(async () => {
+    if (intentionalClose.current) return;
     const jwt = await fetchJwt();
-    if (!jwt) return;
+    if (intentionalClose.current) return;
+    if (!jwt) {
+      // The backend is down, or the session is gone. Either way this is the
+      // failure the board most needs to recover from, so it schedules the same
+      // backoff `onclose` would have.
+      scheduleRetry();
+      return;
+    }
 
     if (wsRef.current && wsRef.current.readyState <= WebSocket.OPEN) return;
 
@@ -119,17 +154,42 @@ export function useOrderSocket(
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
+    /**
+     * OPENING IS NOT SUCCESS. The server accepts the socket first and validates
+     * the authenticate frame after (server/app/services/websocket_auth.py), so
+     * a rejected token — expired session_version, revoked staff row, disabled
+     * module, wrong business — produces open → close, and the queue router has
+     * a second such path that closes cleanly when the tenant has no location.
+     *
+     * Resetting the backoff here treated that as a working connection, so an
+     * accept-then-close loop retried at the base delay forever and never backed
+     * off; `setConnected(true)` made the offline bar mount and unmount with it,
+     * which is the flicker. `lastContactAt` waits too: a handshake is not
+     * contact, and refreshing it here held the "no contact" counter at 00:00.
+     *
+     * NOR IS THE `authenticated` FRAME SUCCESS, which the reproduction settled:
+     * the queue socket authenticated on every attempt and still died ~30ms
+     * later with 1006, so resetting on that frame kept the retry pinned at the
+     * base delay just as `onopen` had. The backoff resets only once the
+     * connection has STAYED up past STABLE_AFTER_MS — the only signal that
+     * distinguishes a connection that worked from one that merely started.
+     */
     ws.onopen = () => {
-      setLastContactAt(Date.now());
       ws.send(JSON.stringify({ type: "authenticate", token: jwt }));
-      setConnected(true);
-      delayRef.current = BASE_DELAY;
     };
 
     ws.onmessage = (event) => {
       setLastContactAt(Date.now());
       try {
         const msg = JSON.parse(event.data as string);
+        if (msg.type === "authenticated") {
+          setConnected(true);
+          if (stableRef.current) clearTimeout(stableRef.current);
+          stableRef.current = setTimeout(() => {
+            if (ws.readyState === WebSocket.OPEN) delayRef.current = BASE_DELAY;
+          }, STABLE_AFTER_MS);
+          return;
+        }
         if (msg.type === "order_updated" && Array.isArray(msg.orders)) {
           onUpdateRef.current(
             (msg.orders as Record<string, unknown>[]).map(toOrderFromWS),
@@ -142,18 +202,32 @@ export function useOrderSocket(
 
     ws.onclose = () => {
       setConnected(false);
+      if (stableRef.current) {
+        clearTimeout(stableRef.current);
+        stableRef.current = null;
+      }
       wsRef.current = null;
-      if (intentionalClose.current) return;
-
-      const delay = delayRef.current;
-      delayRef.current = Math.min(delay * 2, MAX_DELAY);
-      retryRef.current = setTimeout(() => connectRef.current(), delay);
+      scheduleRetry();
     };
 
     ws.onerror = () => {
       ws.close();
     };
-  }, [businessId]);
+  }, [businessId, scheduleRetry]);
+  /** Retry, now. See `SocketStatus.reconnect`. */
+  const reconnect = useCallback(() => {
+    if (retryRef.current) {
+      clearTimeout(retryRef.current);
+      retryRef.current = null;
+    }
+    delayRef.current = BASE_DELAY;
+    intentionalClose.current = false;
+    const socket = wsRef.current;
+    if (socket && socket.readyState <= WebSocket.OPEN) return;
+    wsRef.current = null;
+    void connectRef.current();
+  }, []);
+
 
   // Keep the refs pointed at the latest values (synced in effects, not during
   // render). onUpdateRef is read in ws.onmessage; connectRef in the reconnect timer.
@@ -170,9 +244,10 @@ export function useOrderSocket(
     return () => {
       intentionalClose.current = true;
       if (retryRef.current) clearTimeout(retryRef.current);
+      if (stableRef.current) clearTimeout(stableRef.current);
       wsRef.current?.close();
     };
   }, [connect]);
 
-  return { connected, lastContactAt };
+  return { connected, lastContactAt, reconnect };
 }

@@ -12,6 +12,12 @@ export interface User {
   createdAt: string;
   /** Set while a 30-day account deletion window is running. */
   deletionRequestedAt?: string;
+  /** Whether the account holder proved control of `email` (migration 053).
+   * False never blocks sign-in — it only raises a prompt in the workspace. */
+  emailVerified: boolean;
+  /** An address the user asked to move to and has not confirmed yet. The
+   * account still uses `email` until they do. */
+  pendingEmail?: string;
 }
 
 export interface Customer extends User {
@@ -88,6 +94,8 @@ export interface MeContext {
     phone?: string;
     avatar?: string;
     userType: string;
+    emailVerified: boolean;
+    pendingEmail?: string;
   };
   business: Pick<Business, "id" | "name" | "slug" | "enabledModules" | "onboardingComplete" | "notificationChannels"> & {
     locations: Array<{ id: string; name: string; address?: string; is_primary: boolean }>;
@@ -1069,6 +1077,10 @@ export interface Reservation {
    *  payload declares them and never populates them. */
   reconfirmationEnabled?: boolean;
   cancellationWindowMinutes?: number;
+  /** Whether the guest's confirmation email went out: `delivered`, `pending`,
+   *  `failed` or `unavailable`. Same vocabulary as the queue and the waitlist,
+   *  so `deliverySeverity` reads all three. Absent on the public projection. */
+  deliveryState?: string;
   createdAt: string;
   updatedAt: string;
 }

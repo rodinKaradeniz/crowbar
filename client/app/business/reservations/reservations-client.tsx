@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { EmptyState } from "@/components/empty-state";
 import { ReservationPanel } from "@/components/reservation-panel";
 import { ReservationTable } from "@/components/reservation-table";
-import { ReservationSearchFilter } from "@/components/reservation-search-filter";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import {
   ReservationEditDialog,
@@ -13,50 +12,56 @@ import {
 } from "@/components/reservation-edit-dialog";
 import { StaffReservationDialog } from "@/components/staff-reservation-dialog";
 import { ReservationTablePlan } from "@/components/reservation-table-plan";
-import { ReservationWaitlistPanel } from "@/components/reservation-waitlist-panel";
 import { Button } from "@/components/ui/button";
 import { useServiceClock } from "@/hooks/use-service-clock";
-import type { Reservation, ReservationWaitlistEntry, ServiceType } from "@/types";
+import type { Reservation, ServiceType } from "@/types";
 import { CustomerResponse } from "@/lib/api-client";
-import { clientMarkReservationNoShow, clientUpdateReservation } from "@/lib/client-api";
+import {
+  clientMarkReservationNoShow,
+  clientRetryReservationDelivery,
+  clientUpdateReservation,
+} from "@/lib/client-api";
 import { toast } from "sonner";
 import { isReservationReschedulable } from "@/lib/availability";
-import { PageBody, PageHeader } from "@/components/page-header";
+import { deliverySeverity } from "@/lib/severity";
 
 interface ReservationsClientProps {
   initialReservations: Reservation[];
-  initialWaitlistEntries: ReservationWaitlistEntry[];
-  businessId: string;
   serviceTypes: ServiceType[];
   customers: CustomerResponse[];
   businessTimezone: string;
   businessMaxGuests: number;
   currentTime: string;
   canOverride: boolean;
+  /** Shared with the Requests tab, so a search survives switching between them. */
+  searchQuery: string;
+  serviceTypeFilter: string;
+  /** The "New reservation" action lives in the workspace header, above the tabs. */
+  creatingReservation: boolean;
+  onCreatingReservationChange: (open: boolean) => void;
 }
 
 export default function ReservationsClient({
   initialReservations,
-  initialWaitlistEntries,
-  businessId,
   serviceTypes,
   customers,
   businessTimezone,
   businessMaxGuests,
   currentTime,
   canOverride,
+  searchQuery,
+  serviceTypeFilter,
+  creatingReservation,
+  onCreatingReservationChange,
 }: ReservationsClientProps) {
   const router = useRouter();
   const [editingReservation, setEditingReservation] =
     useState<Reservation | null>(null);
   const [reschedulingReservation, setReschedulingReservation] =
     useState<Reservation | null>(null);
-  const [creatingReservation, setCreatingReservation] = useState(false);
   const [cancellingReservation, setCancellingReservation] =
     useState<Reservation | null>(null);
   const [noShowReservation, setNoShowReservation] = useState<Reservation | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [serviceTypeFilter, setServiceTypeFilter] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [openReservation, setOpenReservation] = useState<Reservation | null>(null);
   const { now, ready } = useServiceClock();
@@ -100,6 +105,29 @@ export default function ReservationsClient({
 
   const handleCancel = (reservation: Reservation) => {
     setCancellingReservation(reservation);
+  };
+
+  // The whole of what a staff member can do about a guest who was not told.
+  // No automatic retry and no queue behind it — someone decides, and presses.
+  const handleResendConfirmation = async (reservation: Reservation) => {
+    setActionLoading(reservation.id);
+    try {
+      const updated = await clientRetryReservationDelivery(reservation.id);
+      if (updated.deliveryState === "delivered") {
+        toast.success("Confirmation email sent to the guest.");
+      } else {
+        toast.warning(
+          "Still not sent. The email provider is unavailable or not configured.",
+        );
+      }
+      router.refresh();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not send the confirmation again.",
+      );
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const handleSave = async (values: ReservationEditValues) => {
@@ -161,34 +189,13 @@ export default function ReservationsClient({
 
   return (
     <>
-      <PageHeader
-        wide
-        title="Reservations"
-        description="The book, for every device and every shift."
-        actions={
-          <Button type="button" onClick={() => setCreatingReservation(true)}>
-            New reservation
-          </Button>
-        }
-      >
-        <ReservationSearchFilter
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          serviceTypeFilter={serviceTypeFilter}
-          onServiceTypeFilterChange={setServiceTypeFilter}
-          serviceTypes={serviceTypes}
-        />
-      </PageHeader>
-
-      <PageBody wide>
-
         {initialReservations.length === 0 ? (
           <EmptyState
             title="Nothing on the book"
             description="Bookings from your public page and from staff land here on one schedule, kept by everyone at once."
             action={{
               label: "Take a booking",
-              onClick: () => setCreatingReservation(true),
+              onClick: () => onCreatingReservationChange(true),
             }}
           />
         ) : (
@@ -285,18 +292,19 @@ export default function ReservationsClient({
                 >
                   Cancel booking
                 </Button>
+                {deliverySeverity(panelReservation.deliveryState) === "attend" ? (
+                  <Button
+                    size="filter"
+                    variant="secondary"
+                    disabled={actionLoading === panelReservation.id}
+                    onClick={() => void handleResendConfirmation(panelReservation)}
+                  >
+                    Send again
+                  </Button>
+                ) : null}
               </>
             ) : null
           }
-        />
-
-        <ReservationWaitlistPanel
-          initialEntries={initialWaitlistEntries}
-          businessId={businessId}
-          businessTimezone={businessTimezone}
-          businessMaxGuests={businessMaxGuests}
-          serviceTypes={serviceTypes}
-          customers={customers}
         />
 
         {/* Edit Reservation Dialog */}
@@ -336,14 +344,14 @@ export default function ReservationsClient({
         <StaffReservationDialog
           reservation={null}
           open={creatingReservation}
-          onOpenChange={setCreatingReservation}
+          onOpenChange={onCreatingReservationChange}
           serviceTypes={serviceTypes}
           businessTimezone={businessTimezone}
           businessMaxGuests={businessMaxGuests}
           canOverride={canOverride}
           mode="create"
           onCompleted={() => {
-            setCreatingReservation(false);
+            onCreatingReservationChange(false);
             router.refresh();
           }}
         />
@@ -359,7 +367,6 @@ export default function ReservationsClient({
           onConfirm={handleCancelConfirm}
           variant="destructive"
         />
-      </PageBody>
     </>
   );
 }
