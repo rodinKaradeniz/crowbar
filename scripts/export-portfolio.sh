@@ -34,15 +34,39 @@ allowlist=(
   .dockerignore .gitignore .gitleaks.toml .github/dependabot.yml .github/workflows
 )
 
+# The loop below refuses images so a stray screenshot, a photo carrying EXIF, or
+# an exploratory notebook can never ride a directory entry in the allowlist into
+# a public export. These are the images the product itself needs, named one by
+# one: the demo venue photo the seeded fixtures render, and the two app icons
+# Next.js serves from its `app/` file conventions.
+exportable_images=(
+  client/public/volt-and-vine.jpg
+  client/app/icon.png
+  client/app/apple-icon.png
+)
+
+is_exportable_image() {
+  local candidate="$1"
+  local allowed
+  for allowed in "${exportable_images[@]}"; do
+    if [[ "$candidate" == "$allowed" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 mkdir -p "$destination"
 cd "$repo_root"
 git ls-files -z -- "${allowlist[@]}" | while IFS= read -r -d '' source_path; do
-  case "$source_path" in
-    *.jpg|*.jpeg|*.png|*.webp|*.ipynb|*.env|.claude/*|.agents/*|.codex/*)
-      echo "Allowlist produced a forbidden path: $source_path" >&2
-      exit 1
-      ;;
-  esac
+  if ! is_exportable_image "$source_path"; then
+    case "$source_path" in
+      *.jpg|*.jpeg|*.png|*.webp|*.ipynb|*.env|.claude/*|.agents/*|.codex/*)
+        echo "Allowlist produced a forbidden path: $source_path" >&2
+        exit 1
+        ;;
+    esac
+  fi
   mkdir -p "$destination/$(dirname "$source_path")"
   cp -p "$source_path" "$destination/$source_path"
 done
