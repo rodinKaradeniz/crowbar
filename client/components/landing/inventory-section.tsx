@@ -14,9 +14,9 @@ const DEDUCTIONS: [string, string][] = [
 ];
 
 const STOCK: [string, number, string, boolean][] = [
-  ["Monkey 47 Gin", 64, "4,5 l", false],
-  ["Campari", 22, "0,9 l", true],
-  ["Cocchi Vermouth", 81, "3,2 l", false],
+  ["Monkey 47 Gin", 64, "4.5 l", false],
+  ["Campari", 22, "0.9 l", true],
+  ["Cocchi Vermouth", 81, "3.2 l", false],
 ];
 
 export function InventorySection() {

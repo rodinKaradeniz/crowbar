@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { IS_DEMO } from "@/lib/demo/mode";
 
 /**
  * `#night` is a walk-through of one service from the door to close-out, and
@@ -33,6 +34,10 @@ const SECTIONS = [
  * operable, screen-reader announced and works with JS disabled. `group-open:`
  * swaps the icon off the element's own open state, so nothing needs to be
  * tracked in React.
+ *
+ * In the demo build the page is the front door of the demo, not a funnel into
+ * sign-up, so the sign-in/workspace pair becomes one "Try the demo" button to
+ * the role picker. Registering is not in the demo; the picker is.
  */
 export function LandingHeader() {
   return (
@@ -55,12 +60,18 @@ export function LandingHeader() {
             </Link>
           ))}
 
-          <Link href="/auth/login" className="py-1.5 font-semibold text-foreground">
-            Sign in
-          </Link>
+          {!IS_DEMO && (
+            <Link href="/auth/login" className="py-1.5 font-semibold text-foreground">
+              Sign in
+            </Link>
+          )}
 
           <Button asChild size="md">
-            <Link href="/auth/register">Start a workspace</Link>
+            {IS_DEMO ? (
+              <Link href="/auth/login">Try the demo</Link>
+            ) : (
+              <Link href="/auth/register">Start a workspace</Link>
+            )}
           </Button>
         </nav>
 
@@ -106,15 +117,21 @@ export function LandingHeader() {
               </Link>
             ))}
 
-            <Link
-              href="/auth/login"
-              className="mkt-nav-sheet-link border-b border-border font-semibold text-foreground"
-            >
-              Sign in
-            </Link>
+            {!IS_DEMO && (
+              <Link
+                href="/auth/login"
+                className="mkt-nav-sheet-link border-b border-border font-semibold text-foreground"
+              >
+                Sign in
+              </Link>
+            )}
 
             <Button asChild size="md" className="mt-4 w-full">
-              <Link href="/auth/register">Start a workspace</Link>
+              {IS_DEMO ? (
+                <Link href="/auth/login">Try the demo</Link>
+              ) : (
+                <Link href="/auth/register">Start a workspace</Link>
+              )}
             </Button>
           </nav>
         </details>

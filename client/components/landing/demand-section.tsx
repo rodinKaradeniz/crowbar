@@ -2,9 +2,10 @@
  * §05 — the seven-night forecast, drawn as bars with the figure above each.
  *
  * Tonight is the brand bar. Every other night is a neutral dust fill, including
- * the 152 on Thursday: a busy night is not a severity. Weekday initials are the
- * canvas's German short forms, matching the venue locale the page is written
- * for; inside the product the same axis comes from `lib/business-time.ts`.
+ * the 152 on Thursday: a busy night is not a severity. The weekday labels are
+ * English short forms because this is an illustration with no venue behind it;
+ * inside the product the same axis comes from `lib/business-time.ts` in the
+ * venue's own locale.
  */
 const NIGHTS: {
   label: string;
@@ -12,13 +13,13 @@ const NIGHTS: {
   height: string;
   kind: "today" | "peak" | "plain";
 }[] = [
-  { label: "HEUTE", covers: "84", height: "56%", kind: "today" },
-  { label: "SA", covers: "92", height: "61%", kind: "plain" },
-  { label: "SO", covers: "48", height: "32%", kind: "plain" },
-  { label: "MO", covers: "31", height: "21%", kind: "plain" },
-  { label: "DI", covers: "39", height: "26%", kind: "plain" },
-  { label: "MI", covers: "66", height: "44%", kind: "plain" },
-  { label: "DO", covers: "152", height: "100%", kind: "peak" },
+  { label: "TODAY", covers: "84", height: "56%", kind: "today" },
+  { label: "SAT", covers: "92", height: "61%", kind: "plain" },
+  { label: "SUN", covers: "48", height: "32%", kind: "plain" },
+  { label: "MON", covers: "31", height: "21%", kind: "plain" },
+  { label: "TUE", covers: "39", height: "26%", kind: "plain" },
+  { label: "WED", covers: "66", height: "44%", kind: "plain" },
+  { label: "THU", covers: "152", height: "100%", kind: "peak" },
 ];
 
 export function DemandSection() {

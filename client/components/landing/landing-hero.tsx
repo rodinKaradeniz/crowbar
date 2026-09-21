@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { IS_DEMO } from "@/lib/demo/mode";
 
 /**
  * 7/5 split, panel flush right, and the "it replaces" strip beneath.
@@ -53,7 +54,11 @@ export function LandingHero() {
 
           <div className="mt-9 flex flex-wrap gap-3">
             <Button asChild size="auth">
-              <Link href="/auth/register">Start a workspace</Link>
+              {IS_DEMO ? (
+                <Link href="/auth/login">Try the demo</Link>
+              ) : (
+                <Link href="/auth/register">Start a workspace</Link>
+              )}
             </Button>
             <Button asChild size="auth" variant="secondary">
               <Link href="#night">See a night in Crowbar</Link>
@@ -61,7 +66,10 @@ export function LandingHero() {
           </div>
 
           <p className="mkt-note mt-5 text-text-muted">
-            Free for 30 days. No card. Your register stays exactly where it is.
+            {/* No trial or billing exists; the demo build does not promise one. */}
+            {IS_DEMO
+              ? "Your register stays exactly where it is."
+              : "Free for 30 days. No card. Your register stays exactly where it is."}
           </p>
         </div>
 
@@ -89,7 +97,7 @@ function SampleNightPanel() {
       aria-label="An example of a night in Crowbar"
     >
       <div className="mkt-cell ground-ink flex items-center justify-between gap-2.5 border-b border-ink bg-background text-foreground">
-        <span className="mkt-kicker">Fr, 28. Aug · 19:24</span>
+        <span className="mkt-kicker">Fri, 28 Aug · 19:24</span>
         <span className="mkt-chip flex items-center gap-[7px] text-primary">
           <span className="mkt-dot live-pulse bg-primary" aria-hidden />
           Service open
@@ -137,7 +145,7 @@ function SampleNightPanel() {
       <div className="mkt-cell mkt-item flex items-baseline gap-2.5 border-b border-line-soft bg-brand-wash-2">
         <span className="mkt-stamp text-primary">19:21</span>
         <span className="text-[var(--surface-4)]">
-          Tisch 4 sent <strong className="font-semibold">2 Negroni</strong> to
+          Table 4 sent <strong className="font-semibold">2 Negroni</strong> to
           the bar board
         </span>
       </div>
@@ -155,7 +163,7 @@ function SampleNightPanel() {
       <div className="mkt-cell mkt-item flex items-baseline gap-2.5">
         <span className="mkt-stamp text-text-muted">19:52</span>
         <span className="text-text-secondary">
-          Tisch 2 <strong className="font-semibold">settled externally</strong>{" "}
+          Table 2 <strong className="font-semibold">settled externally</strong>{" "}
           — Theo, 19:52
         </span>
       </div>

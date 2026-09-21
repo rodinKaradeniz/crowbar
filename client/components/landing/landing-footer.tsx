@@ -53,8 +53,7 @@ export function LandingFooter() {
               <span className="mkt-logo-type text-foreground">CROWBAR</span>
             </div>
             <p className="mkt-item max-w-[34ch] leading-[1.5]">
-              Operations for one venue at a time. Built with bars in Berlin,
-              Lisbon and Kopenhagen.
+              Operations for one venue at a time.
             </p>
           </div>
 
@@ -80,7 +79,10 @@ export function LandingFooter() {
 
         <div className="mkt-kicker flex flex-wrap justify-between gap-4 pt-[22px] tracking-[0.06em] normal-case text-text-on-ink-faint">
           <span>
-            © {new Date().getFullYear()} Crowbar Systems GmbH · Berlin
+            © {new Date().getFullYear()} Crowbar · Powered by{" "}
+            <Link href="https://merulio.com" className="hover:text-primary">
+              Merulio
+            </Link>
           </span>
         </div>
       </div>

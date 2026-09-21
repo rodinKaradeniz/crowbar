@@ -15,7 +15,7 @@
  * anywhere. Kept as the canvas draws it, and recorded against the ticket-target
  * gap in `docs/TODO.md` §7a: when targets ship, the product matches this page.
  *
- * The tab total is written in German format because this is an illustration
+ * The tab total is written in English format because this is an illustration
  * with no tenant behind it. Every figure in the product goes through
  * `lib/money.ts` with the venue's own configured locale.
  */
@@ -92,7 +92,7 @@ function BarBoardPanel() {
           <span>T9</span>
           <span className="text-attend-text">3:12</span>
         </div>
-        <p className="mkt-item-lg font-medium">4 × Pils, 0,3 l</p>
+        <p className="mkt-item-lg font-medium">4 × Pils, 0.3 l</p>
       </div>
 
       <div className="mkt-cell-tight opacity-50">
@@ -110,15 +110,15 @@ function BarBoardPanel() {
 
 function TabPanel() {
   const lines: [string, string][] = [
-    ["2 × Negroni", "28,00"],
-    ["1 × Gimlet", "13,00"],
-    ["Padrón-Paprika", "9,50"],
+    ["2 × Negroni", "28.00"],
+    ["1 × Gimlet", "13.00"],
+    ["Padrón peppers", "9.50"],
   ];
 
   return (
     <div className="ground-ink border border-surface-raised bg-surface text-foreground">
       <div className="mkt-cell-head type-label flex items-center justify-between border-b border-surface-raised text-text-on-ink-faint">
-        <span>Tab · Tisch 4</span>
+        <span>Tab · Table 4</span>
         {/* Brand, not severity: an open tab during service is the normal case. */}
         <span className="text-primary">Open</span>
       </div>
@@ -135,7 +135,7 @@ function TabPanel() {
 
       <div className="flex items-baseline justify-between px-3 py-[13px]">
         <span className="type-label text-text-on-ink-faint">Running</span>
-        <span className="mkt-fig-sm">50,50 €</span>
+        <span className="mkt-fig-sm">€50.50</span>
       </div>
     </div>
   );

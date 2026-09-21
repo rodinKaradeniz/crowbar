@@ -2,53 +2,21 @@ CROWBAR — LOCAL CHEATSHEET
 Repo: /Users/rodinkaradeniz/projects/crowbar
 Local development only. Nothing here applies to Railway.
 
+== 1. DEMO CREDENTIALS          http://localhost:3000/auth/login
+  EMAIL                    PASSWORD     ROLE
+  owner@example.com        password123  owner
+  manager@example.com      password123  manager
+  host@example.com         password123  host_server
+  bar@example.com          password123  bar_kitchen
+  inventory@example.com    password123  inventory_operator
 
-────────────────────────────────────────────────────────────────────────
-1. DEMO CREDENTIALS
-────────────────────────────────────────────────────────────────────────
+Tenant "Volt & Vine" (slug volt-and-vine). Exists only after seeding (§4).
+password123 rejected? Reseed (§4) without DEMO_ADMIN_PASSWORD.
 
-All five accounts belong to the seeded demo tenant "Volt & Vine"
-(slug: volt-and-vine). Sign in at http://localhost:3000/auth/login
-
-  EMAIL                    PASSWORD     ROLE                NAME
-  owner@example.com        password123  owner               Demo Owner
-  manager@example.com      password123  manager             Demo Manager
-  host@example.com         password123  host_server         Demo Host / Server
-  bar@example.com          password123  bar_kitchen         Demo Bartender
-  inventory@example.com    password123  inventory_operator  Demo Inventory Operator
-
-These exist only after seeding (section 4). A migrate-only run creates no
-users at all.
-
-To use a different password, set DEMO_ADMIN_PASSWORD before seeding. The
-plaintext is never written to a seed file — only its bcrypt hash is
-substituted in.
-
-IF password123 IS REJECTED, the last seed ran with DEMO_ADMIN_PASSWORD set.
-Nothing records what it was: the hash is all that is stored, and the plaintext
-only ever existed in that one shell command. The seeder prints the password it
-used, so it is in that run's scrollback and nowhere else. Reseed (section 4)
-without the variable to get back to the documented one — or, to keep the demo
-data you have been working through, replace just the hashes:
-
-  cd /Users/rodinkaradeniz/projects/crowbar/server
-  HASH=$(venv/bin/python -c "import bcrypt; \
-    print(bcrypt.hashpw(b'password123', bcrypt.gensalt()).decode())")
-  docker exec crowbar-db psql -U postgres -d crowbar \
-    -c "UPDATE users SET password_hash = '$HASH' \
-        WHERE email LIKE '%@example.com';"
-
-
-────────────────────────────────────────────────────────────────────────
-2. RUN THE WHOLE APP
-────────────────────────────────────────────────────────────────────────
-
+== 2. RUN THE WHOLE APP
   cd /Users/rodinkaradeniz/projects/crowbar
   ./scripts/dev.sh
-
-Starts Docker (postgres, redis, ml), installs backend deps, runs pending
-migrations, then starts backend and frontend in the foreground.
-Does NOT seed.
+  KILL_STALE=true ./scripts/dev.sh      # if 3000/8000 are held
 
   Frontend    http://localhost:3000
   Backend     http://localhost:8000
@@ -57,164 +25,39 @@ Does NOT seed.
   PostgreSQL  localhost:5432
   Redis       localhost:6379
 
-Leave the terminal open — Ctrl+C stops backend and frontend.
+== 3. STOP THE APP
+  Ctrl+C                               # backend + frontend; Docker keeps running
+  ./scripts/stop.sh                    # also Docker (removes containers, keeps data)
 
-Only one copy can run at a time. dev.sh refuses to start when 3000 or 8000
-is already in use and names the process holding it. Stop that process
-(section 5), or let dev.sh do it:
+  cd server && docker compose stop
+  cd server && docker compose down
+  cd server && docker compose up -d
 
-  KILL_STALE=true ./scripts/dev.sh
-
-Demo only — the frontend alone, on its own mock API. No Docker, no venv, no
-migrations, no API, no ML; nothing to seed and no password:
-
-  ./scripts/dev.sh --demo
-  ./scripts/dev.sh --demo --demo-api-url=https://<demo-domain>/demo-api
-
-  Demo        http://localhost:3000/auth/login   (pick a role, then work the night)
-  Mock API    answered inside the frontend process — no backend, no network.
-              /demo-api serves the same mock over HTTP for curl, and
-              --demo-api-url points the frontend at a deployed demo's mock.
-
-You can walk the whole service loop: book, seat, scan the table QR, order,
-send to the pass, record the register, close the table. What you change is
-kept in your own browser cookie and nowhere else — another browser sees the
-recorded evening untouched, and "Start the evening again" in the demo banner
-puts it back. Everything outside that loop (venue setup, settings, staff,
-account flows) answers "not in the demo" rather than half-saving.
-
-KILL_STALE works the same; SEED_DATA is rejected, as is --demo-api-url
-without --demo. The mock serves client/lib/demo/fixtures/recording.json,
-recorded from the seeded stack. To re-record (full stack running and seeded;
-reads only, writes nothing):
-
-  cd /Users/rodinkaradeniz/projects/crowbar/client
-  DEMO_ADMIN_PASSWORD='<the seeded value>' node scripts/record-demo-fixtures.mjs
-
-To walk the loop as a test against a running demo (no password needed):
-
-  cd /Users/rodinkaradeniz/projects/crowbar/client && npm run test:journey:demo
-
-
-────────────────────────────────────────────────────────────────────────
-3. STOP THE APP
-────────────────────────────────────────────────────────────────────────
-
-  Ctrl+C                  in the dev.sh terminal — stops backend + frontend,
-                          leaves Docker running
-
-  ./scripts/stop.sh       stops Docker too
-
-Note: stop.sh runs `docker compose down`, which REMOVES the containers, not
-just stops them. Your data survives — postgres lives in the external volume
-crowbar_postgres_data — but the containers are recreated on the next
-dev.sh run. If `docker ps` shows no crowbar-* containers, this is why.
-
-Docker only, without the script:
-
-  cd server && docker compose stop     # keep containers, just stop them
-  cd server && docker compose down     # remove containers (same as stop.sh)
-  cd server && docker compose up -d    # bring them back
-
-
-────────────────────────────────────────────────────────────────────────
-4. SEED / RESET DEMO DATA
-────────────────────────────────────────────────────────────────────────
-
-Seeding IS the reset. The seed file tears the demo tenant down and re-inserts
-it. There is no separate reset command.
-
-It is NOT a plain cascade, and it matters if you add to the seed. Five tables
-hold business_id ON DELETE RESTRICT rather than CASCADE, so that a settlement,
-a correction or a status trail cannot vanish with its tenant — which means
-DELETE FROM businesses fails outright once any of them holds a row. The seed
-clears those explicitly first, in dependency order, and that is what lets you
-re-run it against a database someone has actually worked a shift through.
-Adding rows to a RESTRICT table without adding its delete to the cleanup block
-breaks re-seeding, and only the SECOND run shows it.
-
-STOP THE API BEFORE SEEDING. With uvicorn up, SEED_DATA=true blocks on a
-relation lock held by an `idle in transaction` session from the live backend,
-and the stream consumer's 30s retry loop piles up behind it. It looks like a
-hang; it completes immediately once the API is stopped. Cost the 2026-09-09
-pass ten minutes.
-
+== 4. SEED / RESET DEMO DATA            (destroys the demo tenant's changes)
+Stop the API first or the seed blocks on a lock:
   pkill -f "uvicorn app.main:app"
-
-Full stack, seeded (dev.sh refuses to start on an occupied port 8000, so a
-leftover API stops this run before it ever reaches the seed):
 
   cd /Users/rodinkaradeniz/projects/crowbar
   SEED_DATA=true ./scripts/dev.sh
+  SEED_DATA=true DEMO_ADMIN_PASSWORD='your-password' ./scripts/dev.sh
 
-Reseed only, without restarting the app (Docker must be up). This is the path
-that deadlocks — stop the API first:
-
-  pkill -f "uvicorn app.main:app"
+Reseed without restarting (Docker up, API stopped):
   cd /Users/rodinkaradeniz/projects/crowbar/server
   SEED_DATA=true venv/bin/python -m db.migrate
 
-Migrations only, no data touched:
-
+Migrations only:
   cd /Users/rodinkaradeniz/projects/crowbar/server
   venv/bin/python -m db.migrate
 
-Custom password:
-
-  SEED_DATA=true DEMO_ADMIN_PASSWORD='your-password' ./scripts/dev.sh
-
-Seeding refuses to run against any non-local database. That guard is what
-keeps demo data away from anything real — leave it alone.
-
-WARNING: this destroys whatever you were working on in the demo tenant.
-
-
-────────────────────────────────────────────────────────────────────────
-5. KILL A PROCESS ON A PORT
-────────────────────────────────────────────────────────────────────────
-
-See what is holding a port:
-
+== 5. KILL A PROCESS ON A PORT
   lsof -i :3000
-
-Just the PIDs:
-
-  lsof -ti :3000
-
-Kill it (graceful):
-
-  lsof -ti :3000 | xargs kill
-
-Force, only if it will not die:
-
-  lsof -ti :3000 | xargs kill -9
-
-Crowbar's two ports in one go (each port needs its own -i):
-
-  lsof -ti :3000 -i :8000 | xargs kill
-
-If the port is free, `lsof -ti` prints nothing and xargs runs kill with no
-arguments — harmless, but you can add `-r` to skip it entirely:
-
   lsof -ti :3000 | xargs -r kill
+  lsof -ti :3000 | xargs -r kill -9
+  lsof -ti :3000 -i :8000 | xargs -r kill
 
-Do not blanket-kill by name. `pkill -f "next dev"` will also kill other
-projects' dev servers, which is easy to do by accident when several are
-running. Target the port instead.
+Target the port, never `pkill -f "next dev"` — that kills other projects too.
 
-
-────────────────────────────────────────────────────────────────────────
-6. SEE THE WAITLIST OFFER SURFACE
-────────────────────────────────────────────────────────────────────────
-
-/reserve/waitlist renders "Offer unavailable" unless a waitlist entry is
-actually in the `offered` state, and an offer only lives OFFER_MINUTES (15).
-The seed creates one, so it is live for fifteen minutes after seeding and
-terminal after that. Reseeding to see this screen is the wrong trade — mint a
-fresh offer instead. Nothing here is destructive; it moves one waitlist row.
-
-Log in and offer the seeded waiting entry:
-
+== 6. SEE THE WAITLIST OFFER SURFACE
   TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
     -H 'Content-Type: application/json' \
     -d '{"email":"owner@example.com","password":"password123"}' \
@@ -225,19 +68,9 @@ Log in and offer the seeded waiting entry:
     -d '{"reservation_time":"<an available slot, ISO 8601 UTC>"}' \
     http://localhost:8000/api/reservations/waitlist/00000000-0000-0030-0000-000000000001/offer
 
-`GET /api/reservations/waitlist` lists the entries and their ids if the seeded
-one has already been used. `requested_starts_at` on the entry is a slot that
-works.
+  curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/reservations/waitlist
 
-The offer link is emailed. Whether that works locally depends on whether
-RESEND_API_KEY is set in server/.env — it IS set on this machine, with a
-verified sending domain, so the response comes back `"delivery_state":
-"delivered"` and the link goes to a real inbox. With the key unset you get
-`"delivery_state": "failed"` and no link at all. Either way you can mint the
-capability token by hand rather than waiting on a mailbox — it is derived, not
-stored:
-
-  cd server
+  cd /Users/rodinkaradeniz/projects/crowbar/server
   REV=$(docker exec crowbar-db psql -U postgres -d crowbar -tAc \
     "SELECT offer_token_revision FROM reservation_waitlist_entries \
      WHERE id='00000000-0000-0030-0000-000000000001'")
@@ -249,11 +82,15 @@ stored:
       entry_id=UUID('00000000-0000-0030-0000-000000000001'),
       revision=$REV))"
 
-Then open, with the token in the FRAGMENT — it is a credential and never
-reaches the server or a log:
-
   http://localhost:3000/reserve/waitlist#token=<the token>
 
-The three token-bearing guest routes all work this way: /reserve/manage,
-/reserve/waitlist and /reserve/waitlist/manage. There is no path-segment
-form of any of them; /reserve/waitlist/<anything> is a 404.
+== 7. FRONTEND-ONLY DEMO        http://localhost:3000/auth/login
+  cd /Users/rodinkaradeniz/projects/crowbar
+  ./scripts/dev.sh --demo
+  ./scripts/dev.sh --demo --demo-api-url=https://<demo-domain>/demo-api
+
+  cd /Users/rodinkaradeniz/projects/crowbar/client && npm run test:journey:demo
+
+Re-record fixtures (full stack running and seeded):
+  cd /Users/rodinkaradeniz/projects/crowbar/client
+  DEMO_ADMIN_PASSWORD='<the seeded value>' node scripts/record-demo-fixtures.mjs

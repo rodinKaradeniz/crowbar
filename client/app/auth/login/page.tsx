@@ -58,7 +58,7 @@ export default function LoginPage() {
             </div>
 
             <p className="type-label text-[var(--text-on-ink-dimmer)]">
-              crowbar.co · Berlin
+              Powered by Merulio
             </p>
           </AuthPanel>
         }

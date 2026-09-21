@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { IS_DEMO } from "@/lib/demo/mode";
 
 /**
  * The brand band — the only surface in the system that is neither paper nor
@@ -11,6 +12,8 @@ import { Button } from "@/components/ui/button";
  * "Thirty days" is a commercial claim, not a product state. There is no
  * subscription or trial model on `Business`, which is why the zero state does
  * not show a trial countdown. Confirm the offer before this ships publicly.
+ * The demo build makes no offer: it says what the demo is instead, and its one
+ * action is the role picker.
  */
 export function ClosingCta() {
   return (
@@ -29,9 +32,15 @@ export function ClosingCta() {
 
         <div className="settle-2 min-w-[min(100%,300px)] flex-[0_1_380px]">
           <p className="mkt-body-lg mb-6 text-[var(--brand-lit-faint)]">
-            Thirty days, your real menu, your real floor, your register
-            untouched. If it hasn&apos;t replaced the clipboard by the end of
-            the month, walk away.
+            {IS_DEMO ? (
+              "One evening at a sample bar, already under way. Pick a role and work the night."
+            ) : (
+              <>
+                Thirty days, your real menu, your real floor, your register
+                untouched. If it hasn&apos;t replaced the clipboard by the end of
+                the month, walk away.
+              </>
+            )}
           </p>
 
           <div className="mkt-gap-actions flex flex-wrap items-center">
@@ -40,14 +49,21 @@ export function ClosingCta() {
               size="auth"
               className="border-[var(--paper)] bg-paper text-primary hover:border-[var(--white)] hover:bg-[var(--white)]"
             >
-              <Link href="/auth/register">Start a workspace</Link>
+              {IS_DEMO ? (
+                <Link href="/auth/login">Try the demo</Link>
+              ) : (
+                <Link href="/auth/register">Start a workspace</Link>
+              )}
             </Button>
-            <Link
-              href="/auth/login"
-              className="mkt-body-sm border-b border-[var(--brand-veil)] px-2 py-4 font-semibold text-[var(--brand-wash)] hover:text-[var(--white)]"
-            >
-              or sign in <span aria-hidden>&#8599;</span>
-            </Link>
+            {/* In the demo the button already goes to the role picker. */}
+            {!IS_DEMO && (
+              <Link
+                href="/auth/login"
+                className="mkt-body-sm border-b border-[var(--brand-veil)] px-2 py-4 font-semibold text-[var(--brand-wash)] hover:text-[var(--white)]"
+              >
+                or sign in <span aria-hidden>&#8599;</span>
+              </Link>
+            )}
           </div>
         </div>
       </div>

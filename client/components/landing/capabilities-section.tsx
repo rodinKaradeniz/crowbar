@@ -93,10 +93,10 @@ function ReservationsRow() {
                 19:15 Marchetti 2p — cxl?
               </div>
               <div className="border-b border-dashed border-border-strong">
-                19:30 ??? 6p (Sonja hat notiert)
+                19:30 ??? 6p (Sonja took it)
               </div>
               <div className="border-b border-dashed border-border-strong">
-                20:00 Bell 6p — allergie??
+                20:00 Bell 6p — allergy??
               </div>
               <div className="text-text-faintest">20:15 ————————</div>
             </div>
@@ -177,7 +177,7 @@ function QueueRow() {
             <p className="mkt-strip-title mb-4">Scans the code by the door</p>
             <div className="border border-border bg-paper p-3">
               <p className="mkt-item mb-2 font-medium">Party of 2 · mobile</p>
-              <p className="mkt-stamp text-text-muted">+49 176 ••• 4102</p>
+              <p className="mkt-stamp text-text-muted">••• ••• 4102</p>
             </div>
           </div>
 
@@ -199,7 +199,7 @@ function QueueRow() {
             <p className="mkt-strip-title mb-4">Table ready — text sent</p>
             <div className="border-l-2 border-primary bg-brand-wash-2 p-3">
               <p className="mkt-item leading-[1.45] text-brand-tint-ink">
-                &ldquo;Zur Eiche: your table is ready. Come to the bar and ask
+                &ldquo;Volt &amp; Vine: your table is ready. Come to the bar and ask
                 for Theo.&rdquo;
               </p>
             </div>
