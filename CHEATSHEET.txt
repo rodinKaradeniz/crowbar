@@ -65,16 +65,23 @@ is already in use and names the process holding it. Stop that process
 
   KILL_STALE=true ./scripts/dev.sh
 
-Demo only — the frontend alone, on its own read-only mock API. No Docker, no
-venv, no migrations, no API, no ML; nothing to seed and no password:
+Demo only — the frontend alone, on its own mock API. No Docker, no venv, no
+migrations, no API, no ML; nothing to seed and no password:
 
   ./scripts/dev.sh --demo
   ./scripts/dev.sh --demo --demo-api-url=https://<demo-domain>/demo-api
 
-  Demo        http://localhost:3000/auth/login   (pick a role; nothing is saved)
+  Demo        http://localhost:3000/auth/login   (pick a role, then work the night)
   Mock API    answered inside the frontend process — no backend, no network.
               /demo-api serves the same mock over HTTP for curl, and
               --demo-api-url points the frontend at a deployed demo's mock.
+
+You can walk the whole service loop: book, seat, scan the table QR, order,
+send to the pass, record the register, close the table. What you change is
+kept in your own browser cookie and nowhere else — another browser sees the
+recorded evening untouched, and "Start the evening again" in the demo banner
+puts it back. Everything outside that loop (venue setup, settings, staff,
+account flows) answers "not in the demo" rather than half-saving.
 
 KILL_STALE works the same; SEED_DATA is rejected, as is --demo-api-url
 without --demo. The mock serves client/lib/demo/fixtures/recording.json,
@@ -83,6 +90,10 @@ reads only, writes nothing):
 
   cd /Users/rodinkaradeniz/projects/crowbar/client
   DEMO_ADMIN_PASSWORD='<the seeded value>' node scripts/record-demo-fixtures.mjs
+
+To walk the loop as a test against a running demo (no password needed):
+
+  cd /Users/rodinkaradeniz/projects/crowbar/client && npm run test:journey:demo
 
 
 ────────────────────────────────────────────────────────────────────────

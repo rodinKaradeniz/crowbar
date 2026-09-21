@@ -42,12 +42,17 @@ data is optional and separate from migrations:
 SEED_DATA=true ./scripts/dev.sh
 ```
 
-To run only the frontend against its built-in read-only mock API — no Docker,
-no Python, no database — use demo mode:
+To run only the frontend against its built-in mock API — no Docker, no Python,
+no database — use demo mode:
 
 ```bash
 ./scripts/dev.sh --demo
 ```
+
+It is one recorded evening you can work: pick a role at sign-in, then book,
+seat, order from a table QR, send to the pass, record the register and close
+the table. What you change is kept in your browser's own cookie and nowhere
+else; "Start the evening again" in the banner puts the recording back.
 
 The local-only seeder refuses non-local database hosts, which is what keeps it
 away from anything real. `DEMO_ADMIN_PASSWORD` is optional: set it to pin a login

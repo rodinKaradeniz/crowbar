@@ -66,6 +66,7 @@ import {
   SupplierProduct,
 } from "@/types";
 import { toMoney, toOptionalMoney } from "@/lib/money";
+import { publishDemoChange } from "@/lib/demo/bus";
 import type { Capability, StaffRole } from "@/lib/permissions";
 
 /**
@@ -122,6 +123,16 @@ function toClientApiError(status: number, statusText: string, body: ErrorPayload
   );
 }
 
+
+/**
+ * A demo has no socket to announce a change on, so the browser announces it to
+ * its own other tabs — the guest's phone view beside the host's board. Nothing
+ * here runs in a real build: `publishDemoChange` returns at the flag.
+ */
+function announceIfDemoWrite(method: string | undefined, ok: boolean): void {
+  if (ok && method && method !== "GET" && method !== "HEAD") publishDemoChange();
+}
+
 async function clientFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${BACKEND_PREFIX}${path}`, {
     headers: {
@@ -136,6 +147,7 @@ async function clientFetch<T>(path: string, options?: RequestInit): Promise<T> {
     throw toClientApiError(response.status, response.statusText, errorBody);
   }
 
+  announceIfDemoWrite(options?.method, true);
   if (response.status === 204) return undefined as T;
   return response.json();
 }
@@ -154,6 +166,7 @@ async function authFetch<T>(path: string, options?: RequestInit): Promise<T> {
     throw toClientApiError(response.status, response.statusText, errorBody);
   }
 
+  announceIfDemoWrite(options?.method, true);
   if (response.status === 204) return undefined as T;
   return response.json();
 }

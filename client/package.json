@@ -12,7 +12,8 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:journey": "playwright test"
+    "test:journey": "playwright test --grep-invert @demo",
+    "test:journey:demo": "playwright test --grep @demo"
   },
   "dependencies": {
     "@paulmillr/qr": "0.3.0",

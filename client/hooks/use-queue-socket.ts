@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useDemoSocket } from "@/hooks/demo-socket";
+import { useDemoDataSocket } from "@/hooks/demo-socket";
 import type { SocketStatus } from "@/hooks/socket-status";
 import { IS_DEMO } from "@/lib/demo/mode";
+import { clientGetQueueEntries } from "@/lib/client-api";
 import type { QueueEntry } from "@/types";
 
 function toQueueEntryFromWS(e: Record<string, unknown>): QueueEntry {
@@ -221,7 +222,18 @@ function useLiveQueueSocket(
   return { connected, lastContactAt, reconnect };
 }
 
-/** The demo build has no socket server; see `hooks/demo-socket.ts`. */
+/**
+ * The demo build has no socket server; see `hooks/demo-socket.ts`. This
+ * callback wants the queue itself rather than a nudge, so the demo reads it
+ * the way the page's own refresh would.
+ */
+function useDemoQueueSocket(
+  businessId: string,
+  onUpdate: (entries: QueueEntry[]) => void,
+): SocketStatus {
+  return useDemoDataSocket(() => clientGetQueueEntries(businessId), onUpdate);
+}
+
 export const useQueueSocket: typeof useLiveQueueSocket = IS_DEMO
-  ? useDemoSocket
+  ? useDemoQueueSocket
   : useLiveQueueSocket;

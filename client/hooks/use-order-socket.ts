@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useDemoSocket } from "@/hooks/demo-socket";
+import { useDemoDataSocket } from "@/hooks/demo-socket";
 import type { SocketStatus } from "@/hooks/socket-status";
 import { IS_DEMO } from "@/lib/demo/mode";
+import { clientGetOrders } from "@/lib/client-api";
 import type { Order } from "@/types";
 import { toMoney } from "@/lib/money";
 
@@ -254,7 +255,18 @@ function useLiveOrderSocket(
   return { connected, lastContactAt, reconnect };
 }
 
-/** The demo build has no socket server; see `hooks/demo-socket.ts`. */
+/**
+ * The demo build has no socket server; see `hooks/demo-socket.ts`. This
+ * callback wants the new tickets rather than a nudge, so the demo reads them
+ * the way the page's own refresh would.
+ */
+function useDemoOrderSocket(
+  businessId: string,
+  onUpdate: (orders: Order[]) => void,
+): SocketStatus {
+  return useDemoDataSocket(() => clientGetOrders(businessId), onUpdate);
+}
+
 export const useOrderSocket: typeof useLiveOrderSocket = IS_DEMO
-  ? useDemoSocket
+  ? useDemoOrderSocket
   : useLiveOrderSocket;

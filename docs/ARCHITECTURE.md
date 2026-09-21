@@ -369,8 +369,10 @@ same business board.
 ### Frontend-only demo
 
 A build of the Next.js app that needs no backend, for a Vercel deployment with
-nothing behind it and for `./scripts/dev.sh --demo`. It is a **read-only
-snapshot of one evening** at the seeded Volt & Vine tenant.
+nothing behind it and for `./scripts/dev.sh --demo`. It is **one recorded
+evening** at the seeded Volt & Vine tenant, which a visitor can work through:
+the service loop is replayed from a log in their own cookie, and every other
+write is refused in words.
 
 - **A build decision.** `NEXT_PUBLIC_CROWBAR_DEMO=true` is inlined at build
   time and read only through `lib/demo/mode.ts`. `next.config.ts` refuses to
@@ -400,10 +402,24 @@ snapshot of one evening** at the seeded Volt & Vine tenant.
   reports' own disclaimer ("…none of them is revenue") is allowed by its exact
   text only. Record while the evening is running: public queue and
   table-session reads show whatever state the venue was in at that moment.
-- **Writes are never saved.** Every non-GET returns 409 `DEMO_NOT_SAVED` in the
-  backend's error envelope, and the operator sees it through the normal error
-  paths. The demo indicator in the root layout always says changes are not
-  kept.
+- **Writes are the visitor's own, and go no further than their browser.** The
+  service loop — book, plan onto a table, seat, scan and order, add a staff
+  round, move rounds to the pass, record that the register settled, close the
+  seating, call a waiting party — becomes an append-only op log in the `rk-demo`
+  cookie (`lib/demo/ops.ts`), deflated and base64url'd to fit. `lib/demo/state.ts`
+  replays it into indexes, `lib/demo/project.ts` lays those over the recorded
+  bodies, and `lib/demo/writes.ts` decides what may be written at all. Ids for
+  what a visitor creates are derived from the op's position (`lib/demo/ids.ts`),
+  so nothing is stored that can be computed, and every such id carries `0d` in
+  its third group. EVERY OTHER WRITE returns 409 `DEMO_NOT_SAVED` in the
+  backend's error envelope. Role still decides: each route carries the same
+  capability its FastAPI router carries, so bar/kitchen cannot seat a party in
+  the demo either. When the cookie is full the next write is 409
+  `DEMO_STATE_FULL` and the indicator's "Start the evening again"
+  (`app/api/demo/reset`) clears it — about seven full loops fit. What the demo
+  does NOT model: inventory quantities, because recipes were not recorded — the
+  servings-remaining count per menu item does move, since the recording carries
+  it.
 - **Sign-in.** In a demo build `/auth/login` offers one-click entry as
   Owner, Host / server or Bar / kitchen. `POST /api/auth/demo` sets `rk-token`
   to an **unsigned** token (`alg: none`, audience `crowbar-demo`,
@@ -419,9 +435,14 @@ snapshot of one evening** at the seeded Volt & Vine tenant.
   later days. Elapsed timers such as ticket age use the visitor's clock
   against the shifted times; the ticket board clamps a future start to 0:00.
 - **Live boards.** There is no WebSocket server. Each socket hook module
-  exports `useDemoSocket` instead of its real body in a demo build. It opens
-  nothing and reports `connected` with no contact time, which `OfflineBar`
-  renders as nothing. The alarm and the real hooks are unchanged.
+  exports a demo body instead of its real one in a demo build. It opens nothing
+  and reports `connected` with no contact time, which `OfflineBar` renders as
+  nothing. The alarm and the real hooks are unchanged. What does arrive is the
+  visitor's own writes: `lib/demo/bus.ts` is a `BroadcastChannel` plus a
+  same-tab listener set, published from the two fetch helpers in
+  `client-api.ts` after a successful non-GET, so the guest's phone view and the
+  host's board move together. Nothing reaches a board that the visitor did not
+  do, and the demo never calls it live.
 - **Insights** answer with the backend's own "unavailable, nothing captured"
   body, so the page shows its honest unreachable state and never a prediction.
   Nothing in the demo sends email or SMS or calls a provider or ML, because
@@ -434,6 +455,13 @@ snapshot of one evening** at the seeded Volt & Vine tenant.
 - **Drift.** `server/tests/unit/test_demo_fixture_contract.py` checks every
   recorded read against the live route table and its `response_model`. When it
   fails, re-record.
+- **Proof.** `client/e2e/demo-service-loop.spec.ts` (`npm run test:journey:demo`)
+  walks the pilot loop against a demo build in one browser context, because one
+  cookie is one evening. It skips itself against a non-demo build. Two steps of
+  the real journey are deliberately absent and the spec says why: the guest's
+  signed management link, which a demo cannot mint, and the stock ledger. The
+  booking it makes is for the next day, because the evening was recorded after
+  the last slot of its own service day had gone.
 
 ### Scheduled one-shot jobs
 

@@ -186,3 +186,7 @@ demo is a Next.js build with no backend behind it (see
   invocation rather than two.
 - Because `NEXT_PUBLIC_*` is inlined at build time, changing this requires a
   redeploy.
+- The demo stores nothing server-side. What a visitor changes lives in one
+  httpOnly cookie in their own browser, so visitors never see each other's
+  evening and nothing about them is retained after it expires. There is no
+  database, no log of what they did, and nothing to erase.

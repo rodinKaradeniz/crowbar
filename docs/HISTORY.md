@@ -3863,11 +3863,81 @@ per-role token.
   routers, so `app.routes` no longer lists routes directly. One schema-hidden
   alias the frontend still calls, `/api/queue/{business_id}/entries`, is mapped
   to its documented twin. The fix for drift is to re-record.
-- **Cost on Vercel.** Each data request makes a second hop to the same
-  deployment, and the production domain must be outside Deployment Protection.
+- **Cost on Vercel.** One function invocation per request, and no constraint
+  on Deployment Protection, once the self-hop was gone.
 
 **References.** `client/lib/demo/`, `client/app/demo-api/[...path]/route.ts`,
 `client/app/api/auth/demo/route.ts`, `client/hooks/demo-socket.ts`,
 `client/next.config.ts`, `client/app/api/proxy/[...path]/route.ts`,
 `client/scripts/record-demo-fixtures.mjs`,
 `server/tests/unit/test_demo_fixture_contract.py`, `scripts/dev.sh`.
+
+
+## 2026-09-21 — The demo's service loop is the visitor's own, held in their cookie
+
+**Context.** The demo shipped read-only: every write answered
+`DEMO_NOT_SAVED`. That was honest, but a demo of an operations product in which
+nothing can be operated shows the rooms and not the work. The earlier entry
+named the reason — Vercel functions keep no memory between invocations — and
+the price: holding a visitor's changes means holding them in a cookie and
+replaying them. Moving the mock in-process (`lib/backend-fetch.ts`) removed the
+blocker that made it impractical, because cookie state can now be read and
+written on the same request that answers the call.
+
+**Decision.** Let a visitor walk the pilot service loop, and nothing else. What
+they do becomes an append-only op log in one httpOnly cookie, replayed on every
+read over the recorded evening. Every write outside that loop is still refused
+in words.
+
+**Consequences.**
+
+- **Inputs, not results, and ids by position.** An op stores what was asked
+  for; the ids of what it creates are derived from the op's index
+  (`lib/demo/ids.ts`), so nothing is stored that can be computed and a later op
+  refers to an earlier one by index. Every derived id carries `0d` in its third
+  group, so a demo's own records are recognisable on sight and can never
+  collide with the recording's.
+- **The cookie is the storage layer, and its limit is the demo's.** The log is
+  deflated and base64url'd; about seven full loops fit in the 4 KB a cookie
+  gets. The next write past that is 409 `DEMO_STATE_FULL`, which says to start
+  the evening again rather than dropping the oldest thing the visitor did.
+  `POST /api/demo/reset` clears it, from a button in the demo banner.
+- **One browser is one evening.** Two visitors never see each other's changes,
+  and neither do two browsers belonging to the same person. This is why the
+  demo journey runs in a single browser context: the guest's phone view and the
+  host's board have to be the same browser to be the same evening.
+- **Role still decides.** Each write carries the capability its FastAPI router
+  carries, checked with the frontend's own `lib/permissions.ts`. Entering as
+  bar/kitchen and trying to seat a party is refused in the demo exactly as it
+  would be for real.
+- **Projection, not a second backend.** `lib/demo/state.ts` replays the log
+  into indexes and `lib/demo/project.ts` lays those over the recorded response
+  bodies. Only the surfaces the loop moves are projected. Where a rule matters
+  it is the backend's own rule, taken from the source: a booking is the table's
+  `next_reservation` until its window starts, the thirty-minute hold is what
+  makes a table read "reserved", and a settled tab stops being the seating's
+  open tab, which is what releases the table.
+- **What is not modelled, and is said so.** Inventory quantities do not move on
+  fulfilment, because recipes were never recorded — the per-menu-item servings
+  count does move, because the recording carries it. The guest's signed
+  management link cannot exist in a demo. A booking made in the demo is for the
+  next day, because the evening was recorded after the last slot of its own
+  service day had gone.
+- **Boards move for the visitor's own writes only.** `lib/demo/bus.ts` is a
+  `BroadcastChannel` plus a same-tab listener set, published from the two fetch
+  helpers in `client-api.ts` after a successful non-GET. The socket hooks stay
+  no-ops, the offline alarm is still untouched, and nothing claims liveness.
+- **The claim is tested by walking it.**
+  `client/e2e/demo-service-loop.spec.ts` (`npm run test:journey:demo`) walks the
+  eleven-step loop against a demo build with no backend, no database and no
+  password, and skips itself against anything else. The existing journey keeps
+  its command; the two are separated by a `@demo` tag.
+- **A read-only demo was the right first step, not the wrong call.** The
+  transport move came first and made this cheap; doing both at once would have
+  mixed a transport change with a state model.
+
+**References.** `client/lib/demo/{ops,ids,state,project,writes,session,snapshot,bus}.ts`,
+`client/app/api/demo/reset/route.ts`, `client/components/demo-indicator.tsx`,
+`client/hooks/demo-socket.ts`, `client/lib/client-api.ts`,
+`client/tests/unit/demo-writes.test.ts`,
+`client/e2e/demo-service-loop.spec.ts`.

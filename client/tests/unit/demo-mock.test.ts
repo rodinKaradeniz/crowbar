@@ -71,16 +71,25 @@ describe("demo time shift", () => {
 });
 
 describe("demo mock handler", () => {
-  it("never saves a write", () => {
-    for (const method of ["POST", "PATCH", "PUT", "DELETE"]) {
+  it("refuses every write outside the service loop", () => {
+    // The loop itself is walked in `demo-writes.test.ts`; these are the
+    // venue-setup and account surfaces the demo deliberately does not model.
+    const outside: [string, string][] = [
+      ["PATCH", "/api/businesses/current"],
+      ["PUT", "/api/floor-plan/settings"],
+      ["POST", "/api/staff/invitations"],
+      ["DELETE", "/api/service-types/00000000-0000-0000-0004-000000000010"],
+    ];
+    for (const [method, path] of outside) {
       const result = handleDemoRequest({
         method,
-        path: "/api/ordering/x/orders",
+        path,
         query: new URLSearchParams(),
         authorization: `Bearer ${mintDemoToken("owner")}`,
       });
       expect(result.status).toBe(409);
       expect(result.body).toMatchObject({ code: "DEMO_NOT_SAVED" });
+      expect(result.ops).toBeUndefined();
     }
   });
 

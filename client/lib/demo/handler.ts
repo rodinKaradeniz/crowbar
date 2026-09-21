@@ -3,8 +3,12 @@ import { hasCapability } from "@/lib/permissions";
 import recording from "./fixtures/recording.json";
 import type { DemoRecording, RecordedResponse } from "./recording";
 import { requestKey } from "./recording";
+import type { DemoOp } from "./ops";
+import { projectRead } from "./project";
+import { reduceOps, type DemoState } from "./state";
 import { dayOffset, serviceDayNumber, shiftJson, shiftValue } from "./time-shift";
-import { readDemoRole } from "./token";
+import { readDemoRole, type DemoRole } from "./token";
+import { handleDemoWrite } from "./writes";
 
 /**
  * The mock API: the backend's HTTP contract, answered from one recorded
@@ -14,9 +18,10 @@ import { readDemoRole } from "./token";
  * never calls anything, so a demo cannot send mail, SMS, reach a provider or
  * the ML service.
  *
- * READ-ONLY. Every write is answered with `DEMO_NOT_SAVED`, which reaches the
- * operator through the normal error paths, so nothing ever claims to be saved.
- * A GET that was never recorded is `DEMO_NOT_RECORDED` rather than invented.
+ * Writes are the visitor's own. The service loop is replayed from a log in
+ * their cookie over the recorded evening (`writes.ts`, `state.ts`,
+ * `project.ts`); every other write is refused in words. A GET that was never
+ * recorded is `DEMO_NOT_RECORDED` rather than invented.
  */
 
 const data = recording as DemoRecording;
@@ -60,25 +65,26 @@ function lookup(audience: string, key: string): RecordedResponse | undefined {
   return responses?.[key] ?? coarseIndex[audience]?.get(coarseKey(key));
 }
 
+
 export interface DemoRequest {
   method: string;
   /** Backend path, starting `/api/`. */
   path: string;
   query: URLSearchParams;
   authorization: string | null;
+  /** The parsed request body, for writes. */
+  body?: unknown;
+  /** The visitor's op log, as their cookie carries it. */
+  ops?: readonly DemoOp[];
   nowMs?: number;
 }
 
 export interface DemoResponse {
   status: number;
   body: unknown;
+  /** Set when the write changed the log and the cookie must be rewritten. */
+  ops?: DemoOp[];
 }
-
-export const DEMO_NOT_SAVED = {
-  code: "DEMO_NOT_SAVED",
-  message: "Not saved. This is a demo, so changes are not kept.",
-  details: null,
-};
 
 const DEMO_NOT_RECORDED = {
   code: "DEMO_NOT_RECORDED",
@@ -128,35 +134,42 @@ function toResponse(entry: RecordedResponse, days: number): DemoResponse {
   return { status: entry.status, body: shiftJson(body, days) };
 }
 
-export function handleDemoRequest(request: DemoRequest): DemoResponse {
-  const method = request.method.toUpperCase();
-  if (method !== "GET" && method !== "HEAD") {
-    return error(409, DEMO_NOT_SAVED);
-  }
-
-  const days = dayOffset(data.recordedAt, request.nowMs);
-  const recordedPath = request.path
+/**
+ * One read: the recorded answer for it, shifted onto today, with the
+ * visitor's own evening laid over the top.
+ */
+function read(
+  path: string,
+  query: URLSearchParams,
+  role: DemoRole | null,
+  state: DemoState,
+  nowMs: number | undefined,
+): DemoResponse {
+  const days = dayOffset(data.recordedAt, nowMs);
+  const recordedPath = path
     .split("/")
     .map((segment) => shiftValue(decodeURIComponent(segment), -days))
     .join("/");
   const recordedQuery = new URLSearchParams(
-    [...request.query.entries()].map(([key, value]) => [key, shiftValue(value, -days)]),
+    [...query.entries()].map(([key, value]) => [key, shiftValue(value, -days)]),
   );
   const key = requestKey("GET", recordedPath, recordedQuery);
 
-  const role = readDemoRole(request.authorization, request.nowMs);
-
-  const insight = /^\/api\/insights\/([a-z]+)$/.exec(request.path);
+  const insight = /^\/api\/insights\/([a-z]+)$/.exec(path);
   if (insight && INSIGHT_RESOURCES.has(insight[1])) {
     if (!role) return error(401, UNAUTHENTICATED);
     if (!hasCapability(role, "insights.view")) return error(403, FORBIDDEN);
     return { status: 200, body: insightsAnswer(insight[1]) };
   }
-  const own = role ? lookup(role, key) : undefined;
-  if (own) return toResponse(own, days);
 
-  const shared = lookup("public", key);
-  if (shared) return toResponse(shared, days);
+  const own = role ? lookup(role, key) : undefined;
+  const shared = own ? undefined : lookup("public", key);
+  const found = own ?? shared;
+  const recorded = found ? toResponse(found, days) : null;
+
+  const projected = projectRead(path, query, recorded, state, nowMs ?? Date.now());
+  if (projected) return projected;
+  if (recorded) return recorded;
 
   // A staff endpoint asked without a demo session is what the real API calls
   // unauthenticated; anything else simply was not recorded.
@@ -165,4 +178,43 @@ export function handleDemoRequest(request: DemoRequest): DemoResponse {
   );
   if (recordedForSomeRole && !role) return error(401, UNAUTHENTICATED);
   return error(404, DEMO_NOT_RECORDED);
+}
+
+export function handleDemoRequest(request: DemoRequest): DemoResponse {
+  const method = request.method.toUpperCase();
+  const role = readDemoRole(request.authorization, request.nowMs);
+  const ops = request.ops ?? [];
+
+  if (method !== "GET" && method !== "HEAD") {
+    const result = handleDemoWrite({
+      method,
+      path: request.path,
+      body: request.body,
+      role,
+      nowMs: request.nowMs ?? Date.now(),
+      ops,
+    });
+
+    if (result.reread) {
+      // The write's reply is the read's own answer, so a new round and a
+      // recorded one come back through exactly the same shift and projection.
+      const state = reduceOps(result.ops ?? ops);
+      const answer = read(result.reread.path, new URLSearchParams(), role, state, request.nowMs);
+      const list = Array.isArray(answer.body) ? (answer.body as { id?: string }[]) : [];
+      const picked = list.find((entry) => entry.id === result.reread!.pickId);
+      return {
+        status: picked ? result.status : 404,
+        body: picked ?? DEMO_NOT_RECORDED,
+        ...(result.ops ? { ops: result.ops } : {}),
+      };
+    }
+
+    return {
+      status: result.status,
+      body: result.body ?? null,
+      ...(result.ops ? { ops: result.ops } : {}),
+    };
+  }
+
+  return read(request.path, request.query, role, reduceOps(ops), request.nowMs);
 }

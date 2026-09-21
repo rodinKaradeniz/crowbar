@@ -16,9 +16,10 @@ export function DemoEntry() {
   return (
     <div>
       <p className="mkt-eyebrow mb-2.5 text-text-muted">Demo</p>
-      <h1 className="auth-title mb-[var(--space-16)]">Look around a sample evening</h1>
+      <h1 className="auth-title mb-[var(--space-16)]">Work a sample evening</h1>
       <p className="mb-[var(--space-32)] max-w-[38ch] text-[length:var(--ui-size)] leading-[var(--ui-lh)] text-text-secondary">
-        Pick a role to see what it sees. Nothing you change is kept, and no
+        Pick a role to see what it sees, and run the night: book, seat, order,
+        send to the pass, settle. What you change stays in this browser, and no
         guest is ever contacted.
       </p>
 

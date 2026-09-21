@@ -34,8 +34,8 @@ For focused work, also read:
   (surface dispositions, risk register, and stage 1–8 evidence contract)
 - Product UI or visual language: `docs/DESIGN.md`
 - Project-specific agent skills: `docs/SKILLS.md`
-- Frontend-only demo (mock API, fixtures, recorder): `client/lib/demo/` and
-  `docs/ARCHITECTURE.md` § Frontend-only demo
+- Frontend-only demo (mock API, cookie-held writes, fixtures, recorder):
+  `client/lib/demo/` and `docs/ARCHITECTURE.md` § Frontend-only demo
 
 `README.md` is the human quick start. This file is the only document ownership
 map and reading order. When documentation disagrees with executable source,
@@ -61,9 +61,11 @@ Crowbar is a multi-tenant operations platform for bars and restaurants:
   scheduled jobs and does not seed demo data unless invoked with
   `SEED_DATA=true`, which is a data mutation — see
   [server/DATABASE.md](server/DATABASE.md).
-- `scripts/dev.sh --demo`: starts only the frontend, as a read-only demo whose
-  mock API answers inside the Next process (`client/lib/demo/`), with no
-  Docker, backend, database, ML or network. The same build is the frontend-only Vercel demo; see
+- `scripts/dev.sh --demo`: starts only the frontend, as a demo whose mock API
+  answers inside the Next process (`client/lib/demo/`), with no Docker,
+  backend, database, ML or network. The service loop can be walked; what a
+  visitor changes is kept in their own cookie and nowhere else, and every other
+  write is refused. The same build is the frontend-only Vercel demo; see
   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) § Frontend-only demo.
 - `server/docker-compose.yml` declares the Compose project as `crowbar`; do not
   remove that name or local containers can collide with unrelated repositories
@@ -199,7 +201,7 @@ Railway, but that intent is not authorization to mutate it.
 # Same, plus replace the synthetic demo tenant (data mutation)
 SEED_DATA=true ./scripts/dev.sh
 
-# Frontend-only demo on the built-in mock API (no Docker, no API, nothing saved)
+# Frontend-only demo on the built-in mock API (no Docker, no API, no network)
 ./scripts/dev.sh --demo
 ./scripts/dev.sh --demo --demo-api-url=https://<demo-domain>/demo-api
 
@@ -218,6 +220,10 @@ npm run build
 # seeds nothing and migrates nothing — plus the password that tenant was seeded
 # with. One-time: npx playwright install chromium
 DEMO_ADMIN_PASSWORD='<the seeded value>' npm run test:journey
+
+# The same loop against a demo build, which needs no stack and no password.
+# Start one first (./scripts/dev.sh --demo) — it skips itself against anything else.
+npm run test:journey:demo
 
 # Backend (runtime dependencies)
 cd server

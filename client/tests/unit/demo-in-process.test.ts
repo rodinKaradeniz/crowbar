@@ -39,13 +39,16 @@ describe("backendFetch in a self-contained demo build", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("refuses a write in the demo the same way over both transports", async () => {
+  it("refuses a write outside the service loop, over either transport", async () => {
     vi.stubEnv("NEXT_PUBLIC_CROWBAR_DEMO", "true");
     vi.stubEnv("API_INTERNAL_URL", "");
     vi.stubEnv("NEXT_PUBLIC_API_URL", "");
     const { backendFetch } = await loadBackendFetch();
 
-    const response = await backendFetch("/api/tabs/x/settle-external", { method: "POST" });
+    const response = await backendFetch("/api/businesses/current", {
+      method: "PATCH",
+      body: JSON.stringify({ name: "Somewhere Else" }),
+    });
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({ code: "DEMO_NOT_SAVED" });
   });
