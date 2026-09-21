@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { setTokenCookie, serverGetMe } from "@/lib/api";
 import { ApiError } from "@/lib/api-client";
+import { backendFetch } from "@/lib/backend-fetch";
 
-const API_BASE =
-  process.env.API_INTERNAL_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:8000";
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,7 +24,7 @@ export async function POST(request: NextRequest) {
     };
 
     // Call FastAPI registration endpoint
-    const backendResponse = await fetch(`${API_BASE}/api/auth/register-business`, {
+    const backendResponse = await backendFetch("/api/auth/register-business", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

@@ -36,6 +36,7 @@ import {
   type LoginResponse,
 } from "./api-client";
 import type { MeContext } from "@/types";
+import { backendFetch } from "@/lib/backend-fetch";
 
 const TOKEN_COOKIE_NAME = "rk-token";
 
@@ -253,11 +254,7 @@ export async function serverGetMeContext(): Promise<MeContext | null> {
   if (!token) return null;
 
   try {
-    const apiUrl =
-      process.env.API_INTERNAL_URL ||
-      process.env.NEXT_PUBLIC_API_URL ||
-      "http://localhost:8000";
-    const res = await fetch(`${apiUrl}/api/auth/me/context`, {
+    const res = await backendFetch("/api/auth/me/context", {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
     });

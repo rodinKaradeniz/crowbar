@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { backendFetch } from "@/lib/backend-fetch";
 import { isTrustedMutationRequest, safeSameOriginRedirect } from "@/lib/request-security";
 
-const BACKEND_URL =
-  process.env.API_INTERNAL_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:8000";
 const TOKEN_COOKIE_NAME = "rk-token";
 
 /**
@@ -34,12 +31,11 @@ async function proxyRequest(
   }
   const { path } = await params;
   const backendPath = `/api/${path.join("/")}`;
-  const url = new URL(backendPath, BACKEND_URL);
-
-  // Preserve query params
+  const query = new URLSearchParams();
   request.nextUrl.searchParams.forEach((value, key) => {
-    url.searchParams.set(key, value);
+    query.set(key, value);
   });
+  const target = query.size ? `${backendPath}?${query}` : backendPath;
 
   // Get JWT from cookie
   const cookieStore = await cookies();
@@ -59,7 +55,10 @@ async function proxyRequest(
     body = await request.text();
   }
 
-  const backendResponse = await fetch(url.toString(), {
+  // `backendFetch` answers in this process in a self-contained demo build, so
+  // the BFF never leaves the app. Everywhere else this is the same request to
+  // the same backend as before.
+  const backendResponse = await backendFetch(target, {
     method: request.method,
     headers,
     body,

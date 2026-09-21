@@ -72,7 +72,9 @@ venv, no migrations, no API, no ML; nothing to seed and no password:
   ./scripts/dev.sh --demo --demo-api-url=https://<demo-domain>/demo-api
 
   Demo        http://localhost:3000/auth/login   (pick a role; nothing is saved)
-  Mock API    http://localhost:3000/demo-api     (default)
+  Mock API    answered inside the frontend process — no backend, no network.
+              /demo-api serves the same mock over HTTP for curl, and
+              --demo-api-url points the frontend at a deployed demo's mock.
 
 KILL_STALE works the same; SEED_DATA is rejected, as is --demo-api-url
 without --demo. The mock serves client/lib/demo/fixtures/recording.json,

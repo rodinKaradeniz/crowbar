@@ -3848,12 +3848,26 @@ per-role token.
 - **Boards are not live, and the alarm is untouched.** The socket hooks switch
   to a no-op at module load in demo builds. `offline-bar.tsx`,
   `socket-status.ts` and the heartbeat did not change.
+- **"No call-site changes" was nearly true**, and the demo stopped relying on
+  it. The first cut served the mock over HTTP at `<origin>/demo-api`, which
+  needed one fix anyway (`/api/proxy` built its upstream URL with
+  `new URL(path, base)`, dropping the base's own path) and made every request
+  a second hop into the same deployment. The seam moved instead: every
+  server-side call goes through `lib/backend-fetch.ts`, which dispatches to
+  the mock in-process when no API URL is configured. That removed the self-hop,
+  the absolute production URL, and the Deployment Protection constraint, and
+  left one variable to set. The HTTP route remains for a remote demo.
 - **Drift is a failing test.** A backend change that breaks a recorded shape
-  fails `test_demo_fixture_contract.py`. The fix is to re-record.
+  fails `test_demo_fixture_contract.py`. It checks against the app's public
+  OpenAPI document and the named Pydantic models. FastAPI 0.141 wraps included
+  routers, so `app.routes` no longer lists routes directly. One schema-hidden
+  alias the frontend still calls, `/api/queue/{business_id}/entries`, is mapped
+  to its documented twin. The fix for drift is to re-record.
 - **Cost on Vercel.** Each data request makes a second hop to the same
   deployment, and the production domain must be outside Deployment Protection.
 
 **References.** `client/lib/demo/`, `client/app/demo-api/[...path]/route.ts`,
 `client/app/api/auth/demo/route.ts`, `client/hooks/demo-socket.ts`,
-`client/next.config.ts`, `client/scripts/record-demo-fixtures.mjs`,
+`client/next.config.ts`, `client/app/api/proxy/[...path]/route.ts`,
+`client/scripts/record-demo-fixtures.mjs`,
 `server/tests/unit/test_demo_fixture_contract.py`, `scripts/dev.sh`.

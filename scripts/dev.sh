@@ -16,6 +16,7 @@ cd "$ROOT"
 
 # --- Flags: parsed before anything starts, so nonsense never half-starts ---
 USAGE="usage: ./scripts/dev.sh [--demo [--demo-api-url=URL]]"
+SCRIPT_ARGS="$*"
 DEMO=false
 DEMO_API_URL=""
 for arg in "$@"; do
@@ -104,7 +105,7 @@ require_free_port() {
 
   err "$name port $port is already in use:"
   ps -o pid,command -p $(echo $pids | tr ' ' ',') 2>/dev/null | sed '1d' | sed 's/^/    /'
-  err "Stop it, or re-run with: KILL_STALE=true ./scripts/dev.sh"
+  err "Stop it, or re-run with: KILL_STALE=true ./scripts/dev.sh${SCRIPT_ARGS:+ $SCRIPT_ARGS}"
   exit 1
 }
 
@@ -130,7 +131,6 @@ trap cleanup SIGINT SIGTERM EXIT
 # which Next ranks above client/.env*, so a developer's env file cannot point
 # the demo at a real backend — and next.config.ts refuses to build if it did.
 if [[ "$DEMO" == "true" ]]; then
-  DEMO_API_URL="${DEMO_API_URL:-http://localhost:3000/demo-api}"
   DEMO_API_URL="${DEMO_API_URL%/}"
 
   echo ""
@@ -151,6 +151,10 @@ if [[ "$DEMO" == "true" ]]; then
     ok "Frontend dependencies already installed"
   fi
 
+  # No API URL unless one was asked for: the demo then answers every backend
+  # call in its own process. Passing them here (empty or not) keeps Next from
+  # reading a developer's client/.env, which would point the demo at a real
+  # backend — and next.config.ts refuses to build if it ever did.
   NEXT_PUBLIC_CROWBAR_DEMO=true \
     API_INTERNAL_URL="$DEMO_API_URL" \
     NEXT_PUBLIC_API_URL="$DEMO_API_URL" \
@@ -165,7 +169,7 @@ if [[ "$DEMO" == "true" ]]; then
   echo "=========================================="
   echo ""
   echo "  Demo:      http://localhost:3000/auth/login"
-  echo "  Mock API:  $DEMO_API_URL"
+  echo "  Mock API:  ${DEMO_API_URL:-in this process (no backend, no network)}"
   echo ""
   echo "  Read-only sample evening: nothing is saved,"
   echo "  no guest is contacted, boards do not update live."

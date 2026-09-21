@@ -6,11 +6,8 @@
  */
 
 import { getToken } from "@/lib/api";
+import { backendFetch } from "@/lib/backend-fetch";
 
-const API_BASE =
-  process.env.API_INTERNAL_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:8000";
 
 /**
  * WHY A STATE AND NOT A NULL.
@@ -75,7 +72,7 @@ async function mlFetch<T>(path: string): Promise<MLResult<T>> {
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}/api/insights${path}`, {
+    response = await backendFetch(`/api/insights${path}`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
     });
@@ -258,7 +255,7 @@ export async function triggerMLPipeline(): Promise<MLPipelineResult | null> {
   try {
     const token = await getToken();
     if (!token) return null;
-    const response = await fetch(`${API_BASE}/api/insights/run`, {
+    const response = await backendFetch("/api/insights/run", {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",

@@ -31,7 +31,7 @@ async function respond(
     authorization: request.headers.get("authorization"),
   });
 
-  if (result.status === 404) {
+  if ((result.body as { code?: string } | null)?.code === "DEMO_NOT_RECORDED") {
     // What a missing fixture looks like from the outside. Re-record to fix.
     console.warn(`[demo-api] not recorded: ${request.method} /${path.join("/")}${request.nextUrl.search}`);
   }

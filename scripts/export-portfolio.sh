@@ -21,8 +21,7 @@ allowlist=(
   client/package.json client/package-lock.json client/next.config.ts client/tsconfig.json
   client/postcss.config.mjs client/eslint.config.mjs client/vitest.config.ts
   client/components.json client/env.example
-  client/public/file.svg client/public/globe.svg client/public/next.svg
-  client/public/vercel.svg client/public/window.svg client/public/widget.js
+  client/public/widget.js
   client/public/volt-and-vine.jpg
   server/app server/db/__init__.py server/db/migrate.py server/db/migrations
   server/db/seeds server/tests server/requirements.txt server/docker-compose.yml

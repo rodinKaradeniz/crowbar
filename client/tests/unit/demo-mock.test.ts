@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { findFixtureViolations } from "@/lib/demo/fixture-rules.mjs";
+import { findFixtureViolations, scrubNonFictionalPhones } from "@/lib/demo/fixture-rules.mjs";
 import recording from "@/lib/demo/fixtures/recording.json";
 import { handleDemoRequest } from "@/lib/demo/handler";
 import { requestKey } from "@/lib/demo/recording";
@@ -125,9 +125,39 @@ describe("demo fixtures", () => {
   it("the rules catch what they claim to", () => {
     expect(findFixtureViolations({ email: "someone@gmail.com" })).toHaveLength(1);
     expect(findFixtureViolations({ phone: "+4930123456789" })).toHaveLength(1);
+    expect(findFixtureViolations({ guest_phone: "030 1234567" })).toHaveLength(1);
+    expect(
+      findFixtureViolations({ id: "00000000-0000-0000-0002-000000000010", date: "2026-09-16", at: "2026-09-16T20:00:00+02:00" }),
+    ).toEqual([]);
     expect(findFixtureViolations({ phone: "+12025550101", email: "owner@example.com" })).toEqual([]);
     expect(findFixtureViolations({ label: "Paid" })).toHaveLength(1);
+    expect(findFixtureViolations({ note: "Not revenue, honestly." })).toHaveLength(1);
+    expect(scrubNonFictionalPhones({ phone: "+493012345678", other: "+12025550101", id: "2026-09-16" })).toEqual({
+      phone: "+12025550199",
+      other: "+12025550101",
+      id: "2026-09-16",
+    });
     expect(findFixtureViolations({ total_revenue: 1 })).toHaveLength(1);
     expect(findFixtureViolations({ note: ["pass", "word", "123"].join("") })).toHaveLength(1);
+  });
+});
+
+describe("demo mock against the recording", () => {
+  const responses = recording.responses as Record<string, Record<string, { status: number }>>;
+  it("serves a recorded range read for the same span on a later day", () => {
+    const key = Object.keys(responses.owner ?? {}).find((k) => k.startsWith("GET /api/reports/queue?"));
+    if (!key) return; // nothing recorded yet
+    const [target, search] = key.slice(4).split("?");
+    const recorded = new URLSearchParams(search);
+    const span = Date.parse(recorded.get("end")!) - Date.parse(recorded.get("start")!);
+    // A visitor three days and eleven hours later asks for the same preset.
+    const later = Date.parse(recording.recordedAt) + 3 * 86_400_000 + 11 * 3_600_000;
+    const query = new URLSearchParams({
+      start: new Date(later - span).toISOString(),
+      end: new Date(later).toISOString(),
+    });
+    const owner = `Bearer ${mintDemoToken("owner", Math.floor(later / 1000))}`;
+    const result = handleDemoRequest({ method: "GET", path: target, query, authorization: owner, nowMs: later });
+    expect(result.status).toBe(responses.owner[key].status);
   });
 });

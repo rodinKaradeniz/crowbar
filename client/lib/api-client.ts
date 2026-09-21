@@ -1,7 +1,4 @@
-const API_BASE =
-  process.env.API_INTERNAL_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:8000";
+import { backendFetch } from "@/lib/backend-fetch";
 
 interface FetchOptions extends RequestInit {
   token?: string;
@@ -21,7 +18,7 @@ async function apiFetch<T>(path: string, options: FetchOptions = {}): Promise<T>
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`, {
+    response = await backendFetch(path, {
       headers,
       ...rest,
     });

@@ -17,20 +17,23 @@ const backendUrl =
 // build that could reach a real backend, or a real build silently serving the
 // mock with no demo indicator. See `lib/demo/mode.ts`.
 const isDemoBuild = process.env.NEXT_PUBLIC_CROWBAR_DEMO === "true";
-const DEMO_API_SUFFIX = "/demo-api";
+const DEMO_API_PATH = "/demo-api";
 const configuredApiUrls = [
   process.env.API_INTERNAL_URL,
   process.env.NEXT_PUBLIC_API_URL,
-];
+].map((url) => url?.replace(/\/+$/, "") || "");
+// A demo build with no backend configured answers every call in its own
+// process. The only other thing it may point at is another demo's mock.
+const isSelfContainedDemo = isDemoBuild && configuredApiUrls.every((url) => url === "");
 if (isDemoBuild) {
-  if (!configuredApiUrls.every((url) => url?.replace(/\/+$/, "").endsWith(DEMO_API_SUFFIX))) {
+  if (!isSelfContainedDemo && !configuredApiUrls.every((url) => url.endsWith(DEMO_API_PATH))) {
     throw new Error(
-      `NEXT_PUBLIC_CROWBAR_DEMO=true needs API_INTERNAL_URL and NEXT_PUBLIC_API_URL both set to a ${DEMO_API_SUFFIX} mock URL.`,
+      `NEXT_PUBLIC_CROWBAR_DEMO=true needs no API URL at all, or API_INTERNAL_URL and NEXT_PUBLIC_API_URL both set to a ${DEMO_API_PATH} mock URL. A demo must never be able to reach a real backend.`,
     );
   }
-} else if (configuredApiUrls.some((url) => url?.replace(/\/+$/, "").endsWith(DEMO_API_SUFFIX))) {
+} else if (configuredApiUrls.some((url) => url.endsWith(DEMO_API_PATH))) {
   throw new Error(
-    `An API URL points at a ${DEMO_API_SUFFIX} mock but NEXT_PUBLIC_CROWBAR_DEMO is not "true".`,
+    `An API URL points at a ${DEMO_API_PATH} mock but NEXT_PUBLIC_CROWBAR_DEMO is not "true".`,
   );
 }
 
@@ -53,10 +56,14 @@ const nextConfig: NextConfig = {
     root: process.cwd(),
   },
   async rewrites() {
+    // Browser public reads. In a self-contained demo this stays inside the
+    // app: the mock route serves it, with no request leaving the process.
     const backendRewrites = [
       {
         source: "/api/backend/:path*",
-        destination: `${backendUrl}/api/:path*`,
+        destination: isSelfContainedDemo
+          ? `${DEMO_API_PATH}/api/:path*`
+          : `${backendUrl}/api/:path*`,
       },
     ];
     if (!isDemoBuild) {

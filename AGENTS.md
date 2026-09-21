@@ -61,9 +61,9 @@ Crowbar is a multi-tenant operations platform for bars and restaurants:
   scheduled jobs and does not seed demo data unless invoked with
   `SEED_DATA=true`, which is a data mutation — see
   [server/DATABASE.md](server/DATABASE.md).
-- `scripts/dev.sh --demo`: starts only the frontend, as a read-only demo backed
-  by a mock API inside the Next app (`client/lib/demo/`), with no Docker,
-  backend, database or ML. The same build is the frontend-only Vercel demo; see
+- `scripts/dev.sh --demo`: starts only the frontend, as a read-only demo whose
+  mock API answers inside the Next process (`client/lib/demo/`), with no
+  Docker, backend, database, ML or network. The same build is the frontend-only Vercel demo; see
   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) § Frontend-only demo.
 - `server/docker-compose.yml` declares the Compose project as `crowbar`; do not
   remove that name or local containers can collide with unrelated repositories

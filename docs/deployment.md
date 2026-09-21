@@ -175,15 +175,14 @@ demo is a Next.js build with no backend behind it (see
 `docs/ARCHITECTURE.md` § Frontend-only demo).
 
 - Root directory: `client`. Build and start: the Next.js defaults.
-- Environment, for both Build and Runtime:
-  - `NEXT_PUBLIC_CROWBAR_DEMO=true`
-  - `API_INTERNAL_URL=https://<production-domain>/demo-api`
-  - `NEXT_PUBLIC_API_URL=https://<production-domain>/demo-api`
+- Environment, for both Build and Runtime: **`NEXT_PUBLIC_CROWBAR_DEMO=true`,
+  and nothing else.**
 - Leave every backend, Resend, Twilio, ML and `RESERVATION_FRAME_ANCESTORS`
-  variable unset. The build refuses to run unless both API URLs end in
-  `/demo-api`.
-- The production domain must **not** be behind Vercel Deployment Protection,
-  because the app fetches its own `/demo-api` server-side. Preview URLs are
-  protected by default, so a preview deployment of the demo will not load data.
-- Because `NEXT_PUBLIC_*` is inlined at build time, changing any of these
-  requires a redeploy.
+  variable unset. The build refuses to run if an API URL points anywhere but a
+  `/demo-api` mock, so a demo cannot be pointed at a real backend by mistake.
+- The demo answers every backend call inside its own process, so it makes no
+  outbound request and no request to itself. Deployment Protection on preview
+  URLs is therefore not a problem, and each request costs one function
+  invocation rather than two.
+- Because `NEXT_PUBLIC_*` is inlined at build time, changing this requires a
+  redeploy.

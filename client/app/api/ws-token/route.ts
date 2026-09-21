@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
+import { backendFetch } from "@/lib/backend-fetch";
+
 const TOKEN_COOKIE_NAME = "rk-token";
-const BACKEND_URL =
-  process.env.API_INTERNAL_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:8000";
 
 /**
  * Exchanges the httpOnly session JWT server-side for a short-lived,
@@ -20,7 +18,7 @@ export async function GET() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const response = await fetch(`${BACKEND_URL}/api/auth/ws-token`, {
+  const response = await backendFetch("/api/auth/ws-token", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",

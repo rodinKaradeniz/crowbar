@@ -374,22 +374,32 @@ snapshot of one evening** at the seeded Volt & Vine tenant.
 
 - **A build decision.** `NEXT_PUBLIC_CROWBAR_DEMO=true` is inlined at build
   time and read only through `lib/demo/mode.ts`. `next.config.ts` refuses to
-  build a demo unless `API_INTERNAL_URL` and `NEXT_PUBLIC_API_URL` both end in
-  `/demo-api`, and refuses a non-demo build if either does. A real deployment
-  cannot be switched into the demo without a rebuild.
-- **The mock speaks the backend's HTTP contract at the base URL.** Both API
-  URLs point at `<origin>/demo-api`, served by `app/demo-api/[...path]`, so the
-  `/api/backend` rewrite, the `/api/proxy` BFF, server components and
-  `ml-api.ts` all reach it unchanged. It sits outside `/api` because `proxy.ts`
-  rejects origin-less writes there, and server-side fetches carry no Origin. In
-  a non-demo build the route returns 404.
+  build a demo unless **no** API URL is set (the self-contained default) or
+  both point at a `/demo-api` mock, and refuses a non-demo build if either
+  does. A real deployment cannot be switched into the demo without a rebuild.
+- **The mock answers in this process.** `lib/backend-fetch.ts` is the single
+  seam every server-side backend call goes through — `api-client.ts`,
+  `api.ts`, `ml-api.ts`, the `/api/proxy` BFF, and the register, invite and
+  ws-token routes. With no API URL configured it dispatches to the mock and
+  returns a `Response`, so a self-contained demo opens no connection to
+  anything, including itself. The mock is imported dynamically, so it never
+  enters a real build's bundle. Browser public reads rewrite internally to the
+  same handler, and `app/demo-api/[...path]` exposes it over HTTP for a remote
+  demo or for curl. It sits outside `/api` because `proxy.ts` rejects
+  origin-less writes there. In a non-demo build the route returns 404.
 - **Fixtures are recorded.** `scripts/record-demo-fixtures.mjs` walks a
   production build against a recording proxy in front of a seeded local API,
   as each demo role and as a guest, and writes every read to
-  `lib/demo/fixtures/recording.json`. The proxy refuses every write, so
-  recording never changes the database. `lib/demo/fixture-rules.mjs` refuses
-  non-fictional contact details, known passwords, and payment or revenue
-  language, and a Vitest test applies the same rules.
+  `lib/demo/fixtures/recording.json`. The walk opens every tab, report range
+  preset and stock history, because those reads happen only on interaction. The
+  proxy refuses every write, so recording never changes the database.
+  `lib/demo/fixture-rules.mjs` refuses non-fictional contact details, known
+  passwords, and payment or revenue language, and a Vitest test applies the
+  same rules. Two exceptions come from the product itself. The seed's German
+  venue and supplier numbers are replaced with a reserved 555 number. The
+  reports' own disclaimer ("…none of them is revenue") is allowed by its exact
+  text only. Record while the evening is running: public queue and
+  table-session reads show whatever state the venue was in at that moment.
 - **Writes are never saved.** Every non-GET returns 409 `DEMO_NOT_SAVED` in the
   backend's error envelope, and the operator sees it through the normal error
   paths. The demo indicator in the root layout always says changes are not
@@ -404,7 +414,10 @@ snapshot of one evening** at the seeded Volt & Vine tenant.
 - **Time.** `lib/demo/time-shift.ts` moves every ISO date in a response forward
   by the whole service days (Europe/Berlin, 04:00 rollover) since the recording,
   in wall-clock time. It moves request dates back by the same amount before the
-  fixture lookup.
+  fixture lookup. Range reads that end at "now" (reports, cost control) are
+  matched by their span in whole days, so each preset range keeps working on
+  later days. Elapsed timers such as ticket age use the visitor's clock
+  against the shifted times; the ticket board clamps a future start to 0:00.
 - **Live boards.** There is no WebSocket server. Each socket hook module
   exports `useDemoSocket` instead of its real body in a demo build. It opens
   nothing and reports `connected` with no contact time, which `OfflineBar`

@@ -3,7 +3,7 @@ import { hasCapability } from "@/lib/permissions";
 import recording from "./fixtures/recording.json";
 import type { DemoRecording, RecordedResponse } from "./recording";
 import { requestKey } from "./recording";
-import { dayOffset, shiftJson, shiftValue } from "./time-shift";
+import { dayOffset, serviceDayNumber, shiftJson, shiftValue } from "./time-shift";
 import { readDemoRole } from "./token";
 
 /**
@@ -20,6 +20,45 @@ import { readDemoRole } from "./token";
  */
 
 const data = recording as DemoRecording;
+
+const INSTANT_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/;
+
+/**
+ * A request key with the instants in its query reduced to what stays true on a
+ * later day.
+ *
+ * Range reads such as reports and cost control ask from a browser-local
+ * midnight up to "now", to the millisecond, so their exact key is never asked
+ * twice. What does repeat is the range's span: "last 7 days" is seven whole
+ * days whenever it is asked. A query with two or more instants is keyed by
+ * that span; a lone instant by its service day.
+ */
+function coarseKey(key: string): string {
+  const [target, search] = key.split("?");
+  if (!search) return key;
+  const params = new URLSearchParams(search);
+  const instants = [...params.entries()].filter(([, value]) => INSTANT_RE.test(value));
+  if (instants.length === 0) return key;
+  const times = instants.map(([, value]) => Date.parse(value));
+  const marker =
+    instants.length > 1
+      ? `span:${Math.floor((Math.max(...times) - Math.min(...times)) / 86_400_000)}`
+      : `day:${serviceDayNumber(times[0])}`;
+  for (const [name] of instants) params.set(name, marker);
+  return `${target}?${params.toString()}`;
+}
+
+const coarseIndex: Partial<Record<string, Map<string, RecordedResponse>>> = Object.fromEntries(
+  Object.entries(data.responses).map(([audience, responses]) => [
+    audience,
+    new Map(Object.entries(responses ?? {}).map(([key, entry]) => [coarseKey(key), entry])),
+  ]),
+);
+
+function lookup(audience: string, key: string): RecordedResponse | undefined {
+  const responses = data.responses[audience as keyof DemoRecording["responses"]];
+  return responses?.[key] ?? coarseIndex[audience]?.get(coarseKey(key));
+}
 
 export interface DemoRequest {
   method: string;
@@ -113,16 +152,16 @@ export function handleDemoRequest(request: DemoRequest): DemoResponse {
     if (!hasCapability(role, "insights.view")) return error(403, FORBIDDEN);
     return { status: 200, body: insightsAnswer(insight[1]) };
   }
-  const own = role ? data.responses[role]?.[key] : undefined;
+  const own = role ? lookup(role, key) : undefined;
   if (own) return toResponse(own, days);
 
-  const shared = data.responses.public?.[key];
+  const shared = lookup("public", key);
   if (shared) return toResponse(shared, days);
 
   // A staff endpoint asked without a demo session is what the real API calls
   // unauthenticated; anything else simply was not recorded.
-  const recordedForSomeRole = Object.entries(data.responses).some(
-    ([audience, responses]) => audience !== "public" && responses?.[key],
+  const recordedForSomeRole = Object.keys(data.responses).some(
+    (audience) => audience !== "public" && lookup(audience, key),
   );
   if (recordedForSomeRole && !role) return error(401, UNAUTHENTICATED);
   return error(404, DEMO_NOT_RECORDED);

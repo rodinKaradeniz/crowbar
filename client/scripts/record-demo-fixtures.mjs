@@ -22,14 +22,15 @@
  */
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { writeFileSync } from "node:fs";
+import { openSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { chromium } from "@playwright/test";
 
-import { findFixtureViolations } from "../lib/demo/fixture-rules.mjs";
+import { findFixtureViolations, scrubNonFictionalPhones } from "../lib/demo/fixture-rules.mjs";
 
 const CLIENT_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = path.join(CLIENT_ROOT, "lib", "demo", "fixtures", "recording.json");
@@ -40,6 +41,8 @@ const WEB_PORT = 3100;
 const WEB = `http://localhost:${WEB_PORT}`;
 const SLUG = "volt-and-vine";
 const PASSWORD = process.env.DEMO_ADMIN_PASSWORD;
+const WEB_LOG = path.join(os.tmpdir(), "crowbar-demo-recording-web.log");
+const WEB_LOG_FD = openSync(WEB_LOG, "w");
 
 /** Seeded demo accounts. Keep in step with `lib/demo/token.ts` DEMO_ROLES. */
 const ROLES = {
@@ -194,7 +197,7 @@ function run(command, args, env, { background = false } = {}) {
   const child = spawn(command, args, {
     cwd: CLIENT_ROOT,
     env: { ...process.env, ...env },
-    stdio: background ? "ignore" : "inherit",
+    stdio: background ? ["ignore", WEB_LOG_FD, WEB_LOG_FD] : "inherit",
     detached: background,
   });
   if (background) return child;
@@ -218,10 +221,51 @@ async function waitFor(url, seconds) {
 
 /** Load a page and give its client-side reads time to finish. */
 async function visit(page, route) {
+  if (web?.exitCode !== null && web?.exitCode !== undefined) {
+    fail(`the frontend under recording exited (${web.exitCode}); see ${WEB_LOG}`);
+  }
   await page.goto(`${WEB}${route}`, { waitUntil: "load", timeout: 60_000 });
   await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => {});
   await page.waitForTimeout(1_500);
   console.log(`  ${route} → ${page.url().replace(WEB, "")}`);
+}
+
+/** Click every ARIA tab on the page, so reads behind each one are recorded. */
+async function clickEveryTab(page) {
+  const tabs = page.getByRole("tab");
+  const count = await tabs.count();
+  for (let i = 0; i < count; i += 1) {
+    await tabs.nth(i).click({ timeout: 3_000 }).catch(() => {});
+    await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
+    await page.waitForTimeout(800);
+  }
+}
+
+/** Reads that only happen once a visitor opens something. */
+async function explore(page) {
+  for (const route of WORKSPACE_ROUTES) {
+    await visit(page, route);
+    await clickEveryTab(page);
+  }
+
+  // Reports: every section for every preset range.
+  await visit(page, "/business/reports");
+  for (const preset of ["Today", "Last 7 days", "Last 28 days", "Last 90 days"]) {
+    await page.getByRole("button", { name: preset, exact: true }).click({ timeout: 3_000 }).catch(() => {});
+    await page.waitForTimeout(800);
+    await clickEveryTab(page);
+  }
+
+  // Inventory: each item's movement ledger.
+  await visit(page, "/business/inventory");
+  const histories = page.locator('button[title="View history"]');
+  const count = await histories.count();
+  for (let i = 0; i < count; i += 1) {
+    await histories.nth(i).click({ timeout: 3_000 }).catch(() => {});
+    await page.waitForTimeout(700);
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+  }
 }
 
 /** Follow up to `limit` in-page links that match, so detail reads are recorded. */
@@ -273,7 +317,7 @@ async function walkAsRole(browser, role) {
   });
   if (!login.ok()) fail(`sign-in as ${role} failed (${login.status()}) — is DEMO_ADMIN_PASSWORD the seeded value?`);
 
-  for (const route of WORKSPACE_ROUTES) await visit(page, route);
+  await explore(page);
   await followLinks(page, "/business/customers", "a[href^='/business/customers/']", 3);
   await followLinks(page, "/business/docs", "a[href^='/business/docs/']", 40);
   await context.close();
@@ -288,6 +332,8 @@ async function walkAsGuest(browser) {
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
+
+let web;
 
 async function main() {
   if (!PASSWORD) fail("set DEMO_ADMIN_PASSWORD to the value the demo tenant was seeded with.");
@@ -305,11 +351,11 @@ async function main() {
     NEXT_DIST_DIR: undefined,
   };
 
-  let web;
   try {
     console.log("Building the frontend against the recording proxy…");
     await run("npx", ["next", "build"], env);
     web = run("npx", ["next", "start", "-p", String(WEB_PORT)], env, { background: true });
+    web.on("exit", (code, signal) => console.log(`  (frontend under recording exited: code=${code} signal=${signal})`));
     await waitFor(`${WEB}/api/health`, 60);
 
     const browser = await chromium.launch();
@@ -331,7 +377,7 @@ async function main() {
     proxy.close();
   }
 
-  const recording = { recordedAt, bodies, responses };
+  const recording = { recordedAt, bodies: scrubNonFictionalPhones(bodies), responses };
   const problems = findFixtureViolations(recording);
   if (problems.length) {
     console.error(problems.slice(0, 50).join("\n"));
