@@ -28,7 +28,7 @@ const COLUMNS: {
     basis: "flex-[0_1_160px]",
     links: [
       { href: "#faq", label: "Questions" },
-      { href: "mailto:hallo@crowbar.co", label: "Contact" },
+      { href: "mailto:crowbar@merulio.com", label: "Contact" },
     ],
   },
 ];

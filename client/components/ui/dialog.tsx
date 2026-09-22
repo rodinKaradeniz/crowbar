@@ -89,6 +89,9 @@ function DialogContent({
           "bg-card text-card-foreground fixed top-[50%] left-[50%] z-50 grid translate-x-[-50%] translate-y-[-50%] outline-none",
           // 330–420px, radius 4, E1.
           "w-[calc(100%-2rem)] max-w-[420px] sm:min-w-[330px]",
+          // Never taller than the viewport: a long form scrolls inside the
+          // dialog, so its footer is always reachable on a laptop screen.
+          "max-h-[calc(100svh-2*var(--space-24))] overflow-y-auto",
           "gap-[var(--space-16)] rounded-[var(--radius-4)] border p-[var(--space-24)] shadow-e1",
           "overlay-enter duration-[var(--dur-enter)]",
           className

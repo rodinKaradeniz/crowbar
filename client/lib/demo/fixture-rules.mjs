@@ -6,6 +6,7 @@
  * - People are obviously fictional: reserved example domains, 555 numbers.
  * - No known demo password.
  * - The non-fiscal boundary: nothing says paid, payment processed or revenue.
+ * - The venue does not describe itself as synthetic to the prospects shown it.
  */
 
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})/g;
@@ -19,6 +20,7 @@ const FORBIDDEN = [
   [/(^|[^a-z])paid([^a-z]|$)/i, "“paid”"],
   [/payment[ _-]processed/i, "“payment processed”"],
   [/(^|[^a-z])revenue([^a-z]|$)/i, "“revenue”"],
+  [/wholly synthetic venue/i, "the seed's local-only venue description"],
 ];
 
 /**
@@ -51,6 +53,26 @@ export function scrubNonFictionalPhones(value, key = "") {
   if (value && typeof value === "object") {
     return Object.fromEntries(
       Object.entries(value).map(([k, item]) => [k, scrubNonFictionalPhones(item, k)]),
+    );
+  }
+  return value;
+}
+
+/**
+ * The seed says, truthfully, that its venue is synthetic. That is the right
+ * sentence for a local database and the wrong one for a bar owner being shown
+ * the product, so the recording carries a plausible one instead. Exact text:
+ * if the seed rewords it, the FORBIDDEN rule above refuses the recording.
+ */
+const SEED_VENUE_DESCRIPTION = "A wholly synthetic venue used only for local demonstration data.";
+export const DEMO_VENUE_DESCRIPTION = "A Berlin cocktail and wine bar with a small kitchen, open late.";
+
+export function substituteVenueDescription(value) {
+  if (value === SEED_VENUE_DESCRIPTION) return DEMO_VENUE_DESCRIPTION;
+  if (Array.isArray(value)) return value.map(substituteVenueDescription);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([k, item]) => [k, substituteVenueDescription(item)]),
     );
   }
   return value;

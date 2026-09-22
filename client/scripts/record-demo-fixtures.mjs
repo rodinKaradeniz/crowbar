@@ -13,8 +13,12 @@
  * role and once as a signed-out guest. Every read the frontend makes — from the
  * browser and from the server — is written to `lib/demo/fixtures/recording.json`.
  * Recorded, not hand-written, so the mock speaks the API's real contract;
- * `server/tests/test_demo_fixture_contract.py` fails when the API moves on, and
- * re-running this is the fix.
+ * `server/tests/unit/test_demo_fixture_contract.py` fails when the API moves
+ * on, and re-running this is the fix.
+ *
+ * Before it is written, non-fictional phone numbers are swapped for a reserved
+ * one and the seed's "wholly synthetic venue" description for a plausible one
+ * (`lib/demo/fixture-rules.mjs`); the seed itself stays honest about being fake.
  *
  * The recording is refused if it holds anything `lib/demo/fixture-rules.mjs`
  * forbids: non-fictional contact details, a known password, or payment and
@@ -30,7 +34,11 @@ import { fileURLToPath } from "node:url";
 
 import { chromium } from "@playwright/test";
 
-import { findFixtureViolations, scrubNonFictionalPhones } from "../lib/demo/fixture-rules.mjs";
+import {
+  findFixtureViolations,
+  scrubNonFictionalPhones,
+  substituteVenueDescription,
+} from "../lib/demo/fixture-rules.mjs";
 
 const CLIENT_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = path.join(CLIENT_ROOT, "lib", "demo", "fixtures", "recording.json");
@@ -64,10 +72,14 @@ const WORKSPACE_ROUTES = [
   "/business/inventory",
   "/business/customers",
   "/business/reports",
-  "/business/insights",
   "/business/menu",
   "/business/staff",
   "/business/docs",
+  "/business/profile/info",
+  "/business/profile/hours",
+  "/business/profile/types",
+  "/business/profile/booking",
+  "/business/settings/widget",
 ];
 
 const PUBLIC_ROUTES = [`/reserve/${SLUG}`, `/menu/${SLUG}`, `/order/${SLUG}`, `/queue/${SLUG}`];
@@ -377,7 +389,11 @@ async function main() {
     proxy.close();
   }
 
-  const recording = { recordedAt, bodies: scrubNonFictionalPhones(bodies), responses };
+  const recording = {
+    recordedAt,
+    bodies: substituteVenueDescription(scrubNonFictionalPhones(bodies)),
+    responses,
+  };
   const problems = findFixtureViolations(recording);
   if (problems.length) {
     console.error(problems.slice(0, 50).join("\n"));

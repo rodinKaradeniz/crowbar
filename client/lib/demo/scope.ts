@@ -14,12 +14,12 @@
 /** Workspace routes out of the demo. Rewritten inside the workspace layout. */
 export const WORKSPACE_ROUTES_NOT_IN_DEMO = [
   "/business/onboarding",
-  "/business/requests",
   "/business/inventory/counts/:path*",
-  "/business/profile",
-  "/business/profile/:path*",
+  "/business/insights",
   "/business/settings",
-  "/business/settings/:path*",
+  // Settings is out of the demo, all of it, except the embed widget. A page
+  // added under settings later is out until it is named here as an exception.
+  "/business/settings/:rest((?!widget(?:/|$)).*)",
 ] as const;
 
 /** Public routes out of the demo. */

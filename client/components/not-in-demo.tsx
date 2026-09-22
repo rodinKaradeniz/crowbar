@@ -10,6 +10,9 @@ import { PageBody, PageHeader } from "@/components/page-header";
  * `next.config.ts`, demo builds only.
  *
  * States what is true and offers the way back. Not an error, so no severity.
+ *
+ * Both descriptions summarise what `lib/demo/scope.ts` leaves out. They drift
+ * whenever that list changes: reread them in the same change.
  */
 export function WorkspaceNotInDemo() {
   return (
@@ -18,7 +21,7 @@ export function WorkspaceNotInDemo() {
       <PageBody>
         <EmptyState
           title="This part of Crowbar is not in the demo"
-          description="Setup, settings and account pages need a real venue behind them. The evening's service is all here."
+          description="Settings, stock counts and insights need a real venue with its own history behind them. Tonight's service and the Venue pages are all here."
           action={{ label: "Back to the overview", href: "/business/overview" }}
         />
       </PageBody>

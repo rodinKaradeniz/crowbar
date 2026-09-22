@@ -95,8 +95,9 @@ const DEMO_NOT_RECORDED = {
 /**
  * The demo has no insights service, so it never shows a prediction — recorded
  * or otherwise. It answers with the backend's own "unavailable and nothing
- * captured" body (`ml_snapshot_service.as_empty_response`), which the Insights
- * page already renders honestly as the `unreachable` state.
+ * captured" body (`ml_snapshot_service.as_empty_response`). The Insights page
+ * itself is out of the demo (`scope.ts`); Overview's forecast panel shows this
+ * sentence, so it says the exclusion is deliberate rather than an outage.
  */
 const INSIGHT_RESOURCES = new Set(["status", "segmentation", "cancellation", "demand"]);
 
@@ -106,7 +107,7 @@ function insightsAnswer(resource: string): object {
     stale: true,
     captured_at: null,
     unavailable_reason:
-      "The demo runs without the insights service, so it has no results to show.",
+      "Insights is not part of this demo, so there are no forecasts to show.",
     resource,
   };
 }

@@ -92,10 +92,10 @@ export function FaqSection() {
           <p className="mkt-body-sm text-muted-foreground">
             Anything else, ask a person:{" "}
             <Link
-              href="mailto:hallo@crowbar.co"
+              href="mailto:crowbar@merulio.com"
               className="border-b border-border-strong"
             >
-              hallo@crowbar.co
+              crowbar@merulio.com
             </Link>
           </p>
         </div>

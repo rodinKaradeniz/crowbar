@@ -25,9 +25,13 @@ from app.config import settings
 # tests publish into the dev stream and the dev consumer later replays those
 # events against tenants that only ever existed here.
 
-TEST_DATABASE_URL = settings.database_url.replace(
-    "/crowbar", "/crowbar_test"
-)
+#
+# CI already points DATABASE_URL at crowbar_test, so a URL that names the test
+# database is left alone; replacing unconditionally made it crowbar_test_test.
+
+TEST_DATABASE_URL = settings.database_url
+if not TEST_DATABASE_URL.endswith("/crowbar_test"):
+    TEST_DATABASE_URL = TEST_DATABASE_URL.replace("/crowbar", "/crowbar_test")
 settings.database_url = TEST_DATABASE_URL
 
 from app.core.redis_client import close_redis  # noqa: E402

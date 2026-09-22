@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { findFixtureViolations, scrubNonFictionalPhones } from "@/lib/demo/fixture-rules.mjs";
+import {
+  DEMO_VENUE_DESCRIPTION,
+  findFixtureViolations,
+  scrubNonFictionalPhones,
+  substituteVenueDescription,
+} from "@/lib/demo/fixture-rules.mjs";
 import recording from "@/lib/demo/fixtures/recording.json";
 import { handleDemoRequest } from "@/lib/demo/handler";
 import { requestKey } from "@/lib/demo/recording";
@@ -148,6 +153,14 @@ describe("demo fixtures", () => {
     });
     expect(findFixtureViolations({ total_revenue: 1 })).toHaveLength(1);
     expect(findFixtureViolations({ note: ["pass", "word", "123"].join("") })).toHaveLength(1);
+  });
+
+  it("swaps the seed's synthetic venue description and refuses it if it survives", () => {
+    const seeded = "A wholly synthetic venue used only for local demonstration data.";
+    expect(substituteVenueDescription([{ description: seeded, name: "Volt & Vine" }])).toEqual([
+      { description: DEMO_VENUE_DESCRIPTION, name: "Volt & Vine" },
+    ]);
+    expect(findFixtureViolations({ description: seeded })).toHaveLength(1);
   });
 });
 

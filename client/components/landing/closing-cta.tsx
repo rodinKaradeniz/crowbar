@@ -22,11 +22,23 @@ export function ClosingCta() {
       <div className="mkt-shell mkt-gap-cta flex flex-wrap items-end">
         <div className="settle min-w-[min(100%,320px)] flex-[1_1_420px]">
           <h2 className="mkt-d2-cta">
-            Open your
-            <br />
-            workspace before
-            <br />
-            Friday service.
+            {IS_DEMO ? (
+              <>
+                Step behind
+                <br />
+                the bar for
+                <br />
+                Friday service.
+              </>
+            ) : (
+              <>
+                Open your
+                <br />
+                workspace before
+                <br />
+                Friday service.
+              </>
+            )}
           </h2>
         </div>
 
