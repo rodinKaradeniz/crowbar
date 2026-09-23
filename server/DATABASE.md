@@ -45,6 +45,14 @@ The pytest fixture creates and drops ORM metadata for each test. It does not
 execute the SQL migration chain, so passing integration tests do not prove that
 a fresh production database can migrate successfully.
 
+Do not run the migrations into `crowbar_test`. The migrations and the fixtures
+are two schema authorities and a database may only have one: the fixtures tear
+down with `Base.metadata.drop_all`, which names constraints by the ORM's names
+and orders drops by the ORM's foreign keys, neither of which a migrated schema
+is guaranteed to match. CI keeps them apart by migrating its own
+`crowbar_migration_check` database, and `docs/HISTORY.md` 2026-09-23 records
+what happens when they share one.
+
 ## Adding a Migration
 
 1. Inspect the current migration tail and choose the next zero-padded filename

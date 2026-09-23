@@ -62,10 +62,17 @@ async def setup_database():
     # The application Redis client is process-global while pytest-asyncio uses
     # a fresh event loop for each test. Close it on the loop that created it so
     # later tests cannot inherit a connection bound to a closed loop.
-    await close_redis()
-    async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    await test_engine.dispose()
+    #
+    # Dispose in a finally: a teardown that raises must cost its own test and no
+    # others. Without this, a failed drop returns a connection with an aborted
+    # transaction to the pool and every later test errors at setup with
+    # "another operation is in progress".
+    try:
+        await close_redis()
+        async with test_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+    finally:
+        await test_engine.dispose()
 
 
 @pytest_asyncio.fixture

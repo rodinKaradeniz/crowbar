@@ -1916,6 +1916,42 @@ the confirmed sequence unless a stage explicitly pulls the item forward.
 - **Ready:** Add migration-chain tests against a fresh database in addition to
   ORM-metadata tests, including seed validation and a reliable disposable reset
   path.
+
+- **Ready — reconcile the ORM with the migrated schema, then test on it.** The
+  migrations and the pytest fixtures are two schema authorities. Since
+  2026-09-23 they no longer share a database (CI migrates
+  `crowbar_migration_check`; `crowbar_test` is `create_all`-owned), which fixes
+  the collision but leaves the divergence. Measured against a database migrated
+  through 054: **28 single-column foreign keys exist in the database that the
+  ORM never declares** — 198 in the database against 174 in the metadata —
+  concentrated in the purchasing and inventory tables, plus
+  `staff_invitations`. `purchase_receipt_lines.stock_movement_id` is the
+  representative case: a plain `UUID` column at `app/models/purchasing.py:109`
+  where the migration creates a real foreign key, so `drop_all` does not know
+  the table depends on `stock_movements` and sorts the drops wrong. Doing this
+  properly means declaring the missing relationships and replacing per-test
+  schema teardown with truncation or transaction rollback, after which the
+  suite could run on the migrated schema and catch this drift for real.
+  **Trigger:** the migration-chain testing work above, or the first bug traced
+  to a relationship the ORM cannot see.
+
+- **Ready — constraint names drift because nothing generates them.** Eight
+  explicit ORM constraint names have no matching name in any migration:
+  `ck_booking_schedules_minimum_notice_nonnegative`,
+  `ck_booking_schedules_advance_booking_days_positive`,
+  `ck_booking_schedules_slot_interval_positive`,
+  `ck_booking_schedules_default_duration_positive`,
+  `ck_booking_schedule_windows_weekday`, `ck_customer_data_requests_status` and
+  `uq_bot_configs_business_channel` — the eighth, the `tabs` settlement foreign
+  key, was aligned by migration 054 because `use_alter=True` made `drop_all`
+  name it on the wire. The remaining seven are harmless today: CHECK, UNIQUE and
+  Index objects are dropped implicitly with `DROP TABLE`, so their names are
+  never used. The systemic cause is that `Base.metadata` has no
+  `naming_convention`, so every name is hand-written on both sides and a new
+  divergence costs nothing to introduce. **Trigger:** the first migration that
+  needs to reference one of them by name — 049 and 051 both already had to
+  retrofit a name — or the move to testing on the migrated schema above.
+
 - **Ready:** Add ML unit, pipeline, minimum-data, reproducibility, and
   leakage-regression tests.
 - **Ready:** Establish accessibility checks, responsive/visual regression,

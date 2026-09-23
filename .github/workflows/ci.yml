@@ -54,7 +54,6 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/crowbar_test
-      TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/crowbar_test
       REDIS_URL: redis://127.0.0.1:6379/0
       ENVIRONMENT: test
     steps:
@@ -65,8 +64,20 @@ jobs:
           cache: pip
       - name: Server dependencies
         run: pip install --require-hashes -r server/requirements-test.lock
+      # The migrations and the pytest fixtures are two separate schema
+      # authorities. They must not share a database: the fixtures build the
+      # schema with Base.metadata.create_all and tear it down with drop_all,
+      # which names constraints the migrations do not create. crowbar_test stays
+      # fixture-owned, exactly as it is on a developer machine, and the
+      # migration check gets a database of its own.
+      - name: Migration-check database
+        env:
+          PGPASSWORD: postgres
+        run: createdb -h 127.0.0.1 -U postgres crowbar_migration_check
       - name: Fresh database migrations
         working-directory: server
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/crowbar_migration_check
         run: python -m db.migrate
       - name: Server tests
         run: python -m pytest server/tests

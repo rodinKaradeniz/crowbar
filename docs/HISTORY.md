@@ -3941,3 +3941,67 @@ in words.
 `client/hooks/demo-socket.ts`, `client/lib/client-api.ts`,
 `client/tests/unit/demo-writes.test.ts`,
 `client/e2e/demo-service-loop.spec.ts`.
+
+## 2026-09-23 — One database has one schema authority, and CI had two
+
+**Context.** The `python` CI job reported 1 passed and 783 errors. The job set
+`DATABASE_URL` to `crowbar_test` and ran `python -m db.migrate` against it, so
+the test database was built by the SQL migrations; `tests/conftest.py` then ran
+`Base.metadata.create_all` (a no-op against that schema) and, per test,
+`drop_all`. `app/models/tab.py` declares the `tabs` → `tab_settlement_events`
+foreign key with an explicit `name="fk_tabs_current_settlement_event"` and
+`use_alter=True` — the only `use_alter` in the codebase — which is what lets
+`drop_all` break that table cycle by emitting a standalone
+`ALTER TABLE tabs DROP CONSTRAINT` under that exact name. Migration 040 had
+added the column with an inline unnamed `REFERENCES`, so a migrated database
+carried the PostgreSQL auto-name `tabs_current_settlement_event_id_fkey` and the
+drop failed. It passed on developer machines because a local `crowbar_test` was
+only ever built by `create_all`, where the ORM's name genuinely exists.
+
+**Decision.** The migrations and the pytest fixtures are two schema authorities
+and no longer share a database. `crowbar_test` is fixture-owned in CI exactly as
+it is locally, and the migration check runs against its own
+`crowbar_migration_check`. The migration step was kept, not removed: it is still
+the only thing that proves a fresh database can migrate cleanly.
+
+**Consequences.**
+
+- **A teardown failure now costs one test, not the whole run.** The drop ran
+  inside `async with test_engine.begin()`, so a raise skipped the
+  `await test_engine.dispose()` on the next line and returned a connection with
+  an aborted transaction to the pool; every later test then errored at setup
+  with `InterfaceError: cannot perform operation: another operation is in
+  progress`. The dispose moved into a `finally`. The drop error itself is not
+  swallowed — a broken teardown must still fail its own test.
+- **Migration 054 renames the constraint to the ORM's name**, guarded by a
+  `pg_constraint` lookup so it is a no-op where `create_all` already built it.
+  Renaming a constraint is catalog-only. The separate composite
+  `fk_tabs_current_settlement_tenant` from migration 042 is untouched.
+- **The reverse fix — run the tests on the migrated schema and delete
+  `create_all`/`drop_all` — was considered and rejected as too large for this
+  pass, and the measurement is why.** With the cascade contained, a suite run
+  against a migrated schema surfaced a second and unrelated class of drift:
+  **28 single-column foreign keys exist in the migrated database that the ORM
+  never declares** (198 in the database, 174 in the metadata), concentrated in
+  the stage 5 purchasing and inventory tables — for example
+  `purchase_receipt_lines.stock_movement_id` is a plain `UUID` column at
+  `app/models/purchasing.py:109` with no `ForeignKey`, so `drop_all` cannot know
+  the table depends on `stock_movements` and sorts the drops wrong. Closing that
+  properly means declaring the missing relationships and replacing per-test
+  schema teardown with truncation or transaction rollback. It belongs with the
+  existing migration-chain testing item in `docs/TODO.md`, not in a CI repair.
+- **Constraint-name drift is a pattern, not one incident.** Eight explicit ORM
+  constraint names have no matching name in any migration. Only the `tabs` FK
+  can break anything today, because CHECK, UNIQUE and Index objects are dropped
+  implicitly with `DROP TABLE` and their names never reach the wire. The
+  systemic cause is that `Base.metadata` has no `naming_convention`, so every
+  name is hand-written on both sides. Recorded in `docs/TODO.md`.
+- `TEST_DATABASE_URL` was removed from the workflow. `Settings` has no such
+  field and nothing read it; its presence implied a separation that did not
+  exist and helped hide this bug.
+
+**References.** `.github/workflows/ci.yml`, `server/tests/conftest.py`,
+`server/db/migrations/054_settlement_constraint_name_alignment.sql`,
+`server/app/models/tab.py`, `server/app/models/purchasing.py`,
+`server/db/migrations/040_external_settlement.sql`,
+`server/db/migrations/042_tenant_constraints.sql`.
