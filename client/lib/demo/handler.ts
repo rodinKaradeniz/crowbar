@@ -5,6 +5,7 @@ import type { DemoRecording, RecordedResponse } from "./recording";
 import { requestKey } from "./recording";
 import type { DemoOp } from "./ops";
 import { projectRead } from "./project";
+import { DEMO_BUSINESS_ID } from "./snapshot";
 import { reduceOps, type DemoState } from "./state";
 import { dayOffset, serviceDayNumber, shiftJson, shiftValue } from "./time-shift";
 import { readDemoRole, type DemoRole } from "./token";
@@ -154,7 +155,26 @@ function read(
   const recordedQuery = new URLSearchParams(
     [...query.entries()].map(([key, value]) => [key, shiftValue(value, -days)]),
   );
-  const key = requestKey("GET", recordedPath, recordedQuery);
+  // The staff availability read is answered from the public recording.
+  //
+  // `GET /api/reservations/availability`
+  // (server/app/routers/reservations.py:298-305) and
+  // `GET /api/availability/business/{id}`
+  // (server/app/routers/availability.py:34-41) both call
+  // availability_service.get_availability with the same six arguments and
+  // return the same AvailabilityResponse. Only their preconditions differ: a
+  // rate limit and the public-booking gate on one, reservations.view and the
+  // module check on the other. The recorder walked the public route only, so
+  // the staff key is rewritten to it and gated here instead.
+  //
+  // This alias holds only while the two routers keep delegating identically.
+  let keyPath = recordedPath;
+  if (recordedPath === "/api/reservations/availability") {
+    if (!role) return error(401, UNAUTHENTICATED);
+    if (!hasCapability(role, "reservations.view")) return error(403, FORBIDDEN);
+    keyPath = `/api/availability/business/${DEMO_BUSINESS_ID}`;
+  }
+  const key = requestKey("GET", keyPath, recordedQuery);
 
   const insight = /^\/api\/insights\/([a-z]+)$/.exec(path);
   if (insight && INSIGHT_RESOURCES.has(insight[1])) {

@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import {
   Dialog,
   DialogContent,
@@ -17,7 +19,11 @@ interface ConfirmationDialogProps {
   description?: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  onConfirm: () => void;
+  /**
+   * Awaited. Throw to keep the dialog open — a caller that fails should say so
+   * over its own still-open dialog, not over a closed one.
+   */
+  onConfirm: () => void | Promise<void>;
   variant?: "default" | "destructive";
 }
 
@@ -36,6 +42,13 @@ interface ConfirmationDialogProps {
  *   loudest thing should not be the one you did not mean to press.
  *
  * The default labels are a fallback, not an example — pass real ones.
+ *
+ * The confirmation WAITS. `onConfirm` used to be fired and forgotten while the
+ * dialog closed in the same tick, so a decision that the server then refused
+ * read as a decision that had been taken: the dialog vanished, and whatever
+ * the caller toasted landed a second later over nothing. It now holds, with
+ * both buttons disabled, until `onConfirm` settles, and closes only if it
+ * resolved.
  */
 export function ConfirmationDialog({
   open,
@@ -47,13 +60,23 @@ export function ConfirmationDialog({
   onConfirm,
   variant = "default",
 }: ConfirmationDialogProps) {
-  const handleConfirm = () => {
-    onConfirm();
-    onOpenChange(false);
+  const [pending, setPending] = useState(false);
+
+  const handleConfirm = async () => {
+    setPending(true);
+    try {
+      await onConfirm();
+      onOpenChange(false);
+    } catch {
+      // The caller owns the message; the dialog's job is to stay put so the
+      // operator can read it and decide again.
+    } finally {
+      setPending(false);
+    }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(next) => !pending && onOpenChange(next)}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
@@ -62,11 +85,12 @@ export function ConfirmationDialog({
 
         <DialogFooter>
           {/* Filled: staying put. */}
-          <Button onClick={() => onOpenChange(false)}>{cancelLabel}</Button>
+          <Button disabled={pending} onClick={() => onOpenChange(false)}>{cancelLabel}</Button>
 
           {/* Quiet: going ahead. */}
           <Button
             variant={variant === "destructive" ? "destructive-quiet" : "secondary"}
+            disabled={pending}
             onClick={handleConfirm}
           >
             {confirmLabel}

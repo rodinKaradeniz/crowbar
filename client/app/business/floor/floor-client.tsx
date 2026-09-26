@@ -22,6 +22,8 @@ import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { FloorPlanSeatingSheet } from "@/components/floor-plan-seating-sheet";
 import { SkeletonList } from "@/components/ui/skeleton";
 import { useFloorPlanSocket } from "@/hooks/use-floor-plan-socket";
+import { useRegionalSettings } from "@/contexts/regional-context";
+import { formatBusinessTime } from "@/lib/business-time";
 import {
   clientApproveTableGuestSession,
   clientDenyTableGuestSession,
@@ -72,11 +74,13 @@ interface FloorClientProps {
 
 type SelectionMode = "seat" | "assign";
 
-function formatVenueTime(value: string | undefined, businessTimezone: string) {
+function formatVenueTime(
+  value: string | undefined,
+  businessTimezone: string,
+  locale: string,
+) {
   if (!value) return null;
-  return new Intl.DateTimeFormat(undefined, { timeZone: businessTimezone, hour: "numeric", minute: "2-digit" }).format(
-    new Date(value),
-  );
+  return formatBusinessTime(value, businessTimezone, locale);
 }
 
 /**
@@ -144,13 +148,14 @@ function PartyCard({
   onSecondary?: () => void;
   businessTimezone: string;
 }) {
+  const { locale } = useRegionalSettings();
   return (
     <div className="border bg-card p-3">
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">{party.name}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            <span className="font-mono tabular-nums">{party.partySize}</span> guests · {party.sourceType === "queue" ? party.status : formatVenueTime(party.startsAt, businessTimezone)}
+            <span className="font-mono tabular-nums">{party.partySize}</span> guests · {party.sourceType === "queue" ? party.status : formatVenueTime(party.startsAt, businessTimezone, locale)}
           </p>
           {/* Neutral. §08 names dietary notes as the case that does NOT
               qualify for a severity — it is information the host needs before
@@ -179,6 +184,7 @@ function PartyCard({
 }
 
 function TableCard({ table, onClick, businessTimezone, waitingToOrder }: { table: FloorPlanBoardTable; onClick: () => void; businessTimezone: string; waitingToOrder: number }) {
+  const { locale } = useRegionalSettings();
   const detail = table.activeSeating?.source ?? table.activeAssignment ?? table.nextReservation;
   return (
     <button
@@ -211,7 +217,7 @@ function TableCard({ table, onClick, businessTimezone, waitingToOrder }: { table
         <div className="mt-4 border-t border-surface-3 pt-2">
           <p className="truncate text-sm font-medium">{detail.name}</p>
           <p className="text-xs text-muted-foreground">
-            {table.activeSeating ? "Seated" : table.activeAssignment ? "At table" : `Next ${formatVenueTime(detail.startsAt, businessTimezone)}`}
+            {table.activeSeating ? "Seated" : table.activeAssignment ? "At table" : `Next ${formatVenueTime(detail.startsAt, businessTimezone, locale)}`}
           </p>
         </div>
       ) : table.operationalStateReason ? (
@@ -423,6 +429,7 @@ function SetupPanel({ onChanged }: { onChanged: () => Promise<void> }) {
 }
 
 export default function FloorClient({ businessId, canManage, canOperate, hasReservations, hasQueue, hasOrdering, businessTimezone }: FloorClientProps) {
+  const { locale } = useRegionalSettings();
   const [board, setBoard] = useState<FloorPlanBoard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -852,6 +859,7 @@ export default function FloorClient({ businessId, canManage, canOperate, hasRese
                               {formatVenueTime(
                                 selectedTable.nextReservation.startsAt,
                                 businessTimezone,
+                                locale,
                               )}
                             </span>
                             , which has not come round yet.
@@ -917,7 +925,7 @@ export default function FloorClient({ businessId, canManage, canOperate, hasRese
                           <p className="text-[13px] text-muted-foreground">
                             A guest scanned this table&apos;s QR code at{" "}
                             <span className="font-mono tabular-nums">
-                              {formatVenueTime(session.createdAt, businessTimezone)}
+                              {formatVenueTime(session.createdAt, businessTimezone, locale)}
                             </span>{" "}
                             and cannot order until someone lets them through.
                           </p>

@@ -6,6 +6,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { IS_DEMO } from "@/lib/demo/mode";
 import {
   Select,
   SelectContent,
@@ -389,7 +390,14 @@ export function ReservationForm({
       <Outcome
         eyebrow="Reservations"
         title="Reservation submitted"
-        body="You'll receive a confirmation email shortly. The venue confirms the booking itself — check that email before you travel."
+        body={
+          // The demo sends nothing: no mail leaves it, and the role picker
+          // already promises no guest is ever contacted. Promising an email
+          // that will never arrive is the one thing this screen must not do.
+          IS_DEMO
+            ? "The venue confirms the booking itself. No email leaves this demo, so nothing here reaches a real guest."
+            : "You'll receive a confirmation email shortly. The venue confirms the booking itself — check that email before you travel."
+        }
       >
         <Button onClick={() => window.location.reload()} className="w-full">
           Make Another Reservation

@@ -7,8 +7,10 @@ import {
   MENU_ITEMS,
   RECORDED_CUSTOMERS,
   RECORDED_LINES,
+  RECORDED_OPEN_TAB_BY_TABLE,
   RECORDED_QUEUE_ENTRIES,
   RECORDED_RESERVATIONS,
+  RECORDED_TABS,
   TABLES,
 } from "./snapshot";
 import { DEMO_ROLES, type DemoRole } from "./token";
@@ -34,7 +36,7 @@ const STATUS_RANK: Record<LineStatus, number> = {
   served: 3,
 };
 
-function round2(value: number): number {
+export function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
@@ -192,6 +194,8 @@ export interface DemoState {
   lineStatus: Map<string, LineStatus>;
   /** Settlement recorded against a recorded tab, by tab id. */
   recordedTabSettlements: Map<string, DemoSettlement>;
+  /** Rounds the visitor added to a recorded tab, by tab id. */
+  recordedTabOrders: Map<string, DemoOrder[]>;
   /** Recorded seatings the visitor closed. */
   closedRecordedSeatings: Set<string>;
   /** Recorded queue parties the visitor called, by entry id → called at. */
@@ -220,6 +224,7 @@ function emptyState(ops: readonly DemoOp[]): DemoState {
     orders: [],
     lineStatus: new Map(),
     recordedTabSettlements: new Map(),
+    recordedTabOrders: new Map(),
     closedRecordedSeatings: new Set(),
     calledQueue: new Map(),
     seatedQueue: new Map(),
@@ -281,7 +286,7 @@ export function partyFor(
 function buildOrder(
   op: OrderOp,
   index: number,
-  tab: DemoTab | null,
+  tabId: string | null,
   tableId: string | null,
 ): DemoOrder {
   const orderId = demoId("order", index);
@@ -327,7 +332,7 @@ function buildOrder(
     business_id: DEMO_BUSINESS_ID,
     location_id: DEMO_LOCATION_ID,
     table_id: tableId,
-    tab_id: tab?.id ?? null,
+    tab_id: tabId,
     table_identifier: table?.label ?? null,
     status: "received",
     idempotency_key: `demo-${index}`,
@@ -363,6 +368,25 @@ export function orderStatusFrom(statuses: readonly LineStatus[]): LineStatus {
 
 function tabTotal(tab: DemoTab): number {
   return round2(tab.orders.reduce((sum, order) => sum + order.total_amount, 0));
+}
+
+/**
+ * What a tab is carrying now, wherever it came from.
+ *
+ * A recorded tab has no object here to hold a running total, so its recorded
+ * one is added to rather than recomputed: the recording's figure is the API's
+ * own answer and may legitimately exclude something the orders list still
+ * shows.
+ */
+function totalFor(state: DemoState, tabId: string): number {
+  const own = state.tabsById.get(tabId);
+  if (own) return own.total;
+  const recorded = RECORDED_TABS.get(tabId);
+  if (!recorded) return 0;
+  const added = state.recordedTabOrders.get(tabId) ?? [];
+  return round2(
+    Number(recorded.total ?? 0) + added.reduce((sum, order) => sum + order.total_amount, 0),
+  );
 }
 
 /** Replay the log. The result is what every read is rendered against. */
@@ -500,6 +524,19 @@ export function reduceOps(ops: readonly DemoOp[]): DemoState {
       case "scan": {
         const table = TABLES.get(op.tb);
         if (!table) break;
+        // A guest who re-opens the menu at the table they already scanned is
+        // the same guest. Minting a second session would orphan the approval
+        // staff had just given the first, and that is exactly the demo
+        // sequence: the guest waits, the presenter approves at the staff
+        // screen, the guest reloads to check. A denial still lets them ask
+        // again, and a scan at another table still starts fresh.
+        if (
+          state.session &&
+          state.session.table_id === op.tb &&
+          state.session.status !== "denied"
+        ) {
+          break;
+        }
         const seating = state.seatings.find(
           (candidate) => candidate.closed_at === null && candidate.table_ids.includes(op.tb),
         );
@@ -561,12 +598,34 @@ export function reduceOps(ops: readonly DemoOp[]): DemoState {
             }
           }
         }
-        const order = buildOrder(op, index, tab, op.tb ?? tab?.table_id ?? null);
+        // Nothing of the visitor's own answers for this round, so the
+        // recording may: it was rung into a recorded tab, or scanned at a
+        // table the recorded evening already has a tab open on. The round
+        // belongs to that tab, and `project.ts` puts it back onto it on the
+        // way out — the same side-map route a settlement against a recorded
+        // tab already takes.
+        const recordedTabId =
+          tab !== null
+            ? null
+            : (op.b && RECORDED_TABS.has(op.b) ? op.b : null) ??
+              (op.tb ? RECORDED_OPEN_TAB_BY_TABLE.get(op.tb) ?? null : null);
+        const recordedTab = recordedTabId ? RECORDED_TABS.get(recordedTabId) ?? null : null;
+
+        const order = buildOrder(
+          op,
+          index,
+          tab?.id ?? recordedTabId,
+          op.tb ?? tab?.table_id ?? recordedTab?.table_id ?? null,
+        );
         state.orders.push(order);
         if (tab) {
           tab.orders.push(order);
           tab.total = tabTotal(tab);
           if (op.c === "qr") tab.channel = "qr";
+        } else if (recordedTabId) {
+          const added = state.recordedTabOrders.get(recordedTabId) ?? [];
+          added.push(order);
+          state.recordedTabOrders.set(recordedTabId, added);
         }
         break;
       }
@@ -611,7 +670,7 @@ export function reduceOps(ops: readonly DemoOp[]): DemoState {
           actor_id: actorId(op.u),
           occurred_at: iso(op.at),
           currency_code: DEMO_CURRENCY,
-          total_snapshot: state.tabsById.get(op.b)?.total ?? 0,
+          total_snapshot: totalFor(state, op.b),
           informational_method: op.m,
           note: op.nt,
           external_register_reference: op.r,

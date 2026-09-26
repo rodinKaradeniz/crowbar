@@ -152,7 +152,7 @@ export default function BusinessOverviewClient({
               value={ops.orders_today || null}
               comparison={
                 ops.open_tabs !== undefined
-                  ? `${ops.open_tabs} tabs still open`
+                  ? `${ops.open_tabs} tab${ops.open_tabs === 1 ? "" : "s"} still open`
                   : undefined
               }
             />
@@ -332,7 +332,7 @@ function ForecastPanel({
 
       {/* Neutral. A month-over-month change has a deadline weeks away; §08
           names it as the case that does not qualify for a severity. */}
-      {monthChange !== 0 ? (
+      {days.length > 0 && monthChange !== 0 ? (
         <p className="mt-2.5 font-mono text-[11.5px] tabular-nums text-muted-foreground">
           {monthChange > 0 ? "+" : ""}
           {monthChange}% bookings vs last month

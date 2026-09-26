@@ -2,7 +2,13 @@ import { hasCapability, type Capability } from "@/lib/permissions";
 
 import type { DemoOp } from "./ops";
 import { wouldOverflow } from "./ops";
-import { DEMO_BUSINESS_ID, MENU_ITEMS, TABLE_BY_QR_TOKEN, TABLES } from "./snapshot";
+import {
+  DEMO_BUSINESS_ID,
+  MENU_ITEMS,
+  RECORDED_TABS,
+  TABLE_BY_QR_TOKEN,
+  TABLES,
+} from "./snapshot";
 import { reduceOps, type DemoState } from "./state";
 import type { DemoRole } from "./token";
 
@@ -248,6 +254,20 @@ export function handleDemoWrite(request: DemoWriteRequest): DemoWriteResult {
       // the recorded QR sheet carries and opens nothing for any other string.
       return { status: 404, body: NOT_FOUND };
     }
+    const open = state.session;
+    if (open && open.table_id === tableId && open.status !== "denied") {
+      // This browser already has a session at this table and staff may have
+      // approved it. Hand that one back rather than logging a second scan:
+      // the reducer would keep the first anyway, and the log stays shorter.
+      return {
+        status: 201,
+        body: {
+          status: open.status,
+          table_label: open.table_label,
+          expires_at: open.expires_at,
+        },
+      };
+    }
     const op: DemoOp = { t: "scan", tb: tableId, at: nowMs };
     return commit(op, (next) => ({
       status: 201,
@@ -304,14 +324,18 @@ export function handleDemoWrite(request: DemoWriteRequest): DemoWriteResult {
   if (tabOrder && method === "POST") {
     const refusal = gate("tabs.operate");
     if (refusal) return refusal;
-    const tab = state.tabsById.get(tabOrder[1]);
-    if (!tab) return { status: 404, body: NOT_FOUND };
+    // The tab is the visitor's own, or one the recorded evening opened. Either
+    // way the round goes onto it; `state.ts` keeps rounds against a recorded
+    // tab in a side map and `project.ts` merges them back.
+    const own = state.tabsById.get(tabOrder[1]);
+    const recorded = own ? undefined : RECORDED_TABS.get(tabOrder[1]);
+    if (!own && !recorded) return { status: 404, body: NOT_FOUND };
     const lines = itemsField(body);
     if (lines.length === 0) return { status: 422, body: invalid("The round is empty.") };
     const op: DemoOp = {
       t: "order",
-      b: tab.id,
-      tb: tab.table_id,
+      b: tabOrder[1],
+      tb: own?.table_id ?? recorded?.table_id ?? null,
       c: "staff",
       it: lines,
       at: nowMs,

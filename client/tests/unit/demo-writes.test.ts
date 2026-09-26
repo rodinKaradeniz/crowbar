@@ -17,6 +17,9 @@ const FREE_TABLE = "00000000-0000-0024-0000-000000000201";
 const MOJITO = "00000000-0000-0000-0008-000000000001";
 const MARTINI = "00000000-0000-0000-0008-000000000010";
 const WAITING_PARTY = "00000000-0000-0000-0013-000000000013";
+/** The one recorded tab with contents, and the table it is open on. */
+const RECORDED_TAB = "00000000-0000-0016-0000-000000000002";
+const RECORDED_TABLE = "00000000-0000-0024-0000-000000000213";
 
 /**
  * A fixed instant to walk at: a Monday, 21:00 in Berlin, mid-service. The
@@ -153,11 +156,18 @@ describe("the demo service loop", () => {
       }).status,
     ).toBe(403);
 
+    // The recorded evening already has a party waiting on approval, so this
+    // scan joins a queue rather than starting one. The scan does not hand the
+    // guest a session id — staff answer it from the board — so find it by the
+    // table this walk seated. Asserting the queue holds only ours would be
+    // asserting the recording is empty, which it stops being the moment the
+    // fixture is recorded inside service hours.
     const pending = guest.read("/api/floor-plan/table-guest-sessions", "host_server", "status=pending")
       .body as Json[];
-    expect(pending).toHaveLength(1);
+    const ours = pending.find((session) => session.table_id === FREE_TABLE);
+    expect(ours).toBeDefined();
     expect(
-      guest.call("POST", `/api/floor-plan/table-guest-sessions/${pending[0].id}/approve`, {
+      guest.call("POST", `/api/floor-plan/table-guest-sessions/${ours!.id}/approve`, {
         role: "host_server",
       }).status,
     ).toBe(204);
@@ -274,6 +284,136 @@ describe("the demo service loop", () => {
     expect(
       (board.queue_entries as Json[]).some((party) => party.source_id === WAITING_PARTY),
     ).toBe(false);
+  });
+
+  /**
+   * The recording owns most of the evening, and a stranger clicks its busiest
+   * tab first. A round rung into one — by a server or by the guest's own QR —
+   * has to land on THAT tab, appear once, and still be there at settlement.
+   */
+  it("puts a staff round and a QR round on the same recorded tab, once each", () => {
+    const staff = visitor();
+
+    const before = (staff.read("/api/tabs", "owner").body as Json[]).find(
+      (tab) => tab.id === RECORDED_TAB,
+    ) as Json;
+    expect(before).toMatchObject({ status: "open", total: 66, table_id: RECORDED_TABLE });
+    expect(before.orders as Json[]).toHaveLength(2);
+
+    // ── A server rings a round into it ──────────────────────────────────────
+    const rung = staff.call("POST", `/api/tabs/${RECORDED_TAB}/orders`, {
+      role: "owner",
+      body: { items: [{ item_id: MOJITO, quantity: 2 }] },
+    });
+    expect(rung.status).toBe(201);
+    const staffOrder = rung.body as Json;
+    expect(staffOrder.tab_id).toBe(RECORDED_TAB);
+    expect(staffOrder.table_identifier).toBe("T3");
+
+    // ── The guest at that same table scans and orders ───────────────────────
+    const qr = staff.read("/api/floor-plan/tables/qr", "owner").body as Json;
+    const url = ((qr.areas as Json[])
+      .flatMap((area) => area.tables as Json[])
+      .find((table) => table.table_id === RECORDED_TABLE) as Json).url as string;
+    staff.call("POST", `/api/ordering/${BUSINESS}/table-sessions`, {
+      body: { table_token: url.split("#table_token=")[1], browser_nonce: "demo" },
+    });
+    const pending = staff.read(
+      "/api/floor-plan/table-guest-sessions",
+      "host_server",
+      "status=pending",
+    ).body as Json[];
+    expect(
+      staff.call("POST", `/api/floor-plan/table-guest-sessions/${pending[0].id}/approve`, {
+        role: "host_server",
+      }).status,
+    ).toBe(204);
+
+    const qrRound = staff.call("POST", `/api/ordering/${BUSINESS}/orders`, {
+      body: { items: [{ item_id: MARTINI, quantity: 1 }] },
+    });
+    expect(qrRound.status).toBe(201);
+    const guestOrder = qrRound.body as Json;
+    // The landing page's own promise: "from the QR menu, or from a server's
+    // tablet. Same tab either way."
+    expect(guestOrder.tab_id).toBe(RECORDED_TAB);
+
+    // ── Once each, and the total says so ────────────────────────────────────
+    const tabs = staff.read("/api/tabs", "owner").body as Json[];
+    expect(tabs.filter((tab) => tab.id === RECORDED_TAB)).toHaveLength(1);
+    const after = tabs.find((tab) => tab.id === RECORDED_TAB) as Json;
+    expect(after.orders as Json[]).toHaveLength(4);
+    expect(after.total).toBe(
+      66 + (staffOrder.total_amount as number) + (guestOrder.total_amount as number),
+    );
+
+    // The tab's own detail read answers too, with the same figure. The
+    // recorder never walked it, so this comes from the index.
+    const detail = staff.read(`/api/tabs/${RECORDED_TAB}`, "owner");
+    expect(detail.status).toBe(200);
+    expect((detail.body as Json).total).toBe(after.total);
+    expect((detail.body as Json).orders as Json[]).toHaveLength(4);
+
+    // The ticket board carries each new round exactly once, and can move it.
+    const tickets = staff.read(`/api/ordering/${BUSINESS}/orders`, "bar_kitchen").body as Json[];
+    for (const id of [staffOrder.id, guestOrder.id]) {
+      expect(tickets.filter((order) => order.id === id)).toHaveLength(1);
+    }
+    const line = ((staffOrder.line_items as Json[])[0] as Json).id as string;
+    expect(
+      staff.call(
+        "PATCH",
+        `/api/ordering/${BUSINESS}/orders/${staffOrder.id}/lines/${line}/status`,
+        { role: "bar_kitchen", body: { status: "ready" } },
+      ).status,
+    ).toBe(200);
+
+    // ── Settling still works, and takes the new rounds with it ──────────────
+    const settled = staff.call("POST", `/api/tabs/${RECORDED_TAB}/settle-externally`, {
+      role: "owner",
+      body: { informational_method: "card", note: null, external_register_reference: "R-1" },
+    });
+    expect(settled.status).toBe(200);
+    expect(settled.body).toMatchObject({ status: "settled_externally" });
+    expect(
+      ((settled.body as Json).settlement_events as Json[])[0].total_snapshot,
+    ).toBe(after.total);
+  });
+
+  it("keeps a pending approval when the guest comes back to the table", () => {
+    const guest = visitor();
+    const qr = guest.read("/api/floor-plan/tables/qr", "owner").body as Json;
+    const url = ((qr.areas as Json[])
+      .flatMap((area) => area.tables as Json[])
+      .find((table) => table.table_id === RECORDED_TABLE) as Json).url as string;
+    const token = url.split("#table_token=")[1];
+    const scan = () =>
+      guest.call("POST", `/api/ordering/${BUSINESS}/table-sessions`, {
+        body: { table_token: token, browser_nonce: "demo" },
+      });
+
+    expect(scan().body).toMatchObject({ status: "pending" });
+    const pending = guest.read(
+      "/api/floor-plan/table-guest-sessions",
+      "host_server",
+      "status=pending",
+    ).body as Json[];
+    expect(
+      guest.call("POST", `/api/floor-plan/table-guest-sessions/${pending[0].id}/approve`, {
+        role: "host_server",
+      }).status,
+    ).toBe(204);
+
+    // The guest reloads the menu while the approval is already in hand. It
+    // must not mint a second session and orphan what staff just answered.
+    const logLength = guest.ops.length;
+    expect(scan().body).toMatchObject({ status: "approved" });
+    expect(guest.ops).toHaveLength(logLength);
+    expect(
+      guest.call("POST", `/api/ordering/${BUSINESS}/orders`, {
+        body: { items: [{ item_id: MOJITO, quantity: 1 }] },
+      }).status,
+    ).toBe(201);
   });
 });
 

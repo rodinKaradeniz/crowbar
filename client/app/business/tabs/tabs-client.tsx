@@ -272,7 +272,7 @@ export function TabsClient({
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-mono text-[12px] text-muted-foreground">
-                          #{tab.id.slice(0, 8)}
+                          #{tab.id.slice(-8)}
                         </span>
                         {tab.status === "open" ? (
                           severity === "attend" ? (
@@ -303,7 +303,7 @@ export function TabsClient({
                   <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border p-4">
                     <div>
                       <h2 className="type-t2 font-mono">
-                        Tab #{selected.id.slice(0, 8)}
+                        Tab #{selected.id.slice(-8)}
                       </h2>
                       <p className="mt-1 text-[13px] text-muted-foreground">
                         Opened{" "}

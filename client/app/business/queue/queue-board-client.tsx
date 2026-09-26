@@ -340,9 +340,11 @@ export function QueueBoardClient({
     setEntries((prev) => prev.filter((e) => e.id !== entry.id));
     try {
       await clientRemoveQueueEntry(businessId, entry.id, removeReason, removeNote.trim() || undefined);
-    } catch {
+    } catch (error) {
       setEntries((prev) => [...prev, entry]);
-      toast.error("Could not remove this party.");
+      toast.error(
+        error instanceof Error ? error.message : "Could not remove this party.",
+      );
     }
   };
 

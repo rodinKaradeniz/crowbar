@@ -69,6 +69,20 @@ for (const order of recordedBody<RecordedOrder[]>(
   }
 }
 
+/**
+ * Preparation stations by id.
+ *
+ * A menu item carries the station it routes to, but only an order line carries
+ * that station's NAME. An item nobody ordered on the recorded evening therefore
+ * had no name to show, and its ticket badge read "Station". The stations list
+ * is itself recorded, so the name is looked up here instead of invented.
+ */
+export const STATIONS: ReadonlyMap<string, string> = new Map(
+  (recordedBody<{ id: string; name: string }[]>("owner", "GET /api/ordering/stations") ?? []).map(
+    (station) => [station.id, station.name],
+  ),
+);
+
 type MenuItem = {
   id: string;
   name: string;
@@ -90,6 +104,7 @@ function indexMenus(menus: MenuShape[] | null, items: Map<string, MenuItemFacts>
       for (const item of category.items ?? []) {
         if (items.has(item.id)) continue;
         const line = routingByItem.get(item.id);
+        const stationId = item.preparation_station_id ?? line?.preparation_station_id ?? null;
         items.set(item.id, {
           id: item.id,
           name: item.name,
@@ -102,9 +117,10 @@ function indexMenus(menus: MenuShape[] | null, items: Map<string, MenuItemFacts>
           taxProfileName: item.tax_profile_name ?? line?.tax_profile_name ?? null,
           taxProfileCode: item.tax_profile_code ?? line?.tax_profile_code ?? null,
           routingTag: item.routing_tag ?? line?.routing_tag ?? null,
-          preparationStationId:
-            item.preparation_station_id ?? line?.preparation_station_id ?? null,
-          preparationStationName: line?.preparation_station_name ?? null,
+          preparationStationId: stationId,
+          preparationStationName:
+            line?.preparation_station_name ??
+            (stationId ? STATIONS.get(stationId) ?? null : null),
         });
       }
     }
@@ -216,6 +232,40 @@ export const RECORDED_CUSTOMERS: ReadonlyMap<string, RecordedCustomer> = new Map
     "owner",
     `GET /api/customers/business/${DEMO_BUSINESS_ID}`,
   ) ?? []).map((customer) => [customer.id, customer]),
+);
+
+export interface RecordedTab {
+  id: string;
+  seating_id: string | null;
+  table_id: string | null;
+  status: string;
+  total: number;
+  [key: string]: unknown;
+}
+
+/**
+ * Every tab the evening was recorded with, by id.
+ *
+ * The visitor's world starts empty, so a round rung into one of these tabs has
+ * nothing of its own to attach to. `state.ts` keeps such rounds in a side map
+ * keyed by the recorded tab id and `project.ts` merges them back on the way
+ * out, the same way a settlement against a recorded tab already works.
+ */
+export const RECORDED_TABS: ReadonlyMap<string, RecordedTab> = new Map(
+  (recordedBody<RecordedTab[]>("owner", "GET /api/tabs") ?? []).map((tab) => [tab.id, tab]),
+);
+
+/**
+ * The open tab a recorded table is carrying, by table id.
+ *
+ * A QR round arrives with a table and no tab. For a table the visitor seated
+ * themselves the seating answers that; for a table the recording has occupied,
+ * this does.
+ */
+export const RECORDED_OPEN_TAB_BY_TABLE: ReadonlyMap<string, string> = new Map(
+  [...RECORDED_TABS.values()]
+    .filter((tab) => tab.status === "open" && tab.table_id !== null)
+    .map((tab) => [tab.table_id as string, tab.id]),
 );
 
 export interface RecordedLineFacts {

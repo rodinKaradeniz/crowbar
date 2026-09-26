@@ -1,9 +1,10 @@
 import {
   DEMO_BUSINESS_ID,
   RECORDED_LINES,
+  RECORDED_TABS,
   TABLES,
 } from "./snapshot";
-import { orderStatusFrom, partyFor, type DemoState, type LineStatus } from "./state";
+import { orderStatusFrom, partyFor, round2, type DemoState, type LineStatus } from "./state";
 
 /**
  * The recorded evening as the visitor has left it.
@@ -58,6 +59,23 @@ function projectRecordedOrders(orders: Json[], state: DemoState): Json[] {
 function projectRecordedTab(tab: Json, state: DemoState): Json {
   const next = clone(tab);
   next.orders = projectRecordedOrders((next.orders as Json[] | undefined) ?? [], state);
+
+  // Rounds the visitor rang into this recorded tab. They sit in `state.orders`
+  // as well, but that is the ticket board's body and this is the tabs body, so
+  // each round appears exactly once on each. The total is ADDED to rather than
+  // recomputed: the recorded figure is the API's own answer for the recorded
+  // rounds and stays whatever it was.
+  const added = state.recordedTabOrders.get(next.id as string) ?? [];
+  if (added.length > 0) {
+    next.orders = [
+      ...(next.orders as Json[]),
+      ...added.map((order) => clone(order) as unknown as Json),
+    ];
+    next.total = round2(
+      Number(next.total ?? 0) + added.reduce((sum, order) => sum + order.total_amount, 0),
+    );
+  }
+
   const settlement = state.recordedTabSettlements.get(next.id as string);
   if (settlement) {
     next.status = "settled_externally";
@@ -356,6 +374,15 @@ export function projectRead(
   if (tab) {
     const own = state.tabsById.get(tab[1]);
     if (own) return { status: 200, body: own };
+    // The recorder walked the tabs LIST but never a single tab, so there is no
+    // recorded body to lay the evening over. The index holds the tab itself,
+    // which is the same object the list is built from, so the detail answers
+    // from that rather than saying a tab the list just showed is not in the
+    // demo.
+    const indexed = RECORDED_TABS.get(tab[1]);
+    if (indexed) {
+      return { status: 200, body: projectRecordedTab(indexed as unknown as Json, state) };
+    }
     if (body) return { status: recorded!.status, body: projectRecordedTab(body as Json, state) };
   }
 

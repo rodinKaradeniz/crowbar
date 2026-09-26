@@ -155,6 +155,8 @@ export default function ReservationsClient({
         router.refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Failed to cancel reservation");
+        // Rethrow so the confirmation stays open over its own message.
+        throw error;
       } finally {
         setActionLoading(null);
       }
