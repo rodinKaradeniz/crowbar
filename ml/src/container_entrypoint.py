@@ -1,4 +1,4 @@
-"""Shell-free container entry point with Railway-compatible port binding."""
+"""Shell-free container entry point that binds the port a host passes in $PORT."""
 
 import os
 

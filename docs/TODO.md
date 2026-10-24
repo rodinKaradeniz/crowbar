@@ -1204,16 +1204,15 @@ is a data mutation that needs explicit authorization.
     2026-09-04.** `app.jobs.customer_retention` (`0 4 * * *`),
     `app.jobs.inventory_reconciliation` (`30 4 * * *`) and
     `app.jobs.reservation_waitlist_expiry` (`*/5 * * * *`) now each have a
-    `server/railway.*.json`, a row in the Source and Process Contract table and
-    a lifecycle bullet naming the schedule and why it is that schedule.
+    row, with its schedule and the reason for it, in the process table of
+    `docs/deployment.md`.
     `server/app/jobs/` and the deployment table are now the same list, and
     `docs/deployment.md` says so, so the next module added without a service is
     visible. Waitlist expiry is the only sub-hourly one: `OFFER_MINUTES` is 15,
     and the job is what notifies staff and releases the entry —
     `expire_entry_if_due` already guards the read and accept paths, so a late
-    run costs visibility, not integrity. Nothing in Railway was touched; these
-    are config-as-code files behind the same deployment gate as everything
-    since migration 023.
+    run costs visibility, not integrity. Nothing external was touched; the
+    schedules sit behind the same deployment gate as everything else.
   - ~~**The disable dialog inverts the severity contract.**~~ **DONE
     2026-09-04.** It is now a `ConfirmationDialog` like the deletion dialog
     beside it, so the safe choice is the filled one on both. The conversion
@@ -1243,19 +1242,13 @@ is a data mutation that needs explicit authorization.
   matrix (walked as the owner only — the matrix is generated and already
   tested), and CI. Two steps are driven through the API rather than the UI, for
   reasons that are product findings and are filed below.
-- **Most of this shipped; what is left is named here.** `ci.yml` already runs
-  client lint, `test:run`, `build` and `npm audit`, plus PostgreSQL and Redis
-  services, `python -m db.migrate`, `pytest` and the ML tests;
-  `supply-chain.yml` runs dependency review, an SBOM and Trivy; `codeql.yml`
-  scans both languages weekly and per pull request. ~~Still missing: seeding and
-  `scripts/verify-fresh-db.sh` are not run in CI, so nothing proves a fresh
-  database is usable; there is no documentation-link check; there is no secret
-  scanning;~~ **DONE 2026-10-23, all three, locally proven and not yet run on
-  GitHub.** The `python` job runs `scripts/verify-fresh-db.sh` against its
-  service container (`CROWBAR_PG_HOST`, no `docker exec`); a `docs` job runs
-  `scripts/check-doc-links.sh` over README.md, AGENTS.md and docs/; a `secrets`
-  job in `supply-chain.yml` runs gitleaks v8.30.1, pinned by digest, over the
-  whole history against `.gitleaks.toml`.
+- **Most of this shipped as CI, and the CI was removed on 2026-10-24** (§ CI/CD
+  keeps the exact commands it ran). The three checks added on 2026-10-23
+  survive as local gates in `AGENTS.md` § Commands:
+  `scripts/verify-fresh-db.sh` (through `docker exec crowbar-db`, or directly
+  against a server named by `CROWBAR_PG_HOST`), `scripts/check-doc-links.sh`
+  over README.md, AGENTS.md and docs/, and gitleaks v8.30.1, pinned by digest,
+  over the whole history against `.gitleaks.toml`.
 
   **The fresh-database check had never asserted anything.** It piped its
   assertion block into `docker exec crowbar-db psql` without `-i`, so psql read
@@ -1511,7 +1504,11 @@ is a data mutation that needs explicit authorization.
     host, a substituted five-digit total still 390; 1024 and 1280 measured
     geometrically identical before and after. Found on the way, not changed: at
     1280 the same figure runs 19px into its cell's 32px right padding; the ink
-    stays inside the cell.
+    stays inside the cell. Re-measured 2026-10-24 on the demo as owner: at 1280
+    the ink ends at 1003 against a content edge of 984 and a cell edge of 1017,
+    with no clipping, no overlap with a neighbour and no scroll; at 1024 and 390
+    it sits 187px and 84px inside the content edge, and `scrollWidth` equals
+    `innerWidth` at all three. Cosmetic, so left as it is.
   - **The height-literal grep cannot find the whole defect class.** Three of the
     worst offenders that pass found had *no height at all*: two bare `<button>`s
     styled only with `type-label`, a menu selector with only padding, and a
@@ -1612,21 +1609,28 @@ already built. It adds no feature and no service.
   risk with an owner; the full local release gate passes again afterwards;
   no secret is tracked in the repository or its history.
 
-### 9. Railway deployment — blocked on stages 0–8a and explicit authorization
+### 9. Production hosting on an own VPS — blocked on stages 0–8a and explicit authorization
 
-- Resume the existing Railway project only after the local release gate passes
-  and the user explicitly authorizes deployment work. Reconcile the preserved
-  migrations 001–022 environment with all local migrations and code first.
-- Deploy public web/API and private PostgreSQL, Redis, optional ML, reminder and
-  retention jobs, and durable object storage. Configure German/EU hosting,
-  domains, TLS, CORS, secrets, rate limiting, and private service networking.
+- Choose and provision the host only after the local release gate passes and
+  the user explicitly authorizes deployment work. The intended target is the
+  user's own VPS at Hetzner; nothing is provisioned. `docs/deployment.md` is
+  the host-neutral contract: topology, processes, schedules and configuration.
+- Run public web/API behind a reverse proxy, with private PostgreSQL, Redis,
+  optional ML, the five scheduled one-shot jobs, and durable upload storage.
+  Configure German/EU hosting, domains, TLS, CORS, secrets, rate limiting, and
+  private service networking.
 - Add staging/pilot separation, pre-deploy migrations, release provenance,
   health/readiness checks, smoke tests, monitoring, job/delivery alerts,
   backup/restore proof, rollback/recovery, and a manual production gate.
 - Keep a single API replica until shared WebSocket fan-out is designed, or add
   that design before scaling horizontally.
+- **Re-check the client-IP trust setting when the host is chosen.** In
+  production `server/app/core/rate_limit.py` takes `X-Real-IP` as the client
+  address, so the reverse proxy must set or overwrite that header; one that
+  passes a client-supplied value through lets a caller choose its own
+  rate-limit key. The stage 8a security audit should read this setting too.
 - **Exit gate:** the exact locally accepted build runs in a recoverable,
-  observable Railway environment and passes post-deploy critical journeys.
+  observable production environment and passes post-deploy critical journeys.
 
 ### 10. Supervised pilot rollout — ready after stage 9
 
@@ -1744,8 +1748,7 @@ roadmap and feed its stages 1–8.
   settings, non-null positive concurrency, persisted reservation end times,
   and override-audit fields. Existing operating hours seed initial defaults;
   missing hours produce a closed schedule. ORM, Pydantic, seed, and focused
-  PostgreSQL tests are aligned. This migration is not deployed while the
-  Railway rollout is paused.
+  PostgreSQL tests are aligned. This migration is not deployed.
 - **Complete — availability creation slice:** One server-authoritative
   availability service now powers the public read contract plus public and
   authenticated reservation creation. It resolves business-default or complete
@@ -2033,7 +2036,7 @@ the confirmed sequence unless a stage explicitly pulls the item forward.
 
 - **Ready — reconcile the ORM with the migrated schema, then test on it.** The
   migrations and the pytest fixtures are two schema authorities. Since
-  2026-09-23 they no longer share a database (CI migrates
+  2026-09-23 they no longer share a database (migration checks use
   `crowbar_migration_check`; `crowbar_test` is `create_all`-owned), which fixes
   the collision but leaves the divergence. Measured against a database migrated
   through 054: **28 single-column foreign keys exist in the database that the
@@ -2078,27 +2081,39 @@ the confirmed sequence unless a stage explicitly pulls the item forward.
 
 ## CI/CD
 
-- **Switched off 2026-10-24, deliberately:** all three workflows are
-  `workflow_dispatch`-only so nothing runs on push, pull request or schedule
-  while Crowbar is kept strictly local. The pipeline below still describes what
-  they do when run by hand; restore each file's previous `on:` block to bring
-  automatic runs back.
-- **Complete:** the pull-request pipeline runs frontend lint/test/build,
-  backend tests against PostgreSQL, fresh-database migrations, the seeded
-  fresh-database invariants (`scripts/verify-fresh-db.sh`), and ML
-  import/tests (`.github/workflows/ci.yml`).
-- ~~**Ready:** Add a documentation/link check.~~ **DONE 2026-10-23:**
-  `scripts/check-doc-links.sh`, the `docs` job in `ci.yml`. Relative links
-  only; anchors are not checked.
-- **Complete for dependencies and vulnerabilities:** `npm audit --audit-level=high`,
-  `dependency-review-action`, an SBOM and a Trivy image scan that fails on
-  HIGH/CRITICAL (`.github/workflows/supply-chain.yml`), plus CodeQL.
-- ~~**Ready:** Add secret scanning.~~ **DONE 2026-10-23:** gitleaks over the
-  full history, the `secrets` job in `supply-chain.yml`.
+- **Removed 2026-10-24, deliberately:** the GitHub workflows (`ci.yml`,
+  `codeql.yml`, `supply-chain.yml`) and Dependabot were deleted while Crowbar is
+  developed strictly locally. Rebuild CI/CD after the app is stable locally and
+  the production host is chosen (stage 9). Until then the local gates in
+  `AGENTS.md` § Commands are the only checks, and nothing runs them
+  automatically. `scripts/check-doc-links.sh` checks relative links only, not
+  anchors.
+- **What a pipeline must run when it is rebuilt** — the deleted workflows ran
+  these on Node 20 and Python 3.13, with PostgreSQL 16 and Redis 7 services:
+  - `npm ci`, `npm audit --audit-level=high`, `npm run lint`,
+    `npm run test:run`, and `npm run build` with
+    `NEXT_PUBLIC_DATA_SOURCE=api` and
+    `NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000`, all in `client/`.
+  - `bash scripts/check-doc-links.sh`.
+  - `pip install --require-hashes -r server/requirements-test.lock`.
+  - `createdb crowbar_migration_check`, then `python -m db.migrate` in
+    `server/` against it, never against the fixture-owned `crowbar_test`.
+  - `bash scripts/verify-fresh-db.sh` with `CROWBAR_PG_HOST`, `PGPASSWORD` and
+    `CROWBAR_PYTHON=python`.
+  - `python -m pytest server/tests` with `DATABASE_URL` naming `crowbar_test`,
+    `REDIS_URL`, and `ENVIRONMENT=test`.
+  - `pip install --require-hashes -r ml/requirements-test.lock`, then
+    `python -m pytest ml/tests`.
+  - The gitleaks command in `AGENTS.md`, over the full history (pinned to
+    v8.30.1; older releases ignore the `[[allowlists]]` tables).
+  - `docker build --tag crowbar-ml:scan ml`, an SPDX SBOM of that image, and a
+    Trivy scan that fails on HIGH/CRITICAL.
+  - Dependency review on pull requests, failing on high severity, and CodeQL
+    for `javascript-typescript` and `python`.
 - **Needs decision:** Choose branch protection and required checks, including
   whether expensive end-to-end or performance suites run per pull request,
   nightly, or before release.
-- **Deferred:** Add a simple CD pipeline when the deployment arc resumes.
+- **Deferred:** Add a simple CD pipeline once the production host is chosen.
   Include staging, environment-specific configuration, migration ordering,
   health checks, smoke tests, rollback, and a manual production gate until
   releases are proven routine.
@@ -2107,22 +2122,15 @@ the confirmed sequence unless a stage explicitly pulls the item forward.
 
 ## Deployment
 
-- **Blocked on stages 0–8 and explicit authorization — Railway rollout:**
-  Deployment is intentionally paused while local MVP development and
-  verification continue. In project
-  `crowbar`, private PostgreSQL, private Redis, and the public FastAPI service
-  are online in EU West. API health, database connectivity, migrations 001–022,
-  and the Redis stream consumer were verified. Do not resume external changes
-  without an explicit user request.
-- **Ready after the local gate — resume point:** Deploy and enable the local
-  FastAPI rate-limit change; then add public Next.js plus private ML, scheduled
-  reminders, and durable object storage. Reconcile reference variables,
-  secrets, the web domain, CORS, private ML connectivity, and end-to-end smoke
-  tests as each service is added.
+- **Blocked on stages 0–8a and explicit authorization — production hosting:**
+  Hosting is not chosen; the intended target is an own VPS at Hetzner, and
+  nothing is provisioned. Stage 9 owns the work and `docs/deployment.md` the
+  host-neutral contract. Do not provision anything without an explicit user
+  request.
 - **Ready after the local gate — production hardening:** Add backup/restore
   testing, migration rollout and rollback procedures, secret management,
   restricted service networking, durable uploads, health checks, monitoring,
-  and release automation when the deployment arc resumes.
+  and release automation on the chosen host.
 - **Ready:** Repair or remove the documented `python -m db.migrate reset`
   workflow. Its drop list predates many current tables, so it is destructive
   without being a reliable full reset.
@@ -2142,8 +2150,8 @@ the confirmed sequence unless a stage explicitly pulls the item forward.
 - **Ready:** Evaluate whether an edge/WAF layer is warranted. (The Next.js docs
   assistant this item also covered was removed in `2e15a17`.) FastAPI now has local,
   Redis-backed rolling-window limits for auth, public reservation, queue,
-  ordering, and related public reads. Deploying them and verifying Railway
-  proxy/IP behavior remain part of the paused deployment arc.
+  ordering, and related public reads. Verifying them behind the production
+  reverse proxy belongs to stage 9.
 - **Ready:** Decide whether Redis event delivery needs a transactional outbox,
   dead-letter handling, replay tools, and metrics. Publishing is currently
   best-effort.

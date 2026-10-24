@@ -16,5 +16,5 @@ export default async function GuestProfilePage({
   if (!business) redirect("/auth/login");
   if (!business.onboardingComplete) redirect("/business/onboarding");
   const { customerId } = await params;
-  return <GuestProfileClient customerId={customerId} canManage={hasCapability(user.role, "customers.manage")} businessTimezone={business.timezone ?? "UTC"} />;
+  return <GuestProfileClient customerId={customerId} canManagePrivacy={hasCapability(user.role, "customers.privacy")} businessTimezone={business.timezone ?? "UTC"} />;
 }

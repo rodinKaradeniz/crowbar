@@ -26,12 +26,12 @@ allowlist=(
   server/app server/db/__init__.py server/db/migrate.py server/db/migrations
   server/db/seeds server/tests server/requirements.txt server/docker-compose.yml
   server/requirements-test.txt server/requirements.lock server/requirements-test.lock
-  server/env.example server/pytest.ini server/railway.api.json server/.dockerignore
+  server/env.example server/pytest.ini server/.dockerignore
   ml/src ml/tests ml/requirements.txt ml/requirements.lock ml/requirements-test.txt
   ml/requirements-test.lock ml/env.example
   ml/Dockerfile ml/.dockerignore
   scripts/dev.sh scripts/export-portfolio.sh scripts/verify-fresh-db.sh
-  .dockerignore .gitignore .gitleaks.toml .github/dependabot.yml .github/workflows
+  .dockerignore .gitignore .gitleaks.toml
 )
 
 # The loop below refuses images so a stray screenshot, a photo carrying EXIF, or
@@ -76,7 +76,6 @@ required_export_files=(
   client/proxy.ts client/scripts/build-doc-chunks.mjs client/tests/setup.ts
   server/db/migrate.py server/db/migrations/043_business_privacy_contact.sql
   server/requirements.lock ml/Dockerfile ml/requirements.lock
-  .github/workflows/ci.yml .github/workflows/supply-chain.yml
 )
 for required_path in "${required_export_files[@]}"; do
   if [[ ! -f "$destination/$required_path" ]]; then

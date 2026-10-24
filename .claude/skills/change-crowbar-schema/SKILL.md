@@ -183,10 +183,9 @@ one belongs in `scripts/verify-fresh-db.sh`, not in pytest.
 
 ## 6. A migration is not deployed because it applied
 
-Migrations **023–050 are local only**. Railway remains at 001–022 and its
-partially provisioned rollout is intentionally paused until the local stages
-pass and the user explicitly authorizes deployment. `docs/deployment.md` owns
-the verified resume point.
+Crowbar runs **locally only**: production hosting is not chosen and no
+database is deployed. Deployment waits until the local stages pass and the
+user explicitly authorizes it. `docs/deployment.md` owns the deployment state.
 
 So: never describe a migration as "shipped", "live", or "in production" on the
 strength of a local run, and do not run a migration against a deployed database

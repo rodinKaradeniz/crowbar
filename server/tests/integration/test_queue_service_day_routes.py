@@ -126,6 +126,52 @@ async def test_simultaneous_joins_serialize_at_the_final_cover(
 
 
 @pytest.mark.asyncio
+async def test_retry_that_loses_the_race_converges_through_the_recheck(
+    client: AsyncClient, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+):
+    """A retry whose first lookup misses, because its twin commits while it waits
+    for the service-day lock, must return the twin's entry from the recheck —
+    as the same two values every other path returns, not a 500."""
+    business_id, headers = await _owner(client)
+    opened = await client.put("/api/queue/service-day", headers=headers, json={
+        "status": "open", "max_waiting_covers": 4,
+    })
+    assert opened.status_code == 200, opened.text
+
+    sessions = async_sessionmaker(
+        bind=db_session.bind, class_=AsyncSession, expire_on_commit=False
+    )
+    real_get_service_day = queue_service.get_service_day
+    twin: dict = {}
+
+    # The retry's first lookup has already missed when it asks for the lock;
+    # the twin joins and commits in that gap, so the recheck is what finds it.
+    async def twin_commits_before_the_lock(db, business_id, *, lock=False):
+        if lock and not twin:
+            twin["pending"] = True
+            async with sessions() as session:
+                twin["state"], _ = await queue_service.join_queue(
+                    session, business_id, "Race party", 2, None, "queue-race-001"
+                )
+                await session.commit()
+        return await real_get_service_day(db, business_id, lock=lock)
+
+    monkeypatch.setattr(queue_service, "get_service_day", twin_commits_before_the_lock)
+
+    async with sessions() as session:
+        result = await queue_service.join_queue(
+            session, business_id, "Race party", 2, None, "queue-race-001"
+        )
+        await session.commit()
+
+    assert len(result) == 2
+    state, created = result
+    assert created is False
+    assert state["entry"] == twin["state"]["entry"]
+    assert "_public_session_token" not in state
+
+
+@pytest.mark.asyncio
 async def test_entries_read_survives_a_business_without_a_primary_location(
     client: AsyncClient, db_session: AsyncSession
 ):

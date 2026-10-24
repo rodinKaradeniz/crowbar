@@ -1,0 +1,262 @@
+CROWBAR - GO LOCAL-ONLY: REMOVE RAILWAY AND GITHUB AUTOMATION, FIX FIVE LEFTOVERS
+(implementation brief)
+
+You are a fresh implementation agent with no prior context. Read, in order:
+AGENTS.md, docs/RULES.md, docs/deployment.md, then the CI/CD section of
+docs/TODO.md and its "9. Railway deployment" stage.
+
+------------------------------------------------------------------------
+THE DECISIONS (made by the user; do not re-litigate them)
+------------------------------------------------------------------------
+- Railway is CUT OFF entirely. Production hosting will later be the user's
+  own VPS (Hetzner). It is NOT chosen in detail, NOT provisioned, and NOT
+  part of this pass. Do not write Dockerfiles, compose files, nginx/Caddy
+  config, systemd units or any "future hosting" scaffolding.
+- GitHub automation is REMOVED: all workflows and Dependabot. CI/CD will be
+  rebuilt later, after the app is stable locally.
+- Development stays entirely local.
+- Vercel STAYS, for the frontend-only demo. Do not touch the Vercel
+  section of docs/deployment.md, the demo build, or anything under
+  client/lib/demo/.
+
+------------------------------------------------------------------------
+THE OVERRIDING CONCERN: DO NOT OVER-BUILD
+------------------------------------------------------------------------
+This is an MVP for ONE bar. This pass is mostly DELETION and honest
+rewording. No new features, no new tooling, no replacement pipeline, no
+refactors of neighbouring code. If an item is bigger than described, STOP
+on it and say so. Existing runtime behaviour must not change except where
+a leftover item below says so.
+
+------------------------------------------------------------------------
+HARD RULES
+------------------------------------------------------------------------
+- GIT: the user owns git. NEVER stage, commit, branch, stash or reset, and
+  do not use `git rm` or `git mv`: delete with plain `rm`. Read-only git
+  only. docs/TODO.md carries uncommitted work from earlier passes; edit
+  it surgically and leave "8a. Security audit" as it is.
+- docs/HISTORY.md is an append-only decision log. Do NOT rewrite or delete
+  old Railway entries; they are history. Append ONE new dated entry (use
+  the file's format) recording: Railway dropped in favour of an own VPS
+  (Hetzner), GitHub workflows and Dependabot removed until the app is
+  stable locally, Vercel kept for the demo. It supersedes the entries
+  "Railway is the deployment target", "Scheduled reminders use a Railway
+  Cron job" and "Railway rollout is intentionally shelved" by naming them.
+- docs/permission-matrix.md is GENERATED; never hand-edit it.
+- Compliance: no user-visible string may say "paid", "payment processed"
+  or "revenue". No plaintext password in server/db/seeds.
+- No dangling files: nothing left behind that only mattered to this
+  session. Use playwright-cli (not chrome-devtools-axi) for widths.
+- zsh: quote globs in grep flags; never name a shell variable `path`.
+- Fix stale docs you find rather than working around them.
+
+------------------------------------------------------------------------
+METHOD
+------------------------------------------------------------------------
+Earlier briefs for this repo carried diagnoses that did not survive contact
+with the code. Treat every statement below as a hypothesis: verify it,
+state what you actually found, and fix the real cause. Every behaviour
+change needs a live check, not only green tests.
+
+------------------------------------------------------------------------
+PART A - REMOVE GITHUB AUTOMATION
+------------------------------------------------------------------------
+A1. Delete .github/workflows/ (ci.yml, codeql.yml, supply-chain.yml) and
+    .github/dependabot.yml. If .github/ is then empty, remove it.
+A2. KEEP the local-use tooling those workflows used; it is useful by hand:
+    scripts/verify-fresh-db.sh, scripts/check-doc-links.sh and
+    .gitleaks.toml. Reword their comments where they say "CI"/"workflow"
+    so they read true with no pipeline. Do not delete them.
+A3. Add the two local gates to the Commands section of AGENTS.md, one
+    line each, so nothing that CI used to run is forgotten:
+      bash scripts/check-doc-links.sh
+      bash scripts/verify-fresh-db.sh        (needs the crowbar-db container)
+    and the secret scan as a local command (the digest-pinned gitleaks
+    image the supervising workflow used is: docker run --rm
+    -v "$PWD:/repo" zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+    git /repo --config /repo/.gitleaks.toml --redact --no-banner ).
+    Read the workflow files BEFORE deleting them and copy the exact
+    command lines the frontend/backend/ML jobs ran into docs/TODO.md's
+    CI/CD section as a short checklist ("what a pipeline must run when it
+    is rebuilt"), so the knowledge survives the deletion.
+A4. scripts/export-portfolio.sh lists .github/dependabot.yml and
+    .github/workflows in its allowlist and REQUIRES
+    .github/workflows/ci.yml and supply-chain.yml in
+    `required_export_files`, so deleting the workflows breaks the export.
+    Remove those entries. Keep its public-content guards (including the
+    `railway\.app` guard: it is cheap and still correct). Prove the script
+    still parses (`bash -n`). Run the export only if it can write to a
+    throwaway directory outside the repo without needing a commit; delete
+    that output afterwards. If it cannot be run without a commit, say so.
+A5. Update present-tense claims about CI/Dependabot/CodeQL/workflows in
+    AGENTS.md, README.md, SECURITY.md, docs/TODO.md (CI/CD and any other
+    section), docs/MVP_ACCEPTANCE.md and portfolio-docs/. The CI/CD section
+    of docs/TODO.md currently carries a note added on 2026-10-24 saying the
+    workflows are "manual-only"; replace it with the truth (removed, why,
+    when to rebuild: after the app is stable locally and hosting is chosen).
+    Do not touch historical HISTORY entries. Run scripts/check-doc-links.sh
+    until it passes.
+
+------------------------------------------------------------------------
+PART B - CUT OFF RAILWAY
+------------------------------------------------------------------------
+B1. BEFORE deleting anything, preserve what only the Railway files hold.
+    The six server/railway.*.json files are the only place the scheduled
+    jobs' cadence is written down:
+      reservation_reminders        0 * * * *     (hourly, UTC)
+      reservation_waitlist_expiry  */5 * * * *
+      account_deletion             30 3 * * *
+      customer_retention           0 4 * * *
+      inventory_reconciliation     30 4 * * *
+    (verify these against the files), plus the API start command
+    (uvicorn app.main:app --host 0.0.0.0 --port $PORT --no-access-log),
+    the web start (npm run start, health /api/health) and ML health
+    (/health). Put them in docs/deployment.md as ONE compact, host-neutral
+    table ("what a host must run"), then delete:
+      server/railway.*.json (six files), ml/railway.json, client/railway.json.
+    Remove server/railway.api.json from scripts/export-portfolio.sh's
+    allowlist (see A4).
+B2. Rewrite docs/deployment.md. Its first part is a Railway runbook (192
+    lines). Replace it with a SHORT host-neutral document (aim for ~60
+    lines): status ("production hosting not chosen; intended target is an
+    own VPS at Hetzner; nothing is provisioned; deployment remains an
+    explicit user-authorized activity"), the topology and boundaries that
+    do not depend on a host (public web + API; private PostgreSQL, Redis,
+    ML; one API replica until WebSocket fan-out is designed; migrations
+    run before the new API starts; the jobs table from B1; secrets come
+    from the env.example files, listed by name only, never values), and
+    no Railway state, project names, service names or "rollout state". KEEP
+    the "Frontend-only demo on Vercel" section VERBATIM. Retitle the
+    document to match (it is no longer "Railway Deployment Runbook").
+B3. Reword Railway mentions that describe the present. Find them with
+    grep -rIn -i railway (excluding node_modules, venv, .git) and handle
+    each: AGENTS.md (the "Railway remains at 001-022 ..." paragraph and
+    the deployment pointers), CHEATSHEET.txt, docs/PRODUCT.md,
+    docs/ARCHITECTURE.md (the cron/jobs prose and the X-Real-IP sentence),
+    docs/MVP_ACCEPTANCE.md (OPS-02 and the repeated "Railway remains
+    intentionally paused" lines), docs/TODO.md, the two project skills
+    (.claude/skills/security/SKILL.md, .claude/skills/change-crowbar-schema/
+    SKILL.md), client/app/page.tsx (comment), client/env.example (comment),
+    ml/src/container_entrypoint.py (docstring), the job docstrings in
+    server/app/jobs/customer_retention.py and reservation_reminders.py.
+    Rules for the rewording:
+      - Say "a scheduled one-shot command" / "the reverse proxy", not a
+        named host.
+      - CODE BEHAVIOUR DOES NOT CHANGE. In particular
+        server/app/core/rate_limit.py still trusts X-Real-IP in
+        production; do not change it. Reword the docs to say the reverse
+        proxy in front of the API must set/overwrite that header, and add
+        ONE entry to docs/TODO.md (hosting stage) that this trust setting
+        must be re-checked when the host is chosen, and that the security
+        audit (stage 8a) should read it. That is the only new TODO item
+        you may add for this part.
+      - server/tests/unit/test_insights_router.py uses the fake hostname
+        ml.railway.internal as test data: change it to a neutral name
+        (e.g. ml.internal) and keep the test green.
+B4. In docs/TODO.md, retitle stage "9. Railway deployment" to an own-VPS
+    production-hosting stage (still "blocked on stages 0-8a and explicit
+    authorization"). Replace Railway-specific bullets with the host-neutral
+    equivalents already there in spirit (EU hosting, TLS, backups with a
+    restore proof, monitoring, a manual production gate, single API
+    replica). Do not grow the stage; do not invent a design. Fix the other
+    TODO/MVP_ACCEPTANCE references to "stage 9 Railway".
+B5. Leave in place: ml/Dockerfile, ml/Dockerfile.test, server/
+    docker-compose.yml (local dev), the Vercel demo and its docs.
+B6. When finished, `grep -rIn -i railway` outside node_modules, venv, .git
+    must return ONLY: old dated entries in docs/HISTORY.md, your one new
+    HISTORY entry, the `railway\.app` guard in scripts/export-portfolio.sh,
+    and at most one sentence in docs/deployment.md saying Railway was
+    dropped. Report the exact grep output.
+
+------------------------------------------------------------------------
+PART C - FIVE LEFTOVERS FROM THE LAST PASS (verify each, then fix)
+------------------------------------------------------------------------
+C1. join_queue returns a tuple of the wrong length on one path.
+    server/app/services/queue_service.py, join_queue(): the return after
+    the second idempotency recheck (after the service-day lock) returns
+    THREE values (`..., False, None`); the first early return and the
+    happy path return two, and both callers
+    (server/app/routers/queue.py, `state, created = await
+    queue_service.join_queue(...)`, at two sites) unpack two. A retry that
+    loses the race would raise ValueError and surface as a 500. Pre-existing
+    since 2026-08-19. Verify, fix to two values, and add a test that
+    actually reaches that path (for example by making the first lookup miss
+    and the recheck hit; say how you forced it). Then confirm a normal join
+    and an idempotent retry still return 201/200 live against a seeded
+    local stack.
+C2. The guest profile offers Export and Anonymise to a role the server
+    refuses. client/app/business/customers/[customerId]/page.tsx passes
+    `canManage = hasCapability(role, "customers.manage")`, and
+    guest-profile-client.tsx shows Export and Anonymise under it; the
+    server guards those routes with `customers.privacy`, which host_server
+    does NOT have (owner and manager do). Verify in client/lib/permissions.ts
+    and server/app/routers/customers.py, then pass a second flag derived
+    from "customers.privacy" for those two buttons only; leave everything
+    else on customers.manage. Check in a browser as host/server (buttons
+    absent, rest of the profile editable) and as manager (buttons present),
+    in the demo build too.
+C3. DEMO_ADMIN_PASSWORD documentation contradicts the seeder.
+    server/env.example says the seeder "refuses known reusable values";
+    server/db/migrate.py falls back to the literal "password123" when the
+    variable is unset. Read the seeder and find out what it ACTUALLY
+    refuses. Then make the two agree with the smallest change that keeps
+    `./scripts/dev.sh` seeding working with no variable set (do not break
+    the local flow, and do not move the literal into a seed file or any
+    other tracked file than migrate.py: the export guard exempts only
+    migrate.py and the export script). Most likely this is a wording fix
+    in env.example. If making them agree would change the local login
+    flow, STOP and report instead.
+C4. `./scripts/dev.sh --demo` falls through into the full-stack startup if
+    its frontend process dies. The demo branch (scripts/dev.sh, around
+    lines 133-183) ends in a bare `wait` and does not exit, so when the
+    frontend dies the script continues into the Docker/migrations/backend
+    section. Verify by reading the control flow. DO NOT reproduce it by
+    letting the real Docker or migration section run. Fix with the smallest
+    change (the demo branch must end by exiting) and prove it safely, for
+    example with a stubbed frontend command or `bash -x` against shimmed
+    docker/psql commands that only record being called. Then run the real
+    `./scripts/dev.sh --demo`, confirm it serves on :3000, kill the
+    frontend, and confirm the script exits instead of starting anything
+    else. Ctrl+C behaviour must be unchanged.
+C5. /business/overview money figure runs 19px into its cell's padding at
+    1280 (client/app/business/overview/business-overview-client.tsx).
+    Measure first: if it stays inside the cell and is not clipped or
+    overlapping, it is cosmetic: leave it and record the measurement in
+    docs/TODO.md. Fix it only if it is actually clipped, overlapping or
+    scrollable, with existing tokens and no width literal. Re-check 1024
+    and 390 (document scrollWidth must stay equal to innerWidth).
+
+------------------------------------------------------------------------
+VERIFICATION YOU MUST RUN, THEN REPORT
+------------------------------------------------------------------------
+- bash scripts/check-doc-links.sh passes.
+- bash -n on every shell script you touched.
+- Client: npm run lint (0 errors; note pre-existing warnings), npx tsc
+  --noEmit, npm run test:run, npm run build. Demo journey:
+  ./scripts/dev.sh --demo then npm run test:journey:demo, then stop it.
+- Server: the suites for queue, customers, insights router and the demo
+  fixture contract, and then the full suite
+  (venv/bin/python -m pytest in server/; it takes ~13 minutes; run it in
+  the background and wait for it). The crowbar-db and crowbar-redis
+  containers may be stopped: start them, and stop them again when done.
+- Live: item C1 and C2 against a seeded local stack (use a disposable
+  database; do not run SEED_DATA=true against anything you are unsure is
+  disposable; ask first if unsure). Browser checks with playwright-cli at
+  verified widths.
+- grep: no new "paid"/"payment processed"/"revenue"; no plaintext password
+  outside server/db/migrate.py.
+- The B6 grep output, pasted exactly.
+- Everything stopped, ports 3000/8000 free, no stray files (remove
+  client/.playwright-cli and client/test-results if created).
+
+REPORT FORMAT (the coordinator verifies against the repo): per item DONE /
+PARTIAL / STOPPED, what you actually found (including where this brief was
+wrong), files changed or deleted, and the evidence as numbers. List what
+you chose not to do and why, and what you could not verify. End with the
+output of `git status --short`.
+
+------------------------------------------------------------------------
+LAST STEP - REQUIRED
+------------------------------------------------------------------------
+Delete this file (local-only-cutoff-and-fixes-brief.txt) from the
+repository root. It is untracked and must never be committed.

@@ -1,6 +1,7 @@
 """Send the hourly reservation-reminder batch, then exit.
 
-Production runs this module as a Railway Cron job:
+Production runs this module as an hourly scheduled one-shot command
+(docs/deployment.md):
 
     python -m app.jobs.reservation_reminders
 """

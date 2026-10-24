@@ -44,7 +44,7 @@ FastAPI :8000 --------------------------------------+--> PostgreSQL :5432
           |                                         |
           +--> in-process stream consumer --> WS managers
                                                     |
-Railway hourly cron --------------------------------+
+Scheduled one-shot jobs ----------------------------+
 ```
 
 Local Docker Compose uses the explicit project name `crowbar` and starts
@@ -53,9 +53,8 @@ stack with unrelated repositories whose Compose directory is also named
 `server`. `scripts/dev.sh` starts FastAPI and Next.js as host processes after
 running migrations, and seeds the demo tenant only when `SEED_DATA=true`.
 `scripts/dev.sh --demo` starts Next.js alone; see § Frontend-only demo.
-The reservation-reminder job is a separate one-shot command. Its Railway Cron
-configuration declares an hourly production schedule, but that service is not
-deployed while the rollout remains paused.
+The scheduled jobs are separate one-shot commands; nothing runs them locally
+unless invoked by hand (§ Scheduled one-shot jobs).
 
 ## Repository Ownership
 
@@ -243,8 +242,8 @@ FastAPI applies Redis-backed rolling-window limits to authentication, public
 reservation, queue, ordering, and related public-read routes when
 `RATE_LIMIT_ENABLED=true`. Keys HMAC client IPs, identity values, business IDs,
 paths, capabilities, and table sessions before storing them in Redis.
-Production trusts Railway's `X-Real-IP`; non-production uses the direct peer
-address. A blocked request uses the standard `RATE_LIMITED` error body and
+Production trusts `X-Real-IP`, which the reverse proxy in front of the API must
+set or overwrite; non-production uses the direct peer address. A blocked request uses the standard `RATE_LIMITED` error body and
 `Retry-After`. Redis failure is logged and fails open so a protection-layer
 incident does not take reservations or ordering offline; database uniqueness,
 capacity locks, and pending-session caps remain authoritative. The Next.js docs
@@ -469,22 +468,20 @@ Every module under `server/app/jobs/` is a one-shot process: it opens an
 engine, does one batch, commits, disposes the engine, and exits. There is no
 Celery worker and no in-process scheduler. All five — `reservation_reminders`,
 `reservation_waitlist_expiry`, `account_deletion`, `customer_retention` and
-`inventory_reconciliation` — have a checked-in Railway Cron service in
-`docs/deployment.md`. None is deployed yet; the deployment gate governs that.
+`inventory_reconciliation` — have a schedule in the host-neutral table in
+`docs/deployment.md`. None is deployed; the deployment gate governs that.
 
 #### Reservation reminders
 
-The checked-in Railway Cron configuration is designed to start
-`python -m app.jobs.reservation_reminders` at the beginning of each UTC hour
-once deployment resumes. The short-lived process selects confirmed
+In production, a scheduled one-shot command starts
+`python -m app.jobs.reservation_reminders` at the beginning of each UTC hour. The short-lived process selects confirmed
 reservations in the policy's reminder window, locks work with `SKIP LOCKED`,
 and creates/updates one `reservation_delivery_attempts` row per enabled email
 or SMS channel. Already delivered channels are skipped; failed channels retry
 and retain the last error and attempt count. The job renders the venue-local
 reservation time, updates the legacy aggregate flag only after all configured
 channels succeed, closes its database engine, and exits. There is no Celery
-worker or in-process scheduler, and the Railway reminder service is not
-currently deployed.
+worker or in-process scheduler, and nothing is deployed.
 
 ### Reservation availability
 
@@ -822,12 +819,11 @@ means both migrations and ORM metadata require deliberate validation.
 Migrations 023–054 are implemented locally. `scripts/verify-fresh-db.sh`
 applies the full chain to a disposable database, runs the canonical synthetic
 seed twice, asserts its schema and relationship invariants, and drops the
-database; CI runs it against its service container. Until 2026-10-23 its
+database; it runs by hand, as nothing runs it automatically. Until 2026-10-23 its
 assertion block never reached psql, so earlier runs proved the migrations and
 the repeatable seed but not the invariants (`docs/HISTORY.md`, 2026-10-23). It
 proves the seeded data is present, not that the journey works; the browser
-journey is that check. Railway remains at migrations 001–022 while deployment
-is paused.
+journey is that check. Nothing is deployed.
 
 Migrations 005 and 006 were renamed early in the project. A database restored
 from an old backup may still contain their former names in `_migrations`; use
@@ -848,14 +844,11 @@ migration chain.
 
 ## Delivery State
 
-Railway is the confirmed deployment target. Managed PostgreSQL, Redis, and the
-public FastAPI service are online in EU West; API health and migrations 001–022
-were verified there. Next.js, ML, reminders, retention scheduling, and durable
-uploads are not deployed, and the local rate-limit implementation is not
-active in Railway until its code is deployed with `RATE_LIMIT_ENABLED=true`.
-The rollout remains paused until MVP stages 0–8 pass locally and the user
-explicitly authorizes deployment work. `docs/deployment.md` records the resume
-point. Production readiness still requires web origin/CORS, secrets, durable
+Crowbar runs locally only. Production hosting is not chosen — the intended
+target is an own VPS — and nothing is provisioned or deployed; deployment waits
+for the local release gate and the user's explicit authorization.
+`docs/deployment.md` records the host-neutral topology, the processes and
+schedules a host must run, and the configuration names. Production readiness still requires web origin/CORS, secrets, durable
 storage, private ML networking, backups/restore, observability, job/delivery
 alerts, release recovery, and an explicit single-replica or shared WebSocket
 fan-out decision.

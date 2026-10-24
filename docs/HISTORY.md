@@ -4087,3 +4087,36 @@ its pass.
 
 **References.** `scripts/verify-fresh-db.sh`, `.github/workflows/ci.yml`,
 `server/db/migrations/027_resource_aware_reservation_availability.sql`.
+
+## 2026-10-24 — Railway is dropped for an own VPS, and CI/CD waits for a stable app
+
+**Context.** The Railway rollout had been paused since 2026-07-25 at migrations
+001–022 while the local code moved to 054. The user decided production hosting
+will be their own VPS (Hetzner) instead, chosen in detail later. The GitHub
+workflows and Dependabot had already been switched to manual-only for strictly
+local development, and still opened dependency pull requests nobody would merge.
+
+**Decision.** Cut Railway off: delete the eight `railway*.json` files and
+replace the Railway runbook in `docs/deployment.md` with a host-neutral
+contract — topology, the processes and job schedules a host must run, and
+configuration names. Delete `.github/workflows/` and `.github/dependabot.yml`;
+keep their local tools (`scripts/check-doc-links.sh`,
+`scripts/verify-fresh-db.sh`, `.gitleaks.toml`) as local gates in `AGENTS.md`,
+and keep the commands the workflows ran as a checklist in `docs/TODO.md` § CI/CD.
+Keep Vercel for the frontend-only demo. This supersedes "Railway is the
+deployment target and ML stays private" (2026-07-24) as to the host only — the
+private-ML and gateway decisions stand — "Scheduled reminders use a Railway Cron
+job" (2026-07-24) as to the mechanism, the one-shot job shape stands, and
+"Railway rollout is intentionally shelved" (2026-07-25).
+
+**Consequences.** Development is entirely local and nothing runs checks
+automatically; the local gates are run by hand. Rebuild CI/CD after the app is
+stable locally and the host is chosen. Stage 9 is now production hosting on an
+own VPS, still blocked on stages 0–8a and explicit authorization. The rate
+limiter still trusts `X-Real-IP` in production, so whichever reverse proxy
+fronts the API must set or overwrite it; stage 9 re-checks that. Any Railway
+resources that still exist are outside the repository and are the user's to
+remove.
+
+**References.** `docs/deployment.md`, `docs/TODO.md` (stage 9, § CI/CD),
+`AGENTS.md` § Commands, `scripts/export-portfolio.sh`.

@@ -49,11 +49,11 @@ Do not run the migrations into `crowbar_test`. The migrations and the fixtures
 are two schema authorities and a database may only have one: the fixtures tear
 down with `Base.metadata.drop_all`, which names constraints by the ORM's names
 and orders drops by the ORM's foreign keys, neither of which a migrated schema
-is guaranteed to match. CI keeps them apart by migrating its own
-`crowbar_migration_check` database, and `docs/HISTORY.md` 2026-09-23 records
-what happens when they share one. CI also runs `../scripts/verify-fresh-db.sh`
-in its own `crowbar_verify_*` database, reaching the service container through
-`CROWBAR_PG_HOST` rather than `docker exec`.
+is guaranteed to match. Migrate a database of its own instead, such as
+`crowbar_migration_check`; `docs/HISTORY.md` 2026-09-23 records what happens
+when they share one. `../scripts/verify-fresh-db.sh` likewise works in its own
+`crowbar_verify_*` database, through `docker exec crowbar-db`, or directly
+against a server named by `CROWBAR_PG_HOST`.
 
 ## Adding a Migration
 

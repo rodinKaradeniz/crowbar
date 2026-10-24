@@ -22,8 +22,8 @@ export const metadata: Metadata = {
  *
  * Static. It was `force-dynamic` for a venue carousel that had already stopped
  * being rendered; nothing on this page reads from the API, so it is prerendered
- * and the Railway-private-network caveat that forced dynamic rendering no
- * longer applies.
+ * and the private-network caveat that forced dynamic rendering no longer
+ * applies.
  *
  * The composition is broken on purpose — §04 of the System canvas. No two
  * consecutive sections share a grid, and the two ink bands cut the paper run

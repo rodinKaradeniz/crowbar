@@ -245,7 +245,7 @@ async def join_queue(
     *,
     actor_id: UUID | None = None,
     channel: str = "web",
-) -> tuple[dict, bool, str | None]:
+) -> tuple[dict, bool]:
     fingerprint = request_fingerprint(name=name, party_size=party_size, phone=phone)
     existing = await db.scalar(
         select(QueueEntry).where(
@@ -279,7 +279,7 @@ async def join_queue(
                 "This idempotency key was already used for a different queue request",
                 code="IDEMPOTENCY_CONFLICT",
             )
-        return await _build_status(db, existing), False, None
+        return await _build_status(db, existing), False
     if phone is not None:
         duplicate = await db.scalar(
             select(QueueEntry.id).where(

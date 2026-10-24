@@ -28,8 +28,9 @@ For focused work, also read:
 
 - Database or migrations: `server/DATABASE.md`
 - ML service or insight models: `ml/CONTEXT.md`
-- Deployment: `docs/deployment.md` (verified runbook and partial rollout state;
-  deployment remains an explicit user-authorized activity)
+- Deployment: `docs/deployment.md` (host-neutral topology, processes and
+  schedules; hosting is not chosen and deployment remains an explicit
+  user-authorized activity)
 - MVP implementation or release verification: `docs/MVP_ACCEPTANCE.md`
   (surface dispositions, risk register, and stage 1–8 evidence contract)
 - Product UI or visual language: `docs/DESIGN.md`
@@ -186,11 +187,12 @@ pilot (10), and a mobile client (11).
 [docs/TODO.md](docs/TODO.md) owns the exact 0–11 order, exit gates, and
 post-MVP deferrals.
 
-Migrations 023–053 are local only. Railway remains at migrations 001–022; its
-partially provisioned rollout is intentionally paused until stages 0–8 pass
-locally and the user explicitly authorizes deployment. The user plans to use
-Railway, but that intent is not authorization to mutate it.
-[docs/deployment.md](docs/deployment.md) owns the verified resume point.
+Crowbar runs locally only. Production hosting is not chosen — the intended
+target is the user's own VPS — and nothing is provisioned; deployment waits
+until stages 0–8a pass locally and the user explicitly authorizes it. There is
+no CI/CD: the GitHub workflows and Dependabot were removed until the app is
+stable locally, so the local gates under Commands are the only checks that run.
+[docs/deployment.md](docs/deployment.md) owns the deployment contract.
 
 ## Commands
 
@@ -234,6 +236,11 @@ uvicorn app.main:app --reload --port 8000
 venv/bin/python -m pip install -r requirements-test.txt
 docker exec crowbar-db createdb -U postgres crowbar_test  # one-time
 venv/bin/python -m pytest
+
+# Local gates, from the repository root (nothing runs these automatically)
+bash scripts/check-doc-links.sh
+bash scripts/verify-fresh-db.sh  # needs the crowbar-db container
+docker run --rm -v "$PWD:/repo" zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f git /repo --config /repo/.gitleaks.toml --redact --no-banner
 
 # Safe migration path
 cd server

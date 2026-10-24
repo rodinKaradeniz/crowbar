@@ -133,8 +133,8 @@ Do not claim a step that cannot run.
   location, three areas, twenty tables, two active combinations, the Bar and
   Kitchen stations, assignments, a live queue and waitlist, an open seating with
   an open tab, and a closed seating settled externally. Steps 3–11 are walkable on
-  seeded data. What is still missing is the automated browser journey and the CI
-  that runs it — stage 8 parts two and three.
+  seeded data. The automated browser journey is `npm run test:journey` (and
+  `test:journey:demo`); nothing runs it automatically.
 
 ## Which role can walk which step
 

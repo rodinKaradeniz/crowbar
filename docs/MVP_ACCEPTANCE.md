@@ -122,7 +122,7 @@ confirmed fixed MVP permission matrix.
 | `/api/invite/accept` | Supporting | Retain cookie handoff after stage-1 invitation/token/password hardening. |
 | `/api/proxy/[...path]` | Supporting infrastructure | Retain authenticated forwarding; stage 1 regression-tests authentication, error/status/header behavior, and mutation boundaries. |
 | `/api/ws-token` | Supporting infrastructure | Retain short-lived business-bound WebSocket credentials; stages 1 and 7 prove revocation, tenant scope, reconnect, and HTTP/WS parity. |
-| `/api/health` | Supporting infrastructure | Retain for local and later Railway health checks; stage 8 defines local release evidence and stage 9 adds deployment readiness. |
+| `/api/health` | Supporting infrastructure | Retain for local and later production health checks; stage 8 defines local release evidence and stage 9 adds deployment readiness. |
 
 No customer dashboard, customer account area, payment screen, receipt/invoice
 route, cash drawer, fiscal export, or supplier-payment route belongs in this
@@ -209,8 +209,8 @@ added here before implementation so there remains one release ledger.
 | ML-01 | P2 | Latest ML results are process-memory dependent, pipelines are unscheduled, data-readiness rules are thin, and legacy payment wording remains. | 6, 7 | Persisted/versioned results, minimum-data/reproducibility/leakage/drift rules, optional scheduling, correct settlement vocabulary and outage proof. |
 | BUY-01 | P1 | Closed 2026-08-25. Supplier, purchase-order, partial receiving, stock-count, price-history, valuation and cost-control workflows ship on one auditable ledger; location transfers are deferred with a trigger. | 5 | Closed — see Stage 5 closure evidence. |
 | REPORT-01 | P2 | Authoritative queue, floor, tab, purchasing, margin, variance, staff-action and ticket-timing reports/exports are incomplete. | 6 | Source-reconciled report tests, role checks, service-day semantics and useful non-fiscal export evidence. |
-| OPS-01 | P1 | There is no repository CI or critical browser E2E suite; storage is local and outage/load/accessibility/responsive coverage is incomplete. | 8, 9 | Local CI-equivalent gate and failure matrix first; durable object storage and deployment operations in stage 9. |
-| OPS-02 | P1 | Railway is partially provisioned at migrations 001–022 while local code is at 030; web/ML/jobs, backups, restore, monitoring and rollback are incomplete. | 8 | Do not mutate before explicit authorization; reconcile and prove the full deployment runbook after local acceptance. |
+| OPS-01 | P1 | There is no automated pipeline (removed 2026-10-24 until the app is stable locally); the critical browser journey and the local gates run by hand; storage is local and outage/load/accessibility/responsive coverage is incomplete. | 8, 9 | Local gates (`AGENTS.md` § Commands) and failure matrix first; durable object storage and deployment operations in stage 9. |
+| OPS-02 | P1 | Production hosting is not chosen (the intended target is an own VPS) and nothing is provisioned; hosting, backups, restore, monitoring and rollback do not exist yet. | 9 | Do not provision before explicit authorization; prove the host-neutral contract in `docs/deployment.md` after local acceptance. |
 | OFFLINE-01 | P2 | Full offline service/count operation is absent. | 5, 7, post-MVP | MVP proves graceful failure and safe retry; full offline counts/service remain deferred unless pilot evidence changes scope. |
 | COPY-01 | P1 | Contact forms simulate success; landing social proof, pricing and draft FAQ include unapproved or stale claims, including payment-like tab language. | 1E | Remove/hide or connect an approved authoritative workflow; copy review and browser smoke prove no false success/claim. |
 
@@ -240,7 +240,7 @@ not by UI convenience.
 | 6 / P1 | Guest privacy and canonical timeline | Reservation, queue, tab and order history link to one business-scoped guest; intake, correction, withdrawal, suppression, merge, export and retention preserve audit/anonymous operations | Ambiguous merge or identity conflict requires review; privacy job failure is alertable and retry-safe | PostgreSQL identity/merge/retention/role tests plus CRM frontend workflows | Pilot privacy request and conservative merge complete locally; operational history remains reconciled |
 | 6 / P2 | Operational reporting | Covers/no-show, waits/seating, utilization/turn, items/stations, open/settled tabs, inventory/purchasing/cost/waste and staff timing reconcile to source/service day | Missing optional data is labelled; no number is called revenue, fiscal, accounting or bank settlement without authority | Source-reconciliation and timezone tests plus export/UI tests | Manager can trace selected report figures back to source records and export useful non-fiscal output |
 | 6 / P2 | Optional ML insights | Tenant-safe inputs/results, minimum-data rules, version/reproducibility/leakage/drift metadata and persisted latest outputs | Unavailable/insufficient/stale model is explicit and never blocks core pages | ML unit/integration plus FastAPI gateway tenant/failure tests | Core demo passes with ML down; when enabled, a result survives process restart and states its limits |
-| 7 / P1 | Fresh local pilot demonstration | Deterministic seed covers all retained core roles/states; critical journey runs from booking through settlement, stock, guest and cost history | Any failed step leaves a diagnosable, recoverable state; reset never uses production-destructive tooling | Automated browser E2E plus fresh migration/seed and all repository checks in CI | One command prepares a fresh demo; critical journey passes on supported desktop/mobile browsers |
+| 7 / P1 | Fresh local pilot demonstration | Deterministic seed covers all retained core roles/states; critical journey runs from booking through settlement, stock, guest and cost history | Any failed step leaves a diagnosable, recoverable state; reset never uses production-destructive tooling | Automated browser E2E plus fresh migration/seed and all repository checks, run as the local gates | One command prepares a fresh demo; critical journey passes on supported desktop/mobile browsers |
 | 7 / P1 | Failure, accessibility and local release gate | Email/SMS/Redis/WS/ML loss cannot corrupt core state; key workflows are keyboard/label/focus/contrast/responsive usable; secrets/dependencies checked | Optional outage degrades honestly with retry/reconcile; no false success or silent loss | Deterministic failure injection, accessibility, responsive, load/concurrency and security scans | Signed local checklist shows no visible placeholder/dead control, no open P0/P1 and all required evidence linked |
 
 ## Baseline evidence captured at stage 0
@@ -351,8 +351,8 @@ repeat-seed verifier passed; Python compilation and `git diff --check` passed.
 Known dependency/framework deprecation warnings remain the maintenance debt
 already recorded in `TODO.md`; no check was weakened.
 
-Railway remains intentionally paused at migrations 001–022. No local stage
-completion authorizes deployment or other external mutation.
+Nothing is deployed. No local stage completion authorizes deployment or other
+external mutation.
 
 ## Stages 3 and 4 closure evidence — 2026-08-19
 
@@ -406,8 +406,8 @@ remain documented dependency/framework maintenance debt and do not conceal a
 failed check. Stage 7 still owns automated cross-browser E2E, the full seeded
 pilot scenario and its accessibility/load/failure matrix.
 
-Railway remains intentionally paused at migrations 001–022. No stage completion
-authorizes deployment or any other external mutation.
+Nothing is deployed. No stage completion authorizes deployment or any other
+external mutation.
 
 ## Stages 3 and 4 public-security evidence — 2026-08-24
 
@@ -462,7 +462,7 @@ Publication is not yet authorized or complete. Before creating the mirror, the
 user must rotate the ignored local OpenAI and Resend keys discovered during the
 working-tree audit, commit the intended canonical source, export from that
 commit, and run the checklist plus both scanners against the exact export.
-Railway and all production credentials remain untouched.
+No hosting environment or production credential was touched.
 
 ## Stage 5 closure evidence — 2026-08-25
 
@@ -530,8 +530,8 @@ the sum of their movement ledgers. Two pre-existing `window.location.assign`
 lint warnings in guest-profile and floor clients remain and are unrelated
 maintenance debt; they do not conceal a failed check.
 
-Railway remains intentionally paused at migrations 001–022. No stage completion
-authorizes deployment or any other external mutation.
+Nothing is deployed. No stage completion authorizes deployment or any other
+external mutation.
 
 ## Stage 6 closure evidence — 2026-08-26
 
@@ -655,10 +655,10 @@ lint, build and unit tests, not by a browser session. Scheduled jobs were not
 run. Redis was up; the ML service was down, which is what made its degradation
 observable.
 
-Railway remains intentionally paused at migrations 001–022. No stage completion
-authorizes deployment or any other external mutation.
+Nothing is deployed. No stage completion authorizes deployment or any other
+external mutation.
 
 Stage implementations replace these observations with dated command output,
 test names, screenshots or recordings where useful, and links to any durable
-runbook or CI artifact. Do not mark a risk closed by editing this document
+runbook or saved check output. Do not mark a risk closed by editing this document
 alone.

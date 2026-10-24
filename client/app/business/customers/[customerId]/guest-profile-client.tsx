@@ -31,7 +31,7 @@ import { PageBody, PageHeader } from "@/components/page-header";
 
 const SUGGESTED_TAGS = ["VIP", "Regular", "No-show risk", "Birthday"];
 
-export default function GuestProfileClient({ customerId, canManage, businessTimezone }: { customerId: string; canManage: boolean; businessTimezone: string }) {
+export default function GuestProfileClient({ customerId, canManagePrivacy, businessTimezone }: { customerId: string; canManagePrivacy: boolean; businessTimezone: string }) {
   const { currencyCode, locale } = useRegionalSettings();
   const money = (value?: number) => value === undefined ? null : formatMoney(value, currencyCode, locale);
   const [guest, setGuest] = useState<GuestProfile | null>(null);
@@ -133,7 +133,7 @@ export default function GuestProfileClient({ customerId, canManage, businessTime
         title={guest.name ?? "Guest"}
         description="One business-scoped hospitality profile and operational history."
         actions={
-          canManage ? (
+          canManagePrivacy ? (
             <>
               <Button variant="secondary" size="filter" onClick={() => void downloadExport()} disabled={busy}>
                 <Download /> Export
@@ -171,7 +171,7 @@ export default function GuestProfileClient({ customerId, canManage, businessTime
       <aside className="space-y-6">
         <section className="border bg-card p-5"><h2 className="flex items-center gap-2 font-semibold"><Tags className="size-4" /> Tags</h2><div className="mt-3 flex flex-wrap gap-2">{guest.tags.map((item) => <button key={item.id} type="button" className="rounded-full border px-2.5 py-1 text-xs hover:bg-muted" onClick={() => void clientRemoveGuestTag(customerId, item.id).then(refresh)}>{item.name} ×</button>)}</div><div className="mt-4 flex gap-2"><Input value={tag} onChange={(event) => setTag(event.target.value)} placeholder="Custom tag" /><Button size="icon" aria-label="Add tag" disabled={busy} onClick={() => void addTag()}><Plus /></Button></div><div className="mt-3 flex flex-wrap gap-2">{SUGGESTED_TAGS.filter((name) => !guest.tags.some((item) => item.name.toLowerCase() === name.toLowerCase())).map((name) => <Button key={name} size="filter" variant="secondary" disabled={busy} onClick={() => void addTag(name)}>{name}</Button>)}</div></section>
         <section className="border bg-card p-5"><h2 className="font-semibold">Marketing consent</h2><div className="mt-3 space-y-3 text-sm">{guest.consents.length ? guest.consents.map((consent) => <div key={consent.channel}><p className="font-medium capitalize">{consent.channel}</p><p className="text-muted-foreground">{consent.isConsented ? "Opted in" : "Not opted in"} · {formatBusinessDate(consent.capturedAt, businessTimezone, locale)}</p></div>) : <p className="text-muted-foreground">No marketing consent recorded.</p>}</div></section>
-        {canManage && <section className="border bg-card p-5"><div className="flex items-center justify-between gap-3"><h2 className="font-semibold">Reconcile duplicate</h2><Button size="filter" variant="secondary" onClick={() => void loadMergeCandidates()} disabled={busy}><GitMerge /> Find guest</Button></div>{mergeCandidates.length > 0 && <div className="mt-3 space-y-2">{mergeCandidates.map((candidate) => <div key={candidate.id} className="flex items-center justify-between gap-2 bg-muted/40 p-2"><div className="min-w-0"><p className="truncate text-sm font-medium">{candidate.name ?? "Unnamed guest"}</p><p className="truncate text-xs text-muted-foreground">{candidate.phone ?? candidate.email ?? candidate.id}</p></div><Button size="filter" variant="secondary" disabled={busy} onClick={() => void mergeGuest(candidate.id)}>Merge</Button></div>)}</div>}<p className="mt-3 text-xs text-muted-foreground">The selected duplicate is anonymised and its operational history moves here.</p></section>}
+        {canManagePrivacy && <section className="border bg-card p-5"><div className="flex items-center justify-between gap-3"><h2 className="font-semibold">Reconcile duplicate</h2><Button size="filter" variant="secondary" onClick={() => void loadMergeCandidates()} disabled={busy}><GitMerge /> Find guest</Button></div>{mergeCandidates.length > 0 && <div className="mt-3 space-y-2">{mergeCandidates.map((candidate) => <div key={candidate.id} className="flex items-center justify-between gap-2 bg-muted/40 p-2"><div className="min-w-0"><p className="truncate text-sm font-medium">{candidate.name ?? "Unnamed guest"}</p><p className="truncate text-xs text-muted-foreground">{candidate.phone ?? candidate.email ?? candidate.id}</p></div><Button size="filter" variant="secondary" disabled={busy} onClick={() => void mergeGuest(candidate.id)}>Merge</Button></div>)}</div>}<p className="mt-3 text-xs text-muted-foreground">The selected duplicate is anonymised and its operational history moves here.</p></section>}
         <section className="border bg-muted/30 p-5 text-sm text-muted-foreground"><p className="font-medium text-foreground">Privacy</p><p className="mt-2">Profiles are anonymised after 24 months of inactivity, unless a venue has a lawful retention obligation. Marketing consent is separate from reservation messages.</p></section>
       </aside>
     </div>

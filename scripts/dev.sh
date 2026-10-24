@@ -180,7 +180,9 @@ if [[ "$DEMO" == "true" ]]; then
   echo "=========================================="
   echo ""
 
+  # The demo ends with its frontend; never fall through into the full stack.
   wait
+  exit
 fi
 
 echo ""

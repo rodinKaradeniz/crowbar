@@ -26,7 +26,7 @@ from app.config import settings
 # events against tenants that only ever existed here.
 
 #
-# CI already points DATABASE_URL at crowbar_test, so a URL that names the test
+# A caller may already point DATABASE_URL at crowbar_test, so a URL that names the test
 # database is left alone; replacing unconditionally made it crowbar_test_test.
 
 TEST_DATABASE_URL = settings.database_url

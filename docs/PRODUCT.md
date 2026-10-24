@@ -17,7 +17,8 @@ Germany. Its confirmed delivery order is: freeze the MVP contract and baseline;
 repair correctness and security; add Germany-ready operational configuration;
 complete the guest-to-table loop; complete ordering and external settlement;
 finish stock, purchasing, and cost control; finish staff/CRM/reporting; pass a
-local demo/release gate; deploy to Railway; then run the supervised pilot.
+local demo/release gate; deploy to the production host; then run the supervised
+pilot.
 German fiscal POS and payment processing are a separate post-MVP program. See
 [TODO.md](TODO.md) for stage boundaries and exit gates.
 

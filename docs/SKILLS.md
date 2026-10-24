@@ -99,8 +99,8 @@ workflow**, not the completeness of a list. Before writing one:
 - Link to the canonical document instead of copying architecture or policy.
 - Put repeated mechanical checks in a script, not in prose.
 
-Skills guide judgment. Tests, database constraints, CI, and the type system
-remain the enforcement mechanisms.
+Skills guide judgment. Tests, database constraints, the local gates, and the
+type system remain the enforcement mechanisms.
 
 ## Candidates, not commitments
 

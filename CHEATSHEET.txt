@@ -1,6 +1,6 @@
 CROWBAR — LOCAL CHEATSHEET
 Repo: /Users/rodinkaradeniz/projects/crowbar
-Local development only. Nothing here applies to Railway.
+Local development only. Nothing here applies to production.
 
 == 1. DEMO CREDENTIALS          http://localhost:3000/auth/login
   EMAIL                    PASSWORD     ROLE

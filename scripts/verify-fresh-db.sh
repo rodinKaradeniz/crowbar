@@ -14,8 +14,8 @@ if [[ ! "$VERIFY_DB" =~ ^crowbar_verify_[a-z0-9_]+$ ]]; then
 fi
 
 # PostgreSQL client tools run inside the local `crowbar-db` container, unless
-# CROWBAR_PG_HOST names a server to reach directly — as CI does, with the
-# runner's own client tools and PGPASSWORD set. `-i` is load-bearing: without
+# CROWBAR_PG_HOST names a server to reach directly, with the caller's own
+# client tools and PGPASSWORD set. `-i` is load-bearing: without
 # it `docker exec` hands psql no stdin, so the assertion block below was never
 # read and every run "passed".
 pg() {

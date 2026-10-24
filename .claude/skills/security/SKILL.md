@@ -145,8 +145,9 @@ this treatment at the same time as the feature, not later.
 script, keyed on HMACed client IPs, identity values, business IDs, paths, and
 opaque session tokens. Policies already exist for login (identity and IP),
 registration, invite acceptance, password reset, public identity writes, public
-writes, public order placement, and public reads. Production trusts Railway's
-`X-Real-IP`; non-production uses the direct peer address.
+writes, public order placement, and public reads. Production trusts `X-Real-IP`,
+which the reverse proxy in front of the API must set or overwrite;
+non-production uses the direct peer address.
 
 Two deliberate properties to preserve: a blocked request returns the standard
 `RATE_LIMITED` error body with `Retry-After`, and Redis failure **fails open**

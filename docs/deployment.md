@@ -1,172 +1,87 @@
-# Railway Deployment Runbook
+# Deployment
 
-Last reconciled with the repository, preserved Railway rollout, and confirmed
-MVP deployment gate on 2026-08-14.
+Last reconciled with the repository on 2026-10-24.
 
-## Deployment Gate
+## Status
 
-Railway is the confirmed target, but deployment remains paused until MVP stages
-0–7 pass locally and the user explicitly authorizes external deployment work.
-Local completion does not itself authorize provisioning, configuration,
-migration, seeding, deployment, or deletion in Railway. The supervised German
-pilot keeps a separate compliant register as payment/fiscal authority; this
-topology must not be presented as a TSE/DSFinV-K cash-register deployment.
+Production hosting is not chosen. The intended target is the user's own VPS at
+Hetzner; nothing is provisioned. Deployment remains an explicit user-authorized
+activity: completing a local stage does not authorize provisioning,
+configuration, migration, seeding or deployment anywhere.
+[TODO.md](TODO.md) stage 9 owns the work. The supervised German pilot keeps a
+separate compliant register as payment and fiscal authority, so no Crowbar
+deployment is a TSE/DSFinV-K cash-register deployment.
 
-## Confirmed Topology
+## Topology and boundaries
 
-Crowbar deploys into one Railway project in EU West.
+These hold whatever the host turns out to be.
 
 ```text
-Internet
-  |
-  +--> web (Next.js) ----------+
-  |                            |
-  +--> api (FastAPI) ----------+--> PostgreSQL
-                               +--> Redis
-                               +--> ml (private FastAPI)
+Internet --> reverse proxy (TLS) --+--> web (Next.js)
+                                   +--> api (FastAPI) --+--> PostgreSQL
+                                                        +--> Redis
+                                                        +--> ml (private FastAPI)
 
-reminders (hourly private cron) ---> PostgreSQL ---> Twilio
-waitlist-expiry (5-minute private cron) ---> PostgreSQL
-account-deletion (daily private cron) ---> PostgreSQL
-customer-retention (daily private cron) ---> PostgreSQL
-inventory-reconciliation (daily private cron) ---> PostgreSQL
+scheduled one-shot commands (table below) --> PostgreSQL (reminders also --> Twilio)
 ```
 
-Only `web` and `api` receive public domains. PostgreSQL, Redis, `ml` and all
-five cron services remain private. Future domain microservices remain private
-behind the FastAPI gateway unless a new architecture decision says otherwise.
+- Only `web` and `api` are public. PostgreSQL, Redis, `ml` and the scheduled
+  commands stay private.
+- One API replica until WebSocket fan-out is designed: connection managers live
+  in one FastAPI process.
+- `python -m db.migrate` (from `server/`) runs and succeeds before a new API
+  starts; a failed migration stops the release. Never seed production data or
+  use `db.migrate reset`.
+- The reverse proxy in front of the API must set or overwrite `X-Real-IP`. In
+  production the rate limiter takes that header as the client address.
+- Next.js reaches the API privately through `API_INTERNAL_URL`.
+  `NEXT_PUBLIC_API_URL` is the public API origin for browser calls and
+  WebSockets; it is compiled into the build and is not secret.
+- Uploads use the local filesystem. Do not expose them until durable storage
+  with backup and deletion behaviour is in place.
 
-Every one-shot job under `server/app/jobs/` has a service here. That was not
-true until 2026-09-04: `customer_retention`, `inventory_reconciliation` and
-`reservation_waitlist_expiry` had shipped as code with no config file and no
-row below, so the retention policy, the ledger reconciliation and the waitlist
-expiry would simply never have run in a deployed environment. A job that exists
-only as a module is a policy the product claims and does not keep.
+## What a host must run
 
-## Source and Process Contract
+| Process | Command | Health or schedule (UTC) |
+| --- | --- | --- |
+| web | `npm run start` in `client/` | `GET /api/health` |
+| api | `uvicorn app.main:app --host 0.0.0.0 --port $PORT --no-access-log` in `server/` | `GET /api/health`, after migrations |
+| ml | the `ml/Dockerfile` image; its entry point binds `$PORT` (default 8001) | `GET /health` |
+| reservation reminders | `python -m app.jobs.reservation_reminders` in `server/` | `0 * * * *` |
+| waitlist expiry | `python -m app.jobs.reservation_waitlist_expiry` | `*/5 * * * *` |
+| account deletion | `python -m app.jobs.account_deletion` | `30 3 * * *` |
+| customer retention | `python -m app.jobs.customer_retention` | `0 4 * * *` |
+| inventory reconciliation | `python -m app.jobs.inventory_reconciliation` | `30 4 * * *` |
 
-Each code service uses the same GitHub repository with an isolated root
-directory. Railway config files use absolute repository paths because a
-service's Root Directory does not automatically relocate its config-as-code
-file.
+Each job runs one batch, closes its database engine and exits; there is no
+persistent worker. Every module under `server/app/jobs/` has a row here — a job
+that exists only as a module is a policy the product claims and does not keep.
+Waitlist expiry is the only sub-hourly job because an offer lasts 15 minutes;
+`expire_entry_if_due` also guards the read and accept paths, so a late run
+costs visibility, not integrity. Retention and reconciliation run after close,
+one after the other, so an anonymisation never lands mid-service.
 
-| Service | Root directory | Config file | Builder | Process |
-| --- | --- | --- | --- | --- |
-| `web` | `/client` | `/client/railway.json` | Railpack | `npm run start` |
-| `api` | `/server` | `/server/railway.api.json` | Railpack | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
-| `ml` | `/ml` | `/ml/railway.json` | Dockerfile | Docker `CMD`, listening on `$PORT` |
-| `reminders` | `/server` | `/server/railway.reminders.json` | Railpack | `python -m app.jobs.reservation_reminders` |
-| `waitlist-expiry` | `/server` | `/server/railway.waitlist-expiry.json` | Railpack | `python -m app.jobs.reservation_waitlist_expiry` |
-| `account-deletion` | `/server` | `/server/railway.account-deletion.json` | Railpack | `python -m app.jobs.account_deletion` |
-| `customer-retention` | `/server` | `/server/railway.customer-retention.json` | Railpack | `python -m app.jobs.customer_retention` |
-| `inventory-reconciliation` | `/server` | `/server/railway.inventory-reconciliation.json` | Railpack | `python -m app.jobs.inventory_reconciliation` |
+## Secrets and configuration
 
-Watch patterns prevent unrelated monorepo changes from rebuilding every
-service.
+Values never go in a committed file. Each `env.example` documents its variables;
+the names are:
 
-## Deployment Lifecycle
+- web (`client/env.example`): `API_INTERNAL_URL`, `NEXT_PUBLIC_API_URL`,
+  `NEXT_PUBLIC_WIDGET_BASE_URL`, `RESERVATION_FRAME_ANCESTORS`.
+- api and jobs (`server/env.example`): `DATABASE_URL`, `REDIS_URL`,
+  `ENVIRONMENT=production`, `RATE_LIMIT_ENABLED=true`, `RATE_LIMIT_HMAC_SECRET`,
+  `SECRET_KEY`, `PUBLIC_LINK_SECRET_KEY`, `TABLE_QR_SECRET_KEY`,
+  `ML_SERVICE_URL`, `ML_INTERNAL_TOKEN`, `CORS_ORIGINS`, `FRONTEND_URL`,
+  `ACCESS_TOKEN_EXPIRE_MINUTES`, `TABLE_GUEST_SESSION_TTL_MINUTES`,
+  `STORAGE_TYPE`, `UPLOAD_DIR`, `RESEND_API_KEY`, `EMAIL_FROM_ADDRESS`,
+  `EMAIL_FROM_NAME`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
+  `TWILIO_FROM_NUMBER`.
+- ml (`ml/env.example`): `DATABASE_URL`, `DATABASE_URL_SYNC`,
+  `ENVIRONMENT=production`, `ML_INTERNAL_TOKEN`, `LOG_LEVEL`,
+  `MLFLOW_TRACKING_URI`.
 
-- `web` must return HTTP 200 from `/api/health` before Railway activates a new
-  deployment.
-- `api` must connect to PostgreSQL and return HTTP 200 from `/api/health`.
-- `ml` must connect to PostgreSQL and return HTTP 200 from `/health`.
-- `api` runs `python -m db.migrate` as a pre-deploy command. A migration failure
-  stops the new deployment before it becomes active.
-- `reminders` runs at `0 * * * *` UTC, completes one batch, closes its database
-  engine, and exits. It has no public domain and no persistent worker.
-- `account-deletion` runs at `30 3 * * *` UTC, erases every staff account whose
-  30-day deletion window has closed, and exits. Same shape as `reminders`: no
-  public domain, no persistent worker.
-- `customer-retention` runs at `0 4 * * *` UTC and applies the documented
-  24-month guest-data inactivity policy. Daily is enough for a policy measured
-  in months; the hour is after close so an anonymisation never lands mid-service.
-- `inventory-reconciliation` runs at `30 4 * * *` UTC, compares every business's
-  balances against the movement ledger, and records one open discrepancy per
-  mismatched item. It never changes stock. Deliberately after
-  `customer-retention` rather than beside it, so two jobs are not writing while
-  a third could still be running.
-- `waitlist-expiry` runs at `*/5 * * * *` UTC — the only sub-hourly job, because
-  `OFFER_MINUTES` is 15 and an hourly sweep would leave an offer looking live on
-  the board for most of its life. It is not the correctness guard:
-  `expire_entry_if_due` also runs on the read and accept paths, so an expired
-  offer can never be accepted even if the job is late. What the cadence buys is
-  the staff notification and the board releasing the entry, so lateness costs
-  visibility, not integrity.
-
-Do not seed production data or use `db.migrate reset`.
-
-## Networking Contract
-
-- Next.js uses `API_INTERNAL_URL` for server components, route handlers, and
-  BFF traffic over Railway private networking.
-- `NEXT_PUBLIC_API_URL` is the public FastAPI origin used only where browser
-  access is required, including WebSockets. It is compiled into the Next.js
-  build and is not secret.
-- FastAPI uses `ML_SERVICE_URL` for the private ML origin and sends
-  `ML_INTERNAL_TOKEN`.
-- FastAPI and ML receive PostgreSQL connection URLs through Railway reference
-  variables. Their settings normalize Railway's provider-standard URL for the
-  async and sync SQLAlchemy drivers.
-- FastAPI receives Redis through a Railway reference variable.
-- Database, Redis, and ML services do not receive public domains.
-
-## Secrets and Configuration
-
-Values belong in Railway Variables, never committed environment files.
-
-At minimum:
-
-- `web`: `API_INTERNAL_URL`, `NEXT_PUBLIC_API_URL`. Set
-  `RESERVATION_FRAME_ANCESTORS` to a comma-separated list of exact `https://`
-  origins authorized to embed public reservation pages. It defaults to
-  `'self'`; wildcards are rejected.
-- `api`: `DATABASE_URL`, `REDIS_URL`, `SECRET_KEY`, `ENVIRONMENT=production`,
-  `RATE_LIMIT_ENABLED=true`, `FRONTEND_URL`, `CORS_ORIGINS`, `ML_SERVICE_URL`,
-  `ML_INTERNAL_TOKEN`, and configured email/SMS provider credentials.
-- `ml`: set both `DATABASE_URL` and `DATABASE_URL_SYNC` to the Postgres
-  `DATABASE_URL` reference; Crowbar selects the appropriate driver.
-  Also set `ENVIRONMENT=production`, `ML_INTERNAL_TOKEN`, and logging
-  configuration.
-- `reminders`: `DATABASE_URL`, `ENVIRONMENT=production`, and Twilio
-  credentials. It does not need Redis.
-
-Use one strong generated value for `ML_INTERNAL_TOKEN` on both `api` and `ml`.
-Use a different strong generated value for `SECRET_KEY`.
-
-## Storage
-
-The backend's current local upload service is not production-durable on
-ephemeral application filesystems. Do not expose uploads until a Railway volume
-or object-storage adapter is configured and its backup/deletion behavior is
-confirmed. Object storage remains the preferred long-term shape.
-
-## Rollout State
-
-**Status:** Intentionally paused while product development completes and passes
-the local MVP release gate. Do not resume external deployment changes without
-a new explicit instruction.
-
-- Complete: Railway project created.
-- Complete: public/private trust boundaries and tenant-scoped ML gateway.
-- Complete: production build and backend regression verification.
-- Complete: service build/start/health/migration/cron definitions checked in.
-- Complete: managed PostgreSQL and Redis services online in EU West.
-- Complete: public FastAPI service online in EU West with its database and
-  Redis references, migrations 001–022, stream consumer, public domain, and
-  health check verified.
-- Pending before any migration rollout: reconcile that preserved 001–022
-  database with local migrations 023–037, the exact accepted application
-  version, forward recovery, and a backup/restore checkpoint.
-- Pending: deploy the local rate-limit change to FastAPI, set
-  `RATE_LIMIT_ENABLED=true`, and verify 429/proxy behavior in Railway.
-- Pending: GitHub-backed `ml`, `reminders`, and `web` services plus production
-  scheduling for customer retention.
-- Pending: their reference variables and secrets, the web domain and CORS,
-  private ML connectivity, and end-to-end smoke tests.
-- Pending: durable uploads, backups, monitoring, and release automation.
-
-Deployment actions remain explicit user-confirmed steps. A TODO entry or this
-runbook is not authorization to mutate Railway.
+`ML_INTERNAL_TOKEN` is one generated value shared by api and ml; generate every
+other secret independently. `DEMO_ADMIN_PASSWORD` is for local seeding only.
 
 ## Frontend-only demo on Vercel
 
