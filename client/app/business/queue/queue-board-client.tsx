@@ -461,10 +461,16 @@ export function QueueBoardClient({
             <Settings2 aria-hidden />
             <span className="hidden phone:inline">Service day</span>
           </Button>
+          {/* Disabled, not hidden, while the service day is closed:
+              `join_queue` refuses every new party then, staff walk-ins
+              included (409 QUEUE_CLOSED), so the board must not offer one.
+              At the cover cap it stays live — a party small enough to fit
+              under the cap is still admitted. */}
           <Button
             size="filter"
             className="min-w-[var(--control-desktop-min)]"
             aria-label="Add a walk-in"
+            disabled={!service?.isOpen}
             onClick={() => setWalkInDialog(true)}
           >
             <Plus aria-hidden />
@@ -498,7 +504,7 @@ export function QueueBoardClient({
             ? service.isFull
               ? "Open, but at the cover cap."
               : "Open to new walk-ins."
-            : "Closed to new walk-ins. Parties already in the queue still work normally."}{" "}
+            : "Closed to new walk-ins. Open it under Service day to add a party; parties already in the queue still work normally."}{" "}
           {service?.estimatedWaitMinutes !== undefined
             ? `Measured wait, from tonight's own turn times: ${service.estimatedWaitMinutes} min.`
             : "No measured wait yet tonight."}{" "}

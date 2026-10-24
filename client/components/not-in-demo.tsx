@@ -21,7 +21,7 @@ export function WorkspaceNotInDemo() {
       <PageBody>
         <EmptyState
           title="This part of Crowbar is not in the demo"
-          description="Settings, stock counts and insights need a real venue with its own history behind them. Tonight's service and the Venue pages are all here."
+          description="Settings, stock counts, insights and the notification history need a real venue with its own history behind them. Tonight's service and the Venue pages are all here."
           action={{ label: "Back to the overview", href: "/business/overview" }}
         />
       </PageBody>

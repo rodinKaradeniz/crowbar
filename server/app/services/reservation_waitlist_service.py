@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from datetime import datetime, timedelta, timezone
@@ -383,7 +384,9 @@ async def deliver_waitlist_offer(
     else:
         sent = bool(
             customer.phone
-            and sms_service.send_sms(
+            # Off the event loop: the provider call blocks for up to its timeout.
+            and await asyncio.to_thread(
+                sms_service.send_sms,
                 customer.phone,
                 f"{business.name} has a table available. Respond here: {offer_url}",
             )

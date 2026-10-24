@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
   Bell,
   Calendar,
@@ -134,6 +135,12 @@ function NotificationSkeleton() {
   );
 }
 
+/**
+ * The sheet is the latest few, not the inbox. Everything older, and the
+ * control that completes a guest data request, is on /business/notifications.
+ */
+const SHEET_LIMIT = 10;
+
 // ─── main component ───────────────────────────────────────────────────────────
 
 /**
@@ -193,7 +200,7 @@ export function NotificationTrigger({
 
       // If panel is open, refresh the displayed list too
       if (openRef.current) {
-        setItems(list);
+        setItems(list.slice(0, SHEET_LIMIT));
         setUnread(list.filter((n) => !n.readAt).length);
       }
 
@@ -246,7 +253,7 @@ export function NotificationTrigger({
         if (!cancelled) {
           // Seed known IDs so background poll won't re-toast these
           list.forEach((n) => knownIdsRef.current.add(n.id));
-          setItems(list);
+          setItems(list.slice(0, SHEET_LIMIT));
           setUnread(list.filter((n) => !n.readAt).length);
         }
       } catch (e) {
@@ -349,17 +356,29 @@ export function NotificationTrigger({
               </span>
             )}
           </div>
-          {unread > 0 && (
+          <div className="flex items-center gap-[var(--space-4)]">
+            {unread > 0 && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="filter"
+                className="text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => void onMarkAllRead()}
+              >
+                Mark all read
+              </Button>
+            )}
             <Button
-              type="button"
+              asChild
               variant="ghost"
               size="filter"
               className="text-xs text-muted-foreground hover:text-foreground"
-              onClick={() => void onMarkAllRead()}
             >
-              Mark all read
+              <Link href="/business/notifications" onClick={() => setOpen(false)}>
+                See all
+              </Link>
             </Button>
-          )}
+          </div>
         </div>
 
         {/* Body */}

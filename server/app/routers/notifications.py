@@ -4,9 +4,19 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import (
+    current_staff_role,
+    get_current_business,
+    get_current_user,
+    require_capability,
+)
+from app.models.business import Business
 from app.models.user import User
-from app.schemas.notification import NotificationResponse, UnreadCountResponse
+from app.schemas.notification import (
+    NotificationResponse,
+    UnreadCountResponse,
+    VenueNotificationResponse,
+)
 from typing import Any
 from app.services import notification_service
 
@@ -34,6 +44,30 @@ async def list_notifications(
         db, current_user, limit=limit, offset=offset
     )
     return [NotificationResponse(**item) for item in items]
+
+
+@router.get(
+    "/venue",
+    response_model=list[VenueNotificationResponse],
+    dependencies=[Depends(require_capability("overview.view"))],
+)
+async def list_venue_notifications(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    business: Business = Depends(get_current_business),
+    kind: list[str] | None = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    """The venue's notifications rather than the caller's inbox."""
+    return await notification_service.list_for_business(
+        db,
+        business_id=business.id,
+        viewer_role=current_staff_role(current_user),
+        kinds=kind,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.patch("/{notification_id}/read", response_model=NotificationResponse)

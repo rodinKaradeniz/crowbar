@@ -112,8 +112,14 @@ export default function BusinessOverviewClient({
           see the other two. So the two extra cells are shown below --bp-phone,
           hidden across the tablet range where the canvas rules, and shown again
           on desktop. `grid-cols-2` was already the phone/tablet column count,
-          so four cells fall into 2x2 with no new rule. */}
-      <div className="grid grid-cols-2 border-b border-border desktop:grid-cols-[repeat(auto-fit,minmax(190px,1fr))]">
+          so four cells fall into 2x2 with no new rule.
+
+          Except money: at 66px even `182,00 €` is 273px against a 162px half
+          cell, so below --bp-phone it takes the full row (and `wrap-break-word`
+          drops only a five-digit total's `€` to a second line). "Next 7
+          nights" spans too, and `grid-flow-row-dense` pulls "Orders placed"
+          up beside the guests, so no arrangement leaves a hole. */}
+      <div className="grid grid-cols-2 grid-flow-row-dense border-b border-border phone:grid-flow-row desktop:grid-cols-[repeat(auto-fit,minmax(190px,1fr))]">
         <FigureCell>
           <Figure
             size="band"
@@ -124,7 +130,7 @@ export default function BusinessOverviewClient({
         </FigureCell>
 
         {ops.ordered_value_today !== undefined ? (
-          <FigureCell className="desktop:order-3">
+          <FigureCell className="col-span-2 wrap-break-word phone:col-span-1 phone:wrap-normal desktop:order-3">
             {/* "Ordered today", never "revenue": nothing here has been
                 collected, and Crowbar does not take the money. */}
             <Figure
@@ -160,7 +166,7 @@ export default function BusinessOverviewClient({
         ) : null}
 
         {forecastAvailable ? (
-          <FigureCell last className="block phone:hidden desktop:order-4 desktop:block">
+          <FigureCell last className="col-span-2 block phone:col-span-1 phone:hidden desktop:order-4 desktop:block">
             <Figure
               size="headline"
               label="Next 7 nights"

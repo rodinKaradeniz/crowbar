@@ -22,6 +22,8 @@ import {
   clientSettleTabExternally,
   clientRequestAccountDeletion,
   clientGetPublicManagedReservation,
+  clientGetVenueNotifications,
+  clientCompleteDataRequest,
 } from "@/lib/client-api";
 
 // Start MSW server for network-level mocking
@@ -721,5 +723,78 @@ describe("reservation confirmation delivery", () => {
     expect(seen).toBe("/api/proxy/reservations/res-9/delivery/retry");
     // A resend that failed again still reports the truth rather than optimism.
     expect(reservation.deliveryState).toBe("failed");
+  });
+});
+
+describe("venue notifications", () => {
+  it("sends each kind as its own parameter and maps the request state", async () => {
+    let seen = "";
+    server.use(
+      http.get("/api/proxy/notifications/venue", ({ request }) => {
+        seen = new URL(request.url).search;
+        return HttpResponse.json([
+          {
+            id: "n1",
+            kind: "customer_data_request",
+            title: "Guest data request",
+            body: "A guest asked for deletion.",
+            payload: { data_request_id: "r1" },
+            created_at: "2026-10-23T18:00:00Z",
+            data_request: {
+              id: "r1",
+              customer_id: "c1",
+              request_type: "deletion",
+              status: "completed",
+              completed_at: "2026-10-23T19:00:00Z",
+              completed_by_name: "Mara",
+            },
+          },
+          {
+            id: "n2",
+            kind: "inventory_low_stock",
+            title: "Low stock",
+            body: "Gin is below par.",
+            payload: {},
+            created_at: "2026-10-23T17:00:00Z",
+            data_request: null,
+          },
+        ]);
+      }),
+    );
+
+    const items = await clientGetVenueNotifications({
+      kinds: ["customer_data_request", "queue_join"],
+      limit: 50,
+    });
+
+    expect(seen).toBe("?kind=customer_data_request&kind=queue_join&limit=50");
+    expect(items[0].dataRequest).toEqual({
+      id: "r1",
+      customerId: "c1",
+      requestType: "deletion",
+      status: "completed",
+      completedAt: "2026-10-23T19:00:00Z",
+      completedByName: "Mara",
+    });
+    expect(items[1].dataRequest).toBeNull();
+    const raw = items[0] as unknown as Record<string, unknown>;
+    expect(raw).not.toHaveProperty("created_at");
+    expect(raw).not.toHaveProperty("data_request");
+  });
+
+  it("completes a request through the privacy route and surfaces a refusal", async () => {
+    server.use(
+      http.post("/api/proxy/customers/data-requests/r2/complete", () =>
+        HttpResponse.json(
+          {
+            code: "GUEST_NOT_ANONYMISED",
+            message: "Anonymise the guest from their profile before completing a deletion request",
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    await expect(clientCompleteDataRequest("r2")).rejects.toThrow(/Anonymise the guest/);
   });
 });

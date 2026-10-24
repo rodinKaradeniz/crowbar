@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import forbidden, not_found
+from app.core.errors import api_error, forbidden, not_found
 from app.database import get_db
 from app.dependencies import get_current_business, get_current_user, require_capability
 from app.models.business import Business
@@ -207,6 +207,21 @@ async def export_customer(
         raise not_found("Guest")
     await db.commit()
     return profile
+
+
+@router.post("/data-requests/{request_id}/complete", response_model=CustomerDataRequestResponse,
+    dependencies=[Depends(require_capability("customers.privacy"))],
+)
+async def complete_data_request(
+    request_id: UUID,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user), business: Business = Depends(get_current_business),
+):
+    try:
+        request = await customer_service.complete_data_request(db, business_id=business.id, request_id=request_id, actor_id=user.id)
+    except customer_service.DataRequestError as exc:
+        raise api_error(exc.status_code, exc.code, str(exc)) from exc
+    await db.commit()
+    return request
 
 
 @router.post("/{customer_id}/data-requests", response_model=CustomerDataRequestResponse,

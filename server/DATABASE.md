@@ -51,7 +51,9 @@ down with `Base.metadata.drop_all`, which names constraints by the ORM's names
 and orders drops by the ORM's foreign keys, neither of which a migrated schema
 is guaranteed to match. CI keeps them apart by migrating its own
 `crowbar_migration_check` database, and `docs/HISTORY.md` 2026-09-23 records
-what happens when they share one.
+what happens when they share one. CI also runs `../scripts/verify-fresh-db.sh`
+in its own `crowbar_verify_*` database, reaching the service container through
+`CROWBAR_PG_HOST` rather than `docker exec`.
 
 ## Adding a Migration
 

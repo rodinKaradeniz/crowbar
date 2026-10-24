@@ -210,7 +210,7 @@ async def create_privacy_request(
             # Only the people who can action it. An unread notification also
             # toasts on whatever screen is signed in, and a guest's deletion
             # request does not belong on the bar screen during service.
-            capability="customers.privacy",
+            capability=nconst.KIND_CAPABILITY[nconst.CUSTOMER_DATA_REQUEST],
         )
 
     # Commit before returning: the guest is told this is recorded, so it has to

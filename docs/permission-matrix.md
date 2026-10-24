@@ -132,6 +132,7 @@ Every authenticated route names exactly one capability, except the self-service 
 | GET | `/api/customers` | `customers.view` | — | owner, manager, host_server, bar_kitchen |
 | GET | `/api/customers/business/{business_id}` | `customers.view` | — | owner, manager, host_server, bar_kitchen |
 | GET | `/api/customers/business/{business_id}/visitors` | `customers.view` | — | owner, manager, host_server, bar_kitchen |
+| POST | `/api/customers/data-requests/{request_id}/complete` | `customers.privacy` | — | owner, manager |
 | GET | `/api/customers/{customer_id}` | `customers.view` | — | owner, manager, host_server, bar_kitchen |
 | PATCH | `/api/customers/{customer_id}` | `customers.manage` | — | owner, manager, host_server |
 | POST | `/api/customers/{customer_id}/data-requests` | `customers.privacy` | — | owner, manager |
@@ -224,6 +225,7 @@ Every authenticated route names exactly one capability, except the self-service 
 | GET | `/api/notifications/` | _self-service_ | — | the signed-in user |
 | POST | `/api/notifications/read-all` | _self-service_ | — | the signed-in user |
 | GET | `/api/notifications/unread-count` | _self-service_ | — | the signed-in user |
+| GET | `/api/notifications/venue` | `overview.view` | — | owner, manager, host_server, bar_kitchen, inventory_operator |
 | PATCH | `/api/notifications/{notification_id}/read` | _self-service_ | — | the signed-in user |
 
 ### `ordering.py`

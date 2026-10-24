@@ -1247,11 +1247,34 @@ is a data mutation that needs explicit authorization.
   client lint, `test:run`, `build` and `npm audit`, plus PostgreSQL and Redis
   services, `python -m db.migrate`, `pytest` and the ML tests;
   `supply-chain.yml` runs dependency review, an SBOM and Trivy; `codeql.yml`
-  scans both languages weekly and per pull request. Still missing: seeding and
+  scans both languages weekly and per pull request. ~~Still missing: seeding and
   `scripts/verify-fresh-db.sh` are not run in CI, so nothing proves a fresh
   database is usable; there is no documentation-link check; there is no secret
-  scanning; and there are no browser, accessibility, responsive, failure-mode
-  or load/concurrency checks.
+  scanning;~~ **DONE 2026-10-23, all three, locally proven and not yet run on
+  GitHub.** The `python` job runs `scripts/verify-fresh-db.sh` against its
+  service container (`CROWBAR_PG_HOST`, no `docker exec`); a `docs` job runs
+  `scripts/check-doc-links.sh` over README.md, AGENTS.md and docs/; a `secrets`
+  job in `supply-chain.yml` runs gitleaks v8.30.1, pinned by digest, over the
+  whole history against `.gitleaks.toml`.
+
+  **The fresh-database check had never asserted anything.** It piped its
+  assertion block into `docker exec crowbar-db psql` without `-i`, so psql read
+  no input and exited 0 — measured: the same pipe without `-i` exits 0 on
+  `SELECT 1/0`, with `-i` it exits 3. Once the block really ran, two latent
+  errors surfaced and were fixed: `:'expected'` sat inside `DO $$`, where psql
+  does not interpolate (a syntax error), and the concurrency invariant named a
+  column that has never existed (`allocation_mode`; it is
+  `availability_resource_mode`, migration 027). Every other assertion passes
+  on a fresh database, and a planted `RAISE` now fails the script (exit 3).
+
+  The first full-history gitleaks run found 11 hits, all false positives —
+  eight seeded order idempotency keys in the demo recording and three made-up
+  table tokens in a test — now allowlisted by exact value. v8.21.2 reported
+  them even with the allowlist present: it does not read the `[[allowlists]]`
+  tables the file uses, which is why the pinned image is v8.30.1.
+
+  Still missing: browser, accessibility, responsive, failure-mode and
+  load/concurrency checks.
 - **Found by the browser journey, 2026-09-04. Six of the seven were closed on
   2026-09-05, and the slow board read was measured and closed on the same
   day.** Every one of the six
@@ -1455,14 +1478,40 @@ is a data mutation that needs explicit authorization.
     address bounced"; that is accepted for a supervised pilot and the upgrade
     path, if it is ever needed, is the queue's existing `DeliverySummary`.
 
-  - **Touch targets found by the 2026-09-09 sweep and deliberately left.** Four
+  - ~~**Touch targets found by the 2026-09-09 sweep and deliberately left.** Four
     inline text links inside prose on the public booking page measure under the
     tablet floor at 1024 — the terms link inside "I agree to the terms and
     conditions", the CROWBAR wordmark, and the venue's phone and email in the
-    "Find us" block. A link inside a sentence cannot be 48px tall without
-    breaking its line box, and the target table in `docs/DESIGN.md` is about
-    controls. If this is ever revisited, the answer is a layout change (lifting
-    the contact links out of prose into a control row), not a height.
+    "Find us" block.~~ **DONE 2026-10-23 for three of the four; the terms link
+    is left, on purpose.** Measured at 1024 and 390 before the change: wordmark
+    100x23, phone 111x21, email 146x22 (and under the 34px desktop floor at
+    1280 too). Phone and email are now a wrapping row of `secondary` buttons at
+    the `md` step, so the existing takeover makes them 48 below 1280 and 40 at
+    1280+ (measured 171x48 and 207x48 at 1024 and 390; 164x40 and 198x40 at
+    1280). The wordmark is not in prose at all, so its link carries
+    `min-h-[var(--control-desktop-min)]`: 100x48 below 1280, 100x34 at 1280.
+    *Cost, measured:* the Find us row wraps at 1024 (386px of buttons in a 383px
+    row) and the booking box grows from 734 to 808px at 1024x768, and 1387 to
+    1461 at 390; 1280x800 is unchanged at 697.
+
+    **The terms link stays 144x15 (136x14 at 1280).** It is a word inside "I
+    agree to the terms and conditions"; lifting it to 48px means an oversized
+    line box, which is the hack this entry ruled out. The checkbox beside it is
+    the actual target for agreeing and measures 48x48. *Trigger to revisit:* the
+    review step is redesigned, at which point the disclosure can become its own
+    control under the checkbox rather than a word in its label.
+  - ~~**`/business/overview` overflows 94px at 390, for an owner or manager.**~~
+    **DONE 2026-10-23.** Measured `scrollWidth` 484 at a verified 390. No panel
+    is owner-only; the culprit is the "Ordered today" figure, which the server
+    drops without `reports.service`, hence 0 for a host. At 66px even
+    `182,00 €` is 273px wide in a 162px half-cell. Below `--bp-phone` the money
+    cell (and "Next 7 nights", so the grid has no hole) takes the full row, with
+    `grid-flow-row-dense` and `wrap-break-word` for a five-digit total
+    (`12.480,00 €` is 370px against 358). After: 390 at 390 as owner and as
+    host, a substituted five-digit total still 390; 1024 and 1280 measured
+    geometrically identical before and after. Found on the way, not changed: at
+    1280 the same figure runs 19px into its cell's 32px right padding; the ink
+    stays inside the cell.
   - **The height-literal grep cannot find the whole defect class.** Three of the
     worst offenders that pass found had *no height at all*: two bare `<button>`s
     styled only with `type-label`, a menu selector with only padding, and a
@@ -1470,12 +1519,49 @@ is a data mutation that needs explicit authorization.
     button inside it looked right. Only a rendered measurement finds those.
     A `playwright-cli` sweep over every route at 1280/1024/390 is the check;
     automating it is stage 8's browser-journey work, not a separate task.
-  - **SMS sends block the event loop.** `sms_service` calls Twilio
+
+    **Attempted 2026-10-23 and stopped before writing the spec**, because the
+    floor half cannot pass on an honest allowlist. Over 22 demo routes at all
+    three widths, horizontal overflow is zero everywhere. Under the floor on
+    every page: the demo banner's two links ("Start the evening again" 156x21,
+    "Switch role" 75x21 at 1280; 165x23 and 80x23 below). On `/` alone, 14 more
+    landing links: header nav 33-35px tall, footer links 20px, the wordmark
+    28px. Fixing those is landing and demo-chrome work, not a test. *Trigger:*
+    that work is done; the spec is then one file of about 100 lines.
+  - ~~**SMS sends block the event loop.** `sms_service` calls Twilio
     synchronously from async request paths, so a hung provider connection stalls
-    a worker. Not reachable locally (no credentials), so this is read, not
-    measured.
-- **Deferred — a venue-wide notification page, and a way to complete a request
-  rather than only read it.** The inbox is a bell and a sheet
+    a worker.~~ **DONE 2026-10-23.** The Twilio client now has a 10s
+    `TwilioHttpClient` timeout, and the four async callers — the queue call and
+    its retry, the waitlist offer and its retry, and the staff reservation
+    patch and delete messages — run the send with `asyncio.to_thread`. The batch
+    reminder job stays synchronous on its own loop, bounded by the same timeout.
+    `tests/integration/test_sms_off_event_loop.py` fakes a provider that hangs
+    0.6s then times out: a ticker on the same loop keeps ticking (and stalls
+    when the offload is removed — checked), and the attempt is recorded
+    `failed`/retryable exactly as any failed delivery. **Real Twilio was not
+    exercised**; there are no credentials locally.
+  - ~~**The queue board invited "Add a walk-in" that the demo refused.**~~
+    **DONE 2026-10-23, by making the board honest rather than the mock
+    permissive.** The real API refuses a staff walk-in on a closed service day
+    exactly as it refuses a guest (409 `QUEUE_CLOSED`, checked live), and the
+    seed leaves tonight's day closed, so the demo was right to refuse. The
+    header button is now disabled while the day is closed, and the board line
+    says to open it under Service day; at the cover cap it stays live, because a
+    party small enough to fit is still admitted. No mock, op, fixture or seed
+    change, so the cookie budget is untouched.
+- ~~**Deferred — a venue-wide notification page, and a way to complete a request
+  rather than only read it.**~~ **DONE 2026-10-23**, no migration and no new
+  capability. `/business/notifications` lists the venue's notifications, one
+  per event (the per-recipient copies share `created_at`, kind, title, body and
+  payload, so `DISTINCT ON` collapses them), filterable by kind group, behind
+  `overview.view`; a kind narrowed at send time stays narrowed, so privacy rows
+  reach only `customers.privacy`. `POST /api/customers/data-requests/{id}/complete`
+  (`customers.privacy`, tenant from `get_current_business`) sets `status`,
+  `completed_by` and `completed_at`, refuses another venue's row (404), a
+  completed one (409) and a deletion whose guest is not anonymised yet (409
+  `GUEST_NOT_ANONYMISED`). The sheet shows the ten most recent with "See all";
+  the nav entry is in `lib/nav.ts`. Out of the demo (`lib/demo/scope.ts`).
+  Original entry: The inbox is a bell and a sheet
   (`client/components/notification-trigger.tsx`): one signed-in user's rows, a
   60s poll, no route, and no nav entry. Guest data requests now land there
   (`server/app/routers/public_privacy.py`), which is what makes the gap
@@ -1498,7 +1584,35 @@ is a data mutation that needs explicit authorization.
   device/browser matrix; the demo can be reset reproducibly without destructive
   production tooling.
 
-### 9. Railway deployment — blocked on stages 0–8 and explicit authorization
+### 8a. Security audit — ready after stage 8, before stage 9
+
+The release gate proves the loop works; this stage asks how it fails under
+hostile or careless use, before any real guest data exists. It audits what is
+already built. It adds no feature and no service.
+
+- Install Cloudflare's `security-audit` skill
+  (<https://github.com/cloudflare/security-audit-skill>, MIT) as
+  `.claude/skills/security-audit/`, unmodified. Read its instructions and
+  check that its helper scripts only read files before installing; add it to
+  the lint and format ignore lists.
+- Run it two to three times against this repository, each run writing its
+  report outside the repo. One run finds about half of what repeated runs find.
+  Leads it marks "needs validation" are confirmed or dismissed by hand against
+  a disposable stack, never by executing anything against Railway.
+- Fix confirmed findings in this stage, not in a backlog. Record each accepted
+  risk, with its reason, in `docs/HISTORY.md`; anything deferred goes to
+  this file with a trigger.
+- Read the findings through the product's own boundaries: tenant derivation,
+  module entitlement, the five-role matrix, guest/QR/WebSocket credential
+  scopes, idempotency, rate limits, the private ML boundary, and the "settled
+  externally" claim. A finding that weakens one of those outranks a generic one.
+- The audit is not a penetration test. A human one belongs before the venue
+  depends on Crowbar for anything beyond the supervised pilot.
+- **Exit gate:** every confirmed finding is fixed or recorded as an accepted
+  risk with an owner; the full local release gate passes again afterwards;
+  no secret is tracked in the repository or its history.
+
+### 9. Railway deployment — blocked on stages 0–8a and explicit authorization
 
 - Resume the existing Railway project only after the local release gate passes
   and the user explicitly authorizes deployment work. Reconcile the preserved
@@ -1964,16 +2078,23 @@ the confirmed sequence unless a stage explicitly pulls the item forward.
 
 ## CI/CD
 
+- **Switched off 2026-10-24, deliberately:** all three workflows are
+  `workflow_dispatch`-only so nothing runs on push, pull request or schedule
+  while Crowbar is kept strictly local. The pipeline below still describes what
+  they do when run by hand; restore each file's previous `on:` block to bring
+  automatic runs back.
 - **Complete:** the pull-request pipeline runs frontend lint/test/build,
-  backend tests against PostgreSQL, fresh-database migrations, and ML
+  backend tests against PostgreSQL, fresh-database migrations, the seeded
+  fresh-database invariants (`scripts/verify-fresh-db.sh`), and ML
   import/tests (`.github/workflows/ci.yml`).
-- **Ready:** Add a documentation/link check. Nothing verifies that the links
-  between these documents still resolve.
+- ~~**Ready:** Add a documentation/link check.~~ **DONE 2026-10-23:**
+  `scripts/check-doc-links.sh`, the `docs` job in `ci.yml`. Relative links
+  only; anchors are not checked.
 - **Complete for dependencies and vulnerabilities:** `npm audit --audit-level=high`,
   `dependency-review-action`, an SBOM and a Trivy image scan that fails on
   HIGH/CRITICAL (`.github/workflows/supply-chain.yml`), plus CodeQL.
-- **Ready:** Add secret scanning. It is the one scanning class with no coverage
-  at all.
+- ~~**Ready:** Add secret scanning.~~ **DONE 2026-10-23:** gitleaks over the
+  full history, the `secrets` job in `supply-chain.yml`.
 - **Needs decision:** Choose branch protection and required checks, including
   whether expensive end-to-end or performance suites run per pull request,
   nightly, or before release.

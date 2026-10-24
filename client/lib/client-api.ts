@@ -27,6 +27,7 @@ import {
   ModifierGroup,
   MeContext,
   Notification,
+  VenueNotification,
   Order,
   OrderLineItem,
   OrderAllDayCount,
@@ -240,6 +241,27 @@ function toNotification(n: Record<string, unknown>): Notification {
     readAt: (n.read_at as string) || null,
     createdAt: n.created_at as string,
     sourceType: (n.source_type as string) || undefined,
+  };
+}
+
+function toVenueNotification(n: Record<string, unknown>): VenueNotification {
+  const request = n.data_request as Record<string, unknown> | null | undefined;
+  return {
+    id: n.id as string,
+    kind: n.kind as string,
+    title: n.title as string,
+    body: n.body as string,
+    createdAt: n.created_at as string,
+    dataRequest: request
+      ? {
+          id: request.id as string,
+          customerId: request.customer_id as string,
+          requestType: request.request_type as string,
+          status: request.status as string,
+          completedAt: (request.completed_at as string) || null,
+          completedByName: (request.completed_by_name as string) || null,
+        }
+      : null,
   };
 }
 
@@ -587,6 +609,28 @@ export async function clientMarkNotificationRead(
 
 export async function clientMarkAllNotificationsRead(): Promise<void> {
   await authFetch("/notifications/read-all", { method: "POST" });
+}
+
+/** The venue's notifications, one per event, optionally narrowed to kinds. */
+export async function clientGetVenueNotifications(options?: {
+  kinds?: string[];
+  limit?: number;
+  offset?: number;
+}): Promise<VenueNotification[]> {
+  const params = new URLSearchParams();
+  for (const kind of options?.kinds ?? []) params.append("kind", kind);
+  if (options?.limit != null) params.set("limit", String(options.limit));
+  if (options?.offset != null) params.set("offset", String(options.offset));
+  const q = params.toString();
+  const data = await authFetch<Record<string, unknown>[]>(
+    q ? `/notifications/venue?${q}` : "/notifications/venue",
+  );
+  return data.map(toVenueNotification);
+}
+
+/** Record that a guest's data request was handled. Deletion needs the guest anonymised first. */
+export async function clientCompleteDataRequest(requestId: string): Promise<void> {
+  await authFetch(`/customers/data-requests/${requestId}/complete`, { method: "POST" });
 }
 
 // ─── Authenticated: User profile & account ────────────────────────────────────

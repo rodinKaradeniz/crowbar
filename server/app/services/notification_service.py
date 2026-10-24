@@ -4,7 +4,9 @@ from uuid import UUID
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants import notifications as nconst
 from app.core import permissions
+from app.models.customer import CustomerDataRequest
 from app.models.notification import Notification
 from app.models.reservation import Reservation
 from app.models.user import User
@@ -72,6 +74,100 @@ async def notify_business_staff(
             )
         )
     await db.flush()
+
+
+async def list_for_business(
+    db: AsyncSession,
+    *,
+    business_id: UUID,
+    viewer_role: str | None,
+    kinds: list[str] | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict]:
+    """The venue's notifications: one per event, not one per recipient.
+
+    `notify_business_staff` writes a row per staff member in one statement, so
+    every copy of an event shares `created_at` (the transaction's `now()`),
+    kind, title, body and payload. `DISTINCT ON` those columns collapses the
+    copies without a migration or an event table.
+
+    A kind narrowed to a capability at send time stays narrowed here, and an
+    unknown role sees none of them. A guest data request carries the live
+    state of its request row, which is what the page completes.
+    """
+    hidden = [
+        kind
+        for kind, capability in nconst.KIND_CAPABILITY.items()
+        if not permissions.has_capability(viewer_role, capability)
+    ]
+    query = (
+        select(Notification)
+        .where(Notification.business_id == business_id)
+        .distinct(
+            Notification.created_at,
+            Notification.kind,
+            Notification.title,
+            Notification.body,
+            Notification.payload,
+        )
+        .order_by(
+            Notification.created_at.desc(),
+            Notification.kind,
+            Notification.title,
+            Notification.body,
+            Notification.payload,
+        )
+        .limit(limit)
+        .offset(offset)
+    )
+    if hidden:
+        query = query.where(Notification.kind.not_in(hidden))
+    if kinds:
+        query = query.where(Notification.kind.in_(kinds))
+    rows = list((await db.execute(query)).scalars().all())
+
+    request_ids: set[UUID] = set()
+    for n in rows:
+        if n.kind == nconst.CUSTOMER_DATA_REQUEST and n.payload.get("data_request_id"):
+            try:
+                request_ids.add(UUID(n.payload["data_request_id"]))
+            except ValueError:
+                pass
+    requests: dict[str, dict] = {}
+    if request_ids:
+        result = await db.execute(
+            select(CustomerDataRequest, User.name)
+            .outerjoin(User, User.id == CustomerDataRequest.completed_by)
+            .where(
+                CustomerDataRequest.business_id == business_id,
+                CustomerDataRequest.id.in_(request_ids),
+            )
+        )
+        for request, completed_by_name in result.all():
+            requests[str(request.id)] = {
+                "id": request.id,
+                "customer_id": request.customer_id,
+                "request_type": request.request_type,
+                "status": request.status,
+                "completed_at": request.completed_at,
+                "completed_by_name": completed_by_name,
+            }
+
+    return [
+        {
+            "id": n.id,
+            "kind": n.kind,
+            "title": n.title,
+            "body": n.body,
+            "payload": n.payload,
+            "created_at": n.created_at,
+            "data_request": requests.get(str(n.payload.get("data_request_id")))
+            if n.kind == nconst.CUSTOMER_DATA_REQUEST
+            else None,
+        }
+        for n in rows
+    ]
 
 
 async def list_for_user(

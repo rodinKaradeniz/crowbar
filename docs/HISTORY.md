@@ -4005,3 +4005,85 @@ the only thing that proves a fresh database can migrate cleanly.
 `server/app/models/tab.py`, `server/app/models/purchasing.py`,
 `server/db/migrations/040_external_settlement.sql`,
 `server/db/migrations/042_tenant_constraints.sql`.
+
+## 2026-10-23 — A slow SMS provider waits in a thread, not on the event loop
+
+**Context.** `sms_service.send_sms` called Twilio synchronously with the SDK's
+default of no timeout, and four async request paths awaited nothing around it:
+the queue call and its retry, the waitlist offer and its retry, and the staff
+reservation patch and delete messages. The queue and waitlist paths also hold a
+`FOR UPDATE` lock on the delivery attempt while they send. One hung connection
+stalled every request on that worker and held the lock for as long as it hung.
+
+**Decision.** Bound the call and move it off the loop, and nothing else. The
+client is built with `TwilioHttpClient(timeout=SMS_TIMEOUT_SECONDS)` (10s), and
+the four async callers run it through `asyncio.to_thread`. No queue, no worker,
+no retry framework: the delivery record already carries the retry, and a
+timeout is just another failed attempt.
+
+**Consequences.**
+
+- A timeout lands in `send_sms`'s existing `except`, returns False, and is
+  recorded `failed` and retryable, the same as a rejected number.
+- The reminder batch job stays synchronous. It owns its own loop and serves no
+  one else, so the timeout is what bounds it.
+- The row lock is still held across the send, now for at most the timeout.
+  Moving the send after the commit would change the delivery state machine and
+  was not needed to stop the stall.
+- Proven with a faked SDK, not real Twilio: there are no credentials locally.
+  `test_sms_off_event_loop.py` fails when the `to_thread` is removed.
+
+**References.** `server/app/services/sms_service.py`,
+`server/app/services/queue_service.py`,
+`server/app/services/reservation_waitlist_service.py`,
+`server/app/services/reservation_notifications.py`,
+`server/tests/integration/test_sms_off_event_loop.py`,
+`server/tests/unit/test_sms_service.py`.
+
+## 2026-10-23 — The queue board stops offering a walk-in the server refuses
+
+**Context.** In the demo, "Add a walk-in" opened a dialog whose submit was
+disabled, and the write behind it would have answered `DEMO_NOT_SAVED`. The
+obvious fix was to teach the demo mock to accept a walk-in. Checked first
+against the real API: `join_queue` refuses every new party on a closed service
+day, staff walk-ins included (409 `QUEUE_CLOSED`), and the seed leaves tonight's
+day closed. The demo was telling the truth; the board was not.
+
+**Decision.** Fix the board, not the mock. The header button is disabled while
+the day is closed, and the status line says to open the queue under Service day.
+At the cover cap it stays enabled, because a party small enough to fit is still
+admitted.
+
+**Consequences.** The mock is never more permissive than the server, the
+recording and the cookie op log are unchanged, and opening the day stays a write
+the demo refuses in words. Making walk-ins demonstrable means a recording taken
+with tonight's day open, which is a re-record inside the venue's service window
+and needs the user's go-ahead.
+
+**References.** `client/app/business/queue/queue-board-client.tsx`,
+`server/app/services/queue_service.py` (`join_queue`),
+`server/db/seeds/001_seed_volt_and_vine.sql`.
+
+## 2026-10-23 — The fresh-database check had passed without running
+
+**Context.** `scripts/verify-fresh-db.sh` is the only thing that proves a
+migrated and seeded database holds the invariants a pytest schema cannot show.
+It piped its assertion block into `docker exec crowbar-db psql`. Without `-i`,
+`docker exec` gives the process no stdin, so psql read nothing and exited 0. A
+pipe of `SELECT 1/0;` through the same command exits 0; with `-i` it exits 3.
+
+**Decision.** Attach stdin and fix what the block then exposed. The expected
+migration count crosses into the `DO` block through `set_config`, because psql
+does not interpolate `:'var'` inside a dollar-quoted body. The concurrency
+assertion now names `availability_resource_mode`, the column migration 027
+actually added; `allocation_mode` never existed. A small `pg` helper runs the
+client tools against `CROWBAR_PG_HOST` when it is set, which is how CI runs the
+script against its service container.
+
+**Consequences.** Every other assertion passed on the first real run, and a
+planted `RAISE` now fails the script. The general lesson: a check that cannot
+fail is not a check. Prove a new gate fails on a planted defect before trusting
+its pass.
+
+**References.** `scripts/verify-fresh-db.sh`, `.github/workflows/ci.yml`,
+`server/db/migrations/027_resource_aware_reservation_availability.sql`.

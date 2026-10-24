@@ -22,6 +22,13 @@ from app.services.marketing_consent_service import (
 
 logger = logging.getLogger(__name__)
 
+#: Seconds before a Twilio request is abandoned. The SDK default is no timeout
+#: at all, so one hung connection held its caller (and, from a request path,
+#: the row lock that caller took) indefinitely. A timeout is an ordinary
+#: failure: it lands in the `except` below and the caller records it the way
+#: it records any other failed delivery.
+SMS_TIMEOUT_SECONDS = 10.0
+
 
 def send_sms(
     to_number: str, body: str, *, message_class: MessageClass = "operational"
@@ -31,6 +38,9 @@ def send_sms(
 
     Returns True on success, False on any failure (missing config, bad number,
     Twilio error).
+
+    It blocks for up to SMS_TIMEOUT_SECONDS, so an async caller runs it with
+    `asyncio.to_thread` rather than on the event loop.
 
     Phone numbers must be in E.164 format (e.g. +14155551234). Numbers that
     do not start with '+' are silently rejected; callers normalize through the
@@ -56,10 +66,15 @@ def send_sms(
         return False
 
     try:
+        from twilio.http.http_client import TwilioHttpClient  # noqa: PLC0415 — lazy import
         from twilio.rest import Client  # noqa: PLC0415 — lazy import
 
-        client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
-        message = client.messages.create(
+        client = Client(
+            settings.twilio_account_sid,
+            settings.twilio_auth_token,
+            http_client=TwilioHttpClient(timeout=SMS_TIMEOUT_SECONDS),
+        )
+        client.messages.create(
             body=body,
             from_=settings.twilio_from_number,
             to=to_number,

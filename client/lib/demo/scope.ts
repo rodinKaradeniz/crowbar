@@ -16,6 +16,9 @@ export const WORKSPACE_ROUTES_NOT_IN_DEMO = [
   "/business/onboarding",
   "/business/inventory/counts/:path*",
   "/business/insights",
+  // The recording holds no notification list, and a guest data request is
+  // not something a demo visitor can raise.
+  "/business/notifications",
   "/business/settings",
   // Settings is out of the demo, all of it, except the embed widget. A page
   // added under settings later is out until it is named here as an exception.

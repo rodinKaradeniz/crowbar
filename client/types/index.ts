@@ -206,6 +206,26 @@ export interface Notification {
   sourceType?: "staff" | "customer" | string;
 }
 
+/** The live state of the request row a guest data notification points at. */
+export interface VenueDataRequest {
+  id: string;
+  customerId: string;
+  requestType: "export" | "correction" | "deletion" | string;
+  status: "pending" | "completed" | string;
+  completedAt: string | null;
+  completedByName: string | null;
+}
+
+/** One venue event, not one person's copy of it, so it has no read state. */
+export interface VenueNotification {
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+  createdAt: string;
+  dataRequest: VenueDataRequest | null;
+}
+
 export interface QueueEntry {
   id: string;
   businessId: string;

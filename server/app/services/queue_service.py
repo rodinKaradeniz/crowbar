@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import secrets
@@ -441,7 +442,9 @@ async def deliver_queue_call(
     attempt.attempt_count += 1
     attempt.last_attempt_at = datetime.now(timezone.utc)
     await db.flush()
-    sent = sms_service.send_sms(
+    # Off the event loop: the provider call blocks for up to its timeout.
+    sent = await asyncio.to_thread(
+        sms_service.send_sms,
         entry.phone or "",
         f"Hi {entry.name}, your table is ready. Please head to the host stand.",
     )

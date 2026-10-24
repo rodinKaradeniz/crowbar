@@ -121,6 +121,12 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Business",
     items: [
+      // Every role is told things; the page narrows what each role sees.
+      {
+        href: "/business/notifications",
+        label: "Notifications",
+        capability: "overview.view",
+      },
       {
         href: "/business/reports",
         label: "Reports",

@@ -3,6 +3,7 @@ import Image from "next/image";
 import { Mail, Phone, MapPin, Globe } from "lucide-react";
 
 import { BrandMark } from "@/components/brand-mark";
+import { Button } from "@/components/ui/button";
 import { useTenantImage } from "@/hooks/use-tenant-image";
 import type { Business } from "@/types";
 import { collapseOperatingHours } from "@/lib/operating-hours";
@@ -77,7 +78,12 @@ export function VenuePanel({ business }: { business: Business }) {
       )}
 
       <div className="flex flex-1 flex-col gap-[var(--space-32)] p-[var(--space-32)]">
-        <Link href="/" className="w-fit text-foreground hover:text-primary">
+        {/* The target is the element, not the ink: the mark stays 16px and the
+            link carries the control floor (34 at a desk, 48 below 1280). */}
+        <Link
+          href="/"
+          className="inline-flex min-h-[var(--control-desktop-min)] w-fit items-center text-foreground hover:text-primary"
+        >
           <BrandMark size="sm" />
         </Link>
 
@@ -100,26 +106,34 @@ export function VenuePanel({ business }: { business: Business }) {
         <section>
           <PanelHeading>Find us</PanelHeading>
           <div className="space-y-[var(--space-12)] text-sm">
-            {business.phone && (
-              <div className="flex items-start gap-[var(--space-12)]">
-                <Phone className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
-                <a
-                  href={`tel:${business.phone}`}
-                  className="type-data hover:text-primary"
-                >
-                  {business.phone}
-                </a>
-              </div>
-            )}
-            {business.email && (
-              <div className="flex items-start gap-[var(--space-12)]">
-                <Mail className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
-                <a
-                  href={`mailto:${business.email}`}
-                  className="break-all hover:text-primary"
-                >
-                  {business.email}
-                </a>
+            {/* Phone and email are the two things a guest taps here, so they
+                are controls on the height ladder rather than links in a line
+                of text: a text link cannot clear the 48px tablet floor without
+                breaking its line box. The email button may grow taller and
+                wrap (`break-all`) so a long address is never cut off. */}
+            {(business.phone || business.email) && (
+              <div className="flex flex-wrap gap-[var(--space-8)]">
+                {business.phone && (
+                  <Button asChild variant="secondary" size="md">
+                    <a href={`tel:${business.phone}`} className="type-data">
+                      <Phone className="text-muted-foreground" aria-hidden />
+                      {business.phone}
+                    </a>
+                  </Button>
+                )}
+                {business.email && (
+                  <Button
+                    asChild
+                    variant="secondary"
+                    size="md"
+                    className="h-auto min-h-[var(--control-md)] max-w-full whitespace-normal break-all py-[var(--space-8)] text-left"
+                  >
+                    <a href={`mailto:${business.email}`}>
+                      <Mail className="text-muted-foreground" aria-hidden />
+                      {business.email}
+                    </a>
+                  </Button>
+                )}
               </div>
             )}
             {business.website && (

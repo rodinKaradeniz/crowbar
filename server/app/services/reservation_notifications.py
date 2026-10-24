@@ -1,5 +1,6 @@
 """Emit in-app notifications for reservation lifecycle (called from reservation routes)."""
 
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
@@ -171,7 +172,9 @@ async def notify_after_reservation_patch(
         else:
             sms_body = f"Your booking for {_fmt_time(new.time, timezone_name)} was updated."
         channels = new.business.notification_channels or []
-        notification_service.send_sms_if_enabled(
+        # Off the event loop: the provider call blocks for up to its timeout.
+        await asyncio.to_thread(
+            notification_service.send_sms_if_enabled,
             channels,
             new.phone,
             f"Crowbar: {sms_body}",
@@ -258,7 +261,8 @@ async def notify_after_reservation_delete(
 
     if actor.user_type == "staff" and reservation.business:
         channels = reservation.business.notification_channels or []
-        notification_service.send_sms_if_enabled(
+        await asyncio.to_thread(
+            notification_service.send_sms_if_enabled,
             channels,
             reservation.phone,
             f"Crowbar: Your booking for {_fmt_time(reservation.time, reservation.business.timezone or 'UTC')} was cancelled.",

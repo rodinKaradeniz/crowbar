@@ -5,39 +5,57 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERIFY_DB="${CROWBAR_VERIFY_DB:-crowbar_verify_mvp}"
 VERIFY_DEMO_PASSWORD="${CROWBAR_VERIFY_DEMO_PASSWORD:-$(openssl rand -hex 16)}"
+PYTHON="${CROWBAR_PYTHON:-venv/bin/python}"
+PG_HOST="${CROWBAR_PG_HOST:-localhost}"
 
 if [[ ! "$VERIFY_DB" =~ ^crowbar_verify_[a-z0-9_]+$ ]]; then
   echo "Verification database must start with crowbar_verify_ and use lowercase letters, digits, or underscores." >&2
   exit 2
 fi
 
+# PostgreSQL client tools run inside the local `crowbar-db` container, unless
+# CROWBAR_PG_HOST names a server to reach directly — as CI does, with the
+# runner's own client tools and PGPASSWORD set. `-i` is load-bearing: without
+# it `docker exec` hands psql no stdin, so the assertion block below was never
+# read and every run "passed".
+pg() {
+  if [[ -n "${CROWBAR_PG_HOST:-}" ]]; then
+    PGHOST="$CROWBAR_PG_HOST" "$@"
+  else
+    docker exec -i crowbar-db "$@"
+  fi
+}
+
 cleanup() {
   if [[ "${KEEP_CROWBAR_VERIFY_DB:-0}" != "1" ]]; then
-    docker exec crowbar-db dropdb --if-exists --force -U postgres "$VERIFY_DB" >/dev/null
+    pg dropdb --if-exists --force -U postgres "$VERIFY_DB" >/dev/null
   fi
 }
 trap cleanup EXIT
 
-docker exec crowbar-db dropdb --if-exists --force -U postgres "$VERIFY_DB" >/dev/null
-docker exec crowbar-db createdb -U postgres "$VERIFY_DB"
+pg dropdb --if-exists --force -U postgres "$VERIFY_DB" >/dev/null
+pg createdb -U postgres "$VERIFY_DB"
 
 cd "$ROOT/server"
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/$VERIFY_DB" \
+DATABASE_URL="postgresql://postgres:postgres@$PG_HOST:5432/$VERIFY_DB" \
   SEED_DATA=true \
   DEMO_ADMIN_PASSWORD="$VERIFY_DEMO_PASSWORD" \
-  venv/bin/python -m db.migrate
+  "$PYTHON" -m db.migrate
 
 # The canonical seed is replacement-based and must be safe to repeat.
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/$VERIFY_DB" \
+DATABASE_URL="postgresql://postgres:postgres@$PG_HOST:5432/$VERIFY_DB" \
   DEMO_ADMIN_PASSWORD="$VERIFY_DEMO_PASSWORD" \
-  venv/bin/python -m db.migrate seed
+  "$PYTHON" -m db.migrate seed
 
 EXPECTED_MIGRATIONS="$(find db/migrations -maxdepth 1 -name '*.sql' | wc -l | tr -d ' ')"
-docker exec crowbar-db psql -v ON_ERROR_STOP=1 -v expected="$EXPECTED_MIGRATIONS" \
+pg psql -v ON_ERROR_STOP=1 -v expected="$EXPECTED_MIGRATIONS" \
   -U postgres -d "$VERIFY_DB" <<'SQL'
+-- psql does not interpolate :variables inside a dollar-quoted body, so the
+-- expected count crosses into the DO block as a session setting.
+SELECT set_config('crowbar.expected_migrations', :'expected', false);
 DO $$
 BEGIN
-  IF (SELECT COUNT(*) FROM _migrations) <> :'expected'::integer THEN
+  IF (SELECT COUNT(*) FROM _migrations) <> current_setting('crowbar.expected_migrations')::integer THEN
     RAISE EXCEPTION 'migration count mismatch';
   END IF;
   IF (SELECT COUNT(*) FROM businesses WHERE slug = 'volt-and-vine') <> 1 THEN
@@ -61,7 +79,7 @@ BEGIN
   END IF;
   IF EXISTS (
     SELECT 1 FROM service_types
-    WHERE allocation_mode = 'legacy' AND max_concurrent_bookings IS NULL
+    WHERE availability_resource_mode = 'legacy' AND max_concurrent_bookings IS NULL
   ) THEN
     RAISE EXCEPTION 'legacy service concurrency invariant failed';
   END IF;

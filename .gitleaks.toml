@@ -5,3 +5,13 @@ useDefault = true
 description = "Historical product prose misclassified as a generic API key"
 regexTarget = "secret"
 regexes = ['''^purchasing/ML$''']
+
+[[allowlists]]
+description = "Seeded order idempotency keys, recorded into the demo fixture; not credentials"
+regexTarget = "secret"
+regexes = ['''^voltvine-order-[a-z]+-\d{3}$''']
+
+[[allowlists]]
+description = "Made-up table token in the QR sheet test"
+regexTarget = "secret"
+regexes = ['''^v2\.tok-b1\.sig$''']

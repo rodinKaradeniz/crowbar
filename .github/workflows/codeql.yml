@@ -1,11 +1,9 @@
 name: CodeQL
 
+# Manual-only while Crowbar is run strictly locally: nothing triggers on push,
+# pull request or schedule. Restore the previous `on:` block (git history) to re-enable.
 on:
-  pull_request:
-  push:
-    branches: [main]
-  schedule:
-    - cron: "23 4 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read

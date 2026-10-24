@@ -819,12 +819,15 @@ Backend integration tests do not run migrations. Their autouse fixture creates
 and drops ORM metadata in a dedicated `crowbar_test` PostgreSQL database. This
 means both migrations and ORM metadata require deliberate validation.
 
-Migrations 023–049 are implemented locally. On 2026-08-25 the repeatable
-`scripts/verify-fresh-db.sh` check applied the full 001–048 chain, ran the
-canonical synthetic seed twice, asserted its schema/relationship invariants,
-and cleaned the disposable database. The seed still lacks the complete Stage
-8 pilot scenario and therefore does not prove the full MVP demo journey.
-Railway remains at migrations 001–022 while deployment is paused.
+Migrations 023–054 are implemented locally. `scripts/verify-fresh-db.sh`
+applies the full chain to a disposable database, runs the canonical synthetic
+seed twice, asserts its schema and relationship invariants, and drops the
+database; CI runs it against its service container. Until 2026-10-23 its
+assertion block never reached psql, so earlier runs proved the migrations and
+the repeatable seed but not the invariants (`docs/HISTORY.md`, 2026-10-23). It
+proves the seeded data is present, not that the journey works; the browser
+journey is that check. Railway remains at migrations 001–022 while deployment
+is paused.
 
 Migrations 005 and 006 were renamed early in the project. A database restored
 from an old backup may still contain their former names in `_migrations`; use

@@ -381,6 +381,59 @@ async def anonymize_customer(db: AsyncSession, *, business_id: UUID, customer: C
     return request
 
 
+class DataRequestError(Exception):
+    def __init__(self, *, status_code: int, code: str, message: str) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.code = code
+
+
+async def complete_data_request(
+    db: AsyncSession, *, business_id: UUID, request_id: UUID, actor_id: UUID
+) -> CustomerDataRequest:
+    """Record that a guest's pending data request was handled, and by whom.
+
+    Export and correction are completed on the operator's word: Crowbar cannot
+    see the email the venue sent or the detail it corrected by hand. Deletion
+    is different, because the erasure is something Crowbar does itself
+    (`anonymize_customer`), so a deletion request cannot be marked complete
+    while the guest's record still identifies them.
+    """
+    request = await db.scalar(
+        select(CustomerDataRequest)
+        .where(
+            CustomerDataRequest.id == request_id,
+            CustomerDataRequest.business_id == business_id,
+        )
+        .with_for_update()
+    )
+    if request is None:
+        raise DataRequestError(status_code=404, code="NOT_FOUND", message="Data request not found")
+    if request.status == "completed":
+        raise DataRequestError(
+            status_code=409,
+            code="DATA_REQUEST_COMPLETED",
+            message="This request is already complete",
+        )
+    if request.request_type == "deletion":
+        anonymized_at = await db.scalar(
+            select(Customer.anonymized_at).where(
+                Customer.id == request.customer_id, Customer.business_id == business_id
+            )
+        )
+        if anonymized_at is None:
+            raise DataRequestError(
+                status_code=409,
+                code="GUEST_NOT_ANONYMISED",
+                message="Anonymise the guest from their profile before completing a deletion request",
+            )
+    request.status = "completed"
+    request.completed_by = actor_id
+    request.completed_at = datetime.now(timezone.utc)
+    await db.flush()
+    return request
+
+
 async def export_customer_data(db: AsyncSession, *, business_id: UUID, customer_id: UUID, actor_id: UUID) -> dict[str, Any] | None:
     profile = await get_customer_profile(db, business_id=business_id, customer_id=customer_id)
     if profile is None:
