@@ -1595,7 +1595,7 @@ already built. It adds no feature and no service.
 - Run it two to three times against this repository, each run writing its
   report outside the repo. One run finds about half of what repeated runs find.
   Leads it marks "needs validation" are confirmed or dismissed by hand against
-  a disposable stack, never by executing anything against Railway.
+  a disposable stack, never by executing anything against any hosted environment.
 - Fix confirmed findings in this stage, not in a backlog. Record each accepted
   risk, with its reason, in `docs/HISTORY.md`; anything deferred goes to
   this file with a trigger.

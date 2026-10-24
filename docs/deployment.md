@@ -85,7 +85,7 @@ other secret independently. `DEMO_ADMIN_PASSWORD` is for local seeding only.
 
 ## Frontend-only demo on Vercel
 
-Separate from the Railway rollout, and like it, an action the user takes. The
+Separate from production hosting, and like it, an action the user takes. The
 demo is a Next.js build with no backend behind it (see
 `docs/ARCHITECTURE.md` § Frontend-only demo).
 
